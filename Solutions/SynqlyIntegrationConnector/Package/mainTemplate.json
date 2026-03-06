@@ -1,0 +1,2491 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Synqly",
+    "comments": "Solution template for SynqlyIntegrationConnector"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "SynqlyIntegrationConnector",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "synqly.azure-sentinel-solution-synqly-integration",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "SynqlyIntegrationConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "SynqlyIntegrationConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Synqly Integration Connector",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "SynqlyIntegrationConnector",
+                  "title": "Synqly Integration Connector",
+                  "publisher": "Synqly",
+                  "logo": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Synqly.svg",
+                  "descriptionMarkdown": "The [Synqly](https://synqly.com) connector provides the capability to push security events from Synqly integrations into Microsoft Sentinel using the Azure Logs Ingestion API. Events are automatically normalized to ASIM (Advanced Security Information Model) tables for use with Microsoft Sentinel analytics, workbooks, and hunting queries.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Events Received",
+                      "legend": "Events",
+                      "baseQuery": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector'"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "View recent audit events",
+                      "query": "ASimAuditEventLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+                    },
+                    {
+                      "description": "View recent authentication events",
+                      "query": "ASimAuthenticationEventLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+                    },
+                    {
+                      "description": "View recent network sessions",
+                      "query": "ASimNetworkSessionLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+                    },
+                    {
+                      "description": "View all event types received",
+                      "query": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize count() by EventSchema | order by count_ desc"
+                    },
+                    {
+                      "description": "View ingestion rate by event type",
+                      "query": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize count() by bin(TimeGenerated, 1h), EventSchema | render timechart"
+                    },
+                    {
+                      "description": "Query using ASIM parser (recommended)",
+                      "query": "imAuthentication | where TimeGenerated > ago(24h) | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ASimAuditEventLogs",
+                      "lastDataReceivedQuery": "ASimAuditEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimAuthenticationEventLogs",
+                      "lastDataReceivedQuery": "ASimAuthenticationEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimDhcpEventLogs",
+                      "lastDataReceivedQuery": "ASimDhcpEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimDnsActivityLogs",
+                      "lastDataReceivedQuery": "ASimDnsActivityLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimFileEventLogs",
+                      "lastDataReceivedQuery": "ASimFileEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimNetworkSessionLogs",
+                      "lastDataReceivedQuery": "ASimNetworkSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimProcessEventLogs",
+                      "lastDataReceivedQuery": "ASimProcessEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimRegistryEventLogs",
+                      "lastDataReceivedQuery": "ASimRegistryEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimUserManagementActivityLogs",
+                      "lastDataReceivedQuery": "ASimUserManagementActivityLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimWebSessionLogs",
+                      "lastDataReceivedQuery": "ASimWebSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required for the Log Analytics workspace.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra ID",
+                        "description": "Application Developer role (or higher) to create app registrations."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Owner or User Access Administrator role on the resource group to deploy DCR and assign Monitoring Metrics Publisher role."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Create ARM Resources and Provide the Required Permissions",
+                      "description": "This connector enables push-based ingestion of security events from Synqly integrations into Microsoft Sentinel. Events are automatically normalized to ASIM (Advanced Security Information Model) tables.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Deploy Connector Resources\nClicking \"Deploy\" creates a Data Collection Rule (DCR), Data Collection Endpoint (DCE), and Entra application with the necessary permissions to securely send data to Microsoft Sentinel."
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Deploy Synqly Integration connector resources",
+                            "applicationDisplayName": "Synqly Integration Connector Application"
+                          },
+                          "type": "DeployPushConnectorButton"
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Grant Additional Permissions (Based on Use Case)",
+                      "description": "Additional roles may be required depending on how you plan to use Synqly with Microsoft Sentinel.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "**Sink Connector (Write-Only)**: No additional permissions needed.\n\n**SIEM Connector (Read/Write)**: Assign **Microsoft Sentinel Contributor** role to the Entra application via the Azure UI in your Log Analytics workspace.\n\nSee [Synqly documentation](https://docs.synqly.com/guides/provider-configuration/microsoft-sentinel-siem-setup) for detailed setup guides."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "3. Push your logs into the workspace",
+                      "description": "Provide these parameters to your Synqly integration. The Synqly service will automatically handle the technical details of data ingestion, including formatting events to one of the 10 supported ASIM schemas (Authentication, AuditEvent, Dhcp, Dns, FileEvent, NetworkSession, ProcessEvent, RegistryEvent, UserManagement, WebSession).",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "**Important**: Events with unsupported schema types are silently dropped by Azure. If expected data is not appearing, verify with your Synqly integration provider that events are being sent with one of the supported schema types listed above."
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Tenant ID (Directory ID)",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra App Registration Application ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Application ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra App Registration Secret",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Secret"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Data Collection Endpoint Uri",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Data Collection Rule Immutable ID",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Stream Name",
+                            "value": "Custom-SynqlyASIM"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Synqly"
+                },
+                "support": {
+                  "name": "Synqly",
+                  "email": "support@synqly.com",
+                  "tier": "Partner",
+                  "link": "https://synqly.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "SynqlyIntegrationConnectorDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Direct",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-SynqlyASIM": {
+                    "columns": [
+                      {
+                        "name": "ActingAppId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingAppName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingOriginalAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessCommandLine",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessCreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ActingProcessFileCompany",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFileDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFileInternalName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFilename",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFileOriginalName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFileProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessFileSize",
+                        "type": "long"
+                      },
+                      {
+                        "name": "ActingProcessFileVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessIMPHASH",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessInjectedAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessIntegrityLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessIsHidden",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ActingProcessMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActingProcessTokenElevation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorOriginalUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUserAadId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUserId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUserIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUsername",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUsernameType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUserSid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AdditionalFields",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "DhcpCircuitId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpLeaseDuration",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DhcpSessionDuration",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DhcpSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpSrcDHCId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpSubscriberId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpUserClass",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpUserClassId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpVendorClass",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DhcpVendorClassId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsFlags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsFlagsAuthenticated",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsAuthoritative",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsCheckingDisabled",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsRecursionAvailable",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsRecursionDesired",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsTruncated",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsFlagsZ",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DnsNetworkDuration",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DnsQuery",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsQueryClass",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DnsQueryClassName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsQueryType",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DnsQueryTypeName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsResponseCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DnsResponseIpCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsResponseIpCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsResponseIpLatitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "DnsResponseIpLongitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "DnsResponseIpRegion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsResponseName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DnsSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Dst",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstAppId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstAppName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstBytes",
+                        "type": "long"
+                      },
+                      {
+                        "name": "DstDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDeviceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDomainType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDvcId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDvcIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDvcScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstDvcScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstFQDN",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstGeoCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstGeoCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstGeoLatitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "DstGeoLongitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "DstGeoRegion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstHostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstInterfaceGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstInterfaceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstMacAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstNatIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstNatPortNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DstOriginalRiskLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstOriginalUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstPackets",
+                        "type": "long"
+                      },
+                      {
+                        "name": "DstPortNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DstRiskLevel",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DstSubscriptionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstUserId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstUserIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstUsername",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstUsernameType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstVlanId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstZone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Dvc",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcAction",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcDomainType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcFQDN",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcHostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcInboundInterface",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcInterface",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcMacAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcOriginalAction",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcOs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcOsVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcOutboundInterface",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcSubscriptionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DvcZone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EventEndTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "EventMessage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOriginalResultDetails",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOriginalSeverity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOriginalSubType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOriginalType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOriginalUid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventOwner",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventProductVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventReportUrl",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventResult",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventResultDetails",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventSchema",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventSchemaVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventSeverity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventStartTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "EventSubType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventVendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileContentType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileSize",
+                        "type": "long"
+                      },
+                      {
+                        "name": "GroupId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GroupIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GroupName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GroupNameType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GroupOriginalType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GroupType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HashType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpContentFormat",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpContentType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpReferrer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpRequestMethod",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpRequestTime",
+                        "type": "int"
+                      },
+                      {
+                        "name": "HttpRequestXff",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpResponseTime",
+                        "type": "int"
+                      },
+                      {
+                        "name": "HttpUserAgent",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HttpVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LogonMethod",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LogonProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkApplicationProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkBytes",
+                        "type": "long"
+                      },
+                      {
+                        "name": "NetworkConnectionHistory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkDirection",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkDuration",
+                        "type": "int"
+                      },
+                      {
+                        "name": "NetworkIcmpCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "NetworkIcmpType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkPackets",
+                        "type": "long"
+                      },
+                      {
+                        "name": "NetworkProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkProtocolVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkRuleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NetworkRuleNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "NetworkSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NewPropertyValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NewValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Object",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ObjectId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ObjectType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OldValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Operation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginalObjectType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessCommandLine",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessCreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ParentProcessFileCompany",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessFileDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessFileProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessFileVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessIMPHASH",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessInjectedAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessIntegrityLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessIsHidden",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ParentProcessMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ParentProcessTokenElevation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PreviousPropertyValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryKey",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryPreviousKey",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryPreviousValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryPreviousValueData",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryPreviousValueType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryValueData",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistryValueType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestedIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Rule",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SourceSystem",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Src",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcAppId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcAppName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcBytes",
+                        "type": "long"
+                      },
+                      {
+                        "name": "SrcDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDeviceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDomainType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDvcId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDvcIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDvcOs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDvcScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcDvcScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileCreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "SrcFileDirectory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileExtension",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileMimeType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFilePath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFilePathType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcFileSize",
+                        "type": "long"
+                      },
+                      {
+                        "name": "SrcFQDN",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcGeoCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcGeoCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcGeoLatitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "SrcGeoLongitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "SrcGeoRegion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcHostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcInterfaceGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcInterfaceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcIsp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcMacAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcNatIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcNatPortNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SrcOriginalRiskLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcOriginalUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcPackets",
+                        "type": "long"
+                      },
+                      {
+                        "name": "SrcPortNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SrcProcessGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcProcessId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcProcessName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcRiskLevel",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SrcSubscriptionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUsername",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUsernameType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcUserUid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcVlanId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcZone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetAppId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetAppName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDeviceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDomainType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDvcId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDvcIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDvcOs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDvcScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetDvcScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileCreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "TargetFileDirectory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileExtension",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileMimeType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFilePath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFilePathType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetFileSize",
+                        "type": "long"
+                      },
+                      {
+                        "name": "TargetFQDN",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetGeoCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetGeoCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetGeoLatitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "TargetGeoLongitude",
+                        "type": "real"
+                      },
+                      {
+                        "name": "TargetGeoRegion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetHostname",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetOriginalAppType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetOriginalRiskLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetOriginalUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetPortNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TargetProcessCommandLine",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessCreationTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "TargetProcessCurrentDirectory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileCompany",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileInternalName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFilename",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileOriginalName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessFileSize",
+                        "type": "long"
+                      },
+                      {
+                        "name": "TargetProcessFileVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessIMPHASH",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessInjectedAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessIntegrityLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessIsHidden",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TargetProcessMD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessSHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessSHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessSHA512",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessStatusCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetProcessTokenElevation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetRiskLevel",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TargetScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUrl",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserIdType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUsername",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUsernameType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserScopeId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserSessionGuid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserSessionId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetUserUid",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TcpFlagsAck",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TcpFlagsFin",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TcpFlagsPsh",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TcpFlagsRst",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TcpFlagsSyn",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "TcpFlagsUrg",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ThreatCategory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatConfidence",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ThreatField",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatFilePath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatFirstReportedTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ThreatFirstReportedTime_d",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ThreatId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatIpAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatIsActive",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ThreatLastReportedTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ThreatLastReportedTime_d",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ThreatName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatOriginalConfidence",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatOriginalRiskLevel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatOriginalRiskLevel_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatRiskLevel",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "TransactionIdHex",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Url",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UrlCategory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UrlOriginal",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ValueType",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "ASimWorkspace"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='AuditEvent'",
+                    "outputStream": "Microsoft-ASimAuditEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='Authentication'",
+                    "outputStream": "Microsoft-ASimAuthenticationEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='DhcpEvent'",
+                    "outputStream": "Microsoft-ASimDhcpEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='Dns' | extend ThreatFirstReportedTime=tostring(ThreatFirstReportedTime), ThreatLastReportedTime=tostring(ThreatLastReportedTime), ThreatOriginalRiskLevel=toint(ThreatOriginalRiskLevel)",
+                    "outputStream": "Microsoft-ASimDnsActivityLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='FileEvent'",
+                    "outputStream": "Microsoft-ASimFileEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='NetworkSession'",
+                    "outputStream": "Microsoft-ASimNetworkSessionLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='ProcessEvent'",
+                    "outputStream": "Microsoft-ASimProcessEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='RegistryEvent'",
+                    "outputStream": "Microsoft-ASimRegistryEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='UserManagement'",
+                    "outputStream": "Microsoft-ASimUserManagementActivityLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-SynqlyASIM"
+                    ],
+                    "destinations": [
+                      "ASimWorkspace"
+                    ],
+                    "transformKql": "source | where EventSchema=='WebSession' | extend FileSize=toint(FileSize)",
+                    "outputStream": "Microsoft-ASimWebSessionLogs"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "SynqlyIntegrationConnector",
+          "title": "Synqly Integration Connector",
+          "publisher": "Synqly",
+          "logo": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Synqly.svg",
+          "descriptionMarkdown": "The [Synqly](https://synqly.com) connector provides the capability to push security events from Synqly integrations into Microsoft Sentinel using the Azure Logs Ingestion API. Events are automatically normalized to ASIM (Advanced Security Information Model) tables for use with Microsoft Sentinel analytics, workbooks, and hunting queries.",
+          "graphQueries": [
+            {
+              "metricName": "Total Events Received",
+              "legend": "Events",
+              "baseQuery": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector'"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "View recent audit events",
+              "query": "ASimAuditEventLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+            },
+            {
+              "description": "View recent authentication events",
+              "query": "ASimAuthenticationEventLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+            },
+            {
+              "description": "View recent network sessions",
+              "query": "ASimNetworkSessionLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | take 10"
+            },
+            {
+              "description": "View all event types received",
+              "query": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize count() by EventSchema | order by count_ desc"
+            },
+            {
+              "description": "View ingestion rate by event type",
+              "query": "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where TimeGenerated > ago(24h) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize count() by bin(TimeGenerated, 1h), EventSchema | render timechart"
+            },
+            {
+              "description": "Query using ASIM parser (recommended)",
+              "query": "imAuthentication | where TimeGenerated > ago(24h) | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ASimAuditEventLogs",
+              "lastDataReceivedQuery": "ASimAuditEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimAuthenticationEventLogs",
+              "lastDataReceivedQuery": "ASimAuthenticationEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimDhcpEventLogs",
+              "lastDataReceivedQuery": "ASimDhcpEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimDnsActivityLogs",
+              "lastDataReceivedQuery": "ASimDnsActivityLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimFileEventLogs",
+              "lastDataReceivedQuery": "ASimFileEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimNetworkSessionLogs",
+              "lastDataReceivedQuery": "ASimNetworkSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimProcessEventLogs",
+              "lastDataReceivedQuery": "ASimProcessEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimRegistryEventLogs",
+              "lastDataReceivedQuery": "ASimRegistryEventLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimUserManagementActivityLogs",
+              "lastDataReceivedQuery": "ASimUserManagementActivityLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimWebSessionLogs",
+              "lastDataReceivedQuery": "ASimWebSessionLogs | where TimeGenerated > ago(7d) and AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | where AdditionalFields._ConnectorId == 'SynqlySentinelASIMConnector' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required for the Log Analytics workspace.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra ID",
+                "description": "Application Developer role (or higher) to create app registrations."
+              },
+              {
+                "name": "Microsoft Azure",
+                "description": "Owner or User Access Administrator role on the resource group to deploy DCR and assign Monitoring Metrics Publisher role."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Create ARM Resources and Provide the Required Permissions",
+              "description": "This connector enables push-based ingestion of security events from Synqly integrations into Microsoft Sentinel. Events are automatically normalized to ASIM (Advanced Security Information Model) tables.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Deploy Connector Resources\nClicking \"Deploy\" creates a Data Collection Rule (DCR), Data Collection Endpoint (DCE), and Entra application with the necessary permissions to securely send data to Microsoft Sentinel."
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Deploy Synqly Integration connector resources",
+                    "applicationDisplayName": "Synqly Integration Connector Application"
+                  },
+                  "type": "DeployPushConnectorButton"
+                }
+              ]
+            },
+            {
+              "title": "2. Grant Additional Permissions (Based on Use Case)",
+              "description": "Additional roles may be required depending on how you plan to use Synqly with Microsoft Sentinel.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "**Sink Connector (Write-Only)**: No additional permissions needed.\n\n**SIEM Connector (Read/Write)**: Assign **Microsoft Sentinel Contributor** role to the Entra application via the Azure UI in your Log Analytics workspace.\n\nSee [Synqly documentation](https://docs.synqly.com/guides/provider-configuration/microsoft-sentinel-siem-setup) for detailed setup guides."
+                  }
+                }
+              ]
+            },
+            {
+              "title": "3. Push your logs into the workspace",
+              "description": "Provide these parameters to your Synqly integration. The Synqly service will automatically handle the technical details of data ingestion, including formatting events to one of the 10 supported ASIM schemas (Authentication, AuditEvent, Dhcp, Dns, FileEvent, NetworkSession, ProcessEvent, RegistryEvent, UserManagement, WebSession).",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "**Important**: Events with unsupported schema types are silently dropped by Azure. If expected data is not appearing, verify with your Synqly integration provider that events are being sent with one of the supported schema types listed above."
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Tenant ID (Directory ID)",
+                    "fillWith": [
+                      "TenantId"
+                    ]
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra App Registration Application ID",
+                    "fillWith": [
+                      "ApplicationId"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Application ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra App Registration Secret",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Secret"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Data Collection Endpoint Uri",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Data Collection Rule Immutable ID",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Stream Name",
+                    "value": "Custom-SynqlyASIM"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Synqly"
+        },
+        "support": {
+          "name": "Synqly",
+          "email": "support@synqly.com",
+          "tier": "Partner",
+          "link": "https://synqly.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Synqly Integration Connector",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Synqly Integration Connector",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Synqly"
+                },
+                "support": {
+                  "name": "Synqly",
+                  "email": "support@synqly.com",
+                  "tier": "Partner",
+                  "link": "https://synqly.com/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'SynqlyIntegrationConnectorDataConnector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "SynqlyIntegrationConnector",
+                "dcrConfig": {
+                  "dataCollectionRuleId": "{{dataCollectionRuleId}}",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-SynqlyASIM"
+                },
+                "auth": {
+                  "type": "Push",
+                  "appId": "[[parameters('auth').appId]",
+                  "servicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.messages"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "SynqlyIntegrationConnector",
+        "publisherDisplayName": "Synqly",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SynqlyIntegrationConnector/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Synqly Integration Connector for Microsoft Sentinel enables push-based ingestion of security events using ASIM normalization across 10 event types.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Synqly.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SynqlyIntegrationConnector",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Synqly"
+        },
+        "support": {
+          "name": "Synqly",
+          "email": "support@synqly.com",
+          "tier": "Partner",
+          "link": "https://synqly.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-01-30",
+        "lastPublishDate": "2026-01-30",
+        "providers": [
+          "Synqly"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network",
+            "Security - Threat Protection",
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
