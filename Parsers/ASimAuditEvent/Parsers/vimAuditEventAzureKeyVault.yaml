@@ -149,33 +149,7 @@ ParserQuery: |
             and (array_length(actorusername_has_any) == 0 or identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s has_any (actorusername_has_any))
             and (array_length(operation_has_any) == 0 or OperationName has_any (operation_has_any))
             and (array_length(object_has_any) == 0 or id_s has_any (object_has_any) or requestUri_s has_any (object_has_any))        
-        | extend
-            EventResult = case(
-                httpStatusCode_d between (200 .. 299), "Success",
-                httpStatusCode_d >= 400, "Failure",
-                "NA"
-            ),
-            EventResultDetails = case(
-                httpStatusCode_d == 200, "",
-                httpStatusCode_d == 201, "Created",
-                httpStatusCode_d == 202, "Accepted",
-                httpStatusCode_d == 204, "No content",
-                httpStatusCode_d == 400, "Bad request",
-                httpStatusCode_d == 401, "Unauthorized",
-                httpStatusCode_d == 403, "Unauthorized",
-                httpStatusCode_d == 404, "Not found",
-                httpStatusCode_d == 409, "Conflict",
-                httpStatusCode_d == 429, "Throttled",
-                httpStatusCode_d >= 500, "Internal error",
-                ""
-            ),
-            EventOriginalResultDetails = strcat("HTTP status code: ", tostring(toint(httpStatusCode_d)), iff(ResultDescription != "", strcat(", ", ResultDescription), ""))
-        | where (eventresult == "*" or EventResult =~ eventresult)
-        | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-        | lookup KeyVaultOperationLookup on OperationName
-        | extend EventType = iff(isempty(EventType), "Other", EventType)
-        | lookup KeyVaultObjectTypeLookup on OperationName
-        | extend ObjectType = iff(isempty(ObjectType), "Other", ObjectType)
+        | extend HttpStatusCode = toint(httpStatusCode_d)
         | extend
             ActorUsername = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s,
             ActorUsernameType = iff(isnotempty(identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s), "UPN", ""),
@@ -195,44 +169,14 @@ ParserQuery: |
         | where
             (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress, srcipaddr_has_any_prefix))
             and (array_length(operation_has_any) == 0 or OperationName has_any (operation_has_any))
-            and (array_length(object_has_any) == 0 or Id has_any (object_has_any) or RequestUri has_any (object_has_any))            
+            and (array_length(object_has_any) == 0 or Id has_any (object_has_any) or RequestUri has_any (object_has_any))  
+        | extend Identity_claims = todynamic(Identity).claim
         | extend
-            EventResult = case(
-                HttpStatusCode between (200 .. 299), "Success",
-                HttpStatusCode >= 400, "Failure",
-                "NA"
-            ),
-            EventResultDetails = case(
-                HttpStatusCode == 200, "",
-                HttpStatusCode == 201, "Created",
-                HttpStatusCode == 202, "Accepted",
-                HttpStatusCode == 204, "No content",
-                HttpStatusCode == 400, "Bad request",
-                HttpStatusCode == 401, "Unauthorized",
-                HttpStatusCode == 403, "Unauthorized",
-                HttpStatusCode == 404, "Not found",
-                HttpStatusCode == 409, "Conflict",
-                HttpStatusCode == 429, "Throttled",
-                HttpStatusCode >= 500, "Internal error",
-                ""
-            ),
-            EventOriginalResultDetails = strcat("HTTP status code: ", tostring(HttpStatusCode), iff(ResultDescription != "", strcat(", ", ResultDescription), ""))
-        | where (eventresult == "*" or EventResult =~ eventresult)
-        | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-        | lookup KeyVaultOperationLookup on OperationName
-        | extend EventType = iff(isempty(EventType), "Other", EventType)
-        | lookup KeyVaultObjectTypeLookup on OperationName
-        | extend ObjectType = iff(isempty(ObjectType), "Other", ObjectType)
-        | extend IdentityStringReplaced = replace_string(tostring(Identity), "http://schemas.microsoft.com/identity/claims/objectidentifier", "objectidentifier")
-        | extend IdentityStringReplaced = replace_string(IdentityStringReplaced, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn", "upn")
-        | extend IdentityStringReplaced = replace_string(IdentityStringReplaced, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", "name")
-        | extend Identity_claims = todynamic(IdentityStringReplaced).claim
-        | extend
-            ActorUsername = tostring(Identity_claims.upn),
-            ActorUsernameType = iff(isnotempty(tostring(Identity_claims.upn)), "UPN", ""),
-            ActorUserId = Identity_claims.objectidentifier,
+            ActorUsername = tostring(Identity_claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"]),
+            ActorUsernameType = iff(isnotempty(tostring(Identity_claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"])), "UPN", ""),
+            ActorUserId = Identity_claims["http://schemas.microsoft.com/identity/claims/objectidentifier"],
             ActorUserIdType = case(
-                isnotempty(tostring(Identity_claims.objectidentifier)), "AADID",
+                isnotempty(tostring(Identity_claims["http://schemas.microsoft.com/identity/claims/objectidentifier"])), "AADID",
                 isnotempty(tostring(Identity_claims.appid)), "AADID",
                 ""
             )
@@ -243,6 +187,10 @@ ParserQuery: |
         union 
         AzDiagnostics(disabled), 
         ResourceSpecific(disabled)
+        | lookup KeyVaultOperationLookup on OperationName
+        | extend EventType = iff(isempty(EventType), "Other", EventType)
+        | lookup KeyVaultObjectTypeLookup on OperationName
+        | extend ObjectType = iff(isempty(ObjectType), "Other", ObjectType)
         | extend
             EventCount = int(1),
             EventStartTime = TimeGenerated,
@@ -267,7 +215,30 @@ ParserQuery: |
             Dst = TargetAppName,
             Src = SrcIpAddr,
             Dvc = EventProduct,
-            EventUid = _ItemId
+            EventUid = _ItemId        
+        | extend
+          EventResult = case(
+              HttpStatusCode between (200 .. 299), "Success",
+              HttpStatusCode >= 400, "Failure",
+              "NA"
+          ),
+          EventResultDetails = case(
+              HttpStatusCode == 200, "",
+              HttpStatusCode == 201, "Created",
+              HttpStatusCode == 202, "Accepted",
+              HttpStatusCode == 204, "No content",
+              HttpStatusCode == 400, "Bad request",
+              HttpStatusCode == 401, "Unauthorized",
+              HttpStatusCode == 403, "Unauthorized",
+              HttpStatusCode == 404, "Not found",
+              HttpStatusCode == 409, "Conflict",
+              HttpStatusCode == 429, "Throttled",
+              HttpStatusCode >= 500, "Internal error",
+              ""
+          ),
+          EventOriginalResultDetails = strcat("HTTP status code: ", tostring(HttpStatusCode), iff(ResultDescription != "", strcat(", ", ResultDescription), ""))    
+        | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+        | where (eventresult == "*" or EventResult =~ eventresult)
         | project
             TimeGenerated,
             Type,
