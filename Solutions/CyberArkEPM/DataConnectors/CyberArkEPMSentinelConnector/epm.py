@@ -43,7 +43,7 @@ TIME_FRAME_FILE_NAME = 'time_frame.json'
 
 def _is_token_expired(token: dict) -> bool:
     timestamp = int(token.get('timestamp', 0))
-    expiration = int(token.get('expiration', 0))
+    expiration = int(token.get('expires_in', 0))
     return timestamp + expiration <= int(time.time())
 
 
@@ -112,9 +112,9 @@ def _get_time_window() -> tuple[str, str]:
 
 def _fetch_set_events(fetch_func, dispatcher_url: str, token: str, filter_date: str, set_id: dict, next_cursor: str = 'start') -> list:
     response_json = fetch_func(
-        epmserver=dispatcher_url,
-        epmToken=token,
-        setid=set_id['Id'],
+        epm_server=dispatcher_url,
+        epm_token=token,
+        set_id=set_id['Id'],
         data=filter_date,
         next_cursor=next_cursor,
     ).json()
@@ -136,7 +136,7 @@ def _get_dispatcher_url(auth_token: str):
     url = f'{epm_host}/EPM/API/accounts/tenanturl'
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'basic {auth_token}'
+        'Authorization': f'Bearer {auth_token}'
     }
     tenant_url = storage.load(file_name=EPM_TENANT_URL_FILE_NAME)
     if tenant_url:
@@ -149,7 +149,7 @@ def _get_dispatcher_url(auth_token: str):
         if 200 <= response.status_code <= 299:
             tenant_url = res_content['tenantUrl']
             storage.save(
-                data={'tenant_url': tenant_url},
+                data={'tenantUrl': tenant_url},
                 file_name=EPM_TENANT_URL_FILE_NAME,
             )
             return tenant_url
@@ -184,25 +184,25 @@ def collect_events() -> list:
     all_events: list = []
     for set_id in sets:
         logging.info(f"Collecting aggregated events from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_aggregated_events, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_aggregated_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'aggregated_events'
             all_events.append(e)
 
         logging.info(f"Collecting raw events from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_detailed_raw_events, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_detailed_raw_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'raw_event'
             all_events.append(e)
 
         logging.info(f"Collecting aggregated policy audits from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_aggregated_policy_audits, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_aggregated_policy_audits, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'aggregated_policy_audits'
             all_events.append(e)
 
         logging.info(f"Collecting policy audit raw event details from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_policy_audit_raw_event_details, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_policy_audit_raw_event_details, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'policy_audit_raw_event_details'
             all_events.append(e)
