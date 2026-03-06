@@ -1548,6 +1548,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
+        ('🔍', f'{relative_to_root}index.html', 'Interactive'),
     ]
     
     # Build navigation line
@@ -1556,6 +1557,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         # Check if this is the current page
         is_current = False
         if page_type == 'statistics' and name == '📊':
+            is_current = True
+        elif page_type == 'readme' and name == '🏠':
             is_current = True
         elif page_type == 'solutions' and name == 'Solutions':
             is_current = True
@@ -8420,6 +8423,9 @@ def generate_docs_readme(
         f.write("This documentation provides comprehensive information about Microsoft Sentinel Solutions, ")
         f.write("including data connectors, log tables, content items, parsers, and ASIM parsers.\n\n")
         
+        # Browse bar
+        write_browse_section(f, 'readme', "")
+        
         # Quick summary stats
         f.write("## Overview\n\n")
         f.write("| Resource | Count | Details |\n")
@@ -8439,6 +8445,7 @@ def generate_docs_readme(
         if asim_products_count > 0:
             f.write(f"| [ASIM Products](asim/asim-products-index.md) | {asim_products_count} | Products with ASIM support |\n")
         f.write(f"| [Statistics](statistics.md) | - | Comprehensive statistics and metrics |\n")
+        f.write(f"| [Interactive Index](index.html) | - | Sortable/filterable HTML view |\n")
         f.write("\n")
         
         # Footnotes for icons if needed
@@ -8464,10 +8471,11 @@ def generate_docs_readme(
         f.write("├── parsers/                # Non-ASIM parser documentation\n")
         f.write("│   ├── parsers-index.md    # Parsers listing\n")
         f.write("│   └── *.md                # Individual parser pages\n")
-        f.write("└── asim/                   # ASIM parser documentation\n")
-        f.write("    ├── asim-index.md       # ASIM parsers index by schema\n")
-        f.write("    ├── asim-products-index.md  # ASIM parsers index by product\n")
-        f.write("    └── *.md                # Individual parser pages\n")
+        f.write("├── asim/                   # ASIM parser documentation\n")
+        f.write("│   ├── asim-index.md       # ASIM parsers index by schema\n")
+        f.write("│   ├── asim-products-index.md  # ASIM parsers index by product\n")
+        f.write("│   └── *.md                # Individual parser pages\n")
+        f.write("└── index.html              # Interactive index (sortable/filterable)\n")
         f.write("```\n\n")
         
         f.write("## Source\n\n")
@@ -9194,6 +9202,22 @@ def main() -> None:
     print(f"  - Content: {args.output_dir / 'content'}/ ({content_pages_count} files)")
     print(f"  - ASIM Parsers: {args.output_dir / 'asim'}/ ({asim_source_pairs * 2 + asim_union_pairs * 2 + asim_empty_count} files)")
     print(f"  - Parsers: {args.output_dir / 'parsers'}/ ({parser_pages_count} files)")
+
+    # Generate interactive HTML index page in the same output directory
+    from generate_interactive_docs import generate_interactive
+    generate_interactive(
+        mapping_csv=args.input,
+        connectors_csv=args.connectors_csv,
+        solutions_csv=args.solutions_csv,
+        content_items_csv=args.content_items_csv,
+        tables_csv=args.tables_csv,
+        output_dir=args.output_dir,
+        content_tables_csv=args.content_tables_csv,
+        tables_overrides_csv=args.tables_overrides_csv,
+        table_schemas_csv=args.table_schemas_csv,
+        parsers_csv=args.parsers_csv,
+        asim_parsers_csv=args.asim_parsers_csv,
+    )
 
 
 if __name__ == "__main__":

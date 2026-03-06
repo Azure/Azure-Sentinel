@@ -10,6 +10,7 @@
 - [Running the Script](#running-the-script)
 - [Command Line Options](#command-line-options)
 - [Output Structure](#output-structure)
+- [Interactive HTML Index](#interactive-html-index)
 - [AI-Rendered Setup Instructions and Permissions](#ai-rendered-setup-instructions-and-permissions)
 - [Additional Documentation Sources](#additional-documentation-sources)
 - [Documentation Overrides and Additional Information](#documentation-overrides-and-additional-information)
@@ -36,6 +37,7 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
 - **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
 - **[Collection Methods Index](../connector-docs/collection-methods/collection-methods-index.md)** - Connectors grouped by data collection method
 - **[Statistics](../connector-docs/statistics.md)** - Comprehensive statistics and metrics
+- **[Interactive Index](../connector-docs/index.html)** - HTML page with DataTables.js for filtering, sorting, and searching across all entity types
 - **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](../connector-docs/solutions/) directory)
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](../connector-docs/connectors/) directory)
 - **Individual Table Pages** - Detailed pages for each table with metadata (in [`tables/`](../connector-docs/tables/) directory)
@@ -165,10 +167,15 @@ connector-docs/
 │   ├── 1passwordeventreporter.md
 │   ├── awscloudfront.md
 │   └── ...
-└── tables/                      # Individual table pages
-    ├── securityevent.md
-    ├── syslog.md
-    └── ...
+├── tables/                      # Individual table pages
+│   ├── securityevent.md
+│   ├── syslog.md
+│   └── ...
+├── index.html                   # Interactive HTML index (DataTables.js)
+├── css/
+│   └── style.css                # Custom styles for interactive index
+└── js/
+    └── app.js                   # DataTables initialization and tab logic
 ```
 
 ### Generated Content
@@ -269,6 +276,75 @@ connector-docs/
 - Deprecated connectors section (in connectors index)
 - Deprecated solutions marked with 🚫 icon (in solutions index)
 - Cross-references between solutions, connectors, tables, content, and parsers
+
+## Interactive HTML Index
+
+**Script:** `generate_interactive_docs.py`
+
+The documentation generator also produces an interactive HTML index page (`index.html`) that provides filterable, sortable tables for all entity types using [DataTables.js](https://datatables.net/). This page is generated automatically as part of `generate_connector_docs.py` and can also be run standalone.
+
+The interactive index is implemented in a separate module (`generate_interactive_docs.py`) that is called by the main documentation generator.
+
+### Tabs
+
+The interactive index has six tabs, each with per-column dropdown filters, global search, click-to-filter, and a "Clear All Filters" notification bar:
+
+| Tab | Columns | Summary Card |
+|-----|---------|-------------|
+| **Solutions** | Logo, Solution, Status, Publisher, Support Tier, Connectors, Tables, Content Items | Active Solutions count |
+| **Connectors** | Logo, Connector, Status, Publisher, Collection Method, Ingestion API, Solution, Tables | Active Connectors count |
+| **Tables** | Table, Discovered Via, Category, Solutions, Connectors, Azure Monitor, Defender XDR | Total Tables count |
+| **Content** | Name, Type, Source, Solution, Description | Total Content Items count |
+| **Parsers** | Parser, Source, Solution, Tables | Total Parsers count |
+| **ASIM** | Parser, Schema, Type, Product, Version, Solutions | Total ASIM Parsers count |
+
+### Icons and Legends
+
+Each tab includes a legend explaining the icons used:
+
+- **Status badges**: Active (green), Deprecated (red), Unpublished (orange)
+- 🔶 Custom Logs v1 (classic) — tables/connectors using the legacy CLv1 schema
+- 📖 Table schema available
+- 🔍 Discovered (not listed in solution JSON)
+- 📦 In solution package / 📄 Standalone / 🔗 GitHub only — content source indicators
+
+### Features
+
+- **Per-column filters**: Dropdown filters on each column (except logo/count columns)
+- **Click-to-filter**: Click any cell value to filter that column
+- **Global search**: Full-text search across all columns
+- **Clear All Filters**: Yellow notification bar appears when filters are active
+- **Entity links**: All entity names link to their individual markdown documentation pages
+- **Collection method links**: Method names link to their method index pages
+- **Solution logos**: Displayed in Solutions and Connectors tabs
+- **Navigation bar**: Links to 📖 Docs (static markdown index) and 📊 Statistics page
+
+### Standalone Usage
+
+```bash
+python generate_interactive_docs.py \
+    --output-dir <docs-directory> \
+    --input solutions_connectors_tables_mapping.csv \
+    --connectors-csv connectors.csv \
+    --solutions-csv solutions.csv \
+    --content-items-csv content_items.csv \
+    --tables-csv tables_reference.csv \
+    --tables-overrides-csv tables.csv \
+    --content-tables-csv content_tables_mapping.csv \
+    --table-schemas-csv table_schemas.csv \
+    --parsers-csv parsers.csv \
+    --asim-parsers-csv asim_parsers.csv
+```
+
+### Synchronization with Static Indexes
+
+The interactive HTML index and static markdown indexes (solutions-index.md, connectors-index.md, tables-index.md, content-index.md, parsers-index.md, asim-index.md) should present the same data with the same filtering rules. When modifying either, ensure the following stay in sync:
+
+- Data filtering/inclusion rules (which entities to show, discovered vs. in-solution)
+- Status classification logic (Active/Deprecated/Unpublished)
+- Icon usage and legend entries
+- Link generation (entity links, collection method links, content source)
+- Special-case handling (placeholder names, "GitHub Only" non-clickable, Standalone non-linked)
 
 ## AI-Rendered Setup Instructions and Permissions
 

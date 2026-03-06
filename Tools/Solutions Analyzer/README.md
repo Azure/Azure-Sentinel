@@ -154,6 +154,24 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.4 - Interactive HTML Index
+
+**Interactive HTML Index:**
+- New `index.html` with DataTables.js providing filterable, sortable, searchable tables
+- Six tabs: Solutions, Connectors, Tables, Content, Parsers, ASIM Parsers
+- Per-column dropdown filters, click-to-filter, global search, and "Clear All Filters" notification bar
+- Summary cards showing active/total counts for each entity type
+- Entity names link to their individual markdown documentation pages
+- Collection method names link to method index pages
+- Solution logos displayed in Solutions and Connectors tabs
+- Navigation bar with links to static docs and statistics page
+- Status badges (Active/Deprecated/Unpublished), icons for CLv1 (🔶), schema (📖), discovered (🔍)
+- Content source indicators: 📦 Solution, 📄 Standalone, 🔗 GitHub Only
+- Standalone content sources show solution name as plain text (not linked), matching static indexes
+- Connectors tab includes all connectors (in-solution + discovered), matching connectors-index.md
+- Per-tab icon legends explaining all visual indicators
+- Can be run standalone or as part of `generate_connector_docs.py`
+
 ### v9.3 - Solution Deprecation & Deprecation Dates
 
 **Solution-Level Deprecation Detection:**
