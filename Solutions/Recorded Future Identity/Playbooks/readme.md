@@ -431,8 +431,6 @@ There is a general limitation of ***3*** fields in the alert description. More i
 
 These analytic are be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
 
-There are importable versions provided under the `Recorded Future Identity\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
-
 <a id="known_issues"></a>
 ## Known Issues
 
