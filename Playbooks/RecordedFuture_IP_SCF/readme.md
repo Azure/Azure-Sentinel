@@ -1,5 +1,20 @@
 # Recorded Future - IP - Command and Control Security Control Feed
 
+> [!CAUTION]
+> ## DEPRECATED
+>
+> **These playbooks have been deprecated and are no longer functional.**
+>
+> Microsoft has deprecated the **Microsoft Graph Security tiIndicators API** (beta) that these playbooks rely on. The `submitTiIndicators` endpoint is no longer available.
+>
+> ### Migration Options
+> - Contact Recorded Future support for updated integration options
+>
+> ### Microsoft Deprecation Reference
+> - [Microsoft Graph Security tiIndicator deprecation](https://learn.microsoft.com/en-us/graph/api/resources/tiindicator?view=graph-rest-beta)
+
+---
+
 Author: Recorded Future\
 Link to [Recorded Future main readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future/readme.md)
 
@@ -46,12 +61,4 @@ Due to internal Microsoft Logic Apps dependencies, please deploy first the **Rec
 
 ## Installation links
 
-Links to deploy the RecordedFuture_IP_SCF_ImportToDefenderEndpoint playbook template:
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_ImportToDefenderEndpoint.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_ImportToDefenderEndpoint.json)
-
-Links to deploy the RecordedFuture_IP_SCF_IndicatorProcessor playbook template:
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_IndicatorProcessor.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FRecordedFuture_IP_SCF%2FRecordedFuture_IP_SCF_IndicatorProcessor.json)
+>This playbook has been deprecated
