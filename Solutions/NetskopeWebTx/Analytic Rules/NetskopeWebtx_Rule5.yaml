@@ -1,0 +1,51 @@
+id: d1b88716-3cd4-4585-a9a2-2dd2c9b04ecb
+name: Netskope - Impossible Travel Detection (Two Countries in Less Than 1 Hour)
+description: |
+  Detects when a user accesses resources from two distinct countries within less than 1 hour, indicating potential credential compromise or VPN abuse.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let timeWindow = 1h;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername) and isnotempty(XCCountry)
+  | summarize 
+      Countries = make_set(XCCountry),
+      Locations = make_set(XCLocation),
+      IPs = make_set(CIp),
+      MinTime = min(TimeGenerated),
+      MaxTime = max(TimeGenerated),
+      EventCount = count()
+      by CsUsername, bin(TimeGenerated, timeWindow)
+  | where array_length(Countries) > 1
+  | extend TimeDiffMinutes = datetime_diff('minute', MaxTime, MinTime)
+  | where TimeDiffMinutes < 60
+  | project 
+      TimeGenerated,
+      User = CsUsername,
+      DistinctCountries = Countries,
+      Locations,
+      SourceIPs = IPs,
+      TimeDifferenceMinutes = TimeDiffMinutes,
+      EventCount,
+      AlertDetails = strcat('User ', CsUsername, ' accessed from ', array_length(Countries), ' countries within ', TimeDiffMinutes, ' minutes')
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.0
+kind: Scheduled

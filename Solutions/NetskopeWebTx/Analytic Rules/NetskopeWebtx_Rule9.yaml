@@ -1,0 +1,79 @@
+id: 6d989fb0-933e-4ae6-88fa-10e7b51c8897
+name: Netskope - Suspicious Network Context (Unusual IPs/Geo/Ports)
+description: |
+  Detects suspicious network activity based on unusual source/destination IPs, geographic anomalies, uncommon ports, and high traffic volumes.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+  - Discovery
+relevantTechniques:
+  - T1071
+  - T1048
+  - T1046
+query: |
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername)
+  | extend 
+      DstPort = coalesce(XCsDstPort, XSrDstPort, CsUriPort),
+      SrcIP = coalesce(XCsSrcIp, CIp),
+      DstIP = coalesce(XCsDstIp, XSrDstIp, SIp)
+  | summarize 
+      EventCount = count(),
+      TotalBytes = sum(Bytes),
+      UniqueDstIPs = dcount(DstIP),
+      DstIPs = make_set(DstIP, 20),
+      UniqueDstPorts = dcount(DstPort),
+      DstPorts = make_set(DstPort, 20),
+      UniqueHosts = dcount(CsHost),
+      Hosts = make_set(CsHost, 20),
+      Countries = make_set(XSCountry),
+      SuspiciousPortHits = countif(DstPort in (20, 21, 22, 23, 25, 445, 1433, 1434, 3306, 3389, 5432, 5900, 5901)),
+      HighRiskCountryHits = countif(XSCountry in ('RU', 'CN', 'KP', 'IR', 'SY'))
+      by CsUsername, XCsSrcIp, XCCountry, XCLocation, bin(TimeGenerated, 1h)
+  | where SuspiciousPortHits > 0 or HighRiskCountryHits > 0 or UniqueDstIPs > 50 or TotalBytes > 1073741824
+  | extend 
+      TotalMB = round(TotalBytes / 1048576.0, 2),
+      RiskFactors = strcat_array(array_concat(
+          iff(SuspiciousPortHits > 0, dynamic(['Suspicious Ports']), dynamic([])),
+          iff(HighRiskCountryHits > 0, dynamic(['High Risk Country']), dynamic([])),
+          iff(UniqueDstIPs > 50, dynamic(['Many Destinations']), dynamic([])),
+          iff(TotalBytes > 1073741824, dynamic(['High Volume']), dynamic([]))
+      ), ', ')
+  | project 
+      TimeGenerated,
+      User = CsUsername,
+      SourceIP = XCsSrcIp,
+      SourceCountry = XCCountry,
+      SourceLocation = XCLocation,
+      DestinationIPs = DstIPs,
+      UniqueDstIPCount = UniqueDstIPs,
+      DestinationPorts = DstPorts,
+      TargetHosts = Hosts,
+      DestinationCountries = Countries,
+      SuspiciousPortAccessCount = SuspiciousPortHits,
+      HighRiskCountryAccessCount = HighRiskCountryHits,
+      TotalDataMB = TotalMB,
+      EventCount,
+      RiskFactors
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: Scheduled
