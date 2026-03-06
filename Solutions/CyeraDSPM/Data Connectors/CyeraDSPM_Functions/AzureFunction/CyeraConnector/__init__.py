@@ -47,7 +47,7 @@ from typing import Dict, Any, Iterable, List, Tuple, Optional
 from uuid import uuid4
 
 import requests
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
 
@@ -120,7 +120,7 @@ DRY_RUN = _env_bool("DRY_RUN", False)
 
 # -------------------- Azure clients --------------------
 
-_default_cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)       # CodeQL [SM05139] Commecting to supress alert. Partner have been asked to udate the code to address the alert.
+_managed_identity_cred = ManagedIdentityCredential()  # Using explicit managed identity for Azure Function authentication
 _blob_client: Optional[BlobServiceClient] = None
 
 def _init_blob_client() -> BlobServiceClient:
@@ -131,7 +131,7 @@ def _init_blob_client() -> BlobServiceClient:
     # Prefer MSI to account URL if provided (Function's managed identity must have Blob Data Contributor)
     if STATE_ACCOUNT_URL:
         try:
-            _blob_client = BlobServiceClient(account_url=STATE_ACCOUNT_URL, credential=_default_cred)
+            _blob_client = BlobServiceClient(account_url=STATE_ACCOUNT_URL, credential=_managed_identity_cred)
             try:
                 _blob_client.create_container(STATE_CONTAINER)
             except ResourceExistsError:
@@ -261,7 +261,7 @@ def _ingest_batches(stream: str, records: List[Dict[str, Any]], run_id: str) -> 
     if not DCE_INGEST or not DCR_IMMUTABLE_ID:
         raise RuntimeError("DCE_INGEST and DCR_IMMUTABLE_ID must be set.")
 
-    token = _default_cred.get_token("https://monitor.azure.com/.default").token
+    token = _managed_identity_cred.get_token("https://monitor.azure.com/.default").token
     url = f"{DCE_INGEST}/dataCollectionRules/{DCR_IMMUTABLE_ID}/streams/{stream}?api-version=2023-01-01"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
