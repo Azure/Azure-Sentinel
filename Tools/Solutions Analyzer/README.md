@@ -171,6 +171,7 @@ See the script documentation for details:
 - Connectors tab includes all connectors (in-solution + discovered), matching connectors-index.md
 - Per-tab icon legends explaining all visual indicators
 - Can be run standalone or as part of `generate_connector_docs.py`
+- Supports `--html-output-dir` and `--html-docs-path` for placing index.html separately from docs (e.g. repo root for GitHub Pages)
 
 ### v9.3 - Solution Deprecation & Deprecation Dates
 

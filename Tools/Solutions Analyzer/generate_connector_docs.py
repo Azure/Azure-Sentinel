@@ -8594,6 +8594,19 @@ def main() -> None:
         action="store_true",
         help="Skip running input CSV generation scripts",
     )
+    parser.add_argument(
+        "--html-output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for interactive index.html, css/, js/ (default: same as --output-dir)",
+    )
+    parser.add_argument(
+        "--html-docs-path",
+        type=str,
+        default='',
+        help="Relative or absolute URL path from index.html to the docs directory "
+             "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'.",
+    )
     
     args = parser.parse_args()
     
@@ -9203,7 +9216,7 @@ def main() -> None:
     print(f"  - ASIM Parsers: {args.output_dir / 'asim'}/ ({asim_source_pairs * 2 + asim_union_pairs * 2 + asim_empty_count} files)")
     print(f"  - Parsers: {args.output_dir / 'parsers'}/ ({parser_pages_count} files)")
 
-    # Generate interactive HTML index page in the same output directory
+    # Generate interactive HTML index page
     from generate_interactive_docs import generate_interactive
     generate_interactive(
         mapping_csv=args.input,
@@ -9217,6 +9230,8 @@ def main() -> None:
         table_schemas_csv=args.table_schemas_csv,
         parsers_csv=args.parsers_csv,
         asim_parsers_csv=args.asim_parsers_csv,
+        html_output_dir=args.html_output_dir,
+        html_docs_path=args.html_docs_path,
     )
 
 

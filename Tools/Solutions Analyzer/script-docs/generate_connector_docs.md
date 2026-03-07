@@ -114,6 +114,8 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
 | `--table-schemas-csv` | `table_schemas.csv` | Path to table schemas CSV file with column definitions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
+| `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/ |
+| `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. |
 
 ## Output Structure
 
@@ -335,6 +337,18 @@ python generate_interactive_docs.py \
     --parsers-csv parsers.csv \
     --asim-parsers-csv asim_parsers.csv
 ```
+
+To place `index.html` at a different location from the docs (e.g. for GitHub Pages which publishes from root):
+
+```bash
+python generate_interactive_docs.py \
+    --output-dir <docs-directory> \
+    --html-output-dir <repo-root> \
+    --html-docs-path "Solutions Docs/" \
+    ...
+```
+
+This writes `index.html`, `css/`, and `js/` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc.
 
 ### Synchronization with Static Indexes
 

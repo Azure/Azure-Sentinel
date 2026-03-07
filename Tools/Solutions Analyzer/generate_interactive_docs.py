@@ -47,6 +47,13 @@ SOURCE_SOLUTION_ICON = "📦"
 SOURCE_STANDALONE_ICON = "📄"
 SOURCE_GITHUB_ICON = "🔗"
 
+# Base path prefix for links from index.html to markdown docs.
+# Set at generation time via generate_interactive(docs_base_path=...).
+# When index.html is in the same directory as the docs, this is "".
+# When index.html is at a different level (e.g. repo root), this is
+# e.g. "Solutions Docs/" so that links become "Solutions Docs/solutions/foo.md".
+_docs_base_path: str = ""
+
 # Display-friendly names for content types (matches generate_connector_docs.py)
 CONTENT_TYPE_DISPLAY = {
     'analytic_rule': 'Analytic Rule',
@@ -208,7 +215,7 @@ def sanitize_filename(text: str) -> str:
 def _md_link(name: str, folder: str) -> str:
     """Return an HTML <a> link to a markdown doc page."""
     filename = sanitize_filename(name)
-    return f'<a href="{folder}/{filename}.md">{esc(name)}</a>'
+    return f'<a href="{_docs_base_path}{folder}/{filename}.md">{esc(name)}</a>'
 
 
 def get_content_item_filename(content_id: str, content_name: str, solution_name: str,
@@ -262,10 +269,10 @@ def _content_link(item: Dict[str, Any]) -> str:
     # Parsers have dedicated pages in parsers/ directory
     if content_type == 'parser':
         filename = sanitize_filename(content_name)
-        return f'<a href="parsers/{filename}.md">{esc(content_name)}</a>'
+        return f'<a href="{_docs_base_path}parsers/{filename}.md">{esc(content_name)}</a>'
 
     filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
-    return f'<a href="content/{filename}.md">{esc(content_name)}</a>'
+    return f'<a href="{_docs_base_path}content/{filename}.md">{esc(content_name)}</a>'
 
 
 # ---------------------------------------------------------------------------
@@ -637,7 +644,11 @@ def generate_html_page(
     parsers_data: List[Dict] = None,
     asim_data: List[Dict] = None,
 ) -> None:
-    """Generate the main interactive HTML page with all tabs."""
+    """Generate the main interactive HTML page with all tabs.
+
+    The module-level ``_docs_base_path`` must be set before calling this
+    function so that all entity links point to the correct docs location.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Write CSS
@@ -1134,8 +1145,8 @@ def _write_index_html(
     <div class="container-fluid">
         <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
         <div class="navbar-nav-links">
-            <a href="README.md" class="nav-doc-link" title="Documentation home">📖 Docs</a>
-            <a href="statistics.md" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
+            <a href="{_docs_base_path}README.md" class="nav-doc-link" title="Documentation home">📖 Docs</a>
+            <a href="{_docs_base_path}statistics.md" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
         </div>
     </div>
 </nav>
@@ -1250,7 +1261,7 @@ def _write_index_html(
         method = c['collection_method']
         if method and method != '?':
             method_file = sanitize_filename(method)
-            method_html = f'<a href="methods/{method_file}.md">{esc(method)}</a>'
+            method_html = f'<a href="{_docs_base_path}methods/{method_file}.md">{esc(method)}</a>'
         else:
             method_html = esc(method)
         sol_link = _md_link(c['solution'], 'solutions')
@@ -1379,7 +1390,7 @@ def _write_index_html(
 """)
     for p in parsers_data:
         discovered = f" {DISCOVERED_ICON}" if p.get('is_discovered') else ""
-        name_link = f'<a href="parsers/{sanitize_filename(p["name"])}.md">{esc(p["name"])}</a>{discovered}'
+        name_link = f'<a href="{_docs_base_path}parsers/{sanitize_filename(p["name"])}.md">{esc(p["name"])}</a>{discovered}'
         if p['source'] == 'Legacy':
             source_html = '📂 Legacy'
         else:
@@ -1415,7 +1426,7 @@ def _write_index_html(
 <tbody>
 """)
     for a in asim_data:
-        name_link = f'<a href="asim/{sanitize_filename(a["name"])}.md">{esc(a["name"])}</a>'
+        name_link = f'<a href="{_docs_base_path}asim/{sanitize_filename(a["name"])}.md">{esc(a["name"])}</a>'
         # Build solution links (comma-separated)
         sol_parts = []
         if a.get('solutions'):
@@ -1475,8 +1486,35 @@ def generate_interactive(
     table_schemas_csv: Path = None,
     parsers_csv: Path = None,
     asim_parsers_csv: Path = None,
+    html_output_dir: Path = None,
+    html_docs_path: str = '',
 ) -> None:
-    """Main entry point: load data and generate interactive HTML docs."""
+    """Main entry point: load data and generate interactive HTML docs.
+
+    Args:
+        html_output_dir: Where to write index.html, css/, js/.
+            Defaults to *output_dir* (same directory as the markdown docs).
+        html_docs_path: Relative or absolute URL path prefix from index.html
+            to the markdown docs directory.  For example ``"Solutions Docs/"``
+            when index.html lives at the repo root and docs live in
+            ``Solutions Docs/``.  Must end with ``/`` if non-empty.
+            An absolute URL (starting with ``http://`` or ``https://``) is
+            also supported.
+    """
+    global _docs_base_path
+
+    # Normalise docs base path
+    if html_docs_path:
+        # Ensure trailing slash for relative paths
+        if not html_docs_path.startswith(('http://', 'https://')) and not html_docs_path.endswith('/'):
+            html_docs_path += '/'
+        _docs_base_path = html_docs_path
+    else:
+        _docs_base_path = ''
+
+    if html_output_dir is None:
+        html_output_dir = output_dir
+
     print("Generating interactive HTML documentation...")
 
     # Default paths relative to this script
@@ -1524,7 +1562,7 @@ def generate_interactive(
           f"Tables: {len(tables_data)}, Content: {len(content_data)}, "
           f"Parsers: {len(parsers_data)}, ASIM: {len(asim_data)}")
 
-    generate_html_page(output_dir, solutions_data, connectors_data, tables_data,
+    generate_html_page(html_output_dir, solutions_data, connectors_data, tables_data,
                        content_data, parsers_data, asim_data)
 
 
@@ -1597,7 +1635,20 @@ def main() -> None:
         "--output-dir",
         type=Path,
         default=Path(__file__).parent / "interactive-docs",
-        help="Output directory for HTML docs",
+        help="Output directory for markdown docs (also used for HTML if --html-output-dir not set)",
+    )
+    parser.add_argument(
+        "--html-output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for index.html, css/, js/ (default: same as --output-dir)",
+    )
+    parser.add_argument(
+        "--html-docs-path",
+        type=str,
+        default='',
+        help="Relative or absolute URL path from index.html to the docs directory "
+             "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'.",
     )
 
     args = parser.parse_args()
@@ -1614,6 +1665,8 @@ def main() -> None:
         table_schemas_csv=args.table_schemas_csv,
         parsers_csv=args.parsers_csv,
         asim_parsers_csv=args.asim_parsers_csv,
+        html_output_dir=args.html_output_dir,
+        html_docs_path=args.html_docs_path,
     )
 
 
