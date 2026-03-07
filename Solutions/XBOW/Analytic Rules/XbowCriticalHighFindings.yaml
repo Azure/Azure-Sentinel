@@ -1,0 +1,85 @@
+id: a1b2c3d4-0001-4e5f-8a9b-xbow00000001
+name: XbowCriticalHighFindings
+description: |
+  Creates an incident for each Critical or High severity finding reported by XBOW that
+  is currently in an open state. These findings represent the most severe security issues
+  and require immediate attention. Each alert is deduplicated per finding so re-ingestion
+  of the same finding does not produce duplicate incidents.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: XbowSecurityConnector
+    dataTypes:
+      - XbowFindings_CL
+      - XbowAssets_CL
+queryFrequency: 30m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - PrivilegeEscalation
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1190
+query: |
+  XbowFindings_CL
+  | where TimeGenerated > ago(1h)
+  | where tolower(Severity) in ('critical', 'high')
+  | where isempty(State) or tolower(State) == 'open'
+  | summarize arg_max(TimeGenerated, *) by FindingId
+  | join kind=leftouter (
+      XbowAssets_CL
+      | summarize arg_max(TimeGenerated, *) by AssetId
+      | project AssetId, StartUrl
+  ) on AssetId
+  | project
+      TimeGenerated,
+      FindingId,
+      FindingName,
+      Severity,
+      State,
+      Summary,
+      Impact,
+      Mitigations,
+      Recipe,
+      AssetId,
+      AssetName,
+      OrganizationId,
+      CreatedAt,
+      StartUrl
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'XBOW {{Severity}}: {{FindingName}}'
+  alertDescriptionFormat: '{{Severity}} severity finding on asset {{AssetName}} ({{AssetId}}). {{Summary}}'
+customDetails:
+  FindingId: FindingId
+  FindingName: FindingName
+  Severity: Severity
+  State: State
+  AssetId: AssetId
+  AssetName: AssetName
+  OrganizationId: OrganizationId
+  CreatedAt: CreatedAt
+  Mitigations: Mitigations
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 24h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - FindingId
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: StartUrl
+version: 1.0.0
+kind: Scheduled

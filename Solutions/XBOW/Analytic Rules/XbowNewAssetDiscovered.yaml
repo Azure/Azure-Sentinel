@@ -1,0 +1,72 @@
+id: a1b2c3d4-0004-4e5f-8a9b-xbow00000004
+name: XbowNewAssetDiscovered
+description: |
+  Alerts when a new asset is registered in XBOW for the first time. This is detected by
+  matching assets whose CreatedAt timestamp falls within the current query window,
+  indicating the asset was newly added rather than updated. This helps track shadow IT,
+  new deployments, and any unexpected expansion of the external attack surface.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: XbowSecurityConnector
+    dataTypes:
+      - XbowAssets_CL
+queryFrequency: 30m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - Discovery
+relevantTechniques:
+  - T1595
+query: |
+  XbowAssets_CL
+  | where TimeGenerated > ago(1h)
+  // Only match assets created within the query window (new, not updated)
+  | where todatetime(CreatedAt) > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by AssetId
+  | project
+      TimeGenerated,
+      AssetId,
+      AssetName,
+      StartUrl,
+      Lifecycle,
+      Sku,
+      OrganizationId,
+      CreatedAt,
+      UpdatedAt,
+      AssetReachableState,
+      AssetReachableMessage
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'XBOW New Asset: {{AssetName}}'
+  alertDescriptionFormat: 'New asset registered in XBOW: {{AssetName}} ({{StartUrl}}). Reachability: {{AssetReachableState}}'
+customDetails:
+  AssetId: AssetId
+  AssetName: AssetName
+  StartUrl: StartUrl
+  Lifecycle: Lifecycle
+  Sku: Sku
+  OrganizationId: OrganizationId
+  CreatedAt: CreatedAt
+  AssetReachableState: AssetReachableState
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 6h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - AssetId
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: StartUrl
+version: 1.0.0
+kind: Scheduled
