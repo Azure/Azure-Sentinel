@@ -1,0 +1,137 @@
+{
+    "id": "XbowSecurityConnector",
+    "title": "XBOW Security Platform (via Azure Function)",
+    "publisher": "XBOW",
+    "descriptionMarkdown": "The **XBOW** data connector ingests asset snapshots, vulnerability findings, and assessment activity from the [XBOW Security Platform](https://console.xbow.com) into Microsoft Sentinel. An Azure Function polls the XBOW API on a timer and pushes asset JSON snapshots into `XbowAssets_CL`, enriched findings (with evidence, PoC recipes, impact, and mitigations) into `XbowFindings_CL`, and assessment lifecycle events into `XbowAssessments_CL`, using the [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) (DCE/DCR).",
+    "graphQueries": [
+        {
+            "metricName": "XBOW Assets",
+            "legend": "XbowAssets_CL",
+            "baseQuery": "XbowAssets_CL"
+        },
+        {
+            "metricName": "XBOW Findings",
+            "legend": "XbowFindings_CL",
+            "baseQuery": "XbowFindings_CL"
+        },
+        {
+            "metricName": "XBOW Assessments",
+            "legend": "XbowAssessments_CL",
+            "baseQuery": "XbowAssessments_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "Latest XBOW asset snapshots",
+            "query": "XbowAssets_CL\n| summarize arg_max(TimeGenerated, *) by AssetId\n| project TimeGenerated, AssetName, Lifecycle, StartUrl, AssetReachableState\n| sort by TimeGenerated desc"
+        },
+        {
+            "description": "All XBOW findings, newest first",
+            "query": "XbowFindings_CL\n| sort by TimeGenerated desc"
+        },
+        {
+            "description": "XBOW critical & high severity open findings",
+            "query": "XbowFindings_CL\n| where State == \"open\" and Severity in (\"critical\", \"high\")\n| sort by TimeGenerated desc"
+        },
+        {
+            "description": "XBOW findings by severity",
+            "query": "XbowFindings_CL\n| summarize Count = count() by Severity\n| sort by Count desc"
+        },
+        {
+            "description": "XBOW assessment activity",
+            "query": "XbowAssessments_CL\n| sort by TimeGenerated desc"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "XbowAssets_CL",
+            "lastDataReceivedQuery": "XbowAssets_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        },
+        {
+            "name": "XbowFindings_CL",
+            "lastDataReceivedQuery": "XbowFindings_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        },
+        {
+            "name": "XbowAssessments_CL",
+            "lastDataReceivedQuery": "XbowAssessments_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "XbowFindings_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(1d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "XBOW API Token",
+                "description": "A XBOW Personal Access Token is required. Generate one in the [XBOW console](https://console.xbow.com) under **Settings > Personal Access Tokens**. Scope the token to the organization you want to monitor."
+            },
+            {
+                "name": "XBOW Organization ID",
+                "description": "The Organization ID from your XBOW account. Find it in the XBOW console URL or via the API."
+            },
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "Azure AD App Registration",
+                "description": "An Azure AD App Registration (service principal) is required. You must manually assign the **Monitoring Metrics Publisher** role on the Data Collection Rule (DCR) to this App Registration after deployment."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions and the Azure Monitor Ingestion API (DCE/DCR) to ingest XBOW assets, findings, and assessments into Microsoft Sentinel. The ARM template automatically creates the Data Collection Endpoint, custom log tables (`XbowAssets_CL`, `XbowFindings_CL`, and `XbowAssessments_CL`), Data Collection Rule, and Function App. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Monitor pricing page](https://azure.microsoft.com/pricing/details/monitor/) for details."
+        },
+        {
+            "title": "",
+            "description": ">**(Optional Step)** Securely store your XBOW API Token and App Registration credentials in Azure Key Vault. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault references with an Azure Function App."
+        },
+        {
+            "title": "STEP 1 – Generate a XBOW API Token",
+            "description": "1. Log into the [XBOW console](https://console.xbow.com) with administrator access.\n2. Click your profile icon (top right) and select **Settings**.\n3. In the left sidebar, click **Personal Access Tokens**.\n4. Click **Generate new token**, provide a name, and select the organization scope.\n5. Copy and securely store your token — it will not be shown again.\n6. Note your **Organization ID** from the XBOW console or from the URL when viewing your organization."
+        },
+        {
+            "title": "STEP 2 – Create an Azure AD App Registration and Grant DCR Role",
+            "description": "1. In the [Azure Portal](https://portal.azure.com), navigate to **Azure Active Directory > App registrations > New registration**.\n2. Provide a name (e.g. `Xbow-Sentinel-Connector`) and register.\n3. Under **Certificates & secrets**, create a new client secret. Note the **Tenant ID**, **Client ID**, and **Client Secret**.\n4. Deploy the connector using Step 3 below, then return here.\n5. Open the deployed **Data Collection Rule** (from the deployment outputs or by searching in the resource group).\n6. Go to **Access control (IAM) > Add role assignment**.\n7. Select role **Monitoring Metrics Publisher**.\n8. Assign access to the App Registration (service principal) created above.\n9. Wait a few minutes for RBAC propagation before verifying ingestion."
+        },
+        {
+            "title": "STEP 3 – Deploy the Azure Function App",
+            "description": "Click **Deploy to Azure** and fill in the parameters. The template will automatically create the Data Collection Endpoint, `XbowAssets_CL`, `XbowFindings_CL`, and `XbowAssessments_CL` tables, Data Collection Rule, and Function App.\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FXBOW%2FData%2520Connectors%2Fazuredeploy_Xbow_API_Xbow.json)\n\n**Parameters to fill in:**\n\n| Parameter | Description |\n|---|---|\n| `WorkspaceName` | Name of your Log Analytics / Sentinel workspace |\n| `XbowApiToken` | XBOW Personal Access Token from Step 1 |\n| `XbowOrgId` | XBOW Organization ID from Step 1 |\n| `TenantId` | Azure AD Tenant ID from Step 2 |\n| `ClientId` | App Registration Client ID from Step 2 |\n| `ClientSecret` | App Registration Client Secret from Step 2 |\n| `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace (from **Log Analytics workspace > Properties**) |\n| `FunctionAppLocation` | Optional Azure region for Function App resources (defaults to the Resource Group location) |",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        }
+    ]
+}
