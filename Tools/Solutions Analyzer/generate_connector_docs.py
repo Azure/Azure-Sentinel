@@ -8620,7 +8620,7 @@ def main() -> None:
     
     # Compute the relative path from docs root to index.html
     global _INTERACTIVE_INDEX_PATH
-    if args.html_docs_path:
+    if args.html_docs_path and not args.html_docs_path.startswith(('http://', 'https://')):
         # Count directory levels in html_docs_path (e.g., "Solutions Docs/" -> 1 level -> "../")
         levels = len([s for s in args.html_docs_path.replace('\\', '/').split('/') if s])
         _INTERACTIVE_INDEX_PATH = '../' * levels + 'index.html'

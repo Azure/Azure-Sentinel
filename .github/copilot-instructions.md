@@ -41,12 +41,12 @@ python map_solutions_connectors_tables.py
 
 #### Documentation Generator
 ```powershell
-python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "Solutions Docs/"
+python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "https://github.com/oshezaf/sentinelninja/blob/main/Solutions Docs/"
 ```
 
 **IMPORTANT:** Never run without `--output-dir` flag.
 
-**IMPORTANT:** Always use `--html-output-dir` and `--html-docs-path` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages, while markdown docs stay in `Solutions Docs/`.
+**IMPORTANT:** Always use `--html-output-dir` and `--html-docs-path` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages. Use the full GitHub blob URL for `--html-docs-path` so that links from the interactive index point to the GitHub repo view where markdown renders properly (GitHub Pages without Jekyll cannot render `.md` files).
 
 **IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
 
