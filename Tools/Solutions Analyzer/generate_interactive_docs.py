@@ -672,6 +672,13 @@ def generate_html_page(
         asim_data or [],
     )
 
+    # Create .nojekyll to prevent GitHub Pages from running Jekyll.
+    # Jekyll's Liquid engine misinterprets {{ in generated docs (e.g. Azure
+    # deployment template URIs) and the build is extremely slow.
+    nojekyll_path = output_dir / ".nojekyll"
+    if not nojekyll_path.exists():
+        nojekyll_path.touch()
+
     print(f"  Interactive docs generated: {output_dir / 'index.html'}")
 
 

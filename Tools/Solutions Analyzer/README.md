@@ -173,6 +173,7 @@ See the script documentation for details:
 - Can be run standalone or as part of `generate_connector_docs.py`
 - Supports `--html-output-dir` and `--html-docs-path` for placing index.html separately from docs (e.g. repo root for GitHub Pages)
 - Static markdown navigation bar (`write_browse_section`) automatically adjusts 🔍 Interactive link based on `--html-docs-path`
+- Generates `.nojekyll` alongside `index.html` to prevent GitHub Pages from running Jekyll (which breaks on `{{` in Azure deployment templates)
 
 ### v9.3 - Solution Deprecation & Deprecation Dates
 

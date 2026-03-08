@@ -348,7 +348,9 @@ python generate_interactive_docs.py \
     ...
 ```
 
-This writes `index.html`, `css/`, and `js/` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc. The reverse is also handled automatically: the navigation bar on every static markdown page links back to `../index.html` (or `../../index.html` for pages in subdirectories) so that the 🔍 Interactive link resolves correctly.
+This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc. The reverse is also handled automatically: the navigation bar on every static markdown page links back to `../index.html` (or `../../index.html` for pages in subdirectories) so that the 🔍 Interactive link resolves correctly.
+
+> **Note:** The `.nojekyll` file disables Jekyll processing on GitHub Pages. This is required because generated connector docs contain `{{` sequences from Azure deployment template URIs, which Jekyll's Liquid engine misinterprets as template variables. Without `.nojekyll`, the GitHub Pages build will fail with Liquid syntax errors.
 
 ### Synchronization with Static Indexes
 
