@@ -881,6 +881,15 @@ table.dataTable a:hover {
     border-color: var(--ms-blue);
 }
 
+/* Top info (record count next to length menu) */
+.col-sm-6 .dataTables_info {
+    display: inline-block;
+    margin-left: 1.2em;
+    font-size: 0.85rem;
+    color: #666;
+    padding-top: 0;
+}
+
 /* Clear all filters bar */
 .clear-filters-bar {
     display: none;
@@ -945,7 +954,7 @@ $(document).ready(function() {
         deferRender: true,
         stateSave: false,
         orderCellsTop: true,
-        dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>rtip',
+        dom: '<"row"<"col-sm-6"li><"col-sm-6"f>>rtip',
         language: {
             search: "Quick filter:",
             lengthMenu: "Show _MENU_ rows",
@@ -1074,7 +1083,9 @@ $(document).ready(function() {
     });
 
     // Click-to-filter: clicking a cell value filters that column
-    $(document).on('click', 'table.dataTable tbody td', function() {
+    // Skip if the click target is a link (let it navigate normally)
+    $(document).on('click', 'table.dataTable tbody td', function(e) {
+        if ($(e.target).closest('a').length) return;
         var table = $(this).closest('table').DataTable();
         var colIdx = table.cell(this).index().column;
         // Get the text content (strip HTML tags)
