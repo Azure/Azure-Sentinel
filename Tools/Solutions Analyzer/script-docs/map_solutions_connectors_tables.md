@@ -9,6 +9,7 @@
 - [Running the Script](#running-the-script)
 - [Command Line Options](#command-line-options)
 - [Override System](#override-system)
+  - [Synthetic Connector Overrides](#synthetic-connector-overrides)
 - [Output Files](#output-files)
   - [connectors.csv](#1-connectorscsv-connector-details-with-collection-method)
   - [solutions.csv](#2-solutionscsv-solution-details)
@@ -24,7 +25,10 @@
   - [Backward Compatibility](#12-solutions_connectors_tables_mappingcsv-backward-compatibility)
 - [Azure Marketplace Availability](#azure-marketplace-availability)
 - [Detection Logic](#detection-logic)
+  - [Connector Discovery](#connector-discovery)
   - [Collection Method Detection](#collection-method-detection)
+  - [Ingestion API Detection](#ingestion-api-detection)
+  - [Custom Log V1 (CLv1) Detection](#custom-log-v1-clv1-detection)
   - [Filter Fields Detection](#filter-fields-detection)
   - [Connector Association Algorithm](#connector-association-algorithm)
   - [Parser Resolution](#parser-resolution)
@@ -73,7 +77,7 @@ The script generates 11 CSV files providing different views of the data:
 
 ### Scope
 
-This analysis covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included.
+This analysis covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. For solutions where connectors are defined only as ARM resources in `Package/mainTemplate.json` (not as standalone JSON files in the `Data Connectors` folder), the analyzer uses a mainTemplate fallback mechanism to discover them. Connectors that have no discoverable definition files at all (such as SAP, which uses a Docker agent architecture) can be added via the [synthetic connector override system](#synthetic-connector-overrides).
 
 ## Prerequisites
 
@@ -193,7 +197,7 @@ The override file is a CSV with the following columns:
 
 | Column | Description |
 |--------|-------------|
-| `Entity` | Entity type to match: `table`, `connector`, or `solution` (case insensitive) |
+| `Entity` | Entity type to match: `table`, `connector`, `solution`, or `synthetic_connector` (case insensitive). See [Synthetic Connector Overrides](#synthetic-connector-overrides) for the special `synthetic_connector` entity type. |
 | `Pattern` | Regex pattern to match against the entity's key field (table_name, connector_id, or solution_name) |
 | `Field` | The field name to override |
 | `Value` | The new value to set |
@@ -229,6 +233,50 @@ This example:
 
 If no `--overrides-csv` argument is provided, the script looks for `solution_analyzer_overrides.csv` in the Tools/Solutions Analyzer directory.
 
+### Synthetic Connector Overrides
+
+In addition to field overrides, the override file supports defining **synthetic connectors** — connectors that have no discoverable definition files in the repository. This is used for connectors that use non-standard architectures (e.g., SAP uses a Docker agent rather than JSON definition files).
+
+#### Format
+
+Synthetic connectors use `Entity = synthetic_connector` and are defined as multiple rows sharing the same `Pattern` (solution folder name) and grouped by `Field = connector_id`:
+
+| Column | Usage for Synthetic Connectors |
+|--------|-------------------------------|
+| `Entity` | Must be `synthetic_connector` |
+| `Pattern` | Solution folder name (e.g., `SAP`) |
+| `Field` | One of: `connector_id` (required, starts a new connector group), `title`, `publisher`, `description`, `tables`, `instruction_steps`, `permissions` |
+| `Value` | Field value. For `tables`, use semicolon-separated table names (e.g., `Table1_CL;Table2_CL`) |
+
+#### Required Fields
+
+- `connector_id` — unique identifier for the connector (also starts a new connector group)
+- `title` — display title
+- `publisher` — publisher name
+
+#### Optional Fields
+
+- `description` — connector description text
+- `tables` — semicolon-separated list of table names
+- `instruction_steps` — JSON-encoded setup instructions
+- `permissions` — JSON-encoded permission requirements
+
+#### Example
+
+```csv
+Entity,Pattern,Field,Value
+synthetic_connector,SAP,connector_id,MicrosoftSentinelSAP,"SAP connector uses Docker agent architecture..."
+synthetic_connector,SAP,title,Microsoft Sentinel for SAP,
+synthetic_connector,SAP,publisher,Microsoft,
+synthetic_connector,SAP,description,"The Microsoft Sentinel solution for SAP allows you to monitor SAP systems...",
+synthetic_connector,SAP,tables,ABAPAuditLog_CL;ABAPChangeDocsLog_CL,
+```
+
+Synthetic connectors:
+- Are only injected if no connector with the same ID was already discovered for the solution
+- Appear in output with `connector_files` set to `synthetic_connector_override` and detection method `synthetic_connector_override`
+- Trigger a `missing_solution_metadata` issue if the solution lacks a SolutionMetadata.json file
+
 ## Output Files
 
 ### 1. connectors.csv (Connector Details with Collection Method)
@@ -254,10 +302,14 @@ Contains one row per unique connector with all connector-specific fields and col
 | `filter_fields` | Filter fields extracted from queries (see [Filter Fields Detection](#filter-fields-detection)) | [KQL query analysis](#filter-fields-detection) with operator extraction |
 | `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON | Comparison: file scan vs Solution JSON content lists |
 | `solution_name` | Name of the parent solution | Parent solution folder name |
-| `is_deprecated` | `true` if connector title contains "[DEPRECATED]" or "[Deprecated]" | Pattern match on connector title |
+| `is_deprecated` | `true` if connector title contains "[DEPRECATED]"/"[Deprecated]", connector JSON has `availability.status` of 0, or parent solution is deprecated | Pattern match on connector title + connector JSON `availability.status` field + solution-level deprecation inheritance |
+| `deprecation_date` | Date string extracted from connector description (e.g., "Aug 31, 2024") when deprecated; empty if not found | Regex extraction from `descriptionMarkdown` near deprecation keywords; overridable |
 | `is_published` | `true` if parent solution is published on Azure Marketplace | Azure Marketplace API query |
 | `ccf_config_file` | GitHub URL to the CCF configuration file (for CCF and CCF Push connectors) | File system scan for polling/poller config files |
 | `ccf_capabilities` | Semicolon-separated CCF capabilities (auth type, paging, POST, etc.) | Parsed from CCF config JSON |
+| `ingestion_api` | Which ingestion API the connector uses: "Log Ingestion API", "HTTP Data Collector API", "Undetermined", or empty | Multi-rule detection: CCF method, Python code scanning, JSON pattern matching, column suffix heuristic |
+| `ingestion_api_reason` | Human-readable explanation of how the ingestion API was determined | Auto-generated by detection logic |
+| `is_clv1` | `true` if any of the connector's tables use the Custom Log V1 schema format | CLv1 detection (column suffixes or _CL table from AMA/HTTP Data Collector connector) |
 
 ### 2. solutions.csv (Solution Details)
 
@@ -283,6 +335,8 @@ Contains one row per solution with all solution-specific metadata. Metadata is s
 | `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON | Solution JSON `Description` field |
 | `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` | Solution JSON `dependentDomainSolutionIds` |
 | `has_connectors` | `true` if solution has data connectors, `false` otherwise | Computed: checks for Data Connectors folder |
+| `is_deprecated` | `true` if solution description contains deprecation language (e.g., "this integration is considered deprecated") | Regex match on Solution JSON `Description` field; overridable |
+| `deprecation_date` | Date string extracted from solution description when deprecated; empty if not found | Regex extraction from `Description` near deprecation keywords; overridable |
 | `is_published` | `true` if solution is published on Azure Marketplace | Azure Marketplace API query |
 | `marketplace_url` | URL to the solution's Azure Marketplace listing | Azure Marketplace API response |
 
@@ -314,6 +368,7 @@ Contains one row per unique table referenced by connectors, with metadata from A
 | `supports_transformations` | Whether ingestion-time transformations are supported | `tables_reference.csv` (Tables feature support page, enriched with Sentinel tables/connectors) |
 | `ingestion_api_supported` | Whether Data Collector API ingestion is supported | `tables_reference.csv` (Logs Ingestion API page) |
 | `lake_only_supported` | Whether lake-only ingestion is supported | `tables_reference.csv` (Sentinel tables/connectors) |
+| `is_clv1` | `true` if table uses the Custom Log V1 schema format (type-suffixed columns or _CL table from AMA/HTTP Data Collector connector) | CLv1 detection logic |
 
 > **Note:** Metadata is sourced from `tables_reference.csv`. Tables not found in the reference file will have empty metadata fields. Run `collect_table_info.py` first to populate this data.
 
@@ -602,6 +657,34 @@ Marketplace availability adds the following fields to the output:
 
 ## Detection Logic
 
+### Connector Discovery
+
+The analyzer uses a multi-tier approach to discover connectors within each solution:
+
+#### Primary: Data Connectors Folder Scan
+
+The primary discovery method scans JSON files in the solution's `Data Connectors/` folder (or paths listed in the Solution JSON). Each JSON file is searched using a depth-first traversal (`find_connector_objects`) for dictionaries containing the required connector fields (`id`, `publisher`, `title`). When a connector's `id` field contains an ARM template variable reference (e.g., `[variables('_uiConfigId10')]`), the ID is generated from the title by removing spaces and hyphens (e.g., `Microsoft Power Automate` → `MicrosoftPowerAutomate`).
+
+#### Fallback: mainTemplate.json
+
+If the primary scan finds no connectors for a solution (or finds connectors with ARM variable IDs only), the analyzer falls back to scanning `Package/mainTemplate.json`. This handles solutions where connectors are defined only as ARM resources of type `Microsoft.SecurityInsights/dataConnectorDefinitions` rather than as standalone JSON files. The function:
+
+1. Searches for ARM resources with type ending in `dataConnectorDefinitions`
+2. Extracts the `connectorUiConfig` from the resource properties
+3. Resolves ARM variable references in the `id` and `publisher` fields using title-based generation
+4. Extracts tables from the `dataTypes` section (filtering out `{{...}}` template placeholders)
+5. Deduplicates against connectors already found by the primary scan using both ID and title matching
+
+This mechanism discovered the Microsoft Dataverse, Microsoft Power Automate, and Microsoft Power Platform Admin Activity connectors from the Microsoft Business Applications solution.
+
+#### Override: Synthetic Connectors
+
+Connectors that have no discoverable definition files at all can be injected via the [synthetic connector override system](#synthetic-connector-overrides). These are only added if no connector with the same ID was already discovered. See [Synthetic Connector Overrides](#synthetic-connector-overrides) for details.
+
+#### Solution Membership
+
+Both mainTemplate and synthetic connectors are classified as **"In Solutions"** (i.e., `not_in_solution_json = false`), not as "Discovered". mainTemplate connectors are ARM resources defined within the solution's package template, and synthetic connectors are explicitly declared as part of a solution via the override CSV. This matches their status as formally documented solution components on Microsoft Learn.
+
 ### Collection Method Detection
 
 The analyzer determines the data collection method used by each connector through comprehensive content analysis. This analysis sets the `collection_method` and `collection_method_reason` columns in `connectors.csv`.
@@ -692,6 +775,56 @@ If no separate config file is found but `pollingConfig` exists in the primary co
 | `MvExpand` | Whether the config uses the MvExpand transformer (`nestedTransformName` containing `MvExpandTransformer`) |
 | `Nested` | Whether the config uses nested steps (`stepType: Nested`) |
 
+### Ingestion API Detection
+
+For API-based connectors (CCF Push, Azure Function, REST API, Unknown Custom Log), the analyzer determines whether they use the modern **Log Ingestion API** or the legacy **HTTP Data Collector API** (also known as Log Analytics Data Collector API). CCF and CCF (Legacy) connectors are excluded because their ingestion is platform-managed (Sentinel PaaS) — the connector definition doesn't configure the ingestion API.
+
+This analysis runs in a second pass after table schemas are fully loaded, because the column suffix heuristic requires schema data.
+
+#### Detection Rules (in priority order)
+
+1. **CCF Push** → Always **Log Ingestion API** (DCR-based, solution code pushes data via DCR)
+2. **Azure Function** → Scan `*.py` files in the solution's Data Connectors folder for API-specific patterns (excluding vendored directories like `.python_packages`):
+   - Log Ingestion API indicators: `LogsIngestionClient`, `azure.monitor.ingestion`, `azure-monitor-ingestion`, `ingestion_endpoint`, `DCR_ID`, `RULE_ID`, `data_collection_rule`
+   - HTTP Data Collector API indicators: `SharedKey`, `build_signature`, `api/logs`, `Log-Type`, `LogAnalyticsData`
+   - If both detected → "Undetermined" (typically indicates migration in progress)
+3. **REST API / Unknown (Custom Log)** → Scan connector JSON for workspace key patterns: `sharedKeys`, `WorkspaceId`, `PrimaryKey` → **HTTP Data Collector API**
+4. **Fallback** → Table column suffix heuristic:
+   - If >40% of table columns end with type suffixes (`_s`, `_d`, `_b`, `_t`, `_g`) → **HTTP Data Collector API**
+   - If table has DCR-sourced schema and <10% type suffixes → **Log Ingestion API**
+
+#### CSV Fields Affected
+
+| Field | Description |
+|-------|-------------|
+| `ingestion_api` | Detected API: "Log Ingestion API", "HTTP Data Collector API", "Undetermined", or empty if not applicable |
+| `ingestion_api_reason` | Human-readable reason for the detection (e.g., "CCF connectors use DCR-based Log Ingestion API") |
+
+### Custom Log V1 (CLv1) Detection
+
+The analyzer identifies tables using the legacy **Custom Log V1** schema format. These are custom log tables originally created through the HTTP Data Collector API, which automatically appends type suffixes (`_s`, `_d`, `_b`, `_t`, `_g`) to column names to indicate data types.
+
+This detection runs after both table schemas and ingestion API detection are complete.
+
+#### Detection Rules
+
+A table is marked as CLv1 (`is_clv1 = true`) if **either** condition is met:
+
+1. **Column suffix heuristic** — More than 40% of the table's non-standard columns end with type suffixes (`_s`, `_d`, `_b`, `_t`, `_g`). Standard columns excluded from the count: `TimeGenerated`, `TenantId`, `Type`, `MG`, `ManagementGroupName`, `SourceSystem`, `_ResourceId`, `_SubscriptionId`.
+
+2. **Connector-based inference** — The table name ends with `_CL` (custom log) AND at least one connector that ingests into this table either:
+   - Uses the **AMA** collection method, or
+   - Uses the **HTTP Data Collector API** ingestion API
+
+A connector is marked as CLv1 if **any** of its tables are CLv1.
+
+#### CSV Fields Affected
+
+| Field | CSV File | Description |
+|-------|----------|-------------|
+| `is_clv1` | `tables.csv` | `true` if the table uses CLv1 schema format |
+| `is_clv1` | `connectors.csv` | `true` if any of the connector's tables use CLv1 schema format |
+
 ### Filter Fields Detection
 
 The analyzer extracts filter field values from KQL queries to identify vendor/product-specific filtering patterns. This helps understand which data sources a connector, parser, or content item targets.
@@ -708,6 +841,7 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 | `EventType` | Multiple (ASIM) | ASIM normalized event type |
 | `ResourceType` | AzureDiagnostics | Azure resource type |
 | `Category` | AzureDiagnostics | Diagnostic category |
+| `Resource` | AzureDiagnostics/AzureMetrics/AzureActivity | Azure resource instance name |
 | `ResourceProvider` | AzureActivity | Azure resource provider |
 | `EventID` | WindowsEvent/SecurityEvent/Event | Windows event ID |
 | `Source` | Event | Windows Event Log source |
@@ -742,6 +876,7 @@ The filter field extraction follows these rules:
    - `DeviceVendor`/`DeviceProduct`/`DeviceEventClassID` → CommonSecurityLog
    - `EventVendor`/`EventProduct`/`EventType` → Context-dependent (ASIM tables)
    - `ResourceType`/`Category` → AzureDiagnostics
+   - `Resource` → AzureDiagnostics, AzureMetrics, or AzureActivity (based on which is in query)
    - `ResourceProvider` → AzureActivity
    - `EventID` → WindowsEvent, SecurityEvent, or Event (based on which is in query)
    - `Source` → Event
@@ -821,6 +956,23 @@ A connector matches a target (content item or parser) if:
 - A connector filtering on `DeviceVendor == "Fortinet"` matches targets filtering on `Fortinet` or `Fortinet AND FortiGate`
 - A connector filtering on specific products does NOT match targets filtering on different products
 
+#### Cross-Field Override: Category → ResourceType
+
+For AzureDiagnostics, certain `Category` values are known to be produced only by a specific Azure resource type. When a connector filters on `ResourceType` and the target only filters on `Category`, the `CATEGORY_TO_RESOURCE_TYPE` mapping is consulted: if all of the target's Category values map to the connector's ResourceType, the match is allowed (the target is more restrictive).
+
+Currently mapped categories:
+
+| Category | ResourceType |
+|----------|-------------|
+| `AzureFirewallNetworkRule` | `AZUREFIREWALLS` |
+| `AzureFirewallApplicationRule` | `AZUREFIREWALLS` |
+| `AzureFirewallNatRule` | `AZUREFIREWALLS` |
+| `AzureFirewallThreatIntel` | `AZUREFIREWALLS` |
+| `AzureFirewallIdpsSignature` | `AZUREFIREWALLS` |
+| `AzureFirewallDnsProxy` | `AZUREFIREWALLS` |
+
+This mapping can be extended for other Azure resource types as needed.
+
 #### Example Matches
 
 | Connector Filters | Target Filters | Match? | Reason |
@@ -830,11 +982,12 @@ A connector matches a target (content item or parser) if:
 | `DeviceVendor == "Fortinet"` | `DeviceVendor in "Fortinet,PaloAlto"` | ✅ | Connector subset of target |
 | `DeviceVendor == "Fortinet"` | `DeviceVendor == "PaloAlto"` | ❌ | No overlap |
 | `DeviceProduct == "FortiGate"` | `DeviceVendor == "Fortinet"` | ❌ | Different field, can't confirm match |
+| `ResourceType == "AZUREFIREWALLS"` | `Category == "AzureFirewallNetworkRule"` | ✅ | Category implies ResourceType (override) |
 
 #### Exclusions
 
 The algorithm excludes:
-- **Deprecated connectors**: Connectors with `[DEPRECATED]` in title
+- **Deprecated connectors**: Connectors with `[DEPRECATED]` in title or `availability.status` of 0 in connector JSON
 - **Content-only connectors**: Connectors that use data from other connectors (don't ingest data themselves)
 - **Excluded tables**: Tables that appear in connector documentation but aren't actually ingested
 
@@ -889,7 +1042,7 @@ The KQL parser uses intelligent query parsing to distinguish actual table names 
 | **Parenthesis/Brace Context** | Detects tables in `(TableName \| ...)` and `{ TableName \| ...}` patterns |
 | **ASIM View Detection** | Recognizes `_Im_*` and `_ASim_*` function calls as table references |
 | **Comment Stripping** | Removes `//` line comments before analysis |
-| **Field Context Filtering** | Excludes identifiers after `\| project`, `\| extend`, `\| parse` operators |
+| **Field Context Filtering** | Excludes identifiers after `\| project`, `\| project-keep`, `\| project-reorder`, `\| extend`, `\| parse` operators |
 
 #### Table Validation
 

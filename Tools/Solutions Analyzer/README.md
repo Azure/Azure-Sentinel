@@ -138,6 +138,10 @@ All three scripts support an override system that allows you to modify field val
 - Assign `category` to tables based on naming patterns (e.g., all AWS* tables → AWS)
 - Set `support_tier` for tables based on their associated solutions
 
+**Synthetic connector overrides** (used by `map_solutions_connectors_tables.py`):
+- Define connectors that have no discoverable definition files in the repository (e.g., SAP Docker agent)
+- See [Synthetic Connector Overrides](script-docs/map_solutions_connectors_tables.md#synthetic-connector-overrides) for details
+
 **Documentation-related overrides** (used by `generate_connector_docs.py`):
 - Add `additional_information` sections with curated documentation links to table, connector, or solution pages
 
@@ -149,6 +153,91 @@ See the script documentation for details:
 ---
 
 ## Version History
+
+### v9.4 - Interactive HTML Index
+
+**Interactive HTML Index:**
+- New `index.html` with DataTables.js providing filterable, sortable, searchable tables
+- Six tabs: Solutions, Connectors, Tables, Content, Parsers, ASIM Parsers
+- Per-column dropdown filters, click-to-filter, global search, and "Clear All Filters" notification bar
+- Summary cards showing active/total counts for each entity type
+- Entity names link to their individual markdown documentation pages
+- Collection method names link to method index pages
+- Solution logos displayed in Solutions and Connectors tabs
+- Navigation bar with links to static docs and statistics page
+- Status badges (Active/Deprecated/Unpublished), icons for CLv1 (🔶), schema (📖), discovered (🔍)
+- Content source indicators: 📦 Solution, 📄 Standalone, 🔗 GitHub Only
+- Standalone content sources show solution name as plain text (not linked), matching static indexes
+- Connectors tab includes all connectors (in-solution + discovered), matching connectors-index.md
+- Per-tab icon legends explaining all visual indicators
+- Can be run standalone or as part of `generate_connector_docs.py`
+- Supports `--html-output-dir` and `--html-docs-path` for placing index.html separately from docs (e.g. repo root for GitHub Pages)
+- `--html-docs-path` supports full GitHub blob URLs (e.g. `https://github.com/.../blob/main/Solutions Docs/`) so that links from the interactive index point to GitHub's rendered markdown view
+- Static markdown navigation bar (`write_browse_section`) automatically adjusts 🔍 Interactive link based on `--html-docs-path` or `--html-index-url`
+- Generates `.nojekyll` alongside `index.html` to prevent GitHub Pages from running Jekyll (which breaks on `{{` in Azure deployment templates)
+
+### v9.3 - Solution Deprecation & Deprecation Dates
+
+**Solution-Level Deprecation Detection:**
+- New `is_deprecated` column in `solutions.csv` detecting solution-level deprecation from the Solution JSON `Description` field
+- Detection patterns: "this integration/solution is (considered) deprecated", "this integration/solution has been deprecated"
+- Deprecated solutions shown with 🚫 icon on solution pages and solutions index, with deprecation footnote
+- Currently detects 4 deprecated Mimecast legacy solutions (MimecastAudit, MimecastSEG, MimecastTIRegional, MimecastTTP), all replaced by the unified Mimecast solution
+
+**Deprecation Dates:**
+- New `deprecation_date` column in both `connectors.csv` and `solutions.csv`
+- Dates extracted from artifact descriptions near deprecation/retirement keywords (supports "Aug 31, 2024", "2024-08-31", markdown bold `**date**` formats)
+- Deprecation date shown in connector and solution property tables in generated docs
+- Both fields are overridable via the override CSV for artifacts without publicly-extractable dates
+
+**Enhanced Connector Deprecation Detection:**
+- Connector `is_deprecated` now also checks `availability.status` in the connector JSON definition (status 0 = deprecated), in addition to the existing `[DEPRECATED]` title check
+- Connectors belonging to deprecated solutions now inherit the solution's deprecated status
+
+
+### v9.2 - Ingestion API & Custom Log V1 Detection
+
+**Ingestion API Detection:**
+- New `ingestion_api` and `ingestion_api_reason` columns in `connectors.csv` identifying whether API-based connectors use the Log Ingestion API or HTTP Data Collector API
+- Detection rules:
+  1. CCF Push connectors → always Log Ingestion API (DCR-based, solution code pushes data)
+  2. Azure Function connectors → Python code scanning for API-specific patterns (e.g., `LogsIngestionClient` vs `SharedKey`/`build_signature`)
+  3. REST API / Custom Log connectors → JSON definition scanning for workspace key patterns (`sharedKeys`, `WorkspaceId`, `PrimaryKey`)
+  4. Fallback → table column suffix heuristic (>40% type-suffix columns `_s`/`_d`/`_b` indicates HTTP Data Collector API)
+  - CCF and CCF (Legacy) are excluded — their ingestion is platform-managed (Sentinel PaaS), not configurable by the connector author
+- Doc generator:
+  - Connector properties table includes "Ingestion API" row with link to API page
+  - New "Ingestion API by Collection Method" table on methods-index.md
+  - New per-API index pages (Log Ingestion API, HTTP Data Collector API, Undetermined) under methods/ with description, documentation links, statistics, and connector listings
+  - New "Ingestion API" subsection on statistics page with summary and by-collection-method breakdown
+
+**Custom Log V1 (CLv1) Detection:**
+- New `is_clv1` column in both `tables.csv` and `connectors.csv` identifying tables using the legacy Custom Log V1 schema format
+- Two detection rules:
+  1. Column suffix heuristic — tables where >40% of non-standard columns end with type suffixes (`_s`, `_d`, `_b`, `_t`, `_g`)
+  2. Connector-based inference — `_CL` tables from connectors using AMA collection method or HTTP Data Collector API
+- A connector is marked CLv1 if any of its tables are CLv1
+- Doc generator:
+  - 🔶 icon shown next to CLv1 tables and connectors in all index pages, solution pages, and method pages
+  - CLv1 attribute shown in table and connector properties pages
+  - Footnote legend explaining the CLv1 icon added to relevant pages
+
+**Connector Association Improvements:**
+- Added `Resource` filter field for AzureDiagnostics/AzureMetrics/AzureActivity tables (identifies specific Azure resource instances, similar to `ResourceProvider`)
+- Added cross-field override: `CATEGORY_TO_RESOURCE_TYPE` mapping for AzureDiagnostics, allowing Category-only parsers to match ResourceType-filtered connectors (e.g., `ASimNetworkSessionAzureFirewall` now correctly associates with Azure Firewall)
+- Fixed `Table(Qualifier)` pattern in `dataTypes.name` extraction: connectors with names like `Event(ThreatIntelligenceIndicator)` now correctly extract the inner qualifier as the table name when no query is available
+
+**Table Detection Improvements:**
+- Added `project-keep` and `project-reorder` to pipe block commands, preventing false table detections from wildcard field patterns like `Event*` in `project-keep` statements
+
+### v9.1 - Connector Discovery
+
+**Connector Discovery - mainTemplate Fallback and Synthetic Connectors:**
+- New mainTemplate.json fallback: discovers connectors defined only as ARM `dataConnectorDefinitions` resources (not as standalone JSON files), resolving ARM variable references in ID/publisher fields
+- New synthetic connector override system: allows manually defining connectors with no discoverable definition files (e.g., SAP Docker agent) via `synthetic_connector` entries in the override CSV
+- Title-based deduplication prevents duplicates when the same connector appears in both Data Connectors files and mainTemplate.json
+- Both mainTemplate and synthetic connectors are classified as "In Solutions" (not "Discovered"), since they are formally part of their solution's package
+- Discovers 4 new connectors: Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin Activity (from mainTemplate), and Microsoft Sentinel for SAP (synthetic override)
 
 ### v9.0 - Discovery Source Prioritization and Table Schema Discovery
 
@@ -168,10 +257,11 @@ See the script documentation for details:
 - Tables discovered via docs-only sources (e.g., Feature Support) now show the relevant doc link
 
 **Statistics Page - Detailed Discovery Breakdowns:**
-- Tables section restructured into three subsections:
-  - **Primary Discovery Source**: table counts by prioritized single source (matching the tables index)
-  - **Doc Sources**: breakdown of tables found in each documentation reference (Azure Monitor, Defender XDR, Sentinel Tables Doc, Feature Support Doc, Ingestion API Doc) — a table may appear in multiple
-  - **Schema Sources**: breakdown of tables with schema information by origin (Azure Monitor docs, DCR, KQL validation)
+- Tables section with unified Discovery Sources table:
+  - **Discovered Via** column: single primary discovery source per table by priority (Connector > Content > per-doc-source > Schema)
+  - **Total** column: how many tables have each source regardless of priority, since a table can appear in multiple sources
+  - Doc sources shown individually with links: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+  - **Schema Sources** subsection: breakdown by origin (Azure Monitor docs, DCR, KQL validation)
 
 ### v8.0 - Solution Dependencies, CCF Legacy, Capabilities Statistics, and Table Schemas
 

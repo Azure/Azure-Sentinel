@@ -44,6 +44,16 @@ ASIM_PARSER_TO_PRODUCT: Dict[str, str] = {}
 # e.g., "_Im_Dns" -> ["_Im_Dns_AzureFirewall", "_Im_Dns_CiscoUmbrella", ...]
 ASIM_UNION_TO_SUB_PARSERS: Dict[str, List[str]] = {}
 
+# Global mapping from ASIM product name to set of associated solution names
+# e.g., "Azure Firewall" -> {"Azure Firewall", "SlashNext"}
+ASIM_PRODUCT_TO_SOLUTIONS: Dict[str, Set[str]] = {}
+
+# Relative path (or absolute URL) from the docs root to index.html.
+# Default is "index.html" (co-located). When --html-docs-path is a relative path (e.g., "Solutions Docs/"),
+# this becomes "../index.html" so that markdown pages link up to the repo root.
+# When --html-index-url is set, this is an absolute URL (e.g., "https://oshezaf.github.io/sentinelninja/index.html").
+_INTERACTIVE_INDEX_PATH: str = "index.html"
+
 # ASIM graphics files (source in graphics/ folder)
 ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
 ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
@@ -62,13 +72,16 @@ DEPRECATED_ICON = "🚫"   # Deprecated/no-entry icon for deprecated connectors
 DISCOVERED_ICON = "🔍"   # Magnifying glass for discovered items not in solution JSON
 ADDITIONAL_INFO_ICON = "➕"  # Plus icon for items with additional documentation/info
 SCHEMA_ICON = "📖"  # Book icon for tables with schema information
+CLV1_ICON = "🔶"  # 🔶 Orange diamond for Custom Log V1 (legacy) tables
 
 # Footnotes for icons
 UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace or not installed in Content Hub."
 DEPRECATED_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This connector has been deprecated and may be removed in future versions."
+DEPRECATED_SOLUTION_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This solution has been deprecated and replaced by a newer integration."
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
 ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
 SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
+CLV1_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`)."
 
 # Collection method metadata: descriptions and documentation links
 COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
@@ -182,6 +195,51 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
         ],
     },
 }
+
+
+# Metadata and descriptions for Ingestion API pages
+INGESTION_API_METADATA: Dict[str, Dict[str, str]] = {
+    "Log Ingestion API": {
+        "name": "Log Ingestion API",
+        "description": "The Log Ingestion API is the modern, recommended method for sending custom data to Azure Monitor Logs (and Microsoft Sentinel). It uses Data Collection Rules (DCRs) and Data Collection Endpoints (DCEs) to define the data pipeline, providing schema validation, transformation, and routing capabilities.",
+        "links": [
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+            ("📖 Logs Ingestion API tutorial", "https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-api"),
+            ("📖 Data Collection Rules overview", "https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview"),
+            ("📖 Data Collection Endpoints overview", "https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview"),
+        ],
+    },
+    "HTTP Data Collector API": {
+        "name": "HTTP Data Collector API (Legacy)",
+        "description": "The HTTP Data Collector API (also known as the Log Analytics Data Collector API) is the legacy method for sending custom log data to Azure Monitor Logs. It uses workspace shared keys for authentication and writes to custom log tables with the `_CL` suffix. **Note:** This API is deprecated in favor of the Logs Ingestion API and will be retired on September 14, 2026.",
+        "links": [
+            ("⚠️ HTTP Data Collector API retirement", "https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-migrate"),
+            ("📖 HTTP Data Collector API reference", "https://learn.microsoft.com/azure/azure-monitor/logs/data-collector-api"),
+            ("📖 Migrate to Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-migrate"),
+        ],
+    },
+    "Undetermined": {
+        "name": "Undetermined (Mixed Signals)",
+        "description": "These connectors contain code patterns for both the Log Ingestion API and the HTTP Data Collector API. This typically indicates connectors in transition from the legacy API to the modern API, where both old and new Function Apps coexist during migration.",
+        "links": [
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+            ("📖 HTTP Data Collector API migration", "https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-migrate"),
+        ],
+    },
+}
+
+
+def get_ingestion_api_filename(api_name: str) -> str:
+    """Get the sanitized filename for an ingestion API page."""
+    return sanitize_filename(api_name.lower().replace(" ", "-").replace("(", "").replace(")", ""))
+
+
+def get_ingestion_api_link(api_name: str, relative_path: str = "") -> str:
+    """Get a markdown link to an ingestion API page."""
+    if not api_name:
+        return ''
+    filename = get_ingestion_api_filename(api_name)
+    return f"[{api_name}]({relative_path}methods/{filename}.md)"
 
 
 def get_collection_method_filename(method: str) -> str:
@@ -403,6 +461,67 @@ def format_additional_info(info_list: Optional[List[str]]) -> str:
     return "\n".join(f"- {item}" for item in info_list)
 
 
+def clean_asim_description(description: str, has_asim_section: bool = True, has_explicit_deps: bool = False) -> str:
+    """Remove inline prerequisite/dependency sections from ASIM solution descriptions.
+    
+    ASIM domain solutions often have embedded prerequisite lists in their descriptions
+    that are now redundant with the structured Pre-requisites and ASIM Pre-requisites 
+    sections. This function detects and removes those sections, replacing with a 
+    reference to the structured sections.
+    
+    Handles two patterns:
+    - Pattern A: **Prerequisite :-** + numbered list + **Underlying Microsoft Technologies used:** 
+    - Pattern B: **Pre-requisites:** + numbered list (followed by **Keywords:** which is kept)
+    
+    Args:
+        description: The raw solution description text
+        has_asim_section: Whether the solution will have an ASIM Pre-requisites section
+        has_explicit_deps: Whether the solution will have a Pre-requisites section
+    
+    Returns:
+        Cleaned description with inline prerequisites replaced by section reference
+    """
+    import re
+    
+    # Detect if there's a prerequisite section to clean
+    prereq_pattern = r'\*\*Pre-?requisites?\s*(?::-?|:)\s*\*\*'
+    if not re.search(prereq_pattern, description, re.IGNORECASE):
+        return description
+    
+    # Build appropriate replacement text based on available sections
+    if has_asim_section:
+        replacement = 'For details on the data sources and ASIM parsers supported by this solution, see the [ASIM Pre-requisites](#asim-pre-requisites) section below.\n\n'
+    elif has_explicit_deps:
+        replacement = 'For details on the required solutions, see the [Pre-requisites](#pre-requisites) section below.\n\n'
+    else:
+        replacement = ''
+    
+    result = description
+    
+    # Remove **Prerequisite :-** or **Pre-requisites:** section with numbered list
+    # Matches from the header through numbered list items, up to next bold header or end
+    result = re.sub(
+        prereq_pattern + r'.*?(?=\*\*[A-Z]|\Z)',
+        replacement,
+        result,
+        count=1,
+        flags=re.DOTALL | re.IGNORECASE
+    )
+    
+    # Remove **Underlying Microsoft Technologies used:** section (up to next bold header or end)
+    result = re.sub(
+        r'\*\*Underlying Microsoft Technologies used:\*\*.*?(?=\*\*[A-Z]|\Z)',
+        '',
+        result,
+        flags=re.DOTALL | re.IGNORECASE
+    )
+    
+    # Clean up excessive whitespace
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
+
+
 def is_asim_parser(table_name: str) -> bool:
     """
     Check if a table name is actually an ASIM parser.
@@ -476,7 +595,7 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
     Args:
         asim_parsers_path: Path to asim_parsers.csv
     """
-    global ASIM_PARSER_NAMES, ASIM_PARSER_TO_FILENAME, ASIM_PARSER_TO_PRODUCT, ASIM_UNION_TO_SUB_PARSERS
+    global ASIM_PARSER_NAMES, ASIM_PARSER_TO_FILENAME, ASIM_PARSER_TO_PRODUCT, ASIM_UNION_TO_SUB_PARSERS, ASIM_PRODUCT_TO_SOLUTIONS
     
     if not asim_parsers_path.exists():
         return
@@ -525,6 +644,16 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
                         ASIM_UNION_TO_SUB_PARSERS[parser_name] = sub_list
                     if equivalent_builtin:
                         ASIM_UNION_TO_SUB_PARSERS[equivalent_builtin] = sub_list
+                
+                # Build product -> solutions mapping
+                associated_solutions = row.get('associated_solutions', '').strip()
+                if product_name and associated_solutions:
+                    if product_name not in ASIM_PRODUCT_TO_SOLUTIONS:
+                        ASIM_PRODUCT_TO_SOLUTIONS[product_name] = set()
+                    for sol in associated_solutions.split(','):
+                        sol = sol.strip()
+                        if sol:
+                            ASIM_PRODUCT_TO_SOLUTIONS[product_name].add(sol)
     except Exception as e:
         print(f"Warning: Could not load ASIM parser names from {asim_parsers_path}: {e}")
 
@@ -1319,6 +1448,9 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         
         # Format table link
         table_link = format_table_link(table, relative_path)
+        # Add CLv1 icon if table uses Custom Log V1 schema
+        if table_ref.get('is_clv1', '').lower() == 'true':
+            table_link += f" {CLV1_ICON}"
         
         row = [table_link]
         
@@ -1422,6 +1554,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
+        ('🔍', _INTERACTIVE_INDEX_PATH if _INTERACTIVE_INDEX_PATH.startswith(('http://', 'https://')) else f'{relative_to_root}{_INTERACTIVE_INDEX_PATH}', 'Interactive'),
     ]
     
     # Build navigation line
@@ -1430,6 +1563,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         # Check if this is the current page
         is_current = False
         if page_type == 'statistics' and name == '📊':
+            is_current = True
+        elif page_type == 'readme' and name == '🏠':
             is_current = True
         elif page_type == 'solutions' and name == 'Solutions':
             is_current = True
@@ -2502,6 +2637,7 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
     
     Returns:
         Markdown formatted link like [Content Name](../content/filename.md)
+        For parsers, links to the dedicated parser page in parsers/ instead.
     """
     content_id = item.get('content_id', '')
     content_name = item.get('content_name', 'Unknown')
@@ -2509,6 +2645,20 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
     content_file = item.get('content_file', '')
     content_type = item.get('content_type', '')
     not_in_solution_json = item.get('not_in_solution_json', 'false')
+    
+    # Parsers have dedicated pages in parsers/ directory (not in content/)
+    if content_type == 'parser':
+        parser_filename = sanitize_anchor(content_name)
+        # Compute path to parsers/ relative to the calling page's directory
+        if "content/" in relative_path:
+            parser_path = relative_path.replace("content/", "parsers/")
+        else:
+            # Caller is in content/ dir (relative_path="") or unknown location
+            parser_path = "../parsers/"
+        link = f"[{content_name}]({parser_path}{parser_filename}.md)"
+        if show_not_in_json and not_in_solution_json == 'true':
+            return f"{link} ⚠️"
+        return link
     
     filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
     
@@ -3202,12 +3352,6 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         
         f.write("📚 **Learn more:** [Deploy Microsoft Sentinel solutions](https://learn.microsoft.com/azure/sentinel/sentinel-solutions-deploy)\n\n")
         
-        # Add coverage note
-        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
-        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
-        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
-        f.write("are not managed via Solutions and are therefore not included here.\n\n")
-        
         # Add navigation to other indexes
         write_browse_section(f, 'solutions', "")
         f.write("---\n\n")
@@ -3237,6 +3381,12 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
             if connectors and connectors[0].get('is_published', 'true') == 'false':
                 unpublished_solutions.add(sol_name)
         published_solutions_count = len(solutions) - len(unpublished_solutions)
+        
+        # Build a set of deprecated solutions
+        deprecated_solutions: Set[str] = set()
+        for sol_name, connectors in solutions.items():
+            if connectors and connectors[0].get('solution_is_deprecated', 'false') == 'true':
+                deprecated_solutions.add(sol_name)
         
         # Count solutions with content
         solutions_with_content = sum(1 for sol in solutions.keys() if sol in content_items_by_solution)
@@ -3282,7 +3432,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         
         # Create alphabetical sections
         by_letter: Dict[str, List[str]] = defaultdict(list)
-        for solution_name in sorted(solutions.keys()):
+        for solution_name in sorted(solutions.keys(), key=str.casefold):
             first_letter = solution_name[0].upper()
             if first_letter.isalpha():
                 by_letter[first_letter].append(solution_name)
@@ -3307,10 +3457,14 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                     solutions_using_asim.add(sol_name)
                     break  # No need to check more items for this solution
         
-        # Add footnotes for unpublished solutions and ASIM icon
+        # Add footnotes for unpublished solutions, deprecated solutions, and ASIM icon
         has_unpublished = len(unpublished_solutions) > 0
+        has_deprecated = len(deprecated_solutions) > 0
         if has_unpublished:
             f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        if has_deprecated:
+            f.write(DEPRECATED_SOLUTION_FOOTNOTE + "\n\n")
         
         if solutions_using_asim:
             f.write(f"> {ASIM_ICON_ROOT} **Uses ASIM:** This icon indicates the solution uses ASIM parsers for normalized data.\n\n")
@@ -3326,7 +3480,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
             f.write("| | Solution | First Published | Publisher |\n")
             f.write("|:--:|----------|----------------|----------|\n")
             
-            for solution_name in sorted(by_letter[letter]):
+            for solution_name in sorted(by_letter[letter], key=str.casefold):
                 connectors = solutions[solution_name]
                 
                 support_tier = connectors[0].get('solution_support_tier', 'N/A')
@@ -3346,6 +3500,8 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 
                 # Add status suffix icons
                 status_suffix = ""
+                if solution_name in deprecated_solutions:
+                    status_suffix += f" {DEPRECATED_ICON}"
                 if solution_name in unpublished_solutions:
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 # Check for additional_information override
@@ -3364,8 +3520,11 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
     print(f"Generated index: {index_path}")
 
 
-def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> None:
+def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path,
+                              connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate connectors index page organized alphabetically."""
+    if connectors_reference is None:
+        connectors_reference = {}
     
     index_path = output_dir / "connectors-index.md"
     
@@ -3413,12 +3572,6 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         # Add navigation
         write_browse_section(f, 'connectors', "")
         f.write("---\n\n")
-        
-        # Add coverage note
-        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
-        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
-        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
-        f.write("are not managed via Solutions and are therefore not included here.\n\n")
         
         # Separate deprecated and active connectors using is_deprecated field
         deprecated_connectors = {}
@@ -3480,6 +3633,13 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         has_additional_info = any(get_doc_override('connector', cid, 'additional_information') for cid in connectors_map.keys())
         if has_additional_info:
             f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
+        # Check if any connectors use CLv1 tables
+        has_clv1_connectors = any(
+            connectors_reference.get(cid, {}).get('is_clv1', '').lower() == 'true'
+            for cid in connectors_map.keys()
+        )
+        if has_clv1_connectors:
+            f.write(CLV1_FOOTNOTE + "\n\n")
         
         # Generate sections by letter with table format
         for letter in letters:
@@ -3513,6 +3673,9 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 # Check for additional_information override
                 if get_doc_override('connector', connector_id, 'additional_information'):
                     status_suffix += f" {ADDITIONAL_INFO_ICON}"
+                # Check for CLv1 tables
+                if connectors_reference.get(connector_id, {}).get('is_clv1', '').lower() == 'true':
+                    status_suffix += f" {CLV1_ICON}"
                 
                 connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
@@ -3570,7 +3733,8 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
     print(f"Generated connectors index: {index_path}")
 
 
-def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> Dict[str, Dict[str, any]]:
+def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path,
+                                      connectors_reference: Dict[str, Dict[str, str]] = None) -> Dict[str, Dict[str, any]]:
     """Generate the collection methods index page and individual method pages.
     
     Args:
@@ -3598,6 +3762,7 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
                 'tables': set(),
                 'description': conn.get('connector_description', ''),
                 'collection_method': conn.get('collection_method', ''),
+                'ingestion_api': conn.get('ingestion_api', ''),
                 'is_published': conn.get('is_published', 'true'),
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
@@ -3680,6 +3845,70 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         f.write(DEPRECATED_FOOTNOTE + "\n\n")
         f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
         
+        # ===================== INGESTION API BY COLLECTION METHOD TABLE =====================
+        # Build ingestion API stats per (collection_method, ingestion_api)
+        api_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        api_totals: Dict[str, int] = defaultdict(int)
+        api_methods_set: Set[str] = set()  # collection methods that have ingestion API info
+        
+        for connector_id, info in connectors_map.items():
+            ingestion_api = info.get('ingestion_api', '')
+            if not ingestion_api:
+                continue
+            method = info.get('collection_method', '') or 'Unknown'
+            api_method_stats[method][ingestion_api] += 1
+            api_totals[ingestion_api] += 1
+            api_methods_set.add(method)
+        
+        if api_totals:
+            f.write("---\n\n")
+            f.write("## Ingestion API by Collection Method\n\n")
+            f.write("API-based connectors (CCF Push, Azure Function, REST API, and Custom Log) ")
+            f.write("use one of two APIs to send data to the Log Analytics workspace. ")
+            f.write("CCF and CCF (Legacy) are excluded as their ingestion is platform-managed.\n\n")
+            
+            # Determine API columns in order
+            api_order = ['Log Ingestion API', 'HTTP Data Collector API', 'Undetermined']
+            api_columns = [api for api in api_order if api in api_totals]
+            
+            # Header
+            f.write("| Collection Method |")
+            for api in api_columns:
+                api_link = get_ingestion_api_link(api, "")
+                f.write(f" {api_link} |")
+            f.write(" **Total** |\n")
+            
+            # Alignment
+            f.write("|:-----------------|")
+            for _ in api_columns:
+                f.write("------:|")
+            f.write("------:|\n")
+            
+            # Data rows - sorted by total across APIs
+            sorted_api_methods = sorted(
+                api_methods_set,
+                key=lambda m: sum(api_method_stats[m].values()),
+                reverse=True
+            )
+            
+            for method in sorted_api_methods:
+                method_link = get_collection_method_link(method, "")
+                f.write(f"| {method_link} |")
+                method_total = 0
+                for api in api_columns:
+                    count = api_method_stats[method].get(api, 0)
+                    method_total += count
+                    f.write(f" {count if count > 0 else '-'} |")
+                f.write(f" **{method_total}** |\n")
+            
+            # Total row
+            grand_total = sum(api_totals.values())
+            f.write("| **Total** |")
+            for api in api_columns:
+                f.write(f" **{api_totals[api]}** |")
+            f.write(f" **{grand_total}** |\n")
+            f.write("\n")
+        
         # Navigation footer
         f.write("---\n\n")
         write_browse_section(f, 'methods', "")
@@ -3688,15 +3917,34 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
     
     # Generate individual method pages
     for method, stats in method_stats.items():
-        generate_collection_method_page(method, stats, methods_dir, deprecated_connectors, unpublished_connectors)
+        generate_collection_method_page(method, stats, methods_dir, deprecated_connectors, unpublished_connectors, connectors_reference)
     
     print(f"Generated {len(method_stats)} collection method pages")
+    
+    # Generate ingestion API pages
+    if api_totals:
+        for api_name in api_totals:
+            # Build stats for this API
+            api_connectors = [
+                (cid, info) for cid, info in connectors_map.items()
+                if info.get('ingestion_api', '') == api_name
+            ]
+            api_stats = {
+                'total': len(api_connectors),
+                'active': sum(1 for cid, _ in api_connectors if cid not in deprecated_connectors and cid not in unpublished_connectors),
+                'deprecated': sum(1 for cid, _ in api_connectors if cid in deprecated_connectors),
+                'unpublished': sum(1 for cid, _ in api_connectors if cid in unpublished_connectors),
+                'connectors': api_connectors,
+            }
+            generate_ingestion_api_page(api_name, api_stats, methods_dir, deprecated_connectors, unpublished_connectors, connectors_reference)
+        print(f"Generated {len(api_totals)} ingestion API pages")
     
     return dict(method_stats)
 
 
 def generate_collection_method_page(method: str, stats: Dict[str, any], methods_dir: Path,
-                                     deprecated_connectors: Set[str], unpublished_connectors: Set[str]) -> None:
+                                     deprecated_connectors: Set[str], unpublished_connectors: Set[str],
+                                     connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate an individual collection method page.
     
     Args:
@@ -3777,6 +4025,8 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                     status_suffix += f" {DISCOVERED_ICON}"
                 if get_doc_override('connector', connector_id, 'additional_information'):
                     status_suffix += f" {ADDITIONAL_INFO_ICON}"
+                if connectors_reference and connectors_reference.get(connector_id, {}).get('is_clv1', '').lower() == 'true':
+                    status_suffix += f" {CLV1_ICON}"
                 
                 connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
@@ -3802,6 +4052,149 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                 solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
                 
                 f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Icon footnotes
+        f.write("---\n\n")
+        if stats['deprecated'] > 0:
+            f.write(DEPRECATED_FOOTNOTE + "\n\n")
+        if stats['unpublished'] > 0:
+            f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'method-page', "../")
+
+
+def generate_ingestion_api_page(api_name: str, stats: Dict[str, any], methods_dir: Path,
+                                 deprecated_connectors: Set[str], unpublished_connectors: Set[str],
+                                 connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
+    """Generate an individual ingestion API page.
+    
+    Args:
+        api_name: Ingestion API name (e.g., "Log Ingestion API", "HTTP Data Collector API", "Undetermined")
+        stats: Stats dict with total, active, deprecated, unpublished, and connectors list
+        methods_dir: Directory for method pages (API pages go in same directory)
+        deprecated_connectors: Set of deprecated connector IDs
+        unpublished_connectors: Set of unpublished connector IDs
+    """
+    filename = get_ingestion_api_filename(api_name)
+    page_path = methods_dir / f"{filename}.md"
+    
+    # Get metadata for this API
+    metadata = INGESTION_API_METADATA.get(api_name, {})
+    display_name = metadata.get('name', api_name)
+    description = metadata.get('description', '')
+    links = metadata.get('links', [])
+    
+    with page_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {display_name}\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'method-page', "../")
+        f.write("---\n\n")
+        
+        # Description
+        if description:
+            f.write(f"{description}\n\n")
+        
+        # Documentation links
+        if links:
+            f.write("## Documentation\n\n")
+            for link_text, link_url in links:
+                f.write(f"- [{link_text}]({link_url})\n")
+            f.write("\n")
+        
+        # Stats summary
+        f.write("## Statistics\n\n")
+        f.write(f"| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| Total Connectors | **{stats['total']}** |\n")
+        f.write(f"| Active | {stats['active']} |\n")
+        f.write(f"| Deprecated {DEPRECATED_ICON} | {stats['deprecated']} |\n")
+        f.write(f"| Unpublished {UNPUBLISHED_ICON} | {stats['unpublished']} |\n")
+        f.write("\n")
+        
+        # Breakdown by collection method
+        method_counts: Dict[str, int] = defaultdict(int)
+        for _, info in stats['connectors']:
+            method = info.get('collection_method', '') or 'Unknown'
+            method_counts[method] += 1
+        
+        if method_counts:
+            f.write("### By Collection Method\n\n")
+            f.write("| Collection Method | Count |\n")
+            f.write("|:-----------------|------:|\n")
+            for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
+                method_link = get_collection_method_link(method, "../")
+                f.write(f"| {method_link} | {count} |\n")
+            f.write(f"| **Total** | **{stats['total']}** |\n")
+            f.write("\n")
+        
+        # Connectors list
+        f.write("## Connectors Using This API\n\n")
+        
+        # Separate into active and deprecated
+        active_connectors = []
+        deprecated_list = []
+        
+        for connector_id, info in stats['connectors']:
+            if connector_id in deprecated_connectors:
+                deprecated_list.append((connector_id, info))
+            else:
+                active_connectors.append((connector_id, info))
+        
+        # Active connectors table
+        if active_connectors:
+            f.write("### Active Connectors\n\n")
+            f.write("| Connector | Collection Method | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:------------------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(active_connectors, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                method = info.get('collection_method', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '?'
+                
+                # Status icons
+                status_suffix = ""
+                if connector_id in unpublished_connectors:
+                    status_suffix += f" {UNPUBLISHED_ICON}"
+                if info.get('not_in_solution_json', 'false') == 'true':
+                    status_suffix += f" {DISCOVERED_ICON}"
+                if connectors_reference and connectors_reference.get(connector_id, {}).get('is_clv1', '').lower() == 'true':
+                    status_suffix += f" {CLV1_ICON}"
+                
+                connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
+                method_link = get_collection_method_link(method, "../")
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
+                
+                f.write(f"| {connector_link} | {method_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Deprecated connectors table
+        if deprecated_list:
+            f.write(f"### Deprecated Connectors {DEPRECATED_ICON}\n\n")
+            f.write("| Connector | Collection Method | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:------------------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(deprecated_list, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                method = info.get('collection_method', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '?'
+                
+                connector_link = f"{DEPRECATED_ICON} [{title}](../connectors/{sanitize_filename(connector_id)}.md)"
+                method_link = get_collection_method_link(method, "../")
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
+                
+                f.write(f"| {connector_link} | {method_link} | {publisher} | {tables_count} | {solution_link} |\n")
             
             f.write("\n")
         
@@ -3966,13 +4359,18 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         if has_schemas:
             f.write(SCHEMA_FOOTNOTE + "\n\n")
         
+        # Check if any tables are CLv1 and add footnote
+        has_clv1_tables = any(tables_reference.get(t, {}).get('is_clv1', '').lower() == 'true' for t in tables_map.keys())
+        if has_clv1_tables:
+            f.write(CLV1_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter - compact format with counts linking to table pages
         for letter in letters:
             f.write(f"## {letter}\n\n")
             f.write("| Table | Discovered Via | Solutions | Connectors | Content |\n")
             f.write("|-------|:---------------|:---------:|:----------:|:--------|\n")
             
-            for table in sorted(by_letter[letter]):
+            for table in sorted(by_letter[letter], key=str.casefold):
                 info = tables_map[table]
                 num_solutions = len(info['solutions'])
                 num_connectors = len(info['connectors'])
@@ -3988,6 +4386,10 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 # Add ADDITIONAL_INFO_ICON if table has additional_information
                 if get_doc_override('table', table, 'additional_information'):
                     table_cell += f" {ADDITIONAL_INFO_ICON}"
+                
+                # Add CLv1 icon if table uses Custom Log V1 schema
+                if tables_reference.get(table, {}).get('is_clv1', '').lower() == 'true':
+                    table_cell += f" {CLV1_ICON}"
                 
                 # Determine primary discovery source by priority:
                 # Connector > Content > Docs > Schema
@@ -4177,6 +4579,11 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             category = table_ref.get('category', '')
             if category:
                 attributes.append(('Category', category))
+            
+            # Custom Log V1 flag
+            is_clv1 = table_ref.get('is_clv1', '').lower() == 'true'
+            if is_clv1:
+                attributes.append(('Custom Log V1', f'Yes {CLV1_ICON} — uses type-suffixed column names'))
             
             # Table characteristics from reference CSV
             basic_logs = table_ref.get('basic_logs_eligible', '')
@@ -4961,6 +5368,24 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 caps_display = ', '.join(f"`{c}`" for c in caps)
                 f.write(f"| **CCF Capabilities** | {caps_display} |\n")
             
+            # Ingestion API
+            ingestion_api = connector_ref.get('ingestion_api', '')
+            if ingestion_api:
+                ingestion_api_link = get_ingestion_api_link(ingestion_api, "../")
+                ingestion_api_reason = connector_ref.get('ingestion_api_reason', '')
+                reason_suffix = f" — *{ingestion_api_reason}*" if ingestion_api_reason else ""
+                f.write(f"| **Ingestion API** | {ingestion_api_link}{reason_suffix} |\n")
+            
+            # Custom Log V1 tables
+            is_clv1 = connector_ref.get('is_clv1', '').lower() == 'true'
+            if is_clv1:
+                f.write(f"| **Custom Log V1 Tables** | Yes {CLV1_ICON} — ingests into tables with type-suffixed columns |\n")
+            
+            # Deprecation date
+            connector_deprecation_date = connector_ref.get('deprecation_date', '')
+            if connector_deprecation_date:
+                f.write(f"| **Deprecated** | {connector_deprecation_date} |\n")
+            
             f.write("\n")
             
             # Description
@@ -5052,7 +5477,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                           solution_table_content_types: Dict[str, Dict[str, Set[str]]] = None,
                           dependency_id_to_solution: Dict[str, str] = None,
                           solution_deps: List[Dict[str, str]] = None,
-                          all_solutions_connectors: Dict[str, List[Dict[str, str]]] = None) -> None:
+                          all_solutions_connectors: Dict[str, List[Dict[str, str]]] = None,
+                          connectors_reference: Dict[str, Dict[str, str]] = None,
+                          tables_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate individual solution documentation page.
     
     Args:
@@ -5079,6 +5506,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         solution_deps = []
     if all_solutions_connectors is None:
         all_solutions_connectors = {}
+    if connectors_reference is None:
+        connectors_reference = {}
+    if tables_reference is None:
+        tables_reference = {}
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -5122,18 +5553,26 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     # Check if solution is published
     is_published = metadata.get('is_published', 'true') == 'true'
     
+    # Check if solution is deprecated
+    is_deprecated = metadata.get('solution_is_deprecated', 'false') == 'true'
+    deprecation_date = metadata.get('solution_deprecation_date', '')
+    
     with solution_path.open("w", encoding="utf-8") as f:
         # Build title with appropriate icons
         title_icons = []
         if solution_uses_asim:
             title_icons.append(ASIM_BADGE_LARGE)
+        if is_deprecated:
+            title_icons.append(DEPRECATED_ICON)
         if not is_published:
             title_icons.append(UNPUBLISHED_ICON)
         
         title_prefix = " ".join(title_icons) + " " if title_icons else ""
         f.write(f"# {title_prefix}{solution_name}\n\n")
         
-        # Add unpublished footnote if applicable
+        # Add status footnotes
+        if is_deprecated:
+            f.write(DEPRECATED_SOLUTION_FOOTNOTE + "\n\n")
         if not is_published:
             f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
         
@@ -5146,14 +5585,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         write_browse_section(f, 'solution-page', "../")
         f.write("---\n\n")
         
-        # Add description if available
-        description = metadata.get('solution_description', '')
-        if description:
-            # Description may contain markdown/HTML, write as-is
-            f.write(f"{description}\n\n")
-        
-        # Solution metadata section
-        f.write("## Solution Information\n\n")
+        # Solution metadata table (no heading - placed before description for quick reference)
         f.write("| Attribute | Value |\n")
         f.write("|:------------------------|:------|\n")
         f.write(f"| **Publisher** | {metadata.get('solution_support_name', 'N/A')} |\n")
@@ -5183,6 +5615,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         if last_publish:
             f.write(f"| **Last Updated** | {last_publish} |\n")
         
+        if deprecation_date:
+            f.write(f"| **Deprecated** | {deprecation_date} |\n")
+        
         solution_folder = metadata.get('solution_folder', '')
         solution_github_url = metadata.get('solution_github_url', '')
         if solution_folder:
@@ -5191,16 +5626,13 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             else:
                 f.write(f"| **Solution Folder** | {solution_folder} |\n")
         
-        # Show dependencies if any
+        # Show pre-requisites summary if any
         dependencies = metadata.get('solution_dependencies', '')
         if dependencies:
-            # Format dependencies as a list
             dep_list = [d.strip() for d in dependencies.split(';') if d.strip()]
             if dep_list:
-                # Resolve dependency IDs to solution names with links
                 dep_links = []
                 for dep_id in dep_list:
-                    # First check for override
                     override_name = get_dependency_override(solution_name, dep_id)
                     if override_name:
                         dep_filename = sanitize_filename(override_name)
@@ -5210,20 +5642,13 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         dep_filename = sanitize_filename(dep_name)
                         dep_links.append(f"[{dep_name}]({dep_filename}.md)")
                     else:
-                        # Keep the raw ID if we can't resolve it
                         dep_links.append(dep_id)
                 deps_formatted = ', '.join(dep_links)
-                f.write(f"| **Dependencies** | {deps_formatted} |\n")
+                f.write(f"| **Pre-requisites** | {deps_formatted} |\n")
         
         f.write("\n")
         
-        # Additional Information section (from overrides) - placed early for visibility
-        additional_info = get_doc_override('solution', solution_name, 'additional_information')
-        if additional_info:
-            f.write("## Additional Information\n\n")
-            f.write(f"{format_additional_info(additional_info)}\n\n")
-        
-        # Build dependency information for use in Dependencies section and connectors/tables sections
+        # Build dependency information early (needed for description cleaning and later sections)
         dep_solutions: Dict[str, Dict[str, str]] = {}  # dep_solution_name -> {type, schemas, id}
         dep_connectors: List[Dict[str, str]] = []  # connector entries from dependency solutions
         dep_connector_tables: Set[str] = set()  # tables from dependency connectors
@@ -5263,55 +5688,147 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         if table:
                             dep_connector_tables.add(table)
         
-        # Dependencies section
-        if dep_solutions:
-            # Count explicit vs ASIM-only dependencies
-            explicit_deps = [d for d in dep_solutions.values() if 'explicit' in d['type']]
-            asim_only_deps = [d for d in dep_solutions.values() if d['type'] == 'ASIM']
-            f.write("## Dependencies\n\n")
-            if explicit_deps and asim_only_deps:
-                f.write(f"This solution has **{len(explicit_deps)} required** and **{len(asim_only_deps)} optional** (ASIM-based) dependencies on other solutions:\n\n")
-            elif asim_only_deps:
-                f.write(f"This solution has **{len(asim_only_deps)} optional** (ASIM-based) dependencies on other solutions that can provide data through ASIM parsers:\n\n")
-            else:
-                f.write(f"This solution depends on **{len(explicit_deps)} other solution(s)**:\n\n")
-            f.write("| Solution | Dependency Type | Details |\n")
-            f.write("|:---------|:----------------|:--------|\n")
-            for dep_sol_name in sorted(dep_solutions.keys()):
-                dep_info = dep_solutions[dep_sol_name]
-                dep_filename = sanitize_filename(dep_sol_name)
-                dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
-                dep_type = dep_info['type']
-                dep_type_display = dep_type
-                if dep_type == 'ASIM':
-                    dep_type_display = 'ASIM (optional)'
-                elif dep_type == 'explicit, ASIM':
-                    dep_type_display = 'explicit, ASIM (optional)'
-                schemas = dep_info.get('schemas', set())
-                if schemas:
-                    details = f"ASIM schemas: {', '.join(sorted(schemas))}"
-                else:
-                    details = "-"
-                f.write(f"| {dep_link} | {dep_type_display} | {details} |\n")
-            f.write("\n")
+        # Split dependencies into explicit pre-requisites and ASIM pre-requisites
+        explicit_dep_names = sorted([n for n, d in dep_solutions.items() if 'explicit' in d['type']])
+        asim_dep_names = sorted([n for n, d in dep_solutions.items() if 'ASIM' in d['type']])
+        has_asim_prereq_section = bool(asim_dep_names) or bool(solution_asim_products)
         
-        # Load README content for later use (added at the end like connector docs)
+        # Add description if available, with additional information appended
+        description = metadata.get('solution_description', '')
+        additional_info = get_doc_override('solution', solution_name, 'additional_information')
+        if description:
+            # For solutions with structured pre-requisites, clean inline prerequisite sections from description
+            if has_asim_prereq_section or explicit_dep_names:
+                description = clean_asim_description(description, has_asim_prereq_section, bool(explicit_dep_names))
+            f.write(f"{description}\n\n")
+        if additional_info:
+            f.write(f"**Additional Information**\n\n")
+            f.write(f"{format_additional_info(additional_info)}\n\n")
+        
+        # Load README content early (needed for TOC and later use)
         readme_content = None
         readme_github_url = None
         if solutions_dir:
             readme_content, readme_github_url = get_solution_readme(solution_name, solutions_dir)
         
-        # Supported Products section (if solution uses ASIM)
-        if solution_asim_products:
-            f.write(f"## {ASIM_ICON} Supported Products\n\n")
-            f.write("This solution uses ASIM parsers and supports the following products:\n\n")
-            f.write("| Product |\n")
-            f.write("|:--------|\n")
-            for product in sorted(solution_asim_products):
-                # Link to ASIM products index with anchor
-                product_anchor = sanitize_anchor(product)
-                f.write(f"| [{product}](../asim/asim-products-index.md#{product_anchor}) |\n")
+        # Pre-compute table section presence for TOC
+        if has_any_connectors:
+            _connector_tables = set(conn['Table'] for conn in connectors if conn.get('Table', '').strip())
+            _all_tables = _connector_tables | set(solution_table_content_types.keys()) | dep_connector_tables
+        else:
+            _all_tables = set(solution_table_content_types.keys())
+        _has_asim_parsers = any(is_asim_parser(t) for t in _all_tables)
+        _has_regular_tables = any(t not in INTERNAL_TABLES and not is_asim_parser(t) for t in _all_tables)
+        _has_internal_tables = any(t in INTERNAL_TABLES for t in _all_tables)
+        # Pre-compute ASIM union parsers for the intro paragraph
+        _asim_parsers = sorted([t for t in _all_tables if is_asim_parser(t)])
+        _asim_union_parsers = sorted([t for t in _asim_parsers if t in ASIM_UNION_TO_SUB_PARSERS])
+        
+        # Build and write Table of Contents
+        toc_entries = []
+        if explicit_dep_names:
+            toc_entries.append(("Pre-requisites", "pre-requisites"))
+        if has_asim_prereq_section:
+            toc_entries.append(("ASIM Pre-requisites", "asim-pre-requisites"))
+        toc_entries.append(("Data Connectors", "data-connectors"))
+        if _has_regular_tables:
+            toc_entries.append(("Tables Used", "tables-used"))
+        if not _has_regular_tables and _has_internal_tables:
+            toc_entries.append(("Internal Tables", "internal-tables"))
+        if content_items:
+            toc_entries.append(("Content Items", "content-items"))
+        if readme_content:
+            toc_entries.append(("Additional Documentation", "additional-documentation"))
+        
+        if len(toc_entries) > 2:
+            f.write("## Contents\n\n")
+            for title, anchor in toc_entries:
+                f.write(f"- [{title}](#{anchor})\n")
             f.write("\n")
+        
+        # Pre-requisites section (explicit dependencies only)
+        if explicit_dep_names:
+            f.write("## Pre-requisites\n\n")
+            f.write(f"This solution depends on **{len(explicit_dep_names)} other solution(s)**:\n\n")
+            # Only show Details column if at least one dependency has ASIM schema info
+            any_has_schemas = any(dep_solutions[n].get('schemas') for n in explicit_dep_names)
+            if any_has_schemas:
+                f.write("| Solution | Details |\n")
+                f.write("|:---------|:--------|\n")
+                for dep_sol_name in explicit_dep_names:
+                    dep_info = dep_solutions[dep_sol_name]
+                    dep_filename = sanitize_filename(dep_sol_name)
+                    dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
+                    schemas = dep_info.get('schemas', set())
+                    if schemas:
+                        details = f"Also provides ASIM schemas: {', '.join(sorted(schemas))}"
+                    else:
+                        details = "-"
+                    f.write(f"| {dep_link} | {details} |\n")
+            else:
+                f.write("| Solution |\n")
+                f.write("|:---------|\n")
+                for dep_sol_name in explicit_dep_names:
+                    dep_filename = sanitize_filename(dep_sol_name)
+                    dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
+                    f.write(f"| {dep_link} |\n")
+            f.write("\n")
+        
+        # ASIM Pre-requisites section (ASIM dependencies + supported products)
+        if has_asim_prereq_section:
+            f.write(f"## <a id=\"asim-pre-requisites\"></a>{ASIM_ICON} ASIM Pre-requisites\n\n")
+            # Build intro paragraph with embedded ASIM parser links
+            if _asim_union_parsers:
+                parser_links = [format_table_link(p, asim_path='../asim/') for p in _asim_union_parsers]
+                if len(parser_links) == 1:
+                    parsers_text = f"the {parser_links[0]}"
+                    plural = ""
+                elif len(parser_links) == 2:
+                    parsers_text = f"the {parser_links[0]} and {parser_links[1]}"
+                    plural = "s"
+                else:
+                    parsers_text = "the " + ", ".join(parser_links[:-1]) + f", and {parser_links[-1]}"
+                    plural = "s"
+                f.write(f"This solution uses {parsers_text} [ASIM (Advanced Security Information Model)](https://learn.microsoft.com/azure/sentinel/normalization) parser{plural} to provide normalized, source-agnostic data access, expanding detection coverage without modifying queries.\n\n")
+            else:
+                f.write("This solution uses [ASIM (Advanced Security Information Model)](https://learn.microsoft.com/azure/sentinel/normalization) parsers to provide normalized, source-agnostic data access, expanding detection coverage without modifying queries.\n\n")
+            
+            # Supported Products table - combines products and their dependency solutions
+            if solution_asim_products or asim_dep_names:
+                f.write(f"### Supported Products\n\n")
+                f.write("| Product | Dependency Solution |\n")
+                f.write("|:--------|:--------------------|\n")
+                
+                # Build set of dep solution names for filtering
+                asim_dep_set = set(asim_dep_names) if asim_dep_names else set()
+                # Track which dependency solutions appear via products
+                covered_dep_solutions: Set[str] = set()
+                
+                for product in sorted(solution_asim_products):
+                    product_anchor = sanitize_anchor(product)
+                    product_link = f"[{product}](../asim/asim-products-index.md#{product_anchor})"
+                    # Find dependency solutions for this product
+                    global_solutions = ASIM_PRODUCT_TO_SOLUTIONS.get(product, set())
+                    product_dep_solutions = sorted(global_solutions & asim_dep_set)
+                    if product_dep_solutions:
+                        dep_links = []
+                        for dep_sol_name in product_dep_solutions:
+                            covered_dep_solutions.add(dep_sol_name)
+                            dep_filename = sanitize_filename(dep_sol_name)
+                            dep_links.append(f"[{dep_sol_name}]({dep_filename}.md)")
+                        f.write(f"| {product_link} | {'<br>'.join(dep_links)} |\n")
+                    else:
+                        f.write(f"| {product_link} | - |\n")
+                
+                # Add dependency solutions not associated with any product
+                if asim_dep_names:
+                    uncovered = [s for s in asim_dep_names if s not in covered_dep_solutions]
+                    for dep_sol_name in uncovered:
+                        dep_filename = sanitize_filename(dep_sol_name)
+                        dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
+                        f.write(f"| - | {dep_link} |\n")
+                
+                f.write("\n")
         
         # Only include connectors section if solution has any connectors
         if not has_any_connectors:
@@ -5378,12 +5895,6 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         f.write(f"| {format_table_link(table)} | {content_list} |\n")
                     f.write("\n")
                 
-                # ASIM Parsers section (if any)
-                if asim_parser_tables:
-                    f.write(f"## {ASIM_ICON} ASIM Parsers Used\n\n")
-                    f.write(f"This solution uses **{len(asim_parser_tables)} ASIM parser(s)** for normalized data:\n\n")
-                    write_tables_table(asim_parser_tables)
-                
                 # Regular Tables section (if any)
                 if regular_tables:
                     f.write("## Tables Used\n\n")
@@ -5391,7 +5902,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     write_tables_table(regular_tables)
                 
                 if internal_tables:
-                    f.write(f"### Internal Tables\n\n")
+                    heading = "##" if not regular_tables else "###"
+                    f.write(f"{heading} Internal Tables\n\n")
                     f.write(f"The following **{len(internal_tables)} table(s)** are used internally by this solution's content items:\n\n")
                     write_tables_table(internal_tables)
                 
@@ -5427,7 +5939,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 connector_link = f"[{connector_title}](../connectors/{sanitize_filename(connector_id)}.md)"
                 not_in_json = first_conn.get('not_in_solution_json', 'false')
                 warning = " ⚠️" if not_in_json == 'true' else ""
-                f.write(f"- {connector_link}{warning}\n")
+                clv1_suffix = f" {CLV1_ICON}" if connectors_reference.get(connector_id, {}).get('is_clv1', '').lower() == 'true' else ""
+                f.write(f"- {connector_link}{warning}{clv1_suffix}\n")
             
             # Add dependency connectors (from dependency solutions)
             if dep_connectors:
@@ -5439,6 +5952,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         sol = conn.get('solution_name', '')
                         dep_by_connector[cid] = sol
                 if dep_by_connector:
+                    f.write(f"\nConnectors from dependency solutions:\n\n")
                     for cid in sorted(dep_by_connector.keys()):
                         dep_sol_name = dep_by_connector[cid]
                         # Get connector title from the dependency connector entries
@@ -5448,11 +5962,23 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                                 dep_conn_title = conn.get('connector_title', cid)
                                 break
                         connector_link = f"[{dep_conn_title}](../connectors/{sanitize_filename(cid)}.md)"
-                        f.write(f"- {connector_link} *(dependency on [{dep_sol_name}]({sanitize_filename(dep_sol_name)}.md))*\n")
+                        dep_clv1_suffix = f" {CLV1_ICON}" if connectors_reference.get(cid, {}).get('is_clv1', '').lower() == 'true' else ""
+                        f.write(f"- {connector_link}{dep_clv1_suffix} *(dependency on [{dep_sol_name}]({sanitize_filename(dep_sol_name)}.md))*\n")
             
             # Add footnote if there are any discovered connectors
             if discovered_connector_count > 0:
                 f.write(f"\n*⚠️ Discovered connector - found in solution folder but not listed in Solution JSON definition.*\n")
+            
+            # Add CLv1 footnote if any connectors use CLv1 tables
+            all_solution_connector_ids = set(by_connector.keys())
+            if dep_connectors:
+                all_solution_connector_ids |= set(dep_by_connector.keys())
+            has_clv1_solution_connectors = any(
+                connectors_reference.get(cid, {}).get('is_clv1', '').lower() == 'true'
+                for cid in all_solution_connector_ids
+            )
+            if has_clv1_solution_connectors:
+                f.write(f"\n{CLV1_FOOTNOTE}\n")
             
             f.write("\n")
         
@@ -5520,7 +6046,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         if has_write:
                             content_parts = [f"{part} (writes)" if part == 'Playbooks' else part for part in content_parts]
                         content_list = ", ".join(content_parts) if content_parts else "-"
-                        f.write(f"| {format_table_link(table)} | {connector_list} | {content_list} |\n")
+                        table_cell = format_table_link(table)
+                        if tables_reference.get(table, {}).get('is_clv1', '').lower() == 'true':
+                            table_cell += f" {CLV1_ICON}"
+                        f.write(f"| {table_cell} | {connector_list} | {content_list} |\n")
                     f.write("\n")
                 
                 def write_asim_parsers_table(tables: List[str]) -> None:
@@ -5539,12 +6068,6 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         f.write(f"| {format_table_link(table)} | {content_list} |\n")
                     f.write("\n")
                 
-                # ASIM Parsers section (if any)
-                if asim_parser_tables:
-                    f.write(f"## {ASIM_ICON} ASIM Parsers Used\n\n")
-                    f.write(f"This solution uses **{len(asim_parser_tables)} ASIM parser(s)** for normalized data:\n\n")
-                    write_asim_parsers_table(asim_parser_tables)
-                
                 # Regular Tables section (if any)
                 if regular_tables:
                     f.write("## Tables Used\n\n")
@@ -5552,9 +6075,18 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     write_connector_tables_table(regular_tables)
                 
                 if internal_tables:
-                    f.write(f"### Internal Tables\n\n")
+                    heading = "##" if not regular_tables else "###"
+                    f.write(f"{heading} Internal Tables\n\n")
                     f.write(f"The following **{len(internal_tables)} table(s)** are used internally by this solution's content items:\n\n")
                     write_connector_tables_table(internal_tables)
+                
+                # Add CLv1 footnote if any tables use Custom Log V1 schema
+                has_clv1_solution_tables = any(
+                    tables_reference.get(t, {}).get('is_clv1', '').lower() == 'true'
+                    for t in all_tables
+                )
+                if has_clv1_solution_tables:
+                    f.write(f"\n{CLV1_FOOTNOTE}\n")
         
         # Content Items section
         if content_items:
@@ -5758,7 +6290,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
 
 def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_union: Dict[str, List[str]] = None, 
                               parser_product_map: Dict[str, str] = None, tables_reference: Dict[str, Dict[str, str]] = None,
-                              connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
+                              connectors_reference: Dict[str, Dict[str, str]] = None,
+                              parser_solutions_map: Dict[str, Dict[str, str]] = None) -> None:
     """Generate a single ASIM parser documentation page.
     
     Args:
@@ -5768,6 +6301,7 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         parser_product_map: Optional mapping from parser equivalent_builtin to product_name
         tables_reference: Optional dictionary of table metadata for transformations/ingestion API info
         connectors_reference: Optional dictionary of connector metadata (includes solution_name)
+        parser_solutions_map: Optional mapping from parser equivalent_builtin to {solutions, connectors}
     """
     if sub_to_union is None:
         sub_to_union = {}
@@ -5777,6 +6311,8 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         tables_reference = {}
     if connectors_reference is None:
         connectors_reference = {}
+    if parser_solutions_map is None:
+        parser_solutions_map = {}
     parser_name = parser.get('parser_name', 'Unknown')
     safe_name = sanitize_filename(parser_name)
     parsers_dir = output_dir / "asim"
@@ -5865,8 +6401,8 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         if sub_parsers:
             f.write("## Products\n\n")
             f.write("This union parser includes parsers for the following products:\n\n")
-            f.write("| Product | Source Parser |\n")
-            f.write("|:--------|:--------------|\n")
+            f.write("| Product | Source Parser | Solutions |\n")
+            f.write("|:--------|:--------------|:----------|\n")
             for sub in sorted(sub_parsers.split(';')):
                 sub = sub.strip()
                 if sub:
@@ -5878,7 +6414,30 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
                     # Use get_asim_parser_filename to get correct filename from mapping
                     # Sub-parsers are referenced by equivalent_builtin but files use parser_name
                     sub_filename = get_asim_parser_filename(sub)
-                    f.write(f"| {product} | [{sub}]({sub_filename}.md) |\n")
+                    # Get solutions for this sub-parser
+                    sub_sol_info = parser_solutions_map.get(sub, {})
+                    solutions_str = sub_sol_info.get('solutions', '')
+                    associated_connectors = sub_sol_info.get('connectors', '')
+                    solution_display = ''
+                    if solutions_str:
+                        solution_list = [s.strip() for s in solutions_str.split(',') if s.strip()]
+                        connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+                        solution_links = []
+                        for s in solution_list:
+                            # Find connectors for this solution - check if any are deprecated
+                            solution_connectors = [c for c in connector_list
+                                                   if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                            connector_for_legacy = ''
+                            for c in solution_connectors:
+                                if is_connector_deprecated(c, connectors_reference):
+                                    connector_for_legacy = c
+                                    break
+                            if not connector_for_legacy and solution_connectors:
+                                connector_for_legacy = solution_connectors[0]
+                            link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                            solution_links.append(link)
+                        solution_display = '<br>'.join(solution_links)
+                    f.write(f"| {product} | [{sub}]({sub_filename}.md) | {solution_display} |\n")
             f.write("\n")
         
         # Tables - using standardized tables table with Selection Criteria
@@ -6625,8 +7184,27 @@ def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path,
                     if sub:
                         sub_to_union[sub].append(union_name)
     
+    # Build mapping: parser equivalent_builtin -> {solutions, connectors} for sub-parser solution display
+    parser_solutions_map: Dict[str, Dict[str, str]] = {}
     for parser in parsers:
-        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map, tables_reference, connectors_reference)
+        equiv = parser.get('equivalent_builtin', '')
+        solutions = parser.get('associated_solutions', '')
+        associated_connectors = parser.get('associated_connectors', '')
+        if equiv and solutions:
+            parser_solutions_map[equiv] = {
+                'solutions': solutions,
+                'connectors': associated_connectors
+            }
+            # Also register _Im_ variant for _ASim_ parsers
+            if equiv.startswith('_ASim_'):
+                im_variant = '_Im_' + equiv[6:]
+                parser_solutions_map[im_variant] = {
+                    'solutions': solutions,
+                    'connectors': associated_connectors
+                }
+    
+    for parser in parsers:
+        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map, tables_reference, connectors_reference, parser_solutions_map)
     
     return len(parsers)
 
@@ -6677,7 +7255,7 @@ def generate_statistics_page(
         f.write("- [Parsers](#parsers)\n")
         f.write("- [ASIM Parsers](#asim-parsers)\n")
         f.write("- [ASIM Products](#asim-products)\n")
-        f.write("- [Dependencies](#dependencies)\n")
+        f.write("- [Pre-requisites](#pre-requisites)\n")
         f.write("\n")
         
         # ===================== TERMINOLOGY DEFINITIONS =====================
@@ -7098,44 +7676,191 @@ def generate_statistics_page(
                     f.write(f"| {feat} | {count} |\n")
                 f.write("\n")
         
+        # ===================== INGESTION API STATISTICS =====================
+        # Build ingestion API stats for connectors that have API information
+        ingestion_api_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0})
+        for connector_id, info in connectors_map.items():
+            api = info.get('ingestion_api', '')
+            if not api:
+                continue
+            ingestion_api_stats[api]['total'] += 1
+            if connector_id in deprecated_connectors:
+                ingestion_api_stats[api]['deprecated'] += 1
+            elif connector_id in unpub_active:
+                ingestion_api_stats[api]['unpublished'] += 1
+            else:
+                ingestion_api_stats[api]['active'] += 1
+        
+        if ingestion_api_stats:
+            f.write("### Ingestion API\n\n")
+            f.write("API-based connectors use one of two APIs to send data to the workspace:\n\n")
+            f.write(f"| Ingestion API | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+            f.write("|:-------------|------:|-------:|-----------:|------------:|\n")
+            
+            api_order = ['Log Ingestion API', 'HTTP Data Collector API', 'Undetermined']
+            for api in api_order:
+                if api in ingestion_api_stats:
+                    stats = ingestion_api_stats[api]
+                    api_link = get_ingestion_api_link(api, "")
+                    f.write(f"| {api_link} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+            
+            total_api = sum(s['total'] for s in ingestion_api_stats.values())
+            total_api_active = sum(s['active'] for s in ingestion_api_stats.values())
+            total_api_deprecated = sum(s['deprecated'] for s in ingestion_api_stats.values())
+            total_api_unpub = sum(s['unpublished'] for s in ingestion_api_stats.values())
+            f.write(f"| **Total** | **{total_api}** | **{total_api_active}** | **{total_api_deprecated}** | **{total_api_unpub}** |\n")
+            f.write("\n")
+            
+            # Ingestion API by Collection Method cross-table
+            api_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+            api_methods_set: Set[str] = set()
+            for connector_id, info in connectors_map.items():
+                api = info.get('ingestion_api', '')
+                if not api:
+                    continue
+                method = info.get('collection_method', '') or 'Unknown'
+                api_method_stats[method][api] += 1
+                api_methods_set.add(method)
+            
+            if api_method_stats:
+                f.write("**By Collection Method:**\n\n")
+                api_columns = [a for a in api_order if a in ingestion_api_stats]
+                
+                f.write("| Collection Method |")
+                for api in api_columns:
+                    api_link = get_ingestion_api_link(api, "")
+                    f.write(f" {api_link} |")
+                f.write(" **Total** |\n")
+                
+                f.write("|:-----------------|")
+                for _ in api_columns:
+                    f.write("------:|")
+                f.write("------:|\n")
+                
+                sorted_api_methods = sorted(api_methods_set, key=lambda m: sum(api_method_stats[m].values()), reverse=True)
+                api_col_totals: Dict[str, int] = defaultdict(int)
+                
+                for method in sorted_api_methods:
+                    method_link = get_collection_method_link(method, "")
+                    f.write(f"| {method_link} |")
+                    method_total = 0
+                    for api in api_columns:
+                        count = api_method_stats[method].get(api, 0)
+                        api_col_totals[api] += count
+                        method_total += count
+                        f.write(f" {count if count > 0 else '-'} |")
+                    f.write(f" **{method_total}** |\n")
+                
+                grand_total = sum(api_col_totals.values())
+                f.write("| **Total** |")
+                for api in api_columns:
+                    f.write(f" **{api_col_totals[api]}** |")
+                f.write(f" **{grand_total}** |\n")
+                f.write("\n")
+        
+        # ===================== CLV1 CONNECTOR STATISTICS =====================
+        clv1_connectors = {cid: info for cid, info in connectors_map.items() if info.get('is_clv1', '') == 'true'}
+        if clv1_connectors:
+            clv1_active = sum(1 for cid in clv1_connectors if cid not in deprecated_connectors and cid not in unpub_active)
+            clv1_deprecated = sum(1 for cid in clv1_connectors if cid in deprecated_connectors)
+            clv1_unpub = sum(1 for cid in clv1_connectors if cid in unpub_active)
+            
+            f.write(f"### Custom Log V1 (CLv1) {CLV1_ICON}\n\n")
+            f.write("Connectors that use at least one Custom Log V1 table (identified by type-suffixed columns or `_CL` suffix with compatible collection method).\n\n")
+            f.write(f"| Metric | Count |\n")
+            f.write(f"|:-------|------:|\n")
+            f.write(f"| CLv1 Connectors | **{len(clv1_connectors)}** |\n")
+            f.write(f"| Active | {clv1_active} |\n")
+            f.write(f"| Deprecated {DEPRECATED_ICON} | {clv1_deprecated} |\n")
+            f.write(f"| Unpublished {UNPUBLISHED_ICON} | {clv1_unpub} |\n")
+            f.write("\n")
+            
+            # CLv1 by collection method
+            clv1_method_stats: Dict[str, int] = defaultdict(int)
+            for cid, info in clv1_connectors.items():
+                method = info.get('collection_method', '') or 'Unknown'
+                clv1_method_stats[method] += 1
+            
+            if clv1_method_stats:
+                f.write("**By Collection Method:**\n\n")
+                f.write("| Collection Method | CLv1 Connectors |\n")
+                f.write("|:-----------------|----------------:|\n")
+                for method, count in sorted(clv1_method_stats.items(), key=lambda x: x[1], reverse=True):
+                    method_link = get_collection_method_link(method, "")
+                    f.write(f"| {method_link} | {count} |\n")
+                f.write(f"| **Total** | **{len(clv1_connectors)}** |\n")
+                f.write("\n")
+            
+            # CLv1 by ingestion API
+            clv1_api_stats: Dict[str, int] = defaultdict(int)
+            clv1_no_api = 0
+            for cid, info in clv1_connectors.items():
+                api = info.get('ingestion_api', '')
+                if api:
+                    clv1_api_stats[api] += 1
+                else:
+                    clv1_no_api += 1
+            
+            if clv1_api_stats:
+                f.write("**By Ingestion API:**\n\n")
+                f.write("| Ingestion API | CLv1 Connectors |\n")
+                f.write("|:-------------|----------------:|\n")
+                api_order = ['Log Ingestion API', 'HTTP Data Collector API', 'Undetermined']
+                for api in api_order:
+                    if api in clv1_api_stats:
+                        api_link = get_ingestion_api_link(api, "")
+                        f.write(f"| {api_link} | {clv1_api_stats[api]} |\n")
+                if clv1_no_api > 0:
+                    f.write(f"| *(no API)* | {clv1_no_api} |\n")
+                f.write(f"| **Total** | **{len(clv1_connectors)}** |\n")
+                f.write("\n")
+        
         # ===================== TABLES STATISTICS =====================
         f.write("## Tables\n\n")
         
-        # Primary discovery source by priority: Connector > Content > Docs > Schema
+        # Doc sub-source priority order for primary attribution within Docs
+        # Each tuple: (csv_column, display_label, doc_url)
+        doc_source_priority = [
+            ('source_azure_monitor', 'Azure Monitor Tables Reference', 'https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-resourcetype'),
+            ('source_defender_xdr', 'Defender XDR Advanced Hunting Schema', 'https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables'),
+            ('source_sentinel_tables', 'Sentinel Tables and Connectors Reference', 'https://learn.microsoft.com/azure/sentinel/data-connectors-reference'),
+            ('source_feature_support', 'Azure Monitor Tables Feature Support', 'https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support'),
+            ('source_ingestion_api', 'Azure Monitor Logs Ingestion API', 'https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview'),
+        ]
+        
+        # Primary discovery source by priority: Connector > Content > Doc sub-sources (by priority) > Schema
         primary_connector = 0
         primary_content = 0
-        primary_docs = 0
+        primary_doc_sources: Dict[str, int] = {label: 0 for _, label, _ in doc_source_priority}
         primary_schema = 0
         primary_none = 0
         for table, info in tables_map.items():
-            ref_data = tables_reference.get(table, {})
-            has_docs = (ref_data.get('source_azure_monitor', '').lower() == 'yes'
-                        or ref_data.get('source_defender_xdr', '').lower() == 'yes'
-                        or ref_data.get('source_sentinel_tables', '').lower() == 'yes'
-                        or ref_data.get('source_feature_support', '').lower() == 'yes'
-                        or ref_data.get('source_ingestion_api', '').lower() == 'yes')
             if info.get('connectors'):
                 primary_connector += 1
             elif info.get('content_types'):
                 primary_content += 1
-            elif has_docs:
-                primary_docs += 1
-            elif table in tables_with_schemas:
-                primary_schema += 1
             else:
-                primary_none += 1
+                ref_data = tables_reference.get(table, {})
+                doc_attributed = False
+                for col, label, _ in doc_source_priority:
+                    if ref_data.get(col, '').lower() == 'yes':
+                        primary_doc_sources[label] += 1
+                        doc_attributed = True
+                        break
+                if not doc_attributed:
+                    if table in tables_with_schemas:
+                        primary_schema += 1
+                    else:
+                        primary_none += 1
         
-        # Doc sub-source counts (a table may appear in multiple doc sources)
-        tables_via_azure_monitor = sum(1 for t in tables_map.keys()
-                                       if tables_reference.get(t, {}).get('source_azure_monitor', '').lower() == 'yes')
-        tables_via_defender_xdr = sum(1 for t in tables_map.keys()
-                                      if tables_reference.get(t, {}).get('source_defender_xdr', '').lower() == 'yes')
-        tables_via_sentinel_tables = sum(1 for t in tables_map.keys()
-                                         if tables_reference.get(t, {}).get('source_sentinel_tables', '').lower() == 'yes')
-        tables_via_feature_support = sum(1 for t in tables_map.keys()
-                                         if tables_reference.get(t, {}).get('source_feature_support', '').lower() == 'yes')
-        tables_via_ingestion_api = sum(1 for t in tables_map.keys()
-                                       if tables_reference.get(t, {}).get('source_ingestion_api', '').lower() == 'yes')
+        # Total counts per source (regardless of priority - how many tables have each source)
+        total_connector = sum(1 for t, info in tables_map.items() if info.get('connectors'))
+        total_content = sum(1 for t, info in tables_map.items() if info.get('content_types'))
+        total_doc_sources: Dict[str, int] = {}
+        for col, label, _ in doc_source_priority:
+            total_doc_sources[label] = sum(1 for t in tables_map.keys()
+                                           if tables_reference.get(t, {}).get(col, '').lower() == 'yes')
+        total_schema = len(tables_with_schemas)
         
         # Schema sub-source counts (from table_schemas.csv source column)
         schema_source_counts: Dict[str, int] = defaultdict(int)
@@ -7151,32 +7876,27 @@ def generate_statistics_page(
                              and tables_reference.get(t, {}).get('source_defender_xdr', '').lower() == 'yes')
         
         f.write("### Overview\n\n")
-        f.write(f"**{len(tables_map)} tables** documented across all discovery sources.\n\n")
+        f.write(f"**{len(tables_map)} tables** documented across all discovery sources. **{total_schema} tables** have schema information.\n\n")
         
-        f.write("### Primary Discovery Source\n\n")
-        f.write("Each table is assigned a single primary discovery source by priority: Connector > Content > Docs > Schema.\n\n")
-        f.write("| Primary Source | Tables |\n")
-        f.write("|:---------------|-------:|\n")
-        f.write(f"| Connector | {primary_connector} |\n")
-        f.write(f"| Content | {primary_content} |\n")
-        f.write(f"| Docs | {primary_docs} |\n")
-        f.write(f"| Schema | {primary_schema} |\n")
+        f.write("### Discovery Sources\n\n")
+        f.write("Each table is assigned a single discovery source (\"Discovered Via\") by priority: "
+                "Connector > Content > Docs > Schema. Within doc sources, priority is: "
+                "Azure Monitor > Defender XDR > Sentinel Tables > Feature Support > Ingestion API. "
+                "The \"Total\" column shows how many tables have each source regardless of priority, "
+                "since a table can appear in multiple sources.\n\n")
+        f.write("| Discovery Source | Discovered Via | Total |\n")
+        f.write("|:-----------------|---------------:|------:|\n")
+        f.write(f"| Connector | {primary_connector} | {total_connector} |\n")
+        f.write(f"| Content | {primary_content} | {total_content} |\n")
+        for _, label, url in doc_source_priority:
+            linked_label = f"[{label}]({url})"
+            f.write(f"| {linked_label} | {primary_doc_sources[label]} | {total_doc_sources[label]} |\n")
+        f.write(f"| Schema | {primary_schema} | {total_schema} |\n")
         if primary_none > 0:
-            f.write(f"| None | {primary_none} |\n")
-        f.write(f"| **Total** | **{len(tables_map)}** |\n")
-        f.write("\n")
-        
-        f.write("### Doc Sources\n\n")
-        f.write("Tables found in documentation references. A single table may appear in multiple doc sources.\n\n")
-        f.write("| Doc Source | Tables |\n")
-        f.write("|:-----------|-------:|\n")
-        f.write(f"| Azure Monitor | {tables_via_azure_monitor} |\n")
-        f.write(f"| Defender XDR | {tables_via_defender_xdr} |\n")
-        f.write(f"| Sentinel Tables Doc | {tables_via_sentinel_tables} |\n")
-        f.write(f"| Feature Support Doc | {tables_via_feature_support} |\n")
-        f.write(f"| Ingestion API Doc | {tables_via_ingestion_api} |\n")
+            f.write(f"| None | {primary_none} | |\n")
+        f.write(f"| **Total** | **{len(tables_map)}** | |\n")
         if xdr_only_tables > 0:
-            f.write(f"| *Defender XDR only (not in Azure Monitor)* | *{xdr_only_tables}* |\n")
+            f.write(f"\n*{xdr_only_tables} tables are available in Defender XDR but not in Azure Monitor Log Analytics.*\n")
         f.write("\n")
         
         f.write("### Schema Sources\n\n")
@@ -7193,6 +7913,29 @@ def generate_statistics_page(
                 f.write(f"| {src} | {schema_source_counts[src]} |\n")
         f.write(f"| **Total unique tables with schema** | **{len(tables_with_schemas)}** |\n")
         f.write("\n")
+        
+        # CLv1 table stats
+        clv1_tables = [t for t, info in tables_map.items() if tables_reference.get(t, {}).get('is_clv1', '') == 'true']
+        if clv1_tables:
+            non_clv1_tables = len(tables_map) - len(clv1_tables)
+            f.write(f"### Custom Log V1 (CLv1) {CLV1_ICON}\n\n")
+            f.write(f"**{len(clv1_tables)}** of {len(tables_map)} tables are Custom Log V1 tables, "
+                    f"identified by type-suffixed columns or `_CL` suffix with compatible collection method.\n\n")
+            
+            # CLv1 tables by category
+            clv1_category_stats: Dict[str, int] = defaultdict(int)
+            for t in clv1_tables:
+                category = tables_reference.get(t, {}).get('category', '') or 'Uncategorized'
+                clv1_category_stats[category] += 1
+            
+            if clv1_category_stats:
+                f.write("**By Table Category:**\n\n")
+                f.write("| Category | CLv1 Tables |\n")
+                f.write("|:---------|------------:|\n")
+                for cat, count in sorted(clv1_category_stats.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {cat} | {count} |\n")
+                f.write(f"| **Total** | **{len(clv1_tables)}** |\n")
+                f.write("\n")
         
         # ===================== CONTENT STATISTICS =====================
         f.write("## Content\n\n")
@@ -7368,8 +8111,8 @@ def generate_statistics_page(
         f.write(f"| **Total** | **{len(by_product)}** |\n")
         f.write("\n")
         
-        # ===================== DEPENDENCIES STATISTICS =====================
-        f.write("## Dependencies\n\n")
+        # ===================== PRE-REQUISITES STATISTICS =====================
+        f.write("## Pre-requisites\n\n")
         
         if solution_dependencies:
             total_dep_records = sum(len(deps) for deps in solution_dependencies.values())
@@ -7416,7 +8159,7 @@ def generate_statistics_page(
             
             # ASIM dependency details
             if asim_schemas_used:
-                f.write("### ASIM Dependencies by Schema\n\n")
+                f.write("### ASIM Pre-requisites by Schema\n\n")
                 
                 # Count solutions per schema
                 schema_to_sources: Dict[str, Set[str]] = defaultdict(set)  # schema -> solutions that USE the parser
@@ -7570,6 +8313,7 @@ def generate_docs_readme(
                         'collection_method': conn.get('collection_method', ''),
                         'is_published': conn.get('is_published', 'true'),
                         'is_deprecated': 'true' if is_deprecated else 'false',
+                        'is_clv1': conn.get('is_clv1', ''),
                     }
             
             # Track unpublished solutions
@@ -7685,6 +8429,9 @@ def generate_docs_readme(
         f.write("This documentation provides comprehensive information about Microsoft Sentinel Solutions, ")
         f.write("including data connectors, log tables, content items, parsers, and ASIM parsers.\n\n")
         
+        # Browse bar
+        write_browse_section(f, 'readme', "")
+        
         # Quick summary stats
         f.write("## Overview\n\n")
         f.write("| Resource | Count | Details |\n")
@@ -7704,6 +8451,7 @@ def generate_docs_readme(
         if asim_products_count > 0:
             f.write(f"| [ASIM Products](asim/asim-products-index.md) | {asim_products_count} | Products with ASIM support |\n")
         f.write(f"| [Statistics](statistics.md) | - | Comprehensive statistics and metrics |\n")
+        f.write(f"| [Interactive Index]({_INTERACTIVE_INDEX_PATH}) | - | Sortable/filterable HTML view |\n")
         f.write("\n")
         
         # Footnotes for icons if needed
@@ -7729,10 +8477,16 @@ def generate_docs_readme(
         f.write("├── parsers/                # Non-ASIM parser documentation\n")
         f.write("│   ├── parsers-index.md    # Parsers listing\n")
         f.write("│   └── *.md                # Individual parser pages\n")
-        f.write("└── asim/                   # ASIM parser documentation\n")
-        f.write("    ├── asim-index.md       # ASIM parsers index by schema\n")
-        f.write("    ├── asim-products-index.md  # ASIM parsers index by product\n")
-        f.write("    └── *.md                # Individual parser pages\n")
+        f.write("├── asim/                   # ASIM parser documentation\n")
+        f.write("│   ├── asim-index.md       # ASIM parsers index by schema\n")
+        f.write("│   ├── asim-products-index.md  # ASIM parsers index by product\n")
+        f.write("│   └── *.md                # Individual parser pages\n")
+        if _INTERACTIVE_INDEX_PATH == "index.html":
+            f.write("└── index.html              # Interactive index (sortable/filterable)\n")
+        elif _INTERACTIVE_INDEX_PATH.startswith(('http://', 'https://')):
+            f.write("└── index.html              # Interactive index (on GitHub Pages)\n")
+        else:
+            f.write("└── ../index.html           # Interactive index (at site root)\n")
         f.write("```\n\n")
         
         f.write("## Source\n\n")
@@ -7851,8 +8605,39 @@ def main() -> None:
         action="store_true",
         help="Skip running input CSV generation scripts",
     )
+    parser.add_argument(
+        "--html-output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for interactive index.html, css/, js/ (default: same as --output-dir)",
+    )
+    parser.add_argument(
+        "--html-docs-path",
+        type=str,
+        default='',
+        help="Relative or absolute URL path from index.html to the docs directory "
+             "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'.",
+    )
+    parser.add_argument(
+        "--html-index-url",
+        type=str,
+        default='',
+        help="Absolute URL for index.html used in static markdown navigation bars "
+             "(e.g. 'https://oshezaf.github.io/sentinelninja/index.html'). "
+             "Required when docs are viewed on GitHub repo (blob view) but index.html is on GitHub Pages.",
+    )
     
     args = parser.parse_args()
+    
+    # Compute the relative path from docs root to index.html
+    global _INTERACTIVE_INDEX_PATH
+    if args.html_index_url:
+        # Absolute URL for index.html (used when docs are on GitHub blob view, index on Pages)
+        _INTERACTIVE_INDEX_PATH = args.html_index_url
+    elif args.html_docs_path and not args.html_docs_path.startswith(('http://', 'https://')):
+        # Count directory levels in html_docs_path (e.g., "Solutions Docs/" -> 1 level -> "../")
+        levels = len([s for s in args.html_docs_path.replace('\\', '/').split('/') if s])
+        _INTERACTIVE_INDEX_PATH = '../' * levels + 'index.html'
     
     # Run input CSV generation scripts if not skipped
     script_dir = Path(__file__).parent
@@ -7924,6 +8709,9 @@ def main() -> None:
                         # Override category if set to Internal
                         if row.get('category', '').lower() == 'internal':
                             tables_reference[table_name]['category'] = 'Internal'
+                        # Merge is_clv1 from mapper output
+                        if row.get('is_clv1', ''):
+                            tables_reference[table_name]['is_clv1'] = row['is_clv1']
         print(f"Loaded overrides ({len(INTERNAL_TABLES)} internal tables)")
     else:
         print(f"Warning: Tables overrides CSV not found: {args.tables_overrides_csv}")
@@ -8159,8 +8947,12 @@ def main() -> None:
             row['filter_fields'] = connectors_reference[connector_id].get('filter_fields', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
+            row['deprecation_date'] = connectors_reference[connector_id].get('deprecation_date', '')
             row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
             row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
+            row['ingestion_api'] = connectors_reference[connector_id].get('ingestion_api', '')
+            row['ingestion_api_reason'] = connectors_reference[connector_id].get('ingestion_api_reason', '')
+            row['is_clv1'] = connectors_reference[connector_id].get('is_clv1', '')
     
     # Enrich rows with logo/description/author/version/dependencies from solutions CSV
     for row in rows:
@@ -8172,6 +8964,8 @@ def main() -> None:
             row['solution_author_name'] = sol_info.get('solution_author_name', '')
             row['solution_version'] = sol_info.get('solution_version', '')
             row['solution_dependencies'] = sol_info.get('solution_dependencies', '')
+            row['solution_is_deprecated'] = sol_info.get('is_deprecated', 'false')
+            row['solution_deprecation_date'] = sol_info.get('deprecation_date', '')
     
     print(f"Loaded {len(rows)} rows")
     
@@ -8200,8 +8994,8 @@ def main() -> None:
         print(f"Warning: Solutions directory not found: {args.solutions_dir} - skipping ReleaseNotes and README enrichment")
     
     # Generate index pages - generate tables_index first to get accurate count
-    generate_connectors_index(by_solution, args.output_dir)
-    generate_collection_methods_index(by_solution, args.output_dir)
+    generate_connectors_index(by_solution, args.output_dir, connectors_reference)
+    generate_collection_methods_index(by_solution, args.output_dir, connectors_reference)
     
     # Load table schemas CSV and group by table name (before tables index, for icon display)
     table_schemas_by_table: Dict[str, List[Dict[str, str]]] = defaultdict(list)
@@ -8235,7 +9029,7 @@ def main() -> None:
         solution_content = content_items_by_solution.get(solution_name, [])
         solution_table_types = solution_table_content_types.get(solution_name, {})
         sol_deps = solution_dependencies.get(solution_name, [])
-        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution)
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution, connectors_reference, tables_reference)
     
     # Generate individual table pages with content item references
     # Build parser-to-table mappings for table pages
@@ -8392,6 +9186,8 @@ def main() -> None:
                 'publisher': conn.get('connector_publisher', 'N/A'),
                 'solution_name': solution_name,
                 'collection_method': conn.get('collection_method', ''),
+                'ingestion_api': conn.get('ingestion_api', ''),
+                'is_clv1': conn.get('is_clv1', ''),
                 'is_published': conn.get('is_published', 'true'),
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
@@ -8448,6 +9244,24 @@ def main() -> None:
     print(f"  - Content: {args.output_dir / 'content'}/ ({content_pages_count} files)")
     print(f"  - ASIM Parsers: {args.output_dir / 'asim'}/ ({asim_source_pairs * 2 + asim_union_pairs * 2 + asim_empty_count} files)")
     print(f"  - Parsers: {args.output_dir / 'parsers'}/ ({parser_pages_count} files)")
+
+    # Generate interactive HTML index page
+    from generate_interactive_docs import generate_interactive
+    generate_interactive(
+        mapping_csv=args.input,
+        connectors_csv=args.connectors_csv,
+        solutions_csv=args.solutions_csv,
+        content_items_csv=args.content_items_csv,
+        tables_csv=args.tables_csv,
+        output_dir=args.output_dir,
+        content_tables_csv=args.content_tables_csv,
+        tables_overrides_csv=args.tables_overrides_csv,
+        table_schemas_csv=args.table_schemas_csv,
+        parsers_csv=args.parsers_csv,
+        asim_parsers_csv=args.asim_parsers_csv,
+        html_output_dir=args.html_output_dir,
+        html_docs_path=args.html_docs_path,
+    )
 
 
 if __name__ == "__main__":

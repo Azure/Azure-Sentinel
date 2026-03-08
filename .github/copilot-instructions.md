@@ -41,10 +41,12 @@ python map_solutions_connectors_tables.py
 
 #### Documentation Generator
 ```powershell
-python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation
+python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "https://github.com/oshezaf/sentinelninja/blob/main/Solutions Docs/" --html-index-url "https://oshezaf.github.io/sentinelninja/index.html"
 ```
 
 **IMPORTANT:** Never run without `--output-dir` flag.
+
+**IMPORTANT:** Always use `--html-output-dir`, `--html-docs-path`, and `--html-index-url` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages. Use the full GitHub blob URL for `--html-docs-path` so that links from the interactive index point to the GitHub repo view where markdown renders properly (GitHub Pages without Jekyll cannot render `.md` files). Use the GitHub Pages URL for `--html-index-url` so that the navigation bar on static markdown pages links back to the interactive index on GitHub Pages.
 
 **IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
 
@@ -80,3 +82,20 @@ Use `--force-refresh` with these types when modifying analysis logic:
 - Any output file changes, including changes to CSV files (new columns, renamed columns, removed columns)
 - Any changes to analysis methods or logic
 - Update the primary readme.md if needed and add the change to the change log. Do not add a version if the previous version as manifested by the changelog, was not committed yet.
+- When adding or removing a CSV output file from the mapper, also update `upload_to_kusto.py` to add or remove the file from the `SOLUTION_ANALYZER_FILES` list.
+
+### Static and Interactive Index Synchronization
+
+The documentation generator produces **two parallel sets of index pages** that must stay in sync:
+
+1. **Static indexes** (`generate_connector_docs.py`): Markdown index pages — `solutions-index.md`, `connectors-index.md`, `tables-index.md`, `content/content-index.md`, etc.
+2. **Interactive index** (`generate_interactive_docs.py`): HTML page with DataTables.js — `index.html` with tabs for Solutions, Connectors, Tables, and Content.
+
+**When modifying any index generation logic**, apply the same change to BOTH the static and interactive indexes:
+- Data filtering/inclusion rules (e.g., which connectors or tables to show)
+- Status classification logic (Active/Deprecated/Unpublished/Discovered)
+- Icon usage and legend entries
+- Special-case handling (e.g., placeholder names like `<PlaybookName>`, "GitHub Only" solution name)
+- Link generation (e.g., collection method links, content item links, parser routing)
+- Column additions or removals
+- Description cleanup (quote stripping, truncation)
