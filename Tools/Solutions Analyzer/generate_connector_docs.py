@@ -48,6 +48,11 @@ ASIM_UNION_TO_SUB_PARSERS: Dict[str, List[str]] = {}
 # e.g., "Azure Firewall" -> {"Azure Firewall", "SlashNext"}
 ASIM_PRODUCT_TO_SOLUTIONS: Dict[str, Set[str]] = {}
 
+# Relative path from the docs root to index.html.
+# Default is "index.html" (co-located). When --html-docs-path is set (e.g., "Solutions Docs/"),
+# this becomes "../index.html" so that markdown pages link up to the repo root.
+_INTERACTIVE_INDEX_PATH: str = "index.html"
+
 # ASIM graphics files (source in graphics/ folder)
 ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
 ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
@@ -1548,7 +1553,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
-        ('🔍', f'{relative_to_root}index.html', 'Interactive'),
+        ('🔍', f'{relative_to_root}{_INTERACTIVE_INDEX_PATH}', 'Interactive'),
     ]
     
     # Build navigation line
@@ -8445,7 +8450,7 @@ def generate_docs_readme(
         if asim_products_count > 0:
             f.write(f"| [ASIM Products](asim/asim-products-index.md) | {asim_products_count} | Products with ASIM support |\n")
         f.write(f"| [Statistics](statistics.md) | - | Comprehensive statistics and metrics |\n")
-        f.write(f"| [Interactive Index](index.html) | - | Sortable/filterable HTML view |\n")
+        f.write(f"| [Interactive Index]({_INTERACTIVE_INDEX_PATH}) | - | Sortable/filterable HTML view |\n")
         f.write("\n")
         
         # Footnotes for icons if needed
@@ -8475,7 +8480,10 @@ def generate_docs_readme(
         f.write("│   ├── asim-index.md       # ASIM parsers index by schema\n")
         f.write("│   ├── asim-products-index.md  # ASIM parsers index by product\n")
         f.write("│   └── *.md                # Individual parser pages\n")
-        f.write("└── index.html              # Interactive index (sortable/filterable)\n")
+        if _INTERACTIVE_INDEX_PATH == "index.html":
+            f.write("└── index.html              # Interactive index (sortable/filterable)\n")
+        else:
+            f.write("└── ../index.html           # Interactive index (at site root)\n")
         f.write("```\n\n")
         
         f.write("## Source\n\n")
@@ -8609,6 +8617,13 @@ def main() -> None:
     )
     
     args = parser.parse_args()
+    
+    # Compute the relative path from docs root to index.html
+    global _INTERACTIVE_INDEX_PATH
+    if args.html_docs_path:
+        # Count directory levels in html_docs_path (e.g., "Solutions Docs/" -> 1 level -> "../")
+        levels = len([s for s in args.html_docs_path.replace('\\', '/').split('/') if s])
+        _INTERACTIVE_INDEX_PATH = '../' * levels + 'index.html'
     
     # Run input CSV generation scripts if not skipped
     script_dir = Path(__file__).parent

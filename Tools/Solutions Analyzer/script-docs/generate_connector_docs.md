@@ -348,7 +348,7 @@ python generate_interactive_docs.py \
     ...
 ```
 
-This writes `index.html`, `css/`, and `js/` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc.
+This writes `index.html`, `css/`, and `js/` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc. The reverse is also handled automatically: the navigation bar on every static markdown page links back to `../index.html` (or `../../index.html` for pages in subdirectories) so that the 🔍 Interactive link resolves correctly.
 
 ### Synchronization with Static Indexes
 
