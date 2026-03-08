@@ -116,6 +116,7 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 | `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/ |
 | `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. |
+| `--html-index-url` | `''` (empty) | Absolute URL for index.html in static markdown navigation bars (e.g. `https://oshezaf.github.io/sentinelninja/index.html`). Required when docs are viewed on GitHub repo but index.html is on GitHub Pages. |
 
 ## Output Structure
 
@@ -344,11 +345,12 @@ To place `index.html` at a different location from the docs (e.g. for GitHub Pag
 python generate_interactive_docs.py \
     --output-dir <docs-directory> \
     --html-output-dir <repo-root> \
-    --html-docs-path "Solutions Docs/" \
+    --html-docs-path "https://github.com/<user>/<repo>/blob/main/Solutions Docs/" \
+    --html-index-url "https://<user>.github.io/<repo>/index.html" \
     ...
 ```
 
-This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>` while all entity links point to `Solutions Docs/solutions/...`, `Solutions Docs/connectors/...`, etc. The reverse is also handled automatically: the navigation bar on every static markdown page links back to `../index.html` (or `../../index.html` for pages in subdirectories) so that the 🔍 Interactive link resolves correctly.
+This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>`. Links from index.html to docs use the GitHub blob URL (`--html-docs-path`) where markdown renders properly. Links from static markdown pages back to index.html use the GitHub Pages URL (`--html-index-url`).
 
 > **Note:** The `.nojekyll` file disables Jekyll processing on GitHub Pages. This is required because generated connector docs contain `{{` sequences from Azure deployment template URIs, which Jekyll's Liquid engine misinterprets as template variables. Without `.nojekyll`, the GitHub Pages build will fail with Liquid syntax errors.
 

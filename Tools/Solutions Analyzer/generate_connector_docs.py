@@ -48,9 +48,10 @@ ASIM_UNION_TO_SUB_PARSERS: Dict[str, List[str]] = {}
 # e.g., "Azure Firewall" -> {"Azure Firewall", "SlashNext"}
 ASIM_PRODUCT_TO_SOLUTIONS: Dict[str, Set[str]] = {}
 
-# Relative path from the docs root to index.html.
-# Default is "index.html" (co-located). When --html-docs-path is set (e.g., "Solutions Docs/"),
+# Relative path (or absolute URL) from the docs root to index.html.
+# Default is "index.html" (co-located). When --html-docs-path is a relative path (e.g., "Solutions Docs/"),
 # this becomes "../index.html" so that markdown pages link up to the repo root.
+# When --html-index-url is set, this is an absolute URL (e.g., "https://oshezaf.github.io/sentinelninja/index.html").
 _INTERACTIVE_INDEX_PATH: str = "index.html"
 
 # ASIM graphics files (source in graphics/ folder)
@@ -1553,7 +1554,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
-        ('🔍', f'{relative_to_root}{_INTERACTIVE_INDEX_PATH}', 'Interactive'),
+        ('🔍', _INTERACTIVE_INDEX_PATH if _INTERACTIVE_INDEX_PATH.startswith(('http://', 'https://')) else f'{relative_to_root}{_INTERACTIVE_INDEX_PATH}', 'Interactive'),
     ]
     
     # Build navigation line
@@ -8482,6 +8483,8 @@ def generate_docs_readme(
         f.write("│   └── *.md                # Individual parser pages\n")
         if _INTERACTIVE_INDEX_PATH == "index.html":
             f.write("└── index.html              # Interactive index (sortable/filterable)\n")
+        elif _INTERACTIVE_INDEX_PATH.startswith(('http://', 'https://')):
+            f.write("└── index.html              # Interactive index (on GitHub Pages)\n")
         else:
             f.write("└── ../index.html           # Interactive index (at site root)\n")
         f.write("```\n\n")
@@ -8615,12 +8618,23 @@ def main() -> None:
         help="Relative or absolute URL path from index.html to the docs directory "
              "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'.",
     )
+    parser.add_argument(
+        "--html-index-url",
+        type=str,
+        default='',
+        help="Absolute URL for index.html used in static markdown navigation bars "
+             "(e.g. 'https://oshezaf.github.io/sentinelninja/index.html'). "
+             "Required when docs are viewed on GitHub repo (blob view) but index.html is on GitHub Pages.",
+    )
     
     args = parser.parse_args()
     
     # Compute the relative path from docs root to index.html
     global _INTERACTIVE_INDEX_PATH
-    if args.html_docs_path and not args.html_docs_path.startswith(('http://', 'https://')):
+    if args.html_index_url:
+        # Absolute URL for index.html (used when docs are on GitHub blob view, index on Pages)
+        _INTERACTIVE_INDEX_PATH = args.html_index_url
+    elif args.html_docs_path and not args.html_docs_path.startswith(('http://', 'https://')):
         # Count directory levels in html_docs_path (e.g., "Solutions Docs/" -> 1 level -> "../")
         levels = len([s for s in args.html_docs_path.replace('\\', '/').split('/') if s])
         _INTERACTIVE_INDEX_PATH = '../' * levels + 'index.html'
