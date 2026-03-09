@@ -5,9 +5,10 @@ Handles loading and validation of environment variables.
 
 import os
 import logging
+from .utils import ParseDurationInput, parse_duration_to_seconds
 
 # Constants
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 
 class Config:
@@ -44,6 +45,22 @@ class Config:
                 self.look_back_days,
             )
             self.look_back_days = 60
+
+        # Process valid_until duration with validation
+        self.valid_until_duration_str = os.environ.get("VALIDUNTIL", "20m")
+        self.valid_until_seconds = None
+
+        if self.valid_until_duration_str:
+            try:
+                input_params = ParseDurationInput(self.valid_until_duration_str)
+                self.valid_until_seconds = parse_duration_to_seconds(input_params)
+            except ValueError as e:
+                logging.error(
+                    "Invalid value for VALIDUNTIL environment variable: %s. Error: %s",
+                    self.valid_until_duration_str,
+                    str(e)
+                )
+                self.valid_until_seconds = None
 
         # Set user agent
         self.user_agent = f"microsoft-sentinel-ioc/{VERSION}"
