@@ -177,7 +177,8 @@ See the script documentation for details:
 
 **HTML Entity Pages:**
 - When `--html-output-dir` is set with a relative `--html-docs-path`, the generator converts every markdown entity page to a styled HTML page alongside the `.md` file
-- Uses Python `markdown` library with tables, fenced code, and sane lists extensions
+- Uses Python `markdown` library with tables, fenced code, sane lists, and toc extensions
+- The `toc` extension automatically generates `id` attributes on all headings, enabling in-page anchor links (e.g. `statistics.html#connectors`)
 - HTML pages share a consistent visual style (navbar, typography, responsive layout) via a shared `page.css` stylesheet
 - Internal `.md` links within pages are automatically rewritten to `.html`
 - Each HTML page includes a navbar linking back to the interactive index (via `--html-index-url`)

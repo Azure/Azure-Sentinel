@@ -321,6 +321,8 @@ Each tab includes a legend explaining the icons used:
 - **Collection method links**: Method names link to their method index pages
 - **Solution logos**: Displayed in Solutions and Connectors tabs
 - **Navigation bar**: Links to 📖 Docs (static markdown index) and 📊 Statistics page
+- **Tab hash linking**: URL hash fragments (e.g. `index.html#connectors`) activate the corresponding tab on page load, hash change, and back/forward navigation (bfcache)
+- **Heading anchors**: HTML entity pages have `id` attributes on all headings, enabling in-page anchor links (e.g. `statistics.html#connectors`)
 
 ### Standalone Usage
 
