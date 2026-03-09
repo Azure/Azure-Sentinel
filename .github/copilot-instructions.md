@@ -41,12 +41,12 @@ python map_solutions_connectors_tables.py
 
 #### Documentation Generator
 ```powershell
-python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "https://github.com/oshezaf/sentinelninja/blob/main/Solutions Docs/" --html-index-url "https://oshezaf.github.io/sentinelninja/index.html"
+python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "Solutions Docs/" --html-index-url "https://oshezaf.github.io/sentinelninja/index.html"
 ```
 
 **IMPORTANT:** Never run without `--output-dir` flag.
 
-**IMPORTANT:** Always use `--html-output-dir`, `--html-docs-path`, and `--html-index-url` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages. Use the full GitHub blob URL for `--html-docs-path` so that links from the interactive index point to the GitHub repo view where markdown renders properly (GitHub Pages without Jekyll cannot render `.md` files). Use the GitHub Pages URL for `--html-index-url` so that the navigation bar on static markdown pages links back to the interactive index on GitHub Pages.
+**IMPORTANT:** Always use `--html-output-dir`, `--html-docs-path`, and `--html-index-url` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages. Use a relative `--html-docs-path` (e.g. `"Solutions Docs/"`) so that both the interactive index links and the HTML entity pages are served directly from GitHub Pages. When `--html-output-dir` is set and `--html-docs-path` is relative, the generator automatically produces HTML versions of all markdown entity pages alongside the `.md` files and updates index.html links to point to the `.html` versions. Use the GitHub Pages URL for `--html-index-url` so that the navigation bar on both HTML entity pages and static markdown pages links back to the interactive index.
 
 **IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
 

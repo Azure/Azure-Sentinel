@@ -114,9 +114,9 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
 | `--table-schemas-csv` | `table_schemas.csv` | Path to table schemas CSV file with column definitions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
-| `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/ |
-| `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. |
-| `--html-index-url` | `''` (empty) | Absolute URL for index.html in static markdown navigation bars (e.g. `https://oshezaf.github.io/sentinelninja/index.html`). Required when docs are viewed on GitHub repo but index.html is on GitHub Pages. |
+| `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/. When set with a relative `--html-docs-path`, also generates HTML entity pages alongside the markdown docs. |
+| `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. When relative and `--html-output-dir` is set, HTML entity pages are generated and index.html links use `.html` extension. |
+| `--html-index-url` | `''` (empty) | Absolute URL for index.html used in HTML entity page navbars and static markdown navigation bars (e.g. `https://oshezaf.github.io/sentinelninja/index.html`). Falls back to a relative path from the entity page if not provided. |
 
 ## Output Structure
 
@@ -345,12 +345,12 @@ To place `index.html` at a different location from the docs (e.g. for GitHub Pag
 python generate_interactive_docs.py \
     --output-dir <docs-directory> \
     --html-output-dir <repo-root> \
-    --html-docs-path "https://github.com/<user>/<repo>/blob/main/Solutions Docs/" \
+    --html-docs-path "Solutions Docs/" \
     --html-index-url "https://<user>.github.io/<repo>/index.html" \
     ...
 ```
 
-This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>`. Links from index.html to docs use the GitHub blob URL (`--html-docs-path`) where markdown renders properly. Links from static markdown pages back to index.html use the GitHub Pages URL (`--html-index-url`).
+This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>`. Because `--html-docs-path` is a relative path (not an absolute URL), the generator also converts every `.md` file under the docs directory to a styled `.html` page and updates `index.html` links to point to the `.html` versions. A `page.css` stylesheet is written to `<repo-root>/css/` for the entity pages. Each HTML entity page includes a navbar linking back to `index.html` (using `--html-index-url` when provided). Links from static markdown pages back to index.html also use `--html-index-url`.
 
 > **Note:** The `.nojekyll` file disables Jekyll processing on GitHub Pages. This is required because generated connector docs contain `{{` sequences from Azure deployment template URIs, which Jekyll's Liquid engine misinterprets as template variables. Without `.nojekyll`, the GitHub Pages build will fail with Liquid syntax errors.
 

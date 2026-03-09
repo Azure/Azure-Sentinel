@@ -9261,6 +9261,7 @@ def main() -> None:
         asim_parsers_csv=args.asim_parsers_csv,
         html_output_dir=args.html_output_dir,
         html_docs_path=args.html_docs_path,
+        html_index_url=getattr(args, 'html_index_url', ''),
     )
 
 

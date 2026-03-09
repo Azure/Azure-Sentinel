@@ -16,6 +16,8 @@ Output structure:
 import csv
 import hashlib
 import html as html_module
+import os
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -53,6 +55,12 @@ SOURCE_GITHUB_ICON = "🔗"
 # When index.html is at a different level (e.g. repo root), this is
 # e.g. "Solutions Docs/" so that links become "Solutions Docs/solutions/foo.md".
 _docs_base_path: str = ""
+
+# File extension for entity page links from index.html.
+# Defaults to ".md".  Set to ".html" when HTML entity pages are generated
+# so that all links from the interactive index point to the rendered HTML
+# versions instead of raw markdown files.
+_link_extension: str = ".md"
 
 # Display-friendly names for content types (matches generate_connector_docs.py)
 CONTENT_TYPE_DISPLAY = {
@@ -213,9 +221,9 @@ def sanitize_filename(text: str) -> str:
 
 
 def _md_link(name: str, folder: str) -> str:
-    """Return an HTML <a> link to a markdown doc page."""
+    """Return an HTML <a> link to a doc page."""
     filename = sanitize_filename(name)
-    return f'<a href="{_docs_base_path}{folder}/{filename}.md">{esc(name)}</a>'
+    return f'<a href="{_docs_base_path}{folder}/{filename}{_link_extension}">{esc(name)}</a>'
 
 
 def get_content_item_filename(content_id: str, content_name: str, solution_name: str,
@@ -269,10 +277,10 @@ def _content_link(item: Dict[str, Any]) -> str:
     # Parsers have dedicated pages in parsers/ directory
     if content_type == 'parser':
         filename = sanitize_filename(content_name)
-        return f'<a href="{_docs_base_path}parsers/{filename}.md">{esc(content_name)}</a>'
+        return f'<a href="{_docs_base_path}parsers/{filename}{_link_extension}">{esc(content_name)}</a>'
 
     filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
-    return f'<a href="{_docs_base_path}content/{filename}.md">{esc(content_name)}</a>'
+    return f'<a href="{_docs_base_path}content/{filename}{_link_extension}">{esc(content_name)}</a>'
 
 
 # ---------------------------------------------------------------------------
@@ -1163,8 +1171,8 @@ def _write_index_html(
     <div class="container-fluid">
         <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
         <div class="navbar-nav-links">
-            <a href="{_docs_base_path}README.md" class="nav-doc-link" title="Documentation home">📖 Docs</a>
-            <a href="{_docs_base_path}statistics.md" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
+            <a href="{_docs_base_path}README{_link_extension}" class="nav-doc-link" title="Documentation home">📖 Docs</a>
+            <a href="{_docs_base_path}statistics{_link_extension}" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
         </div>
     </div>
 </nav>
@@ -1279,7 +1287,7 @@ def _write_index_html(
         method = c['collection_method']
         if method and method != '?':
             method_file = sanitize_filename(method)
-            method_html = f'<a href="{_docs_base_path}methods/{method_file}.md">{esc(method)}</a>'
+            method_html = f'<a href="{_docs_base_path}methods/{method_file}{_link_extension}">{esc(method)}</a>'
         else:
             method_html = esc(method)
         sol_link = _md_link(c['solution'], 'solutions')
@@ -1408,7 +1416,7 @@ def _write_index_html(
 """)
     for p in parsers_data:
         discovered = f" {DISCOVERED_ICON}" if p.get('is_discovered') else ""
-        name_link = f'<a href="{_docs_base_path}parsers/{sanitize_filename(p["name"])}.md">{esc(p["name"])}</a>{discovered}'
+        name_link = f'<a href="{_docs_base_path}parsers/{sanitize_filename(p["name"])}{_link_extension}">{esc(p["name"])}</a>{discovered}'
         if p['source'] == 'Legacy':
             source_html = '📂 Legacy'
         else:
@@ -1444,7 +1452,7 @@ def _write_index_html(
 <tbody>
 """)
     for a in asim_data:
-        name_link = f'<a href="{_docs_base_path}asim/{sanitize_filename(a["name"])}.md">{esc(a["name"])}</a>'
+        name_link = f'<a href="{_docs_base_path}asim/{sanitize_filename(a["name"])}{_link_extension}">{esc(a["name"])}</a>'
         # Build solution links (comma-separated)
         sol_parts = []
         if a.get('solutions'):
@@ -1489,6 +1497,192 @@ def _write_index_html(
 
 
 # ---------------------------------------------------------------------------
+# HTML entity page generation  (MD → HTML conversion)
+# ---------------------------------------------------------------------------
+
+def _write_page_css(path: Path) -> None:
+    """Write CSS for the rendered HTML entity pages."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("""\
+/* Solutions Analyzer – entity page styles */
+:root {
+    --ms-blue: #0078d4;
+    --ms-dark: #1b1a19;
+    --ms-gray: #605e5c;
+    --ms-light: #f3f2f1;
+    --ms-border: #e1dfdd;
+}
+* { box-sizing: border-box; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    margin: 0; padding: 0;
+    color: #333; background: #faf9f8;
+}
+
+/* Navbar (matches interactive index) */
+.navbar {
+    background: var(--ms-blue);
+    padding: 8px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.navbar-brand {
+    color: #fff; font-weight: 600; font-size: 1.05rem;
+}
+.navbar-nav-links { display: flex; gap: 16px; align-items: center; }
+.navbar-nav-links a {
+    color: rgba(255,255,255,0.85); text-decoration: none; font-size: 0.85rem;
+}
+.navbar-nav-links a:hover { color: #fff; }
+
+/* Content area */
+.doc-content {
+    max-width: 1100px; margin: 24px auto; padding: 28px 36px;
+    background: #fff; border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    line-height: 1.65;
+}
+
+/* Typography */
+h1 { color: var(--ms-blue); border-bottom: 2px solid var(--ms-border); padding-bottom: 8px; margin-top: 0; }
+h2 { color: #333; margin-top: 1.6em; border-bottom: 1px solid var(--ms-border); padding-bottom: 6px; }
+h3 { color: #444; margin-top: 1.3em; }
+h4 { color: var(--ms-gray); margin-top: 1.1em; }
+
+a { color: var(--ms-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Tables */
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.9rem; }
+th, td { border: 1px solid var(--ms-border); padding: 8px 12px; text-align: left; }
+th { background: var(--ms-light); font-weight: 600; }
+tr:hover { background: #f5f5f5; }
+
+/* Code */
+code {
+    background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.88em;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+pre { background: #f5f5f5; padding: 14px 18px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+
+/* Horizontal rules */
+hr { border: none; border-top: 1px solid var(--ms-border); margin: 1.5em 0; }
+
+/* Lists */
+ul, ol { padding-left: 1.5em; }
+li { margin: 4px 0; }
+
+/* Images */
+img { max-width: 100%; height: auto; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .doc-content { margin: 10px; padding: 18px; }
+    table { font-size: 0.82rem; }
+    th, td { padding: 5px 8px; }
+}
+""", encoding='utf-8')
+
+
+_PAGE_HTML_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title} &mdash; Solutions Analyzer</title>
+<link rel="stylesheet" href="{css_path}">
+</head>
+<body>
+<nav class="navbar">
+    <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
+    <div class="navbar-nav-links">
+        <a href="{index_url}" title="Interactive index">&#128269; Interactive</a>
+    </div>
+</nav>
+<div class="doc-content">
+{body}
+</div>
+</body>
+</html>
+"""
+
+
+def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
+                         index_url: str) -> None:
+    """Convert every .md file under *docs_dir* to a styled .html page.
+
+    * Uses Python-Markdown with ``tables`` and ``fenced_code`` extensions.
+    * Rewrites relative ``.md`` links to ``.html`` so internal navigation
+      works entirely within the HTML entity pages.
+    * Writes a ``page.css`` stylesheet to ``{html_output_dir}/css/``.
+    """
+    try:
+        import markdown as _markdown_lib
+    except ImportError:
+        print("  WARNING: 'markdown' package not installed — skipping HTML page generation.")
+        print("           Install with: pip install markdown")
+        return
+
+    # Write shared CSS for entity pages
+    _write_page_css(html_output_dir / "css" / "page.css")
+
+    md_extensions = ['tables', 'fenced_code', 'sane_lists']
+    count = 0
+
+    for md_file in sorted(docs_dir.rglob('*.md')):
+        md_content = md_file.read_text(encoding='utf-8')
+
+        # Extract title from first H1
+        title_match = re.search(r'^#\s+(.+)$', md_content, re.MULTILINE)
+        if title_match:
+            title = title_match.group(1)
+            # Strip markdown formatting artefacts from the title
+            title = re.sub(r'[*_`\[\]()]', '', title).strip()
+        else:
+            title = md_file.stem
+
+        # Convert markdown → HTML body
+        html_body = _markdown_lib.markdown(md_content, extensions=md_extensions)
+
+        # Rewrite relative .md links → .html  (leave http(s) and mailto alone)
+        html_body = re.sub(
+            r'href="(?!https?://|mailto:)([^"]*?)\.md"',
+            r'href="\1.html"',
+            html_body,
+        )
+
+        # Compute relative path to CSS
+        css_path = os.path.relpath(
+            html_output_dir / 'css' / 'page.css',
+            md_file.parent,
+        ).replace('\\', '/')
+
+        # Compute index URL (use absolute URL if provided, else relative)
+        if index_url.startswith(('http://', 'https://')):
+            page_index_url = index_url
+        else:
+            page_index_url = os.path.relpath(
+                html_output_dir / index_url,
+                md_file.parent,
+            ).replace('\\', '/')
+
+        # Assemble final page
+        html_page = _PAGE_HTML_TEMPLATE.format(
+            title=esc(title),
+            css_path=css_path,
+            index_url=esc(page_index_url),
+            body=html_body,
+        )
+
+        html_file = md_file.with_suffix('.html')
+        html_file.write_text(html_page, encoding='utf-8')
+        count += 1
+
+    print(f"  Generated {count} HTML entity pages under {docs_dir}")
+
+
+# ---------------------------------------------------------------------------
 # Main orchestration
 # ---------------------------------------------------------------------------
 
@@ -1506,20 +1700,37 @@ def generate_interactive(
     asim_parsers_csv: Path = None,
     html_output_dir: Path = None,
     html_docs_path: str = '',
+    html_index_url: str = '',
 ) -> None:
     """Main entry point: load data and generate interactive HTML docs.
 
     Args:
         html_output_dir: Where to write index.html, css/, js/.
             Defaults to *output_dir* (same directory as the markdown docs).
+            When provided, also generates HTML entity pages alongside the
+            markdown docs (unless *html_docs_path* is an absolute URL).
         html_docs_path: Relative or absolute URL path prefix from index.html
             to the markdown docs directory.  For example ``"Solutions Docs/"``
             when index.html lives at the repo root and docs live in
             ``Solutions Docs/``.  Must end with ``/`` if non-empty.
             An absolute URL (starting with ``http://`` or ``https://``) is
-            also supported.
+            also supported — in that case HTML entity pages are NOT generated
+            and all links point to the external URL.
+        html_index_url: Absolute URL to index.html (e.g. GitHub Pages URL).
+            Used in HTML entity page navbars and in static markdown page
+            navbars.  Falls back to a relative path if empty.
     """
-    global _docs_base_path
+    global _docs_base_path, _link_extension
+
+    # Determine whether to generate HTML entity pages.
+    # When html_output_dir is explicit and docs_path is relative (not an
+    # external URL), we render .html copies of every markdown page and
+    # make the interactive index link to the .html versions.
+    _wants_html_pages = (
+        html_output_dir is not None
+        and not html_docs_path.startswith(('http://', 'https://'))
+    )
+    _link_extension = '.html' if _wants_html_pages else '.md'
 
     # Normalise docs base path
     if html_docs_path:
@@ -1582,6 +1793,11 @@ def generate_interactive(
 
     generate_html_page(html_output_dir, solutions_data, connectors_data, tables_data,
                        content_data, parsers_data, asim_data)
+
+    # Generate HTML entity pages alongside the markdown docs
+    if _wants_html_pages:
+        index_url = html_index_url or 'index.html'
+        _generate_html_pages(output_dir, html_output_dir, index_url)
 
 
 def main() -> None:
@@ -1666,7 +1882,15 @@ def main() -> None:
         type=str,
         default='',
         help="Relative or absolute URL path from index.html to the docs directory "
-             "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'.",
+             "(e.g. 'Solutions Docs/' when index.html is at repo root). Must end with '/'. "
+             "When relative and --html-output-dir is set, HTML entity pages are generated.",
+    )
+    parser.add_argument(
+        "--html-index-url",
+        type=str,
+        default='',
+        help="Absolute URL to index.html (e.g. GitHub Pages URL). Used in HTML entity "
+             "page navbars.  Falls back to a relative path if not provided.",
     )
 
     args = parser.parse_args()
@@ -1685,6 +1909,7 @@ def main() -> None:
         asim_parsers_csv=args.asim_parsers_csv,
         html_output_dir=args.html_output_dir,
         html_docs_path=args.html_docs_path,
+        html_index_url=args.html_index_url,
     )
 
 

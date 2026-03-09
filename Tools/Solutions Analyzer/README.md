@@ -161,7 +161,7 @@ See the script documentation for details:
 - Six tabs: Solutions, Connectors, Tables, Content, Parsers, ASIM Parsers
 - Per-column dropdown filters, click-to-filter, global search, and "Clear All Filters" notification bar
 - Summary cards showing active/total counts for each entity type
-- Entity names link to their individual markdown documentation pages
+- Entity names link to their individual documentation pages
 - Collection method names link to method index pages
 - Solution logos displayed in Solutions and Connectors tabs
 - Navigation bar with links to static docs and statistics page
@@ -172,9 +172,17 @@ See the script documentation for details:
 - Per-tab icon legends explaining all visual indicators
 - Can be run standalone or as part of `generate_connector_docs.py`
 - Supports `--html-output-dir` and `--html-docs-path` for placing index.html separately from docs (e.g. repo root for GitHub Pages)
-- `--html-docs-path` supports full GitHub blob URLs (e.g. `https://github.com/.../blob/main/Solutions Docs/`) so that links from the interactive index point to GitHub's rendered markdown view
 - Static markdown navigation bar (`write_browse_section`) automatically adjusts 🔍 Interactive link based on `--html-docs-path` or `--html-index-url`
 - Generates `.nojekyll` alongside `index.html` to prevent GitHub Pages from running Jekyll (which breaks on `{{` in Azure deployment templates)
+
+**HTML Entity Pages:**
+- When `--html-output-dir` is set with a relative `--html-docs-path`, the generator converts every markdown entity page to a styled HTML page alongside the `.md` file
+- Uses Python `markdown` library with tables, fenced code, and sane lists extensions
+- HTML pages share a consistent visual style (navbar, typography, responsive layout) via a shared `page.css` stylesheet
+- Internal `.md` links within pages are automatically rewritten to `.html`
+- Each HTML page includes a navbar linking back to the interactive index (via `--html-index-url`)
+- `index.html` links automatically use `.html` extension when HTML entity pages are generated
+- Eliminates dependency on GitHub blob view for reading entity pages — everything is served from GitHub Pages
 
 ### v9.3 - Solution Deprecation & Deprecation Dates
 
