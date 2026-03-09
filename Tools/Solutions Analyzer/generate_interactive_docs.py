@@ -1594,6 +1594,32 @@ img { max-width: 100%; height: auto; }
     table { font-size: 0.82rem; }
     th, td { padding: 5px 8px; }
 }
+
+/* DataTable overrides for schema tables */
+table.dataTable thead th {
+    background: var(--ms-light);
+    font-weight: 600;
+    white-space: nowrap;
+}
+table.dataTable thead tr.filters th {
+    background: #fff;
+    padding: 4px 6px;
+}
+table.dataTable thead tr.filters input {
+    width: 100%;
+    padding: 2px 6px;
+    font-size: 0.82rem;
+    border: 1px solid var(--ms-border);
+    border-radius: 3px;
+}
+table.dataTable thead tr.filters input:focus {
+    outline: none;
+    border-color: var(--ms-blue);
+}
+table.dataTable tbody tr:hover {
+    background: #e8f4fd !important;
+}
+.dataTables_filter { margin-bottom: 6px; }
 """, encoding='utf-8')
 
 
@@ -1605,6 +1631,7 @@ _PAGE_HTML_TEMPLATE = """\
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} &mdash; Solutions Analyzer</title>
 <link rel="stylesheet" href="{css_path}">
+{head_extra}
 </head>
 <body>
 <nav class="navbar">
@@ -1616,9 +1643,43 @@ _PAGE_HTML_TEMPLATE = """\
 <div class="doc-content">
 {body}
 </div>
+{body_extra}
 </body>
 </html>
 """
+
+# DataTables resources injected into table doc pages that have a schema section.
+_DATATABLE_HEAD_EXTRA = """\
+<link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>"""
+
+_DATATABLE_BODY_EXTRA = """\
+<script>
+$(function() {
+    var t = $('#schema-table');
+    if (!t.length) return;
+    // Add filter row to thead
+    var hdr = t.find('thead');
+    var cols = hdr.find('tr:first th').length;
+    var fr = $('<tr class="filters"></tr>');
+    for (var i = 0; i < cols; i++) fr.append('<th><input type="text" placeholder="Filter…"></th>');
+    hdr.append(fr);
+    // Init DataTable
+    var dt = t.DataTable({
+        paging: false,
+        info: true,
+        orderCellsTop: true,
+        dom: 'frti',
+    });
+    // Per-column filter
+    hdr.find('tr.filters input').each(function(i) {
+        $(this).on('keyup change', function() {
+            dt.column(i).search(this.value).draw();
+        });
+    });
+});
+</script>"""
 
 
 def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
@@ -1667,6 +1728,9 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         else:
             title = md_file.stem
 
+        # Determine the parent directory (used for tab linking and schema detection)
+        parent_name = md_file.parent.name
+
         # Convert markdown → HTML body
         html_body = _markdown_lib.markdown(md_content, extensions=md_extensions)
 
@@ -1677,6 +1741,24 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
             html_body,
         )
 
+        # For table docs with a Schema section, tag the schema <table> with
+        # an id so DataTables.js can enhance it with sort + filter.
+        has_schema_table = False
+        if parent_name == 'tables':
+            # The schema table directly follows an <h2>Schema … heading.
+            # Inject id="schema-table" on the first <table> after that heading.
+            html_body, n = re.subn(
+                r'(<h2>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
+                r'\1<table id="schema-table">',
+                html_body,
+                count=1,
+                flags=re.DOTALL,
+            )
+            has_schema_table = n > 0
+
+        head_extra = _DATATABLE_HEAD_EXTRA if has_schema_table else ''
+        body_extra = _DATATABLE_BODY_EXTRA if has_schema_table else ''
+
         # Compute relative path to CSS
         css_path = os.path.relpath(
             html_output_dir / 'css' / 'page.css',
@@ -1684,7 +1766,6 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         ).replace('\\', '/')
 
         # Determine the tab fragment from the parent directory name
-        parent_name = md_file.parent.name
         tab_fragment = _dir_to_tab.get(parent_name, '')
         tab_hash = f'#{tab_fragment}' if tab_fragment else ''
 
@@ -1703,6 +1784,8 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
             css_path=css_path,
             index_url=esc(page_index_url),
             body=html_body,
+            head_extra=head_extra,
+            body_extra=body_extra,
         )
 
         html_file = md_file.with_suffix('.html')
