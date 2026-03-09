@@ -70,16 +70,7 @@ ParserQuery: |
     AzureDiagnostics
     | where not(disabled)
     | where ResourceType == "VAULTS"
-    | where Category == "AuditEvent"
-    | where
-        (isnull(starttime) or TimeGenerated >= starttime)
-        and (isnull(endtime) or TimeGenerated <= endtime)
-    | where array_length(newvalue_has_any) == 0
-    | where
-        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIPAddress, srcipaddr_has_any_prefix))
-        and (array_length(actorusername_has_any) == 0 or identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s has_any (actorusername_has_any))
-        and (array_length(operation_has_any) == 0 or OperationName has_any (operation_has_any))
-        and (array_length(object_has_any) == 0 or id_s has_any (object_has_any) or requestUri_s has_any (object_has_any))        
+    | where Category == "AuditEvent"  
     | extend HttpStatusCode = toint(httpStatusCode_d)
     | extend
         ActorUsername = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s,
@@ -95,12 +86,6 @@ ParserQuery: |
   let ResourceSpecific = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])){
     AZKVAuditLogs
     | where not(disabled)
-        and (isnull(starttime) or TimeGenerated >= starttime)
-        and (isnull(endtime) or TimeGenerated <= endtime) 
-    | where
-        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress, srcipaddr_has_any_prefix))
-        and (array_length(operation_has_any) == 0 or OperationName has_any (operation_has_any))
-        and (array_length(object_has_any) == 0 or Id has_any (object_has_any) or RequestUri has_any (object_has_any))  
     | extend Identity_claims = todynamic(Identity).claim
     | extend
         ActorUsername = tostring(Identity_claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"]),
@@ -111,34 +96,13 @@ ParserQuery: |
             isnotempty(tostring(Identity_claims.appid)), "AADID",
             ""
         )
-    | where array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any)
     | extend Object = coalesce(Id, RequestUri, OperationName)
     | project-rename CallerIPAddress = CallerIpAddress
   };
-  let Combined = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])) {
+  let Combined = (disabled: bool = false) {
     union 
-    AzDiagnostics(
-        disabled=disabled, 
-        starttime=starttime, 
-        endtime=endtime, 
-        eventresult=eventresult, 
-        operation_has_any=operation_has_any, 
-        eventtype_in=eventtype_in, 
-        srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
-        actorusername_has_any=actorusername_has_any, 
-        object_has_any=object_has_any, 
-        newvalue_has_any=newvalue_has_any), 
-    ResourceSpecific(
-        disabled=disabled, 
-        starttime=starttime, 
-        endtime=endtime, 
-        eventresult=eventresult, 
-        operation_has_any=operation_has_any, 
-        eventtype_in=eventtype_in, 
-        srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
-        actorusername_has_any=actorusername_has_any, 
-        object_has_any=object_has_any, 
-        newvalue_has_any=newvalue_has_any)
+    AzDiagnostics(disabled=disabled), 
+    ResourceSpecific(disabled=disabled)
     | lookup KeyVaultOperationLookup on OperationName
     | extend EventType = iff(isempty(EventType), "Other", EventType)
     | extend
@@ -189,7 +153,6 @@ ParserQuery: |
       ),
       EventOriginalResultDetails = strcat("HTTP status code: ", tostring(HttpStatusCode), iff(ResultDescription != "", strcat(", ", ResultDescription), ""))    
     | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    | where (eventresult == "*" or EventResult =~ eventresult)
     | project
         TimeGenerated,
         Type,
