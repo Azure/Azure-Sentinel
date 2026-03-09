@@ -93,7 +93,7 @@ ParserQuery: |
       "ListPrivateEndpointConnections", "Read",
       "AccessPolicyMerge", "Set"
     ];
-  let AzDiagnostics = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])){
+  let AzDiagnostics = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), operation_has_any: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])){
     AzureDiagnostics
     | where not(disabled)
     | where ResourceType == "VAULTS"
@@ -119,11 +119,12 @@ ParserQuery: |
         )
     | extend Object = coalesce(id_s, requestUri_s, OperationName)
   };
-  let ResourceSpecific = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])){
+  let ResourceSpecific = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), operation_has_any: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])){
     AZKVAuditLogs
     | where not(disabled)
         and (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime) 
+    | where array_length(newvalue_has_any) == 0
     | where
         (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(CallerIpAddress, srcipaddr_has_any_prefix))
         and (array_length(operation_has_any) == 0 or OperationName has_any (operation_has_any))
@@ -148,9 +149,7 @@ ParserQuery: |
         disabled=disabled, 
         starttime=starttime, 
         endtime=endtime, 
-        eventresult=eventresult, 
         operation_has_any=operation_has_any, 
-        eventtype_in=eventtype_in, 
         srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
         actorusername_has_any=actorusername_has_any, 
         object_has_any=object_has_any, 
@@ -159,15 +158,14 @@ ParserQuery: |
         disabled=disabled, 
         starttime=starttime, 
         endtime=endtime, 
-        eventresult=eventresult, 
         operation_has_any=operation_has_any, 
-        eventtype_in=eventtype_in, 
         srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
         actorusername_has_any=actorusername_has_any, 
         object_has_any=object_has_any, 
         newvalue_has_any=newvalue_has_any)
     | lookup KeyVaultOperationLookup on OperationName
     | extend EventType = iff(isempty(EventType), "Other", EventType)
+    | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
     | extend
         EventCount = int(1),
         EventStartTime = TimeGenerated,
@@ -199,8 +197,9 @@ ParserQuery: |
           HttpStatusCode between (200 .. 299), "Success",
           HttpStatusCode >= 400, "Failure",
           "NA"
-      ),
-      EventResultDetails = case(
+      )
+    | where (eventresult == "*" or EventResult =~ eventresult)
+    | extend EventResultDetails = case(
           HttpStatusCode == 200, "",
           HttpStatusCode == 201, "Created",
           HttpStatusCode == 202, "Accepted",
@@ -216,7 +215,6 @@ ParserQuery: |
       ),
       EventOriginalResultDetails = strcat("HTTP status code: ", tostring(HttpStatusCode), iff(ResultDescription != "", strcat(", ", ResultDescription), ""))    
     | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    | where (eventresult == "*" or EventResult =~ eventresult)
     | project
         TimeGenerated,
         Type,
