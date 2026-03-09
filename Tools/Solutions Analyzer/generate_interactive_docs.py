@@ -1088,7 +1088,20 @@ $(document).ready(function() {
     $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
         // Adjust DataTable columns on tab show (fixes width issues)
         $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+        // Update URL hash to reflect active tab
+        var id = $(e.target).attr('id');  // e.g. 'connectors-tab'
+        if (id) history.replaceState(null, '', '#' + id.replace('-tab', ''));
     });
+
+    // Activate tab from URL hash on page load (e.g. index.html#connectors)
+    var hash = window.location.hash.replace('#', '');
+    if (hash) {
+        var tabBtn = $('#' + hash + '-tab');
+        if (tabBtn.length) {
+            var bsTab = new bootstrap.Tab(tabBtn[0]);
+            bsTab.show();
+        }
+    }
 
     // Click-to-filter: clicking a cell value filters that column
     // Skip if the click target is a link (let it navigate normally)
@@ -1627,6 +1640,18 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
     # Write shared CSS for entity pages
     _write_page_css(html_output_dir / "css" / "page.css")
 
+    # Map subdirectory names to the corresponding tab hash fragment on
+    # index.html so that the navbar "Interactive" link opens the right tab.
+    _dir_to_tab = {
+        'solutions': 'solutions',
+        'connectors': 'connectors',
+        'tables': 'tables',
+        'content': 'content',
+        'parsers': 'parsers',
+        'asim': 'asim',
+        'methods': 'connectors',   # methods are shown via the Connectors tab
+    }
+
     md_extensions = ['tables', 'fenced_code', 'sane_lists']
     count = 0
 
@@ -1658,14 +1683,19 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
             md_file.parent,
         ).replace('\\', '/')
 
+        # Determine the tab fragment from the parent directory name
+        parent_name = md_file.parent.name
+        tab_fragment = _dir_to_tab.get(parent_name, '')
+        tab_hash = f'#{tab_fragment}' if tab_fragment else ''
+
         # Compute index URL (use absolute URL if provided, else relative)
         if index_url.startswith(('http://', 'https://')):
-            page_index_url = index_url
+            page_index_url = index_url + tab_hash
         else:
             page_index_url = os.path.relpath(
                 html_output_dir / index_url,
                 md_file.parent,
-            ).replace('\\', '/')
+            ).replace('\\', '/') + tab_hash
 
         # Assemble final page
         html_page = _PAGE_HTML_TEMPLATE.format(
