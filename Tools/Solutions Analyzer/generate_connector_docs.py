@@ -707,6 +707,45 @@ def format_solution_link_with_legacy(solution_name: str,
     return f"[{display_name}]({relative_path}{sanitize_filename(solution_name)}.md)"
 
 
+def format_popularity(value: str) -> str:
+    """Format marketplace popularity score (0-1) as a descriptive label with percentage.
+    
+    Azure Marketplace popularity is a relative ranking score between 0 and 1 where
+    higher values indicate more popular solutions. There are no official labels,
+    so we use descriptive ranges.
+    """
+    if not value:
+        return ''
+    try:
+        score = float(value)
+    except ValueError:
+        return ''
+    pct = int(score * 100)
+    if score >= 0.8:
+        return f"🟢 High ({pct}%)"
+    elif score >= 0.5:
+        return f"🔵 Medium ({pct}%)"
+    elif score >= 0.1:
+        return f"🟡 Low ({pct}%)"
+    else:
+        return f"⚪ Very Low ({pct}%)"
+
+
+def format_rating(avg: str, count: str) -> str:
+    """Format marketplace rating for display."""
+    if not avg or not count:
+        return ''
+    try:
+        avg_f = float(avg)
+        count_i = int(float(count))
+    except ValueError:
+        return ''
+    if count_i == 0:
+        return ''
+    stars = '★' * int(round(avg_f)) + '☆' * (5 - int(round(avg_f)))
+    return f"{stars} {avg_f:.1f}/5 ({count_i:,} ratings)"
+
+
 def sanitize_anchor(text: str) -> str:
     """Convert text to URL-safe anchor and filename-safe identifier.
     
@@ -3476,8 +3515,8 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
-            f.write("| | Solution | First Published | Publisher |\n")
-            f.write("|:--:|----------|----------------|----------|\n")
+            f.write("| | Solution | First Published | Popularity | Publisher |\n")
+            f.write("|:--:|----------|----------------|:----------:|----------|\n")
             
             for solution_name in sorted(by_letter[letter], key=str.casefold):
                 connectors = solutions[solution_name]
@@ -3485,6 +3524,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 support_tier = connectors[0].get('solution_support_tier', 'N/A')
                 support_name = connectors[0].get('solution_support_name', 'N/A')
                 first_published = connectors[0].get('solution_first_publish_date', 'N/A')
+                popularity = format_popularity(connectors[0].get('mp_popularity', ''))
                 
                 # Add logo column
                 logo_url = connectors[0].get('solution_logo_url', '')
@@ -3508,7 +3548,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                     status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md){status_suffix}"
-                f.write(f"| {logo_cell} | {solution_link} | {first_published} | {support_name} |\n")
+                f.write(f"| {logo_cell} | {solution_link} | {first_published} | {popularity} | {support_name} |\n")
             
             f.write("\n")
         
@@ -5567,7 +5607,13 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             title_icons.append(UNPUBLISHED_ICON)
         
         title_prefix = " ".join(title_icons) + " " if title_icons else ""
-        f.write(f"# {title_prefix}{solution_name}\n\n")
+        # Use marketplace display name if available (more descriptive), fall back to solution_name
+        display_name = metadata.get('mp_display_name', '') or solution_name
+        f.write(f"# {title_prefix}{display_name}\n\n")
+        
+        # Show solution folder name if different from display name
+        if display_name != solution_name:
+            f.write(f"*Solution: {solution_name}*\n\n")
         
         # Add status footnotes
         if is_deprecated:
@@ -5628,6 +5674,16 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         marketplace_url = metadata.get('marketplace_url', '')
         if marketplace_url:
             f.write(f"| **Marketplace** | [Azure Marketplace]({marketplace_url}) |\n")
+        
+        # Marketplace popularity
+        popularity_display = format_popularity(metadata.get('mp_popularity', ''))
+        if popularity_display:
+            f.write(f"| **Popularity** | {popularity_display} |\n")
+        
+        # Marketplace rating
+        rating_display = format_rating(metadata.get('mp_rating_average', ''), metadata.get('mp_rating_count', ''))
+        if rating_display:
+            f.write(f"| **Rating** | {rating_display} |\n")
         
         # Show pre-requisites summary if any
         dependencies = metadata.get('solution_dependencies', '')
@@ -5697,7 +5753,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         has_asim_prereq_section = bool(asim_dep_names) or bool(solution_asim_products)
         
         # Add description if available, with additional information appended
+        # Fall back to marketplace summary if no local description
         description = metadata.get('solution_description', '')
+        if not description:
+            description = metadata.get('mp_summary', '')
         additional_info = get_doc_override('solution', solution_name, 'additional_information')
         if description:
             # For solutions with structured pre-requisites, clean inline prerequisite sections from description
@@ -8998,6 +9057,11 @@ def main() -> None:
             row['solution_is_deprecated'] = sol_info.get('is_deprecated', 'false')
             row['solution_deprecation_date'] = sol_info.get('deprecation_date', '')
             row['marketplace_url'] = sol_info.get('marketplace_url', '')
+            row['mp_display_name'] = sol_info.get('mp_display_name', '')
+            row['mp_summary'] = sol_info.get('mp_summary', '')
+            row['mp_popularity'] = sol_info.get('mp_popularity', '')
+            row['mp_rating_average'] = sol_info.get('mp_rating_average', '')
+            row['mp_rating_count'] = sol_info.get('mp_rating_count', '')
     
     print(f"Loaded {len(rows)} rows")
     

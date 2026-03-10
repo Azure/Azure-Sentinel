@@ -333,6 +333,7 @@ def build_solutions_table_data(
             'publisher': publisher,
             'support_tier': support_tier,
             'first_published': first_published,
+            'popularity': sol_meta.get('mp_popularity', ''),
             'connectors': len(real_connectors),
             'tables': len(tables),
             'content_items': content_count,
@@ -1041,7 +1042,8 @@ $(document).ready(function() {
             order: [[1, 'asc']],
             columnDefs: [
                 { targets: 0, orderable: false, searchable: false, width: '40px' },
-                { targets: [6,7,8], className: 'text-center' },
+                { targets: [7,8,9], className: 'text-center' },
+                { targets: 6, className: 'text-center' },
             ]
         });
     }
@@ -1156,6 +1158,25 @@ def _logo_img(url: str) -> str:
     return f'<img src="{esc(url)}" alt="" class="sol-logo" loading="lazy">'
 
 
+def _popularity_label(value: str) -> str:
+    """Format marketplace popularity score for HTML display."""
+    if not value:
+        return ''
+    try:
+        score = float(value)
+    except ValueError:
+        return ''
+    pct = int(score * 100)
+    if score >= 0.8:
+        return f'<span title="Popularity: {pct}%">🟢 High</span>'
+    elif score >= 0.5:
+        return f'<span title="Popularity: {pct}%">🔵 Medium</span>'
+    elif score >= 0.1:
+        return f'<span title="Popularity: {pct}%">🟡 Low</span>'
+    else:
+        return f'<span title="Popularity: {pct}%">⚪ Very Low</span>'
+
+
 def _write_index_html(
     path: Path,
     solutions_data: List[Dict],
@@ -1259,11 +1280,11 @@ def _write_index_html(
 <thead>
 <tr>
     <th></th><th>Solution</th><th>Status</th><th>Publisher</th><th>Support</th>
-    <th>First Published</th><th>Connectors</th><th>Tables</th><th>Content</th>
+    <th>First Published</th><th>Popularity</th><th>Connectors</th><th>Tables</th><th>Content</th>
 </tr>
 <tr class="filters">
     <th data-filter="false"></th><th></th><th></th><th></th><th></th>
-    <th></th><th data-filter="false"></th><th data-filter="false"></th><th data-filter="false"></th>
+    <th></th><th></th><th data-filter="false"></th><th data-filter="false"></th><th data-filter="false"></th>
 </tr>
 </thead>
 <tbody>
@@ -1272,13 +1293,14 @@ def _write_index_html(
         logo = _logo_img(s['logo_url'])
         badge = _status_badge(s['status'])
         name_link = _md_link(s['name'], 'solutions')
+        pop_label = _popularity_label(s.get('popularity', ''))
         content_display = str(s['content_items'])
         if s['content_discovered'] > 0:
             content_display = f"{s['content_in_solution']} (+{s['content_discovered']} \U0001f50d)"
         html_parts.append(
             f"<tr><td>{logo}</td><td>{name_link}</td><td>{badge}</td>"
             f"<td>{esc(s['publisher'])}</td><td>{esc(s['support_tier'])}</td>"
-            f"<td>{esc(s['first_published'])}</td>"
+            f"<td>{esc(s['first_published'])}</td><td>{pop_label}</td>"
             f"<td>{s['connectors']}</td><td>{s['tables']}</td><td>{content_display}</td></tr>\n"
         )
     html_parts.append("</tbody></table>\n")
