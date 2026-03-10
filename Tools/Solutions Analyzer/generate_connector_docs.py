@@ -1554,7 +1554,6 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
-        ('🔍', _INTERACTIVE_INDEX_PATH if _INTERACTIVE_INDEX_PATH.startswith(('http://', 'https://')) else f'{relative_to_root}{_INTERACTIVE_INDEX_PATH}', 'Interactive'),
     ]
     
     # Build navigation line

@@ -1644,10 +1644,7 @@ _PAGE_HTML_TEMPLATE = """\
 </head>
 <body>
 <nav class="navbar">
-    <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
-    <div class="navbar-nav-links">
-        <a href="{index_url}" title="Interactive index">&#128269; Interactive</a>
-    </div>
+    <a href="{index_url}" class="navbar-brand" style="text-decoration:none;color:inherit">Microsoft Sentinel &mdash; Solutions Analyzer</a>
 </nav>
 <div class="doc-content">
 {body}
@@ -1747,6 +1744,56 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         html_body = re.sub(
             r'href="(?!https?://|mailto:)([^"]*?)\.md"',
             r'href="\1.html"',
+            html_body,
+        )
+
+        # Compute base index URL (without tab hash) for browse-bar rewriting
+        if index_url.startswith(('http://', 'https://')):
+            base_index_url = index_url
+        else:
+            base_index_url = os.path.relpath(
+                html_output_dir / index_url,
+                md_file.parent,
+            ).replace('\\', '/')
+
+        # Rewrite browse-bar links: static index pages → index.html#tab
+        # Map index page filenames to tab hash fragments
+        _index_to_tab = {
+            'solutions-index.html': '#solutions',
+            'connectors-index.html': '#connectors',
+            'methods-index.html': '#connectors',
+            'tables-index.html': '#tables',
+            'content-index.html': '#content',
+            'parsers-index.html': '#parsers',
+            'asim-index.html': '#asim',
+            'asim-products-index.html': '#asim',
+        }
+
+        def _rewrite_index_link(m: re.Match) -> str:
+            """Replace static index page links with index.html#tab links."""
+            filename = m.group(1)
+            if filename in _index_to_tab:
+                return f'href="{base_index_url}{_index_to_tab[filename]}"'
+            return m.group(0)
+
+        # Match href="(optional-path/)index-page.html"
+        html_body = re.sub(
+            r'href="(?:[^"]*/)?((?:solutions|connectors|methods|tables|content|parsers|asim(?:-products)?)-index\.html)"',
+            _rewrite_index_link,
+            html_body,
+        )
+
+        # Rewrite 🏠 home link: README.html → index.html (no tab hash)
+        html_body = re.sub(
+            r'href="[^"]*README\.html"',
+            f'href="{base_index_url}"',
+            html_body,
+        )
+
+        # Remove the 🔍 Interactive link from the browse bar (if still present)
+        html_body = re.sub(
+            r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>',
+            '',
             html_body,
         )
 
