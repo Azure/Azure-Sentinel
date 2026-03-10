@@ -47,63 +47,63 @@ Click the button below to deploy all required Azure resources (DCE, custom table
 
 ### Parameters
 
-| Parameter | Description |
-|---|---|
-| `WorkspaceName` | Name of your Log Analytics / Sentinel workspace |
-| `UpwindOrgId` | Upwind Organization ID (Settings → Organization) |
-| `UpwindClientId` | Upwind API Client ID (Settings → API Keys) |
-| `UpwindClientSecret` | Upwind API Client Secret |
-| `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace |
-| `UpwindLogsSchedule` | CRON schedule for the function trigger (default: `0 0 * * * *`) |
+| Parameter                        | Description                                                     |
+|----------------------------------|-----------------------------------------------------------------|
+| `WorkspaceName`                  | Name of your Log Analytics / Sentinel workspace                 |
+| `UpwindOrgId`                    | Upwind Organization ID (Settings → Organization)                |
+| `UpwindClientId`                 | Upwind API Client ID (Settings → API Keys)                      |
+| `UpwindClientSecret`             | Upwind API Client Secret                                        |
+| `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace                 |
+| `UpwindLogsSchedule`             | CRON schedule for the function trigger (default: `0 0 * * * *`) |
 
-## Table schema — `UpwindLogs_CL`
+## Table schema
 
-| Column | Type | API field |
-|---|---|---|
-| `TimeGenerated` | datetime | Ingestion time |
-| `AssetId` | string | `id` |
-| `Category` | string | `category` |
-| `SubCategory` | string | `sub_category` |
-| `CloudProvider` | string | `cloud_provider` |
-| `CloudAccountId` | string | `cloud_account_id` |
-| `ResourceType` | string | `resource_type` |
-| `CloudResourceId` | string | `cloud_resource_id` |
-| `Region` | string | `region` |
-| `AssetName` | string | `name` |
-| `ProtectedBy` | string | `protected_by` |
-| `Status` | string | `status` |
-| `Tags` | dynamic | `tags` |
-| `NetworkRisk` | dynamic | `network_risk` |
-| `DetectionRisk` | dynamic | `detection_risk` |
-| `VulnerabilityRisk` | dynamic | `vulnerability_risk` |
-| `HighPrivilegeRisk` | dynamic | `high_privilege_risk` |
-| `Technologies` | dynamic | `technologies` |
-| `PublicIpAddresses` | dynamic | `public_ip_addresses` |
-| `PrivateIpAddresses` | dynamic | `private_ip_addresses` |
-| `SensitiveDataAtRest` | dynamic | `sensitive_data_at_rest` |
-| `SensitiveDataInTransit` | dynamic | `sensitive_data_in_transit` |
+| Column                   | Type     | API field                   |
+|--------------------------|----------|-----------------------------|
+| `TimeGenerated`          | datetime | Ingestion time              |
+| `id`                | string   | `id`                        |
+| `category`               | string   | `category`                  |
+| `SubCategory`            | string   | `sub_category`              |
+| `cloud_provider`          | string   | `cloud_provider`            |
+| `cloud_account_id`         | string   | `cloud_account_id`          |
+| `resource_type`           | string   | `resource_type`             |
+| `cloud_resource_id`        | string   | `cloud_resource_id`         |
+| `region`                 | string   | `region`                    |
+| `name`              | string   | `name`                      |
+| `protected_by`            | string   | `protected_by`              |
+| `status`                 | string   | `status`                    |
+| `tags`                   | dynamic  | `tags`                      |
+| `network_risk`            | dynamic  | `network_risk`              |
+| `detection_risk`          | dynamic  | `detection_risk`            |
+| `vulnerability_risk`      | dynamic  | `vulnerability_risk`        |
+| `high_privilege_risk`      | dynamic  | `high_privilege_risk`       |
+| `technologies`           | dynamic  | `technologies`              |
+| `public_ip_addresses`      | dynamic  | `public_ip_addresses`       |
+| `private_ip_addresses`     | dynamic  | `private_ip_addresses`      |
+| `sensitive_data_at_rest`    | dynamic  | `sensitive_data_at_rest`    |
+| `sensitive_data_in_transit` | dynamic  | `sensitive_data_in_transit` |
 
 ## Sample KQL queries
 
 ```kql
 // All assets, most recent first
-UpwindLogs_CL
+${table_name}
 | sort by TimeGenerated desc
 
 // Assets with critical vulnerabilities
-UpwindLogs_CL
-| extend vulnCritical = toint(VulnerabilityRisk.critical_count)
+${table_name}
+| extend vulnCritical = toint(vulnerability_risk.critical_count)
 | where vulnCritical > 0
-| project AssetName, ResourceType, CloudProvider, Region, vulnCritical
+| project name, resource_type, cloud_provider, region, vulnCritical
 | sort by vulnCritical desc
 
 // Assets with elevated privileges
-UpwindLogs_CL
-| where tobool(HighPrivilegeRisk.has_elevated_privilege) == true
-| project AssetName, ResourceType, CloudProvider, Region, CloudAccountId
+${table_name}
+| where tobool(high_privilege_risk.has_elevated_privilege) == true
+| project name, resource_type, cloud_provider, region, cloud_account_id
 
 // Asset count by cloud provider
-UpwindLogs_CL
+${table_name}
 | where TimeGenerated > ago(24h)
-| summarize count() by CloudProvider
+| summarize count() by cloud_provider
 ```
