@@ -5625,6 +5625,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             else:
                 f.write(f"| **Solution Folder** | {solution_folder} |\n")
         
+        marketplace_url = metadata.get('marketplace_url', '')
+        if marketplace_url:
+            f.write(f"| **Marketplace** | [Azure Marketplace]({marketplace_url}) |\n")
+        
         # Show pre-requisites summary if any
         dependencies = metadata.get('solution_dependencies', '')
         if dependencies:
@@ -8993,6 +8997,7 @@ def main() -> None:
             row['solution_dependencies'] = sol_info.get('solution_dependencies', '')
             row['solution_is_deprecated'] = sol_info.get('is_deprecated', 'false')
             row['solution_deprecation_date'] = sol_info.get('deprecation_date', '')
+            row['marketplace_url'] = sol_info.get('marketplace_url', '')
     
     print(f"Loaded {len(rows)} rows")
     

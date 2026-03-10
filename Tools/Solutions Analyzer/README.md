@@ -154,6 +154,19 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.5 - Extended Marketplace Data & Content Count Split
+
+**Extended Marketplace Data Collection:**
+- Expanded Azure Marketplace API integration from 2 fields (`is_published`, `marketplace_url`) to 19 `mp_*` fields in `solutions.csv`
+- New fields include: display name, summary, publisher name, preview/stop-sell status, creation/modification dates, categories, keywords, popularity score, user ratings, pricing model, and Microsoft product flag
+- Cache format changed from CSV (`marketplace_availability.csv`) to JSON (`marketplace_data.json`) with automatic migration of old cache
+- Added marketplace URL row to solution documentation pages
+
+**Content Item Count Splitting:**
+- Solution pages, statistics page, and interactive index now show separate counts for "in solution" vs "discovered" content items
+- CLv1 identification footnote includes accuracy caveat (CLv1 prefixes are allowed for CLv2)
+- Standardized discovered connector footnote format across all pages
+
 ### v9.4 - Interactive HTML Index
 
 **Interactive HTML Index:**

@@ -339,6 +339,25 @@ Contains one row per solution with all solution-specific metadata. Metadata is s
 | `deprecation_date` | Date string extracted from solution description when deprecated; empty if not found | Regex extraction from `Description` near deprecation keywords; overridable |
 | `is_published` | `true` if solution is published on Azure Marketplace | Azure Marketplace API query |
 | `marketplace_url` | URL to the solution's Azure Marketplace listing | Azure Marketplace API response |
+| `mp_is_published` | `true`/`false` — whether solution is published on Azure Marketplace | Azure Marketplace API |
+| `mp_url` | Direct URL to the Azure Marketplace listing | Computed from publisher/offer IDs |
+| `mp_display_name` | Solution display name on Azure Marketplace | API `displayName` field |
+| `mp_summary` | Short summary text from the marketplace listing | API `summary` field |
+| `mp_long_summary` | Extended summary text from the marketplace listing | API `longSummary` field |
+| `mp_publisher_display_name` | Publisher display name on the marketplace | API `publisherDisplayName` field |
+| `mp_is_preview` | `true`/`false` — whether the listing is in preview | API `isPreview` field |
+| `mp_is_stop_sell` | `true`/`false` — whether the listing is stop-sell (delisted) | API `isStopSell` field |
+| `mp_creation_date` | Marketplace listing creation date (YYYY-MM-DD) | API `creationDate` field |
+| `mp_last_modified_date` | Marketplace listing last modification date (YYYY-MM-DD) | API `bigCatLastModifiedDate` field |
+| `mp_categories` | Semicolon-separated marketplace category IDs | API `categoryIds` array |
+| `mp_keywords` | Semicolon-separated marketplace keywords | API `keywords` array |
+| `mp_popularity` | Popularity score (0–1 range, higher = more popular) | API `enrichedData.popularity.azurePortalApps` |
+| `mp_rating_average` | Average user rating (0–5 scale) | API `enrichedData.rating.all.averageRating` |
+| `mp_rating_count` | Total number of user ratings | API `enrichedData.rating.all.totalRatings` |
+| `mp_is_free` | `true`/`false` — whether the first plan is free | API `plans[0].isFree` |
+| `mp_is_byol` | `true`/`false` — whether the listing is bring-your-own-license | API `isByol` field |
+| `mp_is_microsoft_product` | `true`/`false` — whether the listing is a Microsoft product | API `isMicrosoftProduct` field |
+| `mp_last_checked` | Date when marketplace data was last fetched (YYYY-MM-DD) | Computed at query time |
 
 **Solution JSON File Selection:**
 
@@ -616,44 +635,73 @@ This CSV file is maintained for backward compatibility with older scripts and wo
 
 ## Azure Marketplace Availability
 
-The script checks whether each solution is published on the Azure Marketplace using the Azure Marketplace Catalog API.
+The script queries the Azure Marketplace Catalog API to collect comprehensive metadata for each solution, including availability status, display names, descriptions, popularity, ratings, categories, and publication dates.
 
 ### How It Works
 
 1. For each solution, the script constructs a legacy product ID from the `publisher_id` and `offer_id` in `SolutionMetadata.json`
-2. It queries the Azure Marketplace Catalog API at `https://catalogapi.azure.com/offers/{legacy_id}`
-3. If the API returns a valid response, the solution is marked as published and the marketplace URL is stored
+2. It queries the Azure Marketplace Catalog API at `https://catalogapi.azure.com/offers/{legacy_id}?api-version=2018-08-01-beta`
+3. If the API returns a valid response, the full response is parsed into 19 `mp_*` fields and cached
+4. If the API returns an error or no data, the solution is marked as unpublished with empty metadata fields
+
+### Collected Fields
+
+The following fields are extracted from the API response (all prefixed with `mp_`):
+
+| Field | Description |
+|-------|-------------|
+| `mp_is_published` | `true`/`false` — whether the solution exists on Azure Marketplace |
+| `mp_url` | Direct link to the marketplace listing |
+| `mp_display_name` | Marketplace display name (often differs from solution folder name) |
+| `mp_summary` | Short description from the listing |
+| `mp_long_summary` | Extended description from the listing |
+| `mp_publisher_display_name` | Publisher name as shown on marketplace |
+| `mp_is_preview` | Whether the listing is in preview |
+| `mp_is_stop_sell` | Whether the listing is delisted/stop-sell |
+| `mp_creation_date` | Date the marketplace listing was created (YYYY-MM-DD) |
+| `mp_last_modified_date` | Date the listing was last modified (YYYY-MM-DD) |
+| `mp_categories` | Semicolon-separated marketplace category IDs |
+| `mp_keywords` | Semicolon-separated keywords |
+| `mp_popularity` | Popularity score (0–1; from `enrichedData.popularity.azurePortalApps`) |
+| `mp_rating_average` | Average user rating (0–5; from `enrichedData.rating.all`) |
+| `mp_rating_count` | Total number of user ratings |
+| `mp_is_free` | Whether the first pricing plan is free |
+| `mp_is_byol` | Whether the listing uses bring-your-own-license model |
+| `mp_is_microsoft_product` | Whether the listing is flagged as a Microsoft product |
+| `mp_last_checked` | Date when this data was last fetched from the API |
 
 ### Caching
 
-To avoid excessive API calls on subsequent runs, marketplace availability results are cached locally:
+To avoid excessive API calls on subsequent runs, marketplace data is cached locally:
 
-- **Cache Location:** `.cache/marketplace_availability.csv`
-- **Cache Format:** CSV with columns `legacy_id`, `is_published`, `marketplace_url`, `last_checked`
+- **Cache Location:** `.cache/marketplace_data.json`
+- **Cache Format:** JSON dictionary keyed by `legacy_id`, each value containing all `mp_*` fields
 - **Cache Behavior:** 
   - If a solution's legacy ID is found in the cache, the cached result is used (no API call)
   - New solutions not in the cache trigger API calls and are added to the cache
-  - Use `--refresh-marketplace` to force refresh all entries
+  - Use `--refresh-marketplace` or `--force-refresh marketplace` to force refresh all entries
+- **Migration:** The script automatically migrates from the old CSV cache format (`marketplace_availability.csv`) to the new JSON format on first run
 
 ### Command Line Options
 
 | Option | Description |
 |--------|-------------|
-| `--skip-marketplace` | Skip marketplace checking entirely (outputs will have empty `is_published` and `marketplace_url` fields) |
+| `--skip-marketplace` | Skip marketplace checking entirely (outputs will have empty marketplace fields) |
 | `--refresh-marketplace` | Force refresh of marketplace cache, ignoring cached results and re-querying all solutions |
+| `--force-refresh marketplace` | Same as `--refresh-marketplace` (via the unified `--force-refresh` mechanism) |
 
 ### Output Fields
 
-Marketplace availability adds the following fields to the output:
+Marketplace data adds the following fields:
 
-| File | Field | Description |
-|------|-------|-------------|
-| `solutions.csv` | `is_published` | `true` if solution is on Azure Marketplace, `false` otherwise |
-| `solutions.csv` | `marketplace_url` | Direct URL to the Azure Marketplace listing (empty if not published) |
+| File | Fields | Description |
+|------|--------|-------------|
+| `solutions.csv` | `is_published`, `marketplace_url` | Legacy fields for backward compatibility |
+| `solutions.csv` | All 19 `mp_*` fields | Full marketplace metadata (see table above) |
 | `connectors.csv` | `is_published` | `true` if parent solution is published |
 | Main mapping CSV | `is_published` | `true` if parent solution is published |
 
-> **Note:** Solutions without valid `publisher_id` and `offer_id` in `SolutionMetadata.json` cannot be checked and will have empty marketplace fields.
+> **Note:** The `is_published` and `marketplace_url` columns are maintained alongside the new `mp_is_published` and `mp_url` fields for backward compatibility. Solutions without valid `publisher_id` and `offer_id` in `SolutionMetadata.json` cannot be checked and will have empty marketplace fields.
 
 ## Detection Logic
 

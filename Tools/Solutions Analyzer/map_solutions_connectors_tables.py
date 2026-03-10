@@ -3899,187 +3899,281 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
 
 
 # Marketplace cache filename (stored in .cache folder)
-MARKETPLACE_CACHE_FILENAME = "marketplace_availability.csv"
+MARKETPLACE_CACHE_FILENAME = "marketplace_data.json"
+
+# Fields extracted from marketplace API response
+MARKETPLACE_FIELDS = [
+    'mp_is_published',
+    'mp_url',
+    'mp_display_name',
+    'mp_summary',
+    'mp_long_summary',
+    'mp_publisher_display_name',
+    'mp_is_preview',
+    'mp_is_stop_sell',
+    'mp_creation_date',
+    'mp_last_modified_date',
+    'mp_categories',
+    'mp_keywords',
+    'mp_popularity',
+    'mp_rating_average',
+    'mp_rating_count',
+    'mp_is_free',
+    'mp_is_byol',
+    'mp_is_microsoft_product',
+    'mp_last_checked',
+]
 
 
-def load_marketplace_cache(cache_dir: Path) -> Dict[str, Tuple[bool, str, str]]:
+def _parse_marketplace_response(data: dict, legacy_id: str) -> Dict[str, str]:
     """
-    Load marketplace availability cache from CSV file.
-    
+    Parse marketplace API JSON response into a flat dict of string values.
+
+    Args:
+        data: Parsed JSON response from the Azure Marketplace catalog API
+        legacy_id: The publisher.offer legacy ID
+
+    Returns:
+        Dictionary with mp_* prefixed string fields
+    """
+    marketplace_url = f"https://azuremarketplace.microsoft.com/en-us/marketplace/apps/{legacy_id}"
+
+    # Extract popularity (prefer azurePortalApps, fall back to ampApps)
+    popularity = ''
+    enriched = data.get('enrichedData', {})
+    pop_data = enriched.get('popularity', {})
+    if pop_data:
+        popularity = str(pop_data.get('azurePortalApps', pop_data.get('ampApps', '')))
+
+    # Extract rating
+    rating_avg = ''
+    rating_count = ''
+    rating_data = enriched.get('rating', {})
+    if rating_data:
+        all_ratings = rating_data.get('all', {})
+        if all_ratings:
+            rating_avg = str(all_ratings.get('averageRating', ''))
+            rating_count = str(all_ratings.get('totalRatings', ''))
+
+    # Extract is_free from first plan
+    is_free = ''
+    plans = data.get('plans', [])
+    if plans:
+        is_free = 'true' if plans[0].get('isFree', False) else 'false'
+
+    # Format dates to just date portion
+    creation_date = data.get('creationDate', '')
+    if creation_date and 'T' in creation_date:
+        creation_date = creation_date.split('T')[0]
+    last_modified = data.get('bigCatLastModifiedDate', '')
+    if last_modified and 'T' in last_modified:
+        last_modified = last_modified.split('T')[0]
+
+    return {
+        'mp_is_published': 'true',
+        'mp_url': marketplace_url,
+        'mp_display_name': data.get('displayName', ''),
+        'mp_summary': data.get('summary', ''),
+        'mp_long_summary': data.get('longSummary', ''),
+        'mp_publisher_display_name': data.get('publisherDisplayName', ''),
+        'mp_is_preview': 'true' if data.get('isPreview', False) else 'false',
+        'mp_is_stop_sell': 'true' if data.get('isStopSell', False) else 'false',
+        'mp_creation_date': creation_date,
+        'mp_last_modified_date': last_modified,
+        'mp_categories': ';'.join(data.get('categoryIds', [])),
+        'mp_keywords': ';'.join(data.get('keywords', [])),
+        'mp_popularity': popularity,
+        'mp_rating_average': rating_avg,
+        'mp_rating_count': rating_count,
+        'mp_is_free': is_free,
+        'mp_is_byol': 'true' if data.get('isByol', False) else 'false',
+        'mp_is_microsoft_product': 'true' if data.get('isMicrosoftProduct', False) else 'false',
+        'mp_last_checked': datetime.now().strftime('%Y-%m-%d'),
+    }
+
+
+def _empty_marketplace_record(is_published: bool = False) -> Dict[str, str]:
+    """Return an empty marketplace record (for unpublished or error cases)."""
+    return {field: '' for field in MARKETPLACE_FIELDS} | {
+        'mp_is_published': 'true' if is_published else 'false',
+        'mp_last_checked': datetime.now().strftime('%Y-%m-%d'),
+    }
+
+
+def load_marketplace_cache(cache_dir: Path) -> Dict[str, Dict[str, str]]:
+    """
+    Load marketplace data cache from JSON file.
+
     Args:
         cache_dir: Path to the cache directory
-        
+
     Returns:
-        Dictionary mapping legacy_id (publisher.offer) to (is_published, marketplace_url, last_checked) tuples
+        Dictionary mapping legacy_id (publisher.offer) to marketplace data dicts
     """
     cache_file = cache_dir / MARKETPLACE_CACHE_FILENAME
-    cache: Dict[str, Tuple[bool, str, str]] = {}
-    
+    cache: Dict[str, Dict[str, str]] = {}
+
     if not cache_file.exists():
+        # Try loading old CSV cache and migrate
+        old_csv = cache_dir / "marketplace_availability.csv"
+        if old_csv.exists():
+            log_print("  Migrating old marketplace_availability.csv cache to new JSON format...")
+            try:
+                with old_csv.open("r", encoding="utf-8", newline='') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        legacy_id = row.get('legacy_id', '')
+                        if legacy_id:
+                            is_published = row.get('is_published', 'true').lower() == 'true'
+                            record = _empty_marketplace_record(is_published)
+                            record['mp_url'] = row.get('marketplace_url', '')
+                            record['mp_last_checked'] = row.get('last_checked', '')
+                            cache[legacy_id] = record
+                log_print(f"    Migrated {len(cache)} entries from old CSV cache")
+            except Exception as e:
+                log_print(f"    Warning: Could not migrate old cache: {e}")
         return cache
-    
+
     try:
-        with cache_file.open("r", encoding="utf-8", newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                legacy_id = row.get('legacy_id', '')
-                if legacy_id:
-                    is_published = row.get('is_published', 'true').lower() == 'true'
-                    marketplace_url = row.get('marketplace_url', '')
-                    last_checked = row.get('last_checked', '')
-                    cache[legacy_id] = (is_published, marketplace_url, last_checked)
+        with cache_file.open("r", encoding="utf-8") as f:
+            cache = json.load(f)
     except Exception as e:
         print(f"Warning: Could not load marketplace cache: {e}")
-    
+
     return cache
 
 
-def save_marketplace_cache(cache_dir: Path, cache: Dict[str, Tuple[bool, str, str]]) -> None:
+def save_marketplace_cache(cache_dir: Path, cache: Dict[str, Dict[str, str]]) -> None:
     """
-    Save marketplace availability cache to CSV file.
-    
+    Save marketplace data cache to JSON file.
+
     Args:
         cache_dir: Path to the cache directory
-        cache: Dictionary mapping legacy_id to (is_published, marketplace_url, last_checked) tuples
+        cache: Dictionary mapping legacy_id to marketplace data dicts
     """
     cache_file = cache_dir / MARKETPLACE_CACHE_FILENAME
-    
+
     # Ensure cache directory exists
     cache_dir.mkdir(parents=True, exist_ok=True)
-    
+
     try:
-        with cache_file.open("w", encoding="utf-8", newline='') as f:
-            fieldnames = ['legacy_id', 'is_published', 'marketplace_url', 'last_checked']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for legacy_id in sorted(cache.keys()):
-                is_published, marketplace_url, last_checked = cache[legacy_id]
-                writer.writerow({
-                    'legacy_id': legacy_id,
-                    'is_published': 'true' if is_published else 'false',
-                    'marketplace_url': marketplace_url,
-                    'last_checked': last_checked,
-                })
+        with cache_file.open("w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Warning: Could not save marketplace cache: {e}")
 
 
-def check_marketplace_availability(publisher_id: str, offer_id: str) -> Tuple[bool, str]:
+def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str, str]:
     """
-    Check if a solution is available on Azure Marketplace.
-    
+    Check if a solution is available on Azure Marketplace and retrieve its metadata.
+
     Args:
         publisher_id: The publisher ID from SolutionMetadata.json
         offer_id: The offer ID from SolutionMetadata.json
-        
+
     Returns:
-        Tuple of (is_published, marketplace_url)
-        - is_published: True if found on marketplace, False otherwise
-        - marketplace_url: URL to the marketplace listing if found, empty string otherwise
+        Dictionary with mp_* prefixed marketplace fields.
+        mp_is_published is 'true' if found, 'false' if 404.
     """
     if not HAS_URLLIB:
-        return True, ""  # Assume published if we can't check
-        
+        return _empty_marketplace_record(True)  # Assume published if we can't check
+
     if not publisher_id or not offer_id:
-        return False, ""  # Can't check without both IDs
-    
+        return _empty_marketplace_record(False)  # Can't check without both IDs
+
     # Build the API URL
     legacy_id = f"{publisher_id}.{offer_id}"
     api_url = f"{AZURE_MARKETPLACE_API_URL}/{legacy_id}?api-version={AZURE_MARKETPLACE_API_VERSION}"
-    
+
     try:
         request = urllib.request.Request(api_url)
         request.add_header('Accept', 'application/json')
-        
+
         with urllib.request.urlopen(request, timeout=10) as response:
             if response.status == 200:
-                # Solution found on marketplace
-                marketplace_url = f"https://azuremarketplace.microsoft.com/en-us/marketplace/apps/{legacy_id}"
-                return True, marketplace_url
+                data = json.loads(response.read().decode('utf-8'))
+                return _parse_marketplace_response(data, legacy_id)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             # Solution not found on marketplace
-            return False, ""
+            return _empty_marketplace_record(False)
         # Other HTTP errors - assume published to avoid false negatives
-        return True, ""
+        return _empty_marketplace_record(True)
     except Exception:
         # Network errors, timeouts, etc. - assume published to avoid false negatives
-        return True, ""
-    
-    return True, ""
+        return _empty_marketplace_record(True)
+
+    return _empty_marketplace_record(True)
 
 
 def check_all_solutions_marketplace(
     solutions_info: Dict[str, Dict[str, str]],
     cache_dir: Path,
     force_refresh: bool = False
-) -> Dict[str, Tuple[bool, str]]:
+) -> Dict[str, Dict[str, str]]:
     """
     Check marketplace availability for all solutions, using cache when available.
-    
+
     Args:
         solutions_info: Dictionary mapping solution names to their info dictionaries
         cache_dir: Path to the cache directory for storing/loading cached results
         force_refresh: If True, ignore cache and check all solutions fresh
-        
+
     Returns:
-        Dictionary mapping solution names to (is_published, marketplace_url) tuples
+        Dictionary mapping solution names to marketplace data dicts (mp_* fields)
     """
-    results: Dict[str, Tuple[bool, str]] = {}
+    results: Dict[str, Dict[str, str]] = {}
     total = len(solutions_info)
-    
+
     # Load existing cache
     cache = load_marketplace_cache(cache_dir) if not force_refresh else {}
-    
+
     # Track stats
     cache_hits = 0
     api_calls = 0
-    today = datetime.now().strftime('%Y-%m-%d')
-    
+
     log_print(f"Checking marketplace availability for {total} solutions...")
     if cache and not force_refresh:
         log_print(f"  Using cached results from {cache_dir / MARKETPLACE_CACHE_FILENAME}")
     elif force_refresh:
         log_print(f"  Force refresh enabled - checking all solutions via API")
-    
+
     for i, (solution_name, info) in enumerate(sorted(solutions_info.items()), 1):
         publisher_id = info.get('solution_publisher_id', '')
         offer_id = info.get('solution_offer_id', '')
-        
+
         # Check cache first
         if publisher_id and offer_id:
             legacy_id = f"{publisher_id}.{offer_id}"
             if legacy_id in cache:
-                is_published, marketplace_url, _ = cache[legacy_id]
-                results[solution_name] = (is_published, marketplace_url)
+                results[solution_name] = cache[legacy_id]
                 cache_hits += 1
                 continue
-        
+
         # Not in cache, make API call
-        is_published, marketplace_url = check_marketplace_availability(publisher_id, offer_id)
-        results[solution_name] = (is_published, marketplace_url)
+        mp_data = check_marketplace_availability(publisher_id, offer_id)
+        results[solution_name] = mp_data
         api_calls += 1
-        
+
         # Update cache
         if publisher_id and offer_id:
             legacy_id = f"{publisher_id}.{offer_id}"
-            cache[legacy_id] = (is_published, marketplace_url, today)
-        
+            cache[legacy_id] = mp_data
+
         # Progress indicator every 25 API calls or every 100 solutions processed
         if api_calls > 0 and api_calls % 25 == 0:
             log_print(f"    [{i}/{total}] Made {api_calls} API calls, {cache_hits} cache hits...")
-    
+
     # Save updated cache
     if api_calls > 0:
         save_marketplace_cache(cache_dir, cache)
         log_print(f"  Updated marketplace cache with {api_calls} new entries")
-    
+
     # Count unpublished
-    unpublished_count = sum(1 for is_pub, _ in results.values() if not is_pub)
+    unpublished_count = sum(1 for mp in results.values() if mp.get('mp_is_published') != 'true')
     log_print(f"  Results: {cache_hits} from cache, {api_calls} API calls")
     log_print(f"  Found {unpublished_count} unpublished solutions out of {total}")
-    
+
     return results
 
 
@@ -8224,7 +8318,7 @@ def main() -> None:
     
     # Check marketplace availability (always runs, uses cache by default)
     # Use --force-refresh=marketplace to refresh the cache
-    marketplace_status: Dict[str, Tuple[bool, str]] = {}
+    marketplace_status: Dict[str, Dict[str, str]] = {}
     cache_dir = script_dir / ".cache"
     marketplace_status = check_all_solutions_marketplace(
         all_solutions_info, 
@@ -8233,28 +8327,29 @@ def main() -> None:
     )
     
     # Add is_published to content items based on their solution's marketplace status
+    _default_mp = _empty_marketplace_record(True)
     for item in all_content_items:
         solution_name = item.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        item['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        item['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to content table mappings
     for mapping in content_table_mappings:
         solution_name = mapping.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        mapping['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        mapping['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to connectors data
     for connector in connectors_data:
         solution_name = connector.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        connector['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        connector['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to main mapping rows
     for row in rows:
         solution_name = row.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        row['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        row['is_published'] = mp.get('mp_is_published', 'true')
     
     # Collect standalone content items from top-level directories
     log_print("\nCollecting standalone content items from top-level directories...")
@@ -8476,17 +8571,16 @@ def main() -> None:
             readme_full_path = ""
         
         # Get marketplace status if available
-        is_published = True
-        marketplace_url = ""
+        mp_data = _empty_marketplace_record(True)
         if marketplace_status:
-            is_published, marketplace_url = marketplace_status.get(solution_name, (True, ""))
+            mp_data = marketplace_status.get(solution_name, _empty_marketplace_record(True))
         
         # Detect solution-level deprecation from description
         sol_description = info.get('solution_description', '')
         sol_is_deprecated = is_solution_deprecated(sol_description)
         sol_deprecation_date = extract_deprecation_date(sol_description) if sol_is_deprecated else ''
         
-        solutions_data.append({
+        solution_row = {
             'solution_name': info['solution_name'],
             'solution_folder': info['solution_folder'],
             'solution_github_url': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
@@ -8507,9 +8601,13 @@ def main() -> None:
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
             'is_deprecated': 'true' if sol_is_deprecated else 'false',
             'deprecation_date': sol_deprecation_date,
-            'is_published': 'true' if is_published else 'false',
-            'marketplace_url': marketplace_url,
-        })
+            'is_published': mp_data.get('mp_is_published', 'true'),
+            'marketplace_url': mp_data.get('mp_url', ''),
+        }
+        # Add all marketplace fields
+        for field in MARKETPLACE_FIELDS:
+            solution_row[field] = mp_data.get(field, '')
+        solutions_data.append(solution_row)
     
     # Build tables data from tables_reference.csv metadata (tables_reference was loaded early)
     # Collect all unique tables from connector data AND content items
@@ -9080,7 +9178,7 @@ def main() -> None:
         'deprecation_date',
         'is_published',
         'marketplace_url',
-    ]
+    ] + MARKETPLACE_FIELDS
     solutions_path = args.solutions_csv.resolve()
     with solutions_path.open("w", encoding="utf-8", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=solutions_fieldnames, quoting=csv.QUOTE_ALL)
