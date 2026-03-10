@@ -102,12 +102,6 @@ All Solution_*.json files must contain these mandatory fields:
 - This references the metadata configuration file located in the solution's Data directory
 - No alternative values or naming conventions are permitted
 - Used to standardize metadata handling across all solutions
-- Explain primary capabilities and data ingestion
-- Include "Underlying Microsoft Technologies used" section
-- List all Azure dependencies with documentation links
-- Include Preview disclaimer when applicable
-- Use proper Markdown formatting
-- Maximum length: 2000 characters
 
 ## Solution Component Validation
 
@@ -125,7 +119,7 @@ All Solution_*.json files must contain these mandatory fields:
 **Data Connector Requirements:**
 - Array of relative file paths from BasePath
 - Files must exist in solution directory structure
-- Supported connector types: Function App, CEF, REST API, Native Polling
+- Supported connector types: Function App, CEF, REST API, Native Polling, CCF
 - Path format: `Data Connectors/{ConnectorName}.json`
 - File naming convention: descriptive and consistent
 
@@ -196,6 +190,7 @@ All Solution_*.json files must contain these mandatory fields:
 - Path format: `Parsers/{ParserName}.txt`
 - Follow ASIM (Advanced Security Information Model) when applicable
 - Proper parameter handling and optimization
+- **ASIM parsers are not supported in solutions data files** - Use custom KQL parsers instead
 
 ### Playbooks
 ```json
@@ -235,7 +230,7 @@ All Solution_*.json files must contain these mandatory fields:
 ### Version Management
 ```json
 {
-  "Version": "2.0.0"        // ✅ Semantic versioning
+  "Version": "3.0.0"        // ✅ Semantic versioning
 }
 ```
 
@@ -494,30 +489,22 @@ const solutionDataSchema = {
 };
 ```
 
-### Version and TemplateSpec Compatibility
-```typescript
-function validateVersionTemplateSpecCompatibility(solutionData: SolutionData): ValidationResult {
-  const version = solutionData.Version;
-  const majorVersion = parseInt(version.split('.')[0]);
-  
-  // Version 3.x.x must have TemplateSpec = false
-  if (majorVersion === 3 && solutionData.TemplateSpec !== false) {
-    return {
-      valid: false,
-      error: 'Version 3.*.* solutions must have TemplateSpec set to false',
-      version: version,
-      templateSpec: solutionData.TemplateSpec
-    };
-  }
-  
-  return { valid: true };
-}
-```
-
 ### File Integrity Validation
 ```typescript
 function validateSolutionIntegrity(solutionPath: string): ValidationResult {
-  const solutionData = JSON.parse(fs.readFileSync(path.join(solutionPath, 'Data', 'Solution_*.json')));
+  // Locate the Solution_*.json file (fs.readFileSync does not expand glob patterns)
+  const dataDir = path.join(solutionPath, 'Data');
+  const files = fs.readdirSync(dataDir);
+  const solutionFile = files.find(file => file.match(/^Solution_.*\.json$/));
+  
+  if (!solutionFile) {
+    return {
+      valid: false,
+      error: 'No Solution_*.json file found in Data directory'
+    };
+  }
+  
+  const solutionData = JSON.parse(fs.readFileSync(path.join(dataDir, solutionFile), 'utf8'));
   const basePath = solutionData.BasePath;
   
   return {
@@ -529,6 +516,23 @@ function validateSolutionIntegrity(solutionPath: string): ValidationResult {
     versionValid: validateVersion(solutionData.Version),
     metadataAligned: validateMetadataAlignment(solutionPath)
   };
+}
+```
+
+**Alternative using glob utility:**
+```typescript
+import { glob } from 'glob';
+
+function validateSolutionIntegrity(solutionPath: string): ValidationResult {
+  const dataDir = path.join(solutionPath, 'Data');
+  const solutionFiles = glob.sync('Solution_*.json', { cwd: dataDir });
+  
+  if (solutionFiles.length === 0) {
+    return { valid: false, error: 'No Solution_*.json file found' };
+  }
+  
+  const solutionData = JSON.parse(fs.readFileSync(path.join(dataDir, solutionFiles[0]), 'utf8'));
+  // ... rest of validation
 }
 ```
 

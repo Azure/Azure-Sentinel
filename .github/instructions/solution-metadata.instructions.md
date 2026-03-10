@@ -83,8 +83,8 @@ Valid industry vertical categories include (optional field). For detailed catego
     ],
     "verticals": [
       "Healthcare",
-      "Financial Services",
-      "Government"
+      "Finance",
+      "Retail"
     ]
   }
 }
@@ -223,18 +223,22 @@ The offer ID must match the solution folder structure:
 - Expected Offer ID: `azure-sentinel-solution-microsoft-entra-id`
 
 #### For Partner or Community Tier Solutions:
-- Offer ID can contain any valid string format
-- No specific naming convention required
+- Offer ID must contain the keyword `sentinel` (case-insensitive)
+- Can use any other valid string format with 'sentinel' included
 - Must be alphanumeric (can include special characters like hyphens, underscores)
 - Maximum length: 50 characters
 - Should be unique and descriptive of the solution
 
 **Valid Examples:**
-- ✅ `partner-solution-app-v1`
-- ✅ `community_custom_solution`
-- ✅ `my-app-connector`
-- ✅ `ThirdPartyApp_Integration`
-- ✅ `custom.solution.name`
+- ✅ `partner-sentinel-app-v1` (contains 'sentinel')
+- ✅ `community-sentinel_custom_solution` (contains 'sentinel')
+- ✅ `sentinel-my-app-connector` (contains 'sentinel')
+- ✅ `ThirdPartyApp_Sentinel_Integration` (contains 'sentinel')
+- ✅ `sentinel.custom.solution.name` (contains 'sentinel')
+
+**Invalid Examples:**
+- ❌ `partner-solution-app-v1` (missing 'sentinel' keyword)
+- ❌ `community_custom_solution` (missing 'sentinel' keyword)
 
 **Validation Logic:**
 ```typescript
@@ -252,13 +256,15 @@ function validateOfferId(offerId: string, tier: string): ValidationResult {
       ].filter(Boolean)
     };
   } else if (tier === 'Partner' || tier === 'Community') {
-    // Flexible format for Partner and Community tiers
+    // Flexible format for Partner and Community tiers, must contain 'sentinel'
     const hasValidChars = /^[a-zA-Z0-9\-_.]+$/.test(offerId);
+    const containsSentinel = offerId.toLowerCase().includes('sentinel');
     return {
-      valid: hasValidChars && maxLength,
+      valid: hasValidChars && maxLength && containsSentinel,
       errors: [
         !hasValidChars && 'Offer ID contains invalid characters',
-        !maxLength && 'Offer ID exceeds maximum length of 50 characters'
+        !maxLength && 'Offer ID exceeds maximum length of 50 characters',
+        !containsSentinel && 'Offer ID must contain the keyword "sentinel"'
       ].filter(Boolean)
     };
   }
@@ -275,58 +281,17 @@ firstPublishDate: ^\\d{4}-\\d{2}-\\d{2}$
 
 **Valid Examples:**
 - ✅ `2024-01-15` (past date)
-- ✅ `2026-03-09` (today's date)
+- ✅ `YYYY-MM-DD` (today's date or earlier)
 
 **Invalid Examples:**
-- ❌ `2027-10-20` (future date)
+- ❌ `2030-10-20` (future date)
 - ❌ `16/05/2022` (wrong format)
 - ❌ `2025-13-45` (invalid month/day)
-
-**Validation Function for Date Check:**
-```typescript
-function validateFirstPublishDate(firstPublishDate: string): ValidationResult {
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date();
-  const todayString = today.toISOString().split('T')[0];
-  
-  // Check format
-  const formatValid = /^\d{4}-\d{2}-\d{2}$/.test(firstPublishDate);
-  if (!formatValid) {
-    return {
-      valid: false,
-      errors: ['Date must be in ISO 8601 format (YYYY-MM-DD)']
-    };
-  }
-  
-  // Check if date is valid
-  const dateObj = new Date(firstPublishDate);
-  const isValidDate = dateObj instanceof Date && !isNaN(dateObj.getTime());
-  if (!isValidDate) {
-    return {
-      valid: false,
-      errors: ['Invalid date value']
-    };
-  }
-  
-  // Check if date is in the future
-  if (firstPublishDate > todayString) {
-    return {
-      valid: false,
-      errors: [`firstPublishDate is set to ${firstPublishDate}, which is a future date. It must not be in the future (today is ${todayString}).`]
-    };
-  }
-  
-  return {
-    valid: true,
-    errors: []
-  };
-}
-```
 
 **CRITICAL: Copilot Review Requirement**
 - Copilot must call this validation function for every SolutionMetadata.json review.
 - If the function returns an error about a future date, Copilot must output a comment like:
-  - ❌ "firstPublishDate is set to 2027-10-20, which is a future date. It must not be in the future (today is 2026-03-09)."
+  - ❌ "firstPublishDate is set to 2030-10-20, which is a future date. It must not be in the future (today is YYYY-MM-DD)."
 
 ### 4. **Provider Validation**
 ```json
@@ -443,20 +408,53 @@ const metadataSchema = {
   properties: {
     publisherId: { 
       pattern: '^[a-z][a-z0-9]{0,49}$',
-      enum: ['azuresentinel', 'microsoftsentinelcommunity'],
-      description: 'Must contain only lowercase letters and digits, no special characters'
+      description: 'Must start with letter, contain only lowercase letters and digits (a-z, 0-9). Approved: "azuresentinel", "microsoftsentinelcommunity", or pre-approved custom IDs'
     },
-    offerId: { pattern: '^azure-sentinel-solution-[a-z0-9-]+$' },
-    firstPublishDate: { format: 'date' },
+    offerId: { 
+      type: 'string',
+      description: 'Format depends on support.tier. See conditionalRules for tier-specific patterns'
+    },
+    firstPublishDate: { format: 'date', description: 'ISO 8601 format (YYYY-MM-DD), must not be a future date' },
     providers: { type: 'array', items: { type: 'string' } },
     support: {
       type: 'object',
       properties: {
-        tier: { enum: ['Microsoft', 'Partner', 'Community'], description: 'Support tier must be one of: Microsoft, Partner, or Community' },
+        tier: { enum: ['Microsoft', 'Partner', 'Community'], description: 'Support tier (case-sensitive)' },
         name: { type: 'string' },
         email: { format: 'email' },
-        link: { format: 'url' }
+        link: { format: 'url', pattern: '^https://' }
       }
+    }
+  },
+  conditionalRules: {
+    offerIdByTier: {
+      condition: (data) => data.support && data.support.tier,
+      validation: (data) => {
+        if (data.support.tier === 'Microsoft') {
+          // Microsoft tier: must follow strict format
+          return /^azure-sentinel-solution-[a-z0-9-]+$/.test(data.offerId);
+        } else if (data.support.tier === 'Partner' || data.support.tier === 'Community') {
+          // Partner/Community tier: flexible format, alphanumeric with hyphens, underscores, dots
+          return /^[a-zA-Z0-9\-_.]+$/.test(data.offerId) && data.offerId.length <= 50;
+        }
+        return true;
+      },
+      message: (data) => `offerId must follow tier-specific rules. Tier: ${data.support.tier}`
+    },
+    publisherIdValidation: {
+      condition: (data) => data.publisherId,
+      validation: (data) => {
+        const approved = ['azuresentinel', 'microsoftsentinelcommunity'];
+        const isApproved = approved.includes(data.publisherId);
+        const isValidFormat = /^[a-z][a-z0-9]{0,49}$/.test(data.publisherId);
+        return isValidFormat && (isApproved || isCustomPreApproved(data.publisherId));
+      },
+      message: 'publisherId must be approved or pre-approved custom ID'
+    },
+    futureDate: {
+      condition: (data) => data.firstPublishDate,
+      validation: (data) => new Date(data.firstPublishDate) <= new Date(),
+      message: 'firstPublishDate cannot be in the future'
     }
   }
 };
@@ -485,5 +483,3 @@ function validateConsistency(metadata: SolutionMetadata, folderPath: string): Va
 4. **Appropriate Categories**: Choose domains that accurately represent the solution
 5. **Version Management**: Update metadata when solution capabilities change
 6. **Documentation Alignment**: Ensure metadata matches solution documentation
-
-These validation rules enable GitHub Copilot to provide comprehensive, automated reviews of Solution Metadata files, ensuring consistency and quality across all Azure Sentinel solutions.
