@@ -9,9 +9,7 @@ terraform {
   required_version = ">= 0.15.0"
 }
 
-data "google_project" "project" {
-  project_id = "Enter Project ID"
-}
+data "google_project" "project" {}
 
 variable "topic-name" {
   type    = string
