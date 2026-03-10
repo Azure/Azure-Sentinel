@@ -1,0 +1,288 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Check Point EM - Importer (Alerts \u2192 Sentinel Incidents)",
+    "description": "Queries the argsentdc_CL custom table (populated by the CCP data connector) for recent alerts and creates corresponding Microsoft Sentinel incidents.",
+    "prerequisites": [
+      "The CCP data connector must be deployed and ingesting alerts into the argsentdc_CL table.",
+      "After deployment, open the playbook and authorize the Azure Monitor Logs and Microsoft Sentinel connections."
+    ],
+    "postDeployment": [
+      "Open the playbook in the Logic App designer, authorize both API connections (Azure Monitor Logs and Microsoft Sentinel), and press Save."
+    ],
+    "lastUpdateTime": "2026-03-03T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Sync"
+    ],
+    "support": {
+      "tier": "Partner",
+      "name": "Check Point",
+      "link": "https://cyberint.com/customer-support/"
+    },
+    "source": {
+      "type": "solution",
+      "name": "Check Point Exposure Management Alerts"
+    },
+    "author": {
+      "name": "Check Point"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0",
+        "title": "Check Point EM - Importer",
+        "notes": [
+          "Initial version - direct API polling with DCR ingestion"
+        ]
+      },
+      {
+        "version": "2.0",
+        "title": "Check Point EM - Importer",
+        "notes": [
+          "Rewritten to query argsentdc_CL table and create Sentinel incidents (RecordedFuture AlertImporter pattern)"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "Check_Point_EM_Importer",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook"
+      }
+    },
+    "Workspace_Name": {
+      "type": "String",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name for KQL queries and incident creation"
+      }
+    },
+    "Polling_Interval_Minutes": {
+      "type": "Int",
+      "defaultValue": 10,
+      "metadata": {
+        "description": "How often to query for new alerts (minutes)"
+      }
+    },
+    "Create_Incident": {
+      "type": "String",
+      "defaultValue": "true",
+      "metadata": {
+        "description": "Create Microsoft Sentinel incidents (possible values true/false)"
+      }
+    }
+  },
+  "variables": {
+    "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "workspace-location-inline": "[resourceGroup().location]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureMonitorLogsConnectionName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "properties": {
+        "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Check_Point_EM_Importer",
+        "hidden-SentinelTemplateVersion": "2.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "Polling_Interval_Minutes": {
+              "defaultValue": 10,
+              "type": "Int"
+            },
+            "Create_Incident": {
+              "defaultValue": "true",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": "@parameters('Polling_Interval_Minutes')"
+              }
+            }
+          },
+          "actions": {
+            "Run_KQL_Query": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "argsentdc_CL\n| where TimeGenerated > ago(@{parameters('Polling_Interval_Minutes')}m)\n| summarize arg_max(TimeGenerated, *) by tostring(ref_id)\n| where status == \"open\"\n| extend sentinel_severity = case(\n    severity in (\"very_high\", \"critical\"), \"High\",\n    severity == \"high\", \"High\",\n    severity == \"medium\", \"Medium\",\n    severity == \"low\", \"Low\",\n    \"Informational\"\n  )\n| project ref_id, event_title, description, severity, sentinel_severity, status,\n          confidence, event_type, category, threat_actor,\n          recommendation, created_date, modification_date,\n          related_assets, impacts, tags, iocs, TimeGenerated",
+                "path": "/queryData",
+                "queries": {
+                  "subscriptions": "@{subscription().subscriptionId}",
+                  "resourcegroups": "@{resourceGroup().name}",
+                  "timerange": "Set in query"
+                }
+              },
+              "runAfter": {}
+            },
+            "Create_incidents_if_enabled": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@parameters('Create_Incident')",
+                      "true"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "For_each_alert": {
+                  "type": "Foreach",
+                  "foreach": "@body('Run_KQL_Query')?['value']",
+                  "actions": {
+                    "Create_incident": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "body": {
+                          "title": "@{items('For_each_alert')?['event_title']}",
+                          "severity": "@{items('For_each_alert')?['sentinel_severity']}",
+                          "status": "New",
+                          "description": "**Check Point Exposure Management Alert**\n\n**Alert:** @{items('For_each_alert')?['event_title']}\n\n**Ref ID:** @{items('For_each_alert')?['ref_id']}\n\n**Category:** @{items('For_each_alert')?['category']}\n\n**Type:** @{items('For_each_alert')?['event_type']}\n\n**Severity:** @{items('For_each_alert')?['severity']}\n\n**Confidence:** @{items('For_each_alert')?['confidence']}\n\n**Description:** @{items('For_each_alert')?['description']}\n\n**Recommendation:** @{items('For_each_alert')?['recommendation']}",
+                          "tagsToAdd": {
+                            "TagsToAdd": [
+                              {
+                                "Tag": "Check Point EM"
+                              },
+                              {
+                                "Tag": "ref_id:@{items('For_each_alert')?['ref_id']}"
+                              },
+                              {
+                                "Tag": "@{items('For_each_alert')?['event_type']}"
+                              }
+                            ]
+                          }
+                        },
+                        "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/workspaces/', parameters('Workspace_Name'))]"
+                      },
+                      "runAfter": {}
+                    },
+                    "Add_comment_to_incident": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@body('Create_incident')?['id']",
+                          "message": "<p><strong>Check Point Exposure Management Alert Details</strong></p><p><strong>Ref ID:</strong> @{items('For_each_alert')?['ref_id']}</p><p><strong>Title:</strong> @{items('For_each_alert')?['event_title']}</p><p><strong>Category:</strong> @{items('For_each_alert')?['category']}</p><p><strong>Type:</strong> @{items('For_each_alert')?['event_type']}</p><p><strong>Severity:</strong> @{items('For_each_alert')?['severity']}</p><p><strong>Confidence:</strong> @{items('For_each_alert')?['confidence']}</p><p><strong>Threat Actor:</strong> @{items('For_each_alert')?['threat_actor']}</p><p><strong>Status:</strong> @{items('For_each_alert')?['status']}</p><hr/><p><strong>Description:</strong> @{items('For_each_alert')?['description']}</p><p><strong>Recommendation:</strong> @{items('For_each_alert')?['recommendation']}</p><hr/><p><strong>Created:</strong> @{items('For_each_alert')?['created_date']}</p><p><strong>Last Modified:</strong> @{items('For_each_alert')?['modification_date']}</p>"
+                        },
+                        "path": "/Incidents/Comment"
+                      },
+                      "runAfter": {
+                        "Create_incident": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Run_KQL_Query": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "Polling_Interval_Minutes": {
+            "value": "[parameters('Polling_Interval_Minutes')]"
+          },
+          "Create_Incident": {
+            "value": "[parameters('Create_Incident')]"
+          }
+        }
+      }
+    }
+  ]
+}
