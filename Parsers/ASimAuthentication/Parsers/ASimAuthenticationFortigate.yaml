@@ -1,0 +1,147 @@
+Parser:
+  Title: ASIM Authentication parser for Fortigate
+  Version: '0.1.0'
+  LastUpdated: Mar 10, 2026
+Product:
+  Name: Fortigate
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: FortiGate Documentation
+  Link: 
+    https://docs.fortinet.com/
+Description: |
+  This ASIM parser supports normalizing Fortigate administrator authentication logs to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationFortigate
+EquivalentBuiltInParser: _ASim_Authentication_Fortigate
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable(EventOriginalSeverity: string, EventSeverity: string)
+  [
+    "information", "Informational",
+    "notice", "Informational",
+    "warning", "Low",
+    "error", "Low",
+    "alert", "Medium",
+    "critical", "High",
+    "emergency", "High",
+    "0", "Informational",
+    "1", "Informational",
+    "2", "Informational",
+    "3", "Informational",
+    "4", "Low",
+    "5", "Low",
+    "6", "Low",
+    "7", "Medium",
+    "8", "Medium",
+    "9", "High",
+    "10", "High"
+  ];
+  let parser = (disabled: bool) {
+    let FortigateLogs = CommonSecurityLog
+      | where not(disabled)
+      | where DeviceVendor == "Fortinet"
+      | where DeviceProduct has "Fortigate"
+      | where DeviceEventClassID !in ("0100022949", "0100022952"); // Omit "Attempted to join FortiCloud" and "service activation failed"
+    let LogoutEvents = FortigateLogs
+      | where Activity == "system event logout"
+      | extend EventType = "Logoff";
+    let LoginEvents = FortigateLogs
+      | where Activity == "system event login"
+      | extend EventType = "Logon"
+      | extend EventResultDetails = case(
+      Message has "invalid password", "Incorrect password",
+      Message has "invalid", "No such user or password",
+      Message has "disabled", "User disabled",
+      Message has "no valid user certificate", "Incorrect key",
+      Message has "blocked IP", "Logon violates policy",
+      Message has "max login failures", "Logon violates policy",
+      Message has "declined disclaimer", "Logon violates policy",
+      Message has "password renewal", "Logon violates policy",
+      Message has "internal error", "Other",
+      Message has "connection timeout", "Other",
+      ""
+    );
+    union
+      LogoutEvents,
+      LoginEvents
+    | extend 
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSchema = "Authentication",
+      EventSchemaVersion = "0.1.4",
+      EventCount = int(1),
+      Type = "CommonSecurityLog"
+    | project-rename
+      EventProductVersion = DeviceVersion,
+      EventProduct = DeviceProduct,
+      EventVendor = DeviceVendor,
+      TargetIpAddr = DestinationIP,
+      TargetHostname = Computer,
+      TargetFQDN = DeviceName,
+      EventOriginalType = Activity,
+      EventOriginalSubType = DeviceEventClassID,
+      TargetUsername = DestinationUserName,
+      TargetDvcId = DeviceExternalID,
+      SrcIpAddr = SourceIP,
+      ActingAppName = SourceProcessName,
+      EventMessage = Message
+    | extend
+      TargetUsernameType = "Simple",
+      TargetDvcIdType = "Other"
+    | parse-kv AdditionalExtensions as (deviceSeverity: string, status: string, ["ad.status"]: string) with (pair_delimiter=";", kv_delimiter="=")
+    | extend EventResult = case(
+      ["ad.status"] == "success" or status == "success", "Success",
+      ["ad.status"] == "failed" or status == "failed", "Failure",
+      EventMessage has "login failed", "Failure",
+      EventMessage has "Login disabled", "Failure",
+      EventMessage has "logged out", "Success",
+      EventMessage has "logged in successfully", "Success",
+      "NA"
+    )
+    | extend
+      EventOriginalSeverity = coalesce(deviceSeverity, LogSeverity, "")
+    | lookup EventSeverityLookup on EventOriginalSeverity
+    | extend
+      Dvc = TargetDvcId,
+      IpAddr = SrcIpAddr
+    | project
+      TimeGenerated,
+      Type,
+      EventResultDetails,
+      EventType,
+      EventStartTime,
+      EventEndTime,
+      EventSchema,
+      EventSchemaVersion,
+      EventCount,
+      EventProductVersion,
+      EventProduct,
+      EventVendor,
+      TargetIpAddr,
+      TargetHostname,
+      TargetFQDN,
+      EventOriginalType,
+      EventOriginalSeverity,
+      EventOriginalSubType,
+      TargetUsername,
+      TargetDvcId,
+      SrcIpAddr,
+      ActingAppName,
+      EventMessage,
+      TargetUsernameType,
+      TargetDvcIdType,
+      EventResult,
+      EventSeverity,
+      Dvc,
+      IpAddr
+  };
+  parser(disabled = disabled);
