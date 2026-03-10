@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.15      | 09-03-2026                     | Update **IPEntity_DuoSecurity Analytic Rule** to use CiscoDuo_CL Table                 |
+| 3.0.15      | 09-03-2026                     | Update **IPEntity_DuoSecurity Analytic Rule**                |
 | 3.0.14      | 16-02-2026                     | Added **Analytic Rule** for URL IOC                  |
 | 3.0.13      | 27-01-2026                     | Updated package to include latest query changes.                  |
 | 3.0.12      | 23-12-2025                     | Replaces the 'AlertPriority' field with 'Severity' in the IPEntity_AppServiceHTTPLogs analytic rule and updates all related references.            |
