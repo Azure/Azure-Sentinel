@@ -81,7 +81,7 @@ DEPRECATED_SOLUTION_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This soluti
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
 ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
 SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
-CLV1_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`)."
+CLV1_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
 
 # Collection method metadata: descriptions and documentation links
 COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
@@ -5966,7 +5966,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             
             # Add footnote if there are any discovered connectors
             if discovered_connector_count > 0:
-                f.write(f"\n*⚠️ Discovered connector - found in solution folder but not listed in Solution JSON definition.*\n")
+                f.write(f"\n{DISCOVERED_FOOTNOTE}\n")
             
             # Add CLv1 footnote if any connectors use CLv1 tables
             all_solution_connector_ids = set(by_connector.keys())
@@ -6105,15 +6105,34 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 'watchlist': 'Watchlists',
             }
             
-            f.write("## Content Items\n\n")
-            f.write(f"This solution includes **{len(content_items)} content item(s)**:\n\n")
+            # Count in-solution vs discovered items
+            in_solution_items = [i for i in content_items if i.get('not_in_solution_json', 'false') != 'true']
+            discovered_items = [i for i in content_items if i.get('not_in_solution_json', 'false') == 'true']
             
-            # Summary table by type
-            f.write("| Content Type | Count |\n")
-            f.write("|:-------------|:------|\n")
-            for content_type, items in sorted(content_by_type.items(), key=lambda x: -len(x[1])):
-                type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
-                f.write(f"| {type_name} | {len(items)} |\n")
+            f.write("## Content Items\n\n")
+            if discovered_items:
+                f.write(f"This solution includes **{len(content_items)} content item(s)** "
+                        f"({len(in_solution_items)} in solution, {len(discovered_items)} discovered {DISCOVERED_ICON}):\n\n")
+            else:
+                f.write(f"This solution includes **{len(content_items)} content item(s)**:\n\n")
+            
+            # Summary table by type — add Discovered column if any discovered items exist
+            has_discovered = len(discovered_items) > 0
+            if has_discovered:
+                f.write("| Content Type | Total | In Solution | Discovered |\n")
+                f.write("|:-------------|------:|------------:|-----------:|\n")
+                for content_type, items in sorted(content_by_type.items(), key=lambda x: -len(x[1])):
+                    type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
+                    in_sol = sum(1 for i in items if i.get('not_in_solution_json', 'false') != 'true')
+                    disc = sum(1 for i in items if i.get('not_in_solution_json', 'false') == 'true')
+                    disc_str = f"{disc}" if disc else "-"
+                    f.write(f"| {type_name} | {len(items)} | {in_sol} | {disc_str} |\n")
+            else:
+                f.write("| Content Type | Count |\n")
+                f.write("|:-------------|:------|\n")
+                for content_type, items in sorted(content_by_type.items(), key=lambda x: -len(x[1])):
+                    type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
+                    f.write(f"| {type_name} | {len(items)} |\n")
             f.write("\n")
             
             # Detailed sections for each content type
@@ -7948,11 +7967,13 @@ def generate_statistics_page(
                 content_by_type[content_type].append(item)
                 total_content += 1
         
-        # Track unpublished content and source counts
+        # Track unpublished content, source counts, and discovered items
         unpublished_count_by_type: Dict[str, int] = defaultdict(int)
         published_count_by_type: Dict[str, int] = defaultdict(int)
         source_counts: Dict[str, int] = defaultdict(int)
         source_counts_by_type: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        discovered_count_by_type: Dict[str, int] = defaultdict(int)
+        in_solution_count_by_type: Dict[str, int] = defaultdict(int)
         
         for solution_name, items in content_items_by_solution.items():
             for item in items:
@@ -7961,6 +7982,10 @@ def generate_statistics_page(
                 source_counts[content_source] += 1
                 source_counts_by_type[content_type][content_source] += 1
                 if content_source == 'Solution':
+                    if item.get('not_in_solution_json', 'false') == 'true':
+                        discovered_count_by_type[content_type] += 1
+                    else:
+                        in_solution_count_by_type[content_type] += 1
                     if item.get('is_published', 'true') == 'false':
                         unpublished_count_by_type[content_type] += 1
                     else:
@@ -7970,11 +7995,13 @@ def generate_statistics_page(
         total_published = sum(published_count_by_type.values())
         total_standalone = source_counts.get('Standalone', 0)
         total_github_only = source_counts.get('GitHub Only', 0)
+        total_discovered = sum(discovered_count_by_type.values())
+        total_in_solution = sum(in_solution_count_by_type.values())
         
         f.write("### Content Items Summary\n\n")
-        f.write("| Metric | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
-        f.write("|:-------|------:|-------------:|---------------:|--------------:|---------------:|\n")
-        f.write(f"| **Content Items** | **{total_content:,}** | {total_published:,} | {total_unpublished:,} | {total_standalone:,} | {total_github_only:,} |\n")
+        f.write("| Metric | Total | 📦 In Solution | 📦 Discovered | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-------|------:|---------------:|--------------:|---------------:|--------------:|---------------:|\n")
+        f.write(f"| **Content Items** | **{total_content:,}** | {total_in_solution:,} | {total_discovered:,} | {total_unpublished:,} | {total_standalone:,} | {total_github_only:,} |\n")
         f.write("\n")
         
         type_order = ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist', 'summary_rule']
@@ -7989,19 +8016,20 @@ def generate_statistics_page(
         }
         
         f.write("### Content Items by Type\n\n")
-        f.write("| Type | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
-        f.write("|:-----|------:|-------------:|---------------:|--------------:|---------------:|\n")
+        f.write("| Type | Total | 📦 In Solution | 📦 Discovered | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-----|------:|---------------:|--------------:|---------------:|--------------:|---------------:|\n")
         
         for content_type in type_order:
             if content_type in content_by_type:
                 type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
                 total = len(content_by_type[content_type])
-                pub_count = published_count_by_type.get(content_type, 0)
+                in_sol_count = in_solution_count_by_type.get(content_type, 0)
+                disc_count = discovered_count_by_type.get(content_type, 0)
                 unpub_count = unpublished_count_by_type.get(content_type, 0)
                 standalone_count = source_counts_by_type[content_type].get('Standalone', 0)
                 github_only_count = source_counts_by_type[content_type].get('GitHub Only', 0)
                 note = "*" if content_type == 'parser' else ""
-                f.write(f"| {type_name}{note} | {total:,} | {pub_count:,} | {unpub_count:,} | {standalone_count:,} | {github_only_count:,} |\n")
+                f.write(f"| {type_name}{note} | {total:,} | {in_sol_count:,} | {disc_count:,} | {unpub_count:,} | {standalone_count:,} | {github_only_count:,} |\n")
         
         f.write("\n")
         f.write("*\\* Parsers from solution content. See [Parsers](parsers/parsers-index.md) section for all parsers including legacy.*\n\n")

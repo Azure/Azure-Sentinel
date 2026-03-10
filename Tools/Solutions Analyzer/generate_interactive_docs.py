@@ -315,6 +315,8 @@ def build_solutions_table_data(
                 tables.add(t)
 
         content_count = len(content_items.get(sol_name, []))
+        content_in_solution = sum(1 for i in content_items.get(sol_name, []) if i.get('not_in_solution_json', 'false') != 'true')
+        content_discovered = content_count - content_in_solution
         is_published = first.get('is_published', 'true') != 'false'
         is_deprecated = first.get('solution_is_deprecated', 'false') == 'true'
         support_tier = first.get('solution_support_tier', '')
@@ -334,6 +336,8 @@ def build_solutions_table_data(
             'connectors': len(real_connectors),
             'tables': len(tables),
             'content_items': content_count,
+            'content_in_solution': content_in_solution,
+            'content_discovered': content_discovered,
         })
     return rows
 
@@ -1268,11 +1272,14 @@ def _write_index_html(
         logo = _logo_img(s['logo_url'])
         badge = _status_badge(s['status'])
         name_link = _md_link(s['name'], 'solutions')
+        content_display = str(s['content_items'])
+        if s['content_discovered'] > 0:
+            content_display = f"{s['content_in_solution']} (+{s['content_discovered']} \U0001f50d)"
         html_parts.append(
             f"<tr><td>{logo}</td><td>{name_link}</td><td>{badge}</td>"
             f"<td>{esc(s['publisher'])}</td><td>{esc(s['support_tier'])}</td>"
             f"<td>{esc(s['first_published'])}</td>"
-            f"<td>{s['connectors']}</td><td>{s['tables']}</td><td>{s['content_items']}</td></tr>\n"
+            f"<td>{s['connectors']}</td><td>{s['tables']}</td><td>{content_display}</td></tr>\n"
         )
     html_parts.append("</tbody></table>\n")
     html_parts.append("""\
@@ -1326,7 +1333,7 @@ def _write_index_html(
     <span class="legend-item"><span class="badge badge-active">Active</span> Published connector</span>
     <span class="legend-item"><span class="badge badge-deprecated">Deprecated</span> Deprecated connector</span>
     <span class="legend-item"><span class="badge badge-unpublished">Unpublished</span> Not on content hub</span>
-    <span class="legend-item">{CLV1_ICON} Custom Logs v1 (classic)</span>
+    <span class="legend-item">{CLV1_ICON} Custom Logs v1 (classic, may not be accurate)</span>
     <span class="legend-item">{DISCOVERED_ICON} Not listed in solution JSON</span>
 </div>
 """)
@@ -1367,7 +1374,7 @@ def _write_index_html(
     html_parts.append("</tbody></table>\n")
     html_parts.append(f"""\
 <div class="table-legend">
-    <span class="legend-item">{CLV1_ICON} Custom Logs v1 (classic)</span>
+    <span class="legend-item">{CLV1_ICON} Custom Logs v1 (classic, may not be accurate)</span>
     <span class="legend-item">{SCHEMA_ICON} Table schema available</span>
 </div>
 """)

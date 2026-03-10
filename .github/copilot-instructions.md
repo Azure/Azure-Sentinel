@@ -99,3 +99,12 @@ The documentation generator produces **two parallel sets of index pages** that m
 - Link generation (e.g., collection method links, content item links, parser routing)
 - Column additions or removals
 - Description cleanup (quote stripping, truncation)
+
+### Markdown and HTML Entity Page Synchronization
+
+The documentation generator produces **both static markdown and HTML versions** of every entity page. When modifying entity page content (solution pages, connector pages, table pages, content item pages, parser pages, statistics page, etc.), ensure the change is reflected in **both outputs**:
+
+- **Markdown pages** (`generate_connector_docs.py`): The primary data source — all content, counts, tables, and formatting are defined here.
+- **HTML entity pages** (`generate_interactive_docs.py` → `_generate_html_pages()`): Auto-generated from the markdown pages via Python `markdown` library. Changes to markdown content flow through automatically, but changes to link rewriting, heading structure, or HTML-specific formatting may need updates in `_generate_html_pages()`.
+
+In most cases, changing `generate_connector_docs.py` is sufficient because HTML pages are derived from the markdown. But if the change involves navigation, link targets, or HTML-specific rendering (e.g., DataTables on schema tables), also update `generate_interactive_docs.py`.
