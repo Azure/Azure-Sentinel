@@ -434,12 +434,22 @@ const metadataSchema = {
           // Microsoft tier: must follow strict format
           return /^azure-sentinel-solution-[a-z0-9-]+$/.test(data.offerId);
         } else if (data.support.tier === 'Partner' || data.support.tier === 'Community') {
-          // Partner/Community tier: flexible format, alphanumeric with hyphens, underscores, dots
-          return /^[a-zA-Z0-9\-_.]+$/.test(data.offerId) && data.offerId.length <= 50;
+          // Partner/Community tier: flexible format but must contain 'sentinel' keyword
+          const hasValidChars = /^[a-zA-Z0-9\-_.]+$/.test(data.offerId);
+          const containsSentinel = data.offerId.toLowerCase().includes('sentinel');
+          const lengthValid = data.offerId.length <= 50;
+          return hasValidChars && containsSentinel && lengthValid;
         }
         return true;
       },
-      message: (data) => `offerId must follow tier-specific rules. Tier: ${data.support.tier}`
+      message: (data) => {
+        if (data.support.tier === 'Partner' || data.support.tier === 'Community') {
+          if (!data.offerId.toLowerCase().includes('sentinel')) {
+            return `offerId must contain the keyword "sentinel" for ${data.support.tier} tier`;
+          }
+        }
+        return `offerId must follow tier-specific rules. Tier: ${data.support.tier}`;
+      }
     },
     publisherIdValidation: {
       condition: (data) => data.publisherId,
@@ -464,7 +474,12 @@ const metadataSchema = {
 ```typescript
 function validateConsistency(metadata: SolutionMetadata, folderPath: string): ValidationResult {
   const folderName = path.basename(folderPath);
-  const expectedOfferId = `azure-sentinel-solution-${folderName.toLowerCase().replace(/\s+/g, '-')}`;
+  // Normalize: lowercase, replace non-alphanumeric runs with single dash, trim repeated dashes
+  const normalizedFolder = folderName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')     // Replace any non-alphanumeric runs with single dash
+    .replace(/^-+|-+$/g, '');         // Trim leading/trailing dashes
+  const expectedOfferId = `azure-sentinel-solution-${normalizedFolder}`;
   
   return {
     offerIdMatches: metadata.offerId === expectedOfferId,

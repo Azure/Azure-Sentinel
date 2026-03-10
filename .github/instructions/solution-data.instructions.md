@@ -473,7 +473,7 @@ const solutionDataSchema = {
     Name: { type: 'string', maxLength: 100, pattern: '^[a-zA-Z0-9 ]+$' },
     Author: { type: 'string', pattern: '^.+ - .+@.+\\..+$' },
     Logo: { type: 'string', pattern: '<img src="https://raw\\.githubusercontent\\.com/Azure/Azure-Sentinel/master/.+" width="75px" height="75px">' },
-    Description: { type: 'string', maxLength: 5000 },
+    Description: { type: 'string', maxLength: 1000 },
     Metadata: { type: 'string', enum: ['SolutionMetadata.json'] },
     Version: { type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$' },
     TemplateSpec: { type: 'boolean' },
