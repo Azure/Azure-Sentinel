@@ -44,24 +44,23 @@ query: |
    | join (
        CiscoDuo
        | where TimeGenerated >= ago(dt_lookBack)
-       | where isnotempty(access_device_ip_s)
-       // renaming time column so it is clear the log this came from
-       | extend Duo_TimeGenerated = isotimestamp_t
+       | where isnotempty(AccessDvcIpAddr)
+       | extend Duo_TimeGenerated = IsoTimestamp
    )
-   on $left.TI_ipEntity == $right.access_device_ip_s
+   on $left.TI_ipEntity == $right.AccessDvcIpAddr
    | where TimeGenerated >= ago(ioc_lookBack)
    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
    | extend Description = tostring(parse_json(Data).description)
    | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
    | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Duo_TimeGenerated,
-   TI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s
-   | extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])
+   TI_ipEntity, DstUserName, AuthFactor, EventResult, SrcAppName, EventType, TransactionId, SrcUserId, AccessDvcIpAddr, SrcGeoCity, AccessDvcLocationState, SrcGeoCountry
+   | extend timestamp = Duo_TimeGenerated, Name = tostring(split(DstUserName, '@', 0)[0]), UPNSuffix = tostring(split(DstUserName, '@', 1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: user_name_s
+        columnName: DstUserName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
@@ -69,6 +68,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: access_device_ip_s
+        columnName: AccessDvcIpAddr
 version: 1.0.10
 kind: Scheduled
