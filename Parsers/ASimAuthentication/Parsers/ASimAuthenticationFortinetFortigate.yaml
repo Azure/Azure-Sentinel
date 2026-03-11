@@ -1,5 +1,5 @@
 Parser:
-  Title: ASIM Authentication filtering parser for Fortigate
+  Title: ASIM Authentication parser for Fortinet - Fortigate
   Version: '0.1.0'
   LastUpdated: Mar 10, 2026
 Product:
@@ -16,37 +16,10 @@ References:
   Link: 
     https://docs.fortinet.com/
 Description: |
-  This ASIM parser supports filtering and normalizing Fortigate administrator authentication logs to the ASIM Authentication normalized schema.
-ParserName: vimAuthenticationFortigate
-EquivalentBuiltInParser: _Im_Authentication_Fortigate
+  This ASIM parser supports normalizing Fortinet - Fortigate administrator authentication logs to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationFortinetFortigate
+EquivalentBuiltInParser: _ASim_Authentication_FortinetFortigate
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: username_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: targetappname_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: srchostname_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventtype_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresultdetails_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -72,40 +45,19 @@ ParserQuery: |
     "9", "High",
     "10", "High"
   ];
-  let parser = (
-      starttime: datetime=datetime(null), 
-      endtime: datetime=datetime(null), 
-      username_has_any: dynamic = dynamic([]),
-      targetappname_has_any: dynamic = dynamic([]), // no targetappname
-      srcipaddr_has_any_prefix: dynamic = dynamic([]),
-      srchostname_has_any: dynamic = dynamic([]), // no srchostname
-      eventtype_in: dynamic = dynamic([]),
-      eventresultdetails_in: dynamic = dynamic([]),
-      eventresult: string = '*',
-      disabled: bool=false
-  ) {
+  let parser = (disabled: bool) {
     let FortigateLogs = CommonSecurityLog
-    | where not(disabled)
-    | where 
-      (isnull(starttime) or TimeGenerated >= starttime) 
-      and (isnull(endtime) or TimeGenerated <= endtime) 
-    | where DeviceVendor == "Fortinet"
-    | where DeviceProduct has "Fortigate"
-    | where DeviceEventClassID !in ("0100022949", "0100022952") // Omit "Attempted to join FortiCloud" and "service activation failed" logs
-    | where ((array_length(username_has_any) == 0) or DestinationUserName has_any(username_has_any))
-      and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix)))
-      and (array_length(srchostname_has_any) == 0)
-      and (array_length(targetappname_has_any) == 0);
+      | where not(disabled)
+      | where DeviceVendor == "Fortinet"
+      | where DeviceProduct has "Fortigate"
+      | where DeviceEventClassID !in ("0100022949", "0100022952"); // Omit "Attempted to join FortiCloud" and "service activation failed"
     let LogoutEvents = FortigateLogs
-    | where Activity == "system event logout"
-    | where ((array_length(eventtype_in) == 0) or "Logoff" in~ (eventtype_in))
-    | where (array_length(eventresultdetails_in) == 0)
-    | extend EventType = "Logoff";
+      | where Activity == "system event logout"
+      | extend EventType = "Logoff";
     let LoginEvents = FortigateLogs
-    | where Activity == "system event login"
-    | where ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
-    | extend EventType = "Logon"
-    | extend EventResultDetails = case(
+      | where Activity == "system event login"
+      | extend EventType = "Logon"
+      | extend EventResultDetails = case(
       Message has "invalid password", "Incorrect password",
       Message has "invalid", "No such user or password",
       Message has "disabled", "User disabled",
@@ -117,11 +69,10 @@ ParserQuery: |
       Message has "internal error", "Other",
       Message has "connection timeout", "Other",
       ""
-    )
-    | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in));
+    );
     union
-    LogoutEvents,
-    LoginEvents
+      LogoutEvents,
+      LoginEvents
     | extend 
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
@@ -156,18 +107,9 @@ ParserQuery: |
       EventMessage has "logged in successfully", "Success",
       "NA"
     )
-    | where (eventresult == "*" or (EventResult == eventresult))
     | extend
       EventOriginalSeverity = coalesce(deviceSeverity, LogSeverity, "")
     | lookup EventSeverityLookup on EventOriginalSeverity
-    | extend temp_isMatchTargetUsername = TargetUsername has_any(username_has_any)
-    | extend ASimMatchingUsername = case(
-        array_length(username_has_any) == 0,
-        "-",
-        temp_isMatchTargetUsername,
-        "TargetUsername",
-        "No match"
-    )
     | extend
       Dvc = TargetDvcId,
       IpAddr = SrcIpAddr
@@ -199,18 +141,7 @@ ParserQuery: |
       TargetDvcIdType,
       EventResult,
       EventSeverity,
-      ASimMatchingUsername,
       Dvc,
       IpAddr
   };
-  parser(
-    starttime=starttime,
-    endtime=endtime,
-    username_has_any=username_has_any,
-    targetappname_has_any=targetappname_has_any,
-    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
-    srchostname_has_any=srchostname_has_any,
-    eventtype_in=eventtype_in,
-    eventresultdetails_in=eventresultdetails_in,
-    eventresult=eventresult,
-    disabled=disabled)
+  parser(disabled = disabled)

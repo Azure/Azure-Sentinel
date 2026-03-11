@@ -1,4 +1,4 @@
-# Changelog for ASimAuthenticationFortigate.yaml
+# Changelog for ASimAuthenticationFortinetFortigate.yaml
 
 ## Version 0.1.0
 

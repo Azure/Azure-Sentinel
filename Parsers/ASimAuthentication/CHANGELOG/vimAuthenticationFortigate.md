@@ -1,4 +1,4 @@
-# Changelog for vimAuthenticationFortigate.yaml
+# Changelog for vimAuthenticationFortinetFortigate.yaml
 
 ## Version 0.1.0
 
