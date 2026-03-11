@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.5
+
+- (2026-03-11) Add parser for Okta - Authentication logs from OktaSystemLogs - [PR #13786](https://github.com/Azure/Azure-Sentinel/pull/13786)
+
 ## Version 0.3.4
 
 - (2026-03-10) Add initial parser for Fortinet - Fortigate logs in CommonSecurityLog - [PR #13786](https://github.com/Azure/Azure-Sentinel/pull/13786)
