@@ -28,7 +28,7 @@ def _upload_to_dcr(config, assets: list) -> None:
 
     dce_endpoint = config.get("azure_dce_endpoint")
     dcr_immutableid = config.get("azure_dcr_immutableid")
-    stream_name = config.get("azure_stream_name")
+    stream_name = "Custom-UpwindLogsAssets_CL"
     credential = config.get("azure_credential")
 
     client = LogsIngestionClient(

@@ -27,7 +27,7 @@ class ConfigStore:
 _REQUIRED_CONFIG_KEYS = [
     "azure_dce_endpoint",
     "azure_dcr_immutableid",
-    "azure_stream_name",
+
     "upwind_org_id",
     "upwind_client_id",
     "upwind_auth_url",
@@ -86,7 +86,7 @@ def load_configuration(azure_credential=None) -> ConfigStore:
         azure_credential=azure_credential,
         azure_dce_endpoint=os.getenv("DCE_ENDPOINT"),
         azure_dcr_immutableid=os.getenv("DCR_IMMUTABLEID"),
-        azure_stream_name=os.getenv("STREAM_NAME"),
+
         upwind_org_id=os.getenv("UPWIND_ORG_ID"),
         upwind_client_id=os.getenv("UPWIND_CLIENT_ID"),
         upwind_client_secret=upwind_client_secret,
