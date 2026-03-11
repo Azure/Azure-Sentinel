@@ -1,6 +1,6 @@
 # Upwind Sentinel Connector
 
-Microsoft Sentinel data connector that ingests **compute platform assets** from the [Upwind](https://upwind.io) cloud security platform into a custom Log Analytics table (`UpwindLogs_CL`) using an Azure Function and the [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) (DCE/DCR).
+Microsoft Sentinel data connector that ingests **compute platform assets** from the [Upwind](https://upwind.io) cloud security platform into a custom Log Analytics table (`UpwindLogsAssets_CL`) using an Azure Function and the [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) (DCE/DCR).
 
 ## What it does
 
