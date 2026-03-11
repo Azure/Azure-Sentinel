@@ -1,4 +1,3 @@
 | Version | Date Modified (DD-MM-YYYY) | Change History |
 |---------|---------------------------|----------------|
-| 3.0.0   | 11-03-2026                | Updated connector files to use template variables; updated documentation link; version bump to 3.0.0.
-<br/> Fix naming inconsistencies in DataBahn solution files. |
+| 3.0.0   | 11-03-2026                | Updated connector files to use template variables; updated documentation link; version bump to 3.0.0 <br> Fix naming inconsistencies in DataBahn solution files. |
