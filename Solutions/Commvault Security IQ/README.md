@@ -60,6 +60,15 @@ Installation
 
 *   Commvault Cloud -> CommvaultSecurityIQ (using Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
 *   For a detailed step-by-step guide, refer to [DataConnector.md](./DataConnector.md).
+*   The deployment creates the following resources:
+    - Azure Function App with System-Assigned Managed Identity
+    - Data Collection Endpoint (DCE)
+    - Data Collection Rule (DCR)
+    - Custom Log Analytics Table (`CommvaultAlerts_CL`)
+    - Storage Account for Function App
+    - Application Insights for monitoring
+    - Role assignment for Managed Identity on DCR
+
 
 ### Configurable Environment Variables ( Optional )
 
