@@ -2,7 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.4] - 2026-02-27
+## [3.0.0] - 2026-03-06
+
+### Removed
+- **Azure Functions Connector**: Completely removed legacy Azure Functions-based data connector
+  - Deleted `Data Connectors/CyeraDSPM_Functions/` directory and all contents
+  - Removed FunctionAppDC.json connector definition
+  - Removed manual deployment documentation (INSTALL.md)
+  - Removed install-pack-v0_7_3.zip
+  - Removed all Azure Function Python code
+
+### Changed
+- **Solution Architecture**: Simplified to single Codeless Connector Framework (CCF) connector only
+  - Updated `Data/Solution_Cyera.json` to reference only CCF connector
+  - Changed "Data Connectors: 2" to "Data Connectors: 1" in all documentation
+  - Updated createUiDefinition.json to show single connector in deployment UI
+  - Maintained all functionality - CCF connector provides same data ingestion via REST API
+
+### Fixed
+- **Deployment URLs**: Fixed broken template variable references in deployment instructions
+  - Replaced `{{userguide-url}}` with working GitHub URL
+  - Replaced `{{deployment-script-zip-url}}` with working raw GitHub URL
+  - Fixed broken "Deploy to Azure" button syntax (removed unsupported ARM template option)
+  - Updated install pack version reference from v0_7_0 to v0_7_3
+
+### Technical Details
+- **Files Modified**:
+  - `Data/Solution_Cyera.json` - Removed Functions connector reference
+  - `Package/mainTemplate.json` - Regenerated with single connector
+  - `Package/createUiDefinition.json` - Updated to show 1 connector
+- **Files Deleted**:
+  - Entire `Data Connectors/CyeraDSPM_Functions/` directory
+- **Impact**: Simplified deployment, eliminated manual Function App setup, aligned with Microsoft's recommended CCF approach
+- **Migration**: Existing users can continue using CCF connector - no functionality loss
+
+### Rationale
+- Microsoft marketplace requirements: ARM template must exist for all deployment options or option must be removed
+- CCF connector already provides all functionality via automated REST API polling
+- Reduces maintenance burden and deployment complexity
+- Aligns with Microsoft's recommended "Direct ingestion" approach for Sentinel solutions
+
+## [3.0.0_RC2] - 2026-02-27
 
 ### Changed
 - **Marketplace Offer ID**: Updated from `azure-sentinel-solution-cyeradspm` to `azure-sentinel-solution-cyeradspm-v3`
@@ -55,7 +95,7 @@ All notable changes to this project will be documented in this file.
   - CyeraClassifications_CL ✓
   - CyeraUsers_CL ✓
 
-## [3.0.0] - 2025-10-29
+## [3.0.0_RC1] - 2025-10-29
 
 ### Added
 - Initial Creation of Codeless Connector Platform (CCP) connector
