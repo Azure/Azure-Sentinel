@@ -1,5 +1,11 @@
 # Changelog for vimAuthenticationAADServicePrincipalSignInLogs.yaml
 
+## Version 0.2.3
+
+- (2026-02-24) [ASIM] Authentication - EntraID enumeration changes - [PR #13571](https://github.com/Azure/Azure-Sentinel/pull/13571)
+- Enumeration change from `Entra ID` to `AAD` for EventProduct
+- Enumeration change from `EntraID` to `AADID` for TargetUserIdType
+- 
 ## Version 0.2.2
 
 - (2024-03-26) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
