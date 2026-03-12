@@ -170,9 +170,9 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Connect Microsoft Defender for Cloud", "https://learn.microsoft.com/azure/sentinel/connect-defender-for-cloud"),
         ],
     },
-    "REST API": {
-        "name": "REST API / Custom Integration",
-        "description": "REST API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
+    "REST Pull API": {
+        "name": "REST Pull API / Custom Integration",
+        "description": "REST Pull API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
         "links": [
             ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
             ("📖 Send data using the Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-walkthrough"),
@@ -3902,7 +3902,7 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         if api_totals:
             f.write("---\n\n")
             f.write("## Ingestion API by Collection Method\n\n")
-            f.write("API-based connectors (CCF Push, Azure Function, REST API, and Custom Log) ")
+            f.write("API-based connectors (CCF Push, Azure Function, REST Pull API, and Custom Log) ")
             f.write("use one of two APIs to send data to the Log Analytics workspace. ")
             f.write("CCF and CCF (Legacy) are excluded as their ingestion is platform-managed.\n\n")
             
@@ -5657,8 +5657,17 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             f.write(f"| **First Published** | {first_publish} |\n")
         
         last_publish = metadata.get('solution_last_publish_date', '')
-        if last_publish:
-            f.write(f"| **Last Updated** | {last_publish} |\n")
+        mp_last_modified = metadata.get('mp_last_modified_date', '')
+        # Prefer marketplace last-modified date when it is recent (after
+        # 2025-12-13, the last repo-wide bulk update) and newer than the
+        # local last-publish date.  This captures marketplace-only updates
+        # that are not reflected in the repo.
+        last_updated = last_publish
+        if mp_last_modified and mp_last_modified > '2025-12-13':
+            if not last_publish or mp_last_modified > last_publish:
+                last_updated = mp_last_modified
+        if last_updated:
+            f.write(f"| **Last Updated** | {last_updated} |\n")
         
         if deprecation_date:
             f.write(f"| **Deprecated** | {deprecation_date} |\n")
@@ -5673,17 +5682,21 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         marketplace_url = metadata.get('marketplace_url', '')
         if marketplace_url:
-            f.write(f"| **Marketplace** | [Azure Marketplace]({marketplace_url}) |\n")
+            # Build a single Marketplace cell with link, rating and popularity
+            mp_parts = [f"[Azure Marketplace]({marketplace_url})"]
+            rating_display = format_rating(metadata.get('mp_rating_average', ''), metadata.get('mp_rating_count', ''))
+            if rating_display:
+                mp_parts.append(f"Rating: {rating_display}")
+            popularity_display = format_popularity(metadata.get('mp_popularity', ''))
+            if popularity_display:
+                mp_parts.append(f"Popularity: {popularity_display}")
+            f.write(f"| **Marketplace** | {' · '.join(mp_parts)} |\n")
         
-        # Marketplace popularity
-        popularity_display = format_popularity(metadata.get('mp_popularity', ''))
-        if popularity_display:
-            f.write(f"| **Popularity** | {popularity_display} |\n")
-        
-        # Marketplace rating
-        rating_display = format_rating(metadata.get('mp_rating_average', ''), metadata.get('mp_rating_count', ''))
-        if rating_display:
-            f.write(f"| **Rating** | {rating_display} |\n")
+        # Marketplace popularity (shown standalone only when there's no marketplace URL)
+        if not marketplace_url:
+            popularity_display = format_popularity(metadata.get('mp_popularity', ''))
+            if popularity_display:
+                f.write(f"| **Popularity** | {popularity_display} |\n")
         
         # Show pre-requisites summary if any
         dependencies = metadata.get('solution_dependencies', '')
@@ -7726,12 +7739,12 @@ def generate_statistics_page(
             # Connector Kind table
             if kind_counts:
                 # RestApiPoller is implicit/default and not listed, so all listed kinds are non-default
-                f.write("**Connector Kind** (non-default kinds; REST API polling is the default):\n\n")
+                f.write("**Connector Kind** (non-default kinds; REST Pull API polling is the default):\n\n")
                 f.write("| Kind | Count |\n")
                 f.write("|:-----|------:|\n")
                 rest_api_count = len(ccf_with_caps) - sum(kind_counts.values())
                 if rest_api_count > 0:
-                    f.write(f"| REST API Polling *(default)* | {rest_api_count} |\n")
+                    f.write(f"| REST Pull API Polling *(default)* | {rest_api_count} |\n")
                 for kind, count in sorted(kind_counts.items(), key=lambda x: x[1], reverse=True):
                     f.write(f"| {kind} | {count} |\n")
                 f.write("\n")
@@ -9062,6 +9075,7 @@ def main() -> None:
             row['mp_popularity'] = sol_info.get('mp_popularity', '')
             row['mp_rating_average'] = sol_info.get('mp_rating_average', '')
             row['mp_rating_count'] = sol_info.get('mp_rating_count', '')
+            row['mp_last_modified_date'] = sol_info.get('mp_last_modified_date', '')
     
     print(f"Loaded {len(rows)} rows")
     

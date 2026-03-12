@@ -1807,31 +1807,12 @@ def is_valid_table_candidate(
     if lowered.endswith("_cl"):
         return True
     
-    # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
-    # Also allow without underscore prefix (e.g., imDns, ASimNetworkSession, imProcessCreate)
-    # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
-    # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
-    if lowered.startswith("_im_") or lowered.startswith("_asim_"):
-        # Check if this is an empty parser (ends with _empty)
-        if lowered.endswith("_empty"):
-            return False  # Empty parsers only contain datatable definitions
-        # Check if this is a helper function (contains verb patterns after prefix)
-        # _im_ is 4 chars, _asim_ is 6 chars
-        after_prefix = lowered[6:] if lowered.startswith("_asim_") else lowered[4:]
-        helper_verbs = ("get", "lookup", "resolve", "check", "build", "extract", "parse")
-        if any(after_prefix.startswith(verb) for verb in helper_verbs):
-            return False  # This is a helper function, not a table/view
-        return True
+    # ASIM parser function names (e.g., ASimAuditEvent, imDns, _Im_Dns, _ASim_NetworkSession)
+    # are NOT treated as tables. They are neither _CL tables nor in the Azure Monitor table
+    # reference. Real ASIM log tables (e.g., ASimAuditEventLogs, ASimDnsActivityLogs) ARE in
+    # the reference and pass the KNOWN_TABLES_LOWER check below.
     
-    # Allow ASIM parser functions without underscore prefix (imDns, ASimNetworkSession, imProcessCreate)
-    # These are commonly used view functions that wrap ASIM parsers
-    if lowered.startswith("im") or lowered.startswith("asim"):
-        # Verify it looks like an ASIM parser (has a schema name after prefix)
-        # Examples: imDns, imNetworkSession, ASimProcessEvent, imProcessCreate
-        if len(lowered) > 4:  # At least "im" + something meaningful
-            return True
-    
-    # Reject other names starting with underscore (except _CL which was handled above)
+    # Reject names starting with underscore (parser functions like _Im_*, _ASim_*, etc.)
     if lowered.startswith("_"):
         return False
     
@@ -2953,6 +2934,16 @@ def extract_schema_from_dcr_json(dcr_json_path: Path) -> List[Dict[str, str]]:
                 continue
             
             for table_name, transform_kql in outputs:
+                # When a non-trivial transformKql is present, the stream columns represent
+                # the INPUT schema (vendor's raw data), not the OUTPUT table schema.
+                # The transform reshapes the data into the output table format.
+                # Only emit columns when there's no transform (columns map 1:1 to output).
+                transform_stripped = transform_kql.strip() if transform_kql else ""
+                if transform_stripped and transform_stripped != "source":
+                    # Transform present - stream columns are input schema, not output table columns.
+                    # Still record the DCR relationship but don't emit individual columns.
+                    continue
+                
                 for col in columns:
                     if not isinstance(col, dict):
                         continue
@@ -3067,6 +3058,122 @@ def extract_schema_from_custom_tables_dir(custom_tables_dir: Path) -> Dict[str, 
             for col in columns:
                 col['source_file'] = json_file.name
             result[table_name] = columns
+    
+    return result
+
+
+def extract_schema_from_arm_table_files(solutions_dir: Path) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Extract table column schemas from ARM table definition JSON files in connector directories.
+    
+    These files (commonly in CCP/CCF connector folders) have the ARM resource format:
+        {"type": "Microsoft.OperationalInsights/workspaces/tables",
+         "properties": {"schema": {"name": "TableName", "columns": [...]}}}
+    
+    Each column has: name, type, and optionally description and isDefaultDisplay.
+    
+    Type values are normalized to lowercase KQL types.
+    
+    This source is preferred over CustomTables (.script/tests/KqlvalidationsTests)
+    because it's the authoritative definition from the connector, often with descriptions.
+    
+    Args:
+        solutions_dir: Path to the Solutions directory
+        
+    Returns:
+        Dict mapping table_name -> list of column dicts with keys:
+        column_name, column_type, description, source_file, source_dir
+    """
+    # Normalize type strings to standard KQL types
+    TYPE_MAP = {
+        "string": "string",
+        "datetime": "datetime",
+        "date/time": "datetime",
+        "system.datetime": "datetime",
+        "timestamp": "datetime",
+        "timetamp": "datetime",
+        "dynamic": "dynamic",
+        "object": "dynamic",
+        "system.object": "dynamic",
+        "real": "real",
+        "double": "real",
+        "system.double": "real",
+        "int": "int",
+        "int32": "int",
+        "integer": "int",
+        "long": "long",
+        "int64": "long",
+        "bigint": "long",
+        "bool": "bool",
+        "boolean": "bool",
+        "guid": "guid",
+        "sbyte": "int",
+        "system.sbyte": "int",
+        "system.string": "string",
+    }
+    
+    result: Dict[str, List[Dict[str, str]]] = {}
+    
+    if not solutions_dir.is_dir():
+        return result
+    
+    for sol_dir in sorted(solutions_dir.iterdir()):
+        dc_dir = sol_dir / "Data Connectors"
+        if not dc_dir.is_dir():
+            continue
+        for json_file in dc_dir.rglob("*.json"):
+            try:
+                raw = json_file.read_text(encoding="utf-8-sig")
+                # Handle trailing commas
+                raw = re.sub(r',\s*([}\]])', r'\1', raw)
+                data = json.loads(raw)
+            except Exception:
+                continue
+            
+            if not isinstance(data, dict):
+                continue
+            
+            # Check if this is an ARM table definition
+            res_type = data.get("type", "")
+            if res_type != "Microsoft.OperationalInsights/workspaces/tables":
+                continue
+            
+            # Extract schema from properties.schema.columns
+            props = data.get("properties", {})
+            if not isinstance(props, dict):
+                continue
+            schema = props.get("schema", {})
+            if not isinstance(schema, dict):
+                continue
+            
+            table_name = schema.get("name", "") or data.get("name", "")
+            if not table_name:
+                continue
+            
+            raw_columns = schema.get("columns", [])
+            if not isinstance(raw_columns, list):
+                continue
+            
+            columns: List[Dict[str, str]] = []
+            for col in raw_columns:
+                if not isinstance(col, dict):
+                    continue
+                col_name = (col.get("name") or "").strip()
+                col_type_raw = (col.get("type") or "").strip()
+                col_desc = (col.get("description") or "").strip()
+                if not col_name:
+                    continue
+                col_type = TYPE_MAP.get(col_type_raw.lower(), col_type_raw.lower())
+                columns.append({
+                    "column_name": col_name,
+                    "column_type": col_type,
+                    "description": col_desc,
+                    "source_file": json_file.name,
+                    "source_dir": str(json_file.parent.relative_to(solutions_dir)),
+                })
+            
+            if columns and table_name not in result:
+                result[table_name] = columns
     
     return result
 
@@ -5502,7 +5609,7 @@ def determine_ingestion_api(
     """Determine whether a connector uses the Log Ingestion API or HTTP Data Collector API.
     
     This is only applicable to connectors that push data via an API:
-    CCF Push, Azure Function, REST API, and Unknown (Custom Log).
+    CCF Push, Azure Function, REST Pull API, and Unknown (Custom Log).
     
     CCF and CCF (Legacy) are excluded because their ingestion mechanism is
     platform-managed (Sentinel PaaS) — the connector definition doesn't configure
@@ -5511,7 +5618,7 @@ def determine_ingestion_api(
     Detection priority:
     1. CCF Push → always Log Ingestion API (DCR-based, solution code pushes data)
     2. Azure Function → scan Python code for API patterns
-    3. REST API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
+    3. REST Pull API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
     4. Fallback: table column suffix heuristic from table_schemas
     
     Args:
@@ -5530,7 +5637,7 @@ def determine_ingestion_api(
     """
     # Only applicable to collection methods where the solution code pushes data via an API
     # CCF and CCF (Legacy) are excluded — their ingestion is platform-managed
-    api_methods = {"CCF Push", "Azure Function", "REST API", "Unknown (Custom Log)"}
+    api_methods = {"CCF Push", "Azure Function", "REST Pull API", "Unknown (Custom Log)"}
     if collection_method not in api_methods:
         return "", ""
     
@@ -5583,7 +5690,7 @@ def determine_collection_method(
     - AMA (Azure Monitor Agent): Uses Azure Monitor Agent for CEF/Syslog collection
     - MMA (Log Analytics Agent): Legacy agent using workspace ID/key
     - Azure Diagnostics: Uses Azure diagnostic settings
-    - REST API: Direct REST API integration
+    - REST Pull API: Direct REST Pull API integration
     - Native: Built-in Microsoft integrations
     
     Detection Priority:
@@ -5592,7 +5699,7 @@ def determine_collection_method(
     3. Native Microsoft integrations
     4. CCF patterns (content-based)
     5. Azure Function patterns
-    6. REST API patterns
+    6. REST Pull API patterns
     7. Table metadata fallback
     
     Args:
@@ -5750,15 +5857,15 @@ def determine_collection_method(
                                       'InstallAgentOnLinuxNonAzure' in content):
         all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
     
-    # === PRIORITY 9: REST API patterns ===
+    # === PRIORITY 9: REST Pull API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
-        all_matches.append(("REST API", "Title/description mentions REST API"))
+        all_matches.append(("REST Pull API", "Title/description mentions REST API"))
     if 'push' in conn_title_lower or 'push' in conn_id_lower:
-        all_matches.append(("REST API", "Push connector (REST API based)"))
+        all_matches.append(("REST Pull API", "Push connector (REST API based)"))
     if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
-        all_matches.append(("REST API", "Webhook pattern (REST API based)"))
+        all_matches.append(("REST Pull API", "Webhook pattern (REST API based)"))
     if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
-        all_matches.append(("REST API", "HTTP endpoint/trigger (REST API)"))
+        all_matches.append(("REST Pull API", "HTTP endpoint/trigger (REST API)"))
     
     # === PRIORITY 10: Table metadata-based detection (lowest content-based priority) ===
     # Only use if no stronger patterns detected - this is a fallback
@@ -5783,9 +5890,9 @@ def determine_collection_method(
     
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
-    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST API
+    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Pull API
     # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
-    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST API", "Unknown (Custom Log)", "Unknown"]
+    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -8902,6 +9009,37 @@ def main() -> None:
     else:
         log_print(f"  Note: {safe_relative(la_schemas_path, repo_root)} not found - run collect_table_info.py to generate it")
 
+    # Load schemas from ARM table definition files in connector directories
+    # These have richer metadata (descriptions) and are preferred over CustomTables
+    arm_table_count = 0
+    arm_table_tables = 0
+    existing_tables_before_arm = set(row['table_name'] for row in table_schemas_data)
+    arm_schemas = extract_schema_from_arm_table_files(solutions_dir)
+    for table_name, columns in arm_schemas.items():
+        if table_name in existing_tables_before_arm:
+            continue
+        arm_table_tables += 1
+        for col in columns:
+            source_dir = col.get('source_dir', '')
+            source_file = col.get('source_file', '')
+            source_url = f"{GITHUB_REPO_URL}/Solutions/{quote(source_dir)}/{quote(source_file)}" if source_dir and source_file else ""
+            table_schemas_data.append({
+                "table_name": table_name,
+                "column_name": col["column_name"],
+                "column_type": col["column_type"],
+                "description": col.get("description", ""),
+                "source": "Connector definition",
+                "source_url": source_url,
+                "stream_name": "",
+                "connector_id": "",
+                "solution_name": "",
+                "dcr_file": "",
+                "transform_kql": "",
+            })
+            arm_table_count += 1
+    arm_skipped = len(set(arm_schemas.keys()) & existing_tables_before_arm)
+    log_print(f"  Loaded {arm_table_count} column schemas across {arm_table_tables} new tables from connector ARM table definitions (skipped {arm_skipped} already-covered tables)")
+
     # Load schemas from CustomTables directory (only for tables not already covered)
     custom_tables_dir = args.custom_tables_dir.resolve()
     custom_tables_count = 0
@@ -8936,10 +9074,11 @@ def main() -> None:
     # Table schemas stats
     dcr_rows = sum(1 for row in table_schemas_data if row.get('source') == 'DCR')
     doc_rows = sum(1 for row in table_schemas_data if row.get('source') == 'Azure Monitor docs')
+    arm_rows = sum(1 for row in table_schemas_data if row.get('source') == 'Connector definition')
     ct_rows = sum(1 for row in table_schemas_data if row.get('source') == 'KQL validation')
     unique_schema_tables = len(set(row['table_name'] for row in table_schemas_data)) if table_schemas_data else 0
     unique_schema_connectors = len(set(row['connector_id'] for row in table_schemas_data if row['connector_id'])) if table_schemas_data else 0
-    log_print(f"  Total {len(table_schemas_data)} schema columns across {unique_schema_tables} tables ({dcr_rows} from DCR, {doc_rows} from docs, {ct_rows} from KQL validation)")
+    log_print(f"  Total {len(table_schemas_data)} schema columns across {unique_schema_tables} tables ({dcr_rows} from DCR, {doc_rows} from docs, {arm_rows} from connector defs, {ct_rows} from KQL validation)")
 
     # ===================== INGESTION API DETECTION =====================
     # Determine whether each API-based connector uses Log Ingestion API or HTTP Data Collector API
@@ -8977,11 +9116,11 @@ def main() -> None:
         connector['ingestion_api'] = ingestion_api
         connector['ingestion_api_reason'] = api_reason
         
-        # Promote Unknown (Custom Log) to REST API if ingestion API was detected from JSON patterns
+        # Promote Unknown (Custom Log) to REST Pull API if ingestion API was detected from JSON patterns
         # The presence of sharedKeys/WorkspaceId/PrimaryKey in the connector definition proves
-        # the connector uses an API-based approach, so it should be classified as REST API
+        # the connector uses an API-based approach, so it should be classified as REST Pull API
         if collection_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
-            connector['collection_method'] = "REST API"
+            connector['collection_method'] = "REST Pull API"
             connector['collection_method_reason'] = f"Promoted from Unknown (Custom Log): {api_reason}"
             promoted_count += 1
         
@@ -8993,7 +9132,7 @@ def main() -> None:
         connectors_data = apply_overrides_to_data(connectors_data, overrides, 'connector', 'connector_id')
     
     if promoted_count:
-        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST API based on ingestion API detection")
+        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Pull API based on ingestion API detection")
     
     # Recount after overrides
     ingestion_api_counts = defaultdict(int)
@@ -9037,7 +9176,7 @@ def main() -> None:
             clv1_tables_set.add(table_name)
             clv1_table_count += 1
 
-    # Additional CLv1 rule: any _CL table from a connector using AMA or HTTP Data Collector API
+    # Additional CLv1 rule: any _CL table from a connector using HTTP Data Collector API
     # Build reverse map: table_name -> set of connector_ids
     table_to_connectors: Dict[str, Set[str]] = defaultdict(set)
     for cid, tbl_list in connector_tables_map.items():
@@ -9052,25 +9191,46 @@ def main() -> None:
             connector_lookup[cid] = connector
 
     clv1_from_connector_count = 0
+    clv1_skipped_has_schema = 0
     for table_entry in tables_data:
         table_name = table_entry['table_name']
         if table_name in clv1_tables_set:
             continue  # Already marked by suffix detection
         if not table_name.endswith('_CL'):
             continue
-        # Check if any connector for this table uses AMA or HTTP Data Collector API
+        # If schema data exists and shows no type suffixes, trust the schema
+        # This prevents false positives for tables that have both a legacy connector
+        # and a modern connector (e.g., CrowdStrike with both Azure Function and CCF)
+        schema_rows = table_schemas_lookup.get(table_name.lower(), [])
+        if schema_rows:
+            has_any_suffix = False
+            for row in schema_rows:
+                col_name = row.get("column_name", "")
+                if col_name and col_name not in ("TimeGenerated", "TenantId", "Type", "MG", "ManagementGroupName",
+                                                  "SourceSystem", "_ResourceId", "_SubscriptionId"):
+                    for suffix in HTTP_COLLECTOR_COLUMN_SUFFIXES:
+                        if col_name.endswith(suffix) and len(col_name) > len(suffix):
+                            has_any_suffix = True
+                            break
+                    if has_any_suffix:
+                        break
+            if not has_any_suffix:
+                clv1_skipped_has_schema += 1
+                continue  # Schema exists with no suffix columns - not CLv1
+        # Check if any connector for this table uses HTTP Data Collector API
         for cid in table_to_connectors.get(table_name, set()):
             conn = connector_lookup.get(cid, {})
-            cm = conn.get('collection_method', '')
             api = conn.get('ingestion_api', '')
-            if cm == 'AMA' or api == 'HTTP Data Collector API':
+            if api == 'HTTP Data Collector API':
                 table_entry['is_clv1'] = 'true'
                 clv1_tables_set.add(table_name)
                 clv1_from_connector_count += 1
                 break
 
     if clv1_from_connector_count:
-        log_print(f"  Additionally marked {clv1_from_connector_count} _CL tables as CLv1 based on AMA/HTTP Data Collector connector")
+        log_print(f"  Additionally marked {clv1_from_connector_count} _CL tables as CLv1 based on HTTP Data Collector connector")
+    if clv1_skipped_has_schema:
+        log_print(f"  Skipped {clv1_skipped_has_schema} _CL tables with schema showing no type suffixes (connector-based rule)")
     clv1_table_count += clv1_from_connector_count
 
     # Mark connectors that use CLv1 tables

@@ -322,7 +322,7 @@ def build_solutions_table_data(
         support_tier = first.get('solution_support_tier', '')
         publisher = first.get('solution_support_name', sol_meta.get('support_name', ''))
         first_published = first.get('solution_first_publish_date', sol_meta.get('first_publish_date', ''))
-        logo_url = first.get('solution_logo_url', sol_meta.get('logo_url', ''))
+        logo_url = first.get('solution_logo_url', '') or sol_meta.get('solution_logo_url', '')
 
         status = "Deprecated" if is_deprecated else ("Unpublished" if not is_published else "Active")
 
@@ -346,6 +346,7 @@ def build_solutions_table_data(
 def build_connectors_table_data(
     by_solution: Dict[str, List[Dict[str, str]]],
     connectors_ref: Dict[str, Dict[str, str]],
+    solutions_ref: Dict[str, Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     """Build the data rows for the connectors table.
     
@@ -353,6 +354,7 @@ def build_connectors_table_data(
     Uses connectors_ref (connectors.csv) for is_deprecated, not_in_solution_json,
     collection_method, and ingestion_api since the mapping CSV lacks these fields.
     """
+    solutions_ref = solutions_ref or {}
     connectors_map: Dict[str, Dict[str, Any]] = {}
 
     for sol_name, connectors in by_solution.items():
@@ -385,7 +387,7 @@ def build_connectors_table_data(
                 'ingestion_api': ref.get('ingestion_api', ''),
                 'is_deprecated': is_deprecated,
                 'is_published': is_published,
-                'logo_url': c.get('solution_logo_url', ''),
+                'logo_url': c.get('solution_logo_url', '') or solutions_ref.get(sol_name, {}).get('solution_logo_url', ''),
                 'tables': set(),
                 'support_tier': c.get('solution_support_tier', ''),
                 'is_clv1': ref.get('is_clv1', '').lower() == 'true',
@@ -837,6 +839,14 @@ table.dataTable tbody td {
     object-fit: contain;
     border-radius: 4px;
 }
+.sol-logo-fallback {
+    display: inline-block;
+    width: 28px;
+    text-align: center;
+    font-size: 20px;
+    line-height: 28px;
+    opacity: 0.5;
+}
 
 /* Links in table cells */
 table.dataTable a {
@@ -1151,10 +1161,10 @@ def _status_badge(status: str) -> str:
     return f'<span class="badge {cls}">{esc(status)}</span>'
 
 
-def _logo_img(url: str) -> str:
-    """Return an img tag for a logo URL, or empty string."""
+def _logo_img(url: str, fallback: str = '') -> str:
+    """Return an img tag for a logo URL, or a fallback emoji/icon string."""
     if not url:
-        return ''
+        return f'<span class="sol-logo-fallback">{fallback}</span>' if fallback else ''
     return f'<img src="{esc(url)}" alt="" class="sol-logo" loading="lazy">'
 
 
@@ -1220,6 +1230,7 @@ def _write_index_html(
         <div class="navbar-nav-links">
             <a href="{_docs_base_path}README{_link_extension}" class="nav-doc-link" title="Documentation home">📖 Docs</a>
             <a href="{_docs_base_path}statistics{_link_extension}" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
+            <a href="asim-browser.html" class="nav-doc-link" title="ASIM Schema Browser">🔎 ASIM Browser</a>
         </div>
     </div>
 </nav>
@@ -1290,7 +1301,7 @@ def _write_index_html(
 <tbody>
 """)
     for s in solutions_data:
-        logo = _logo_img(s['logo_url'])
+        logo = _logo_img(s['logo_url'], '📦')
         badge = _status_badge(s['status'])
         name_link = _md_link(s['name'], 'solutions')
         pop_label = _popularity_label(s.get('popularity', ''))
@@ -1330,7 +1341,7 @@ def _write_index_html(
 <tbody>
 """)
     for c in connectors_data:
-        logo = _logo_img(c['logo_url'])
+        logo = _logo_img(c['logo_url'], '🔌')
         badge = _status_badge(c['status'])
         clv1 = f" {CLV1_ICON}" if c.get('is_clv1') else ""
         discovered = f" {DISCOVERED_ICON}" if c.get('is_discovered') else ""
@@ -1674,6 +1685,9 @@ _PAGE_HTML_TEMPLATE = """\
 <body>
 <nav class="navbar">
     <a href="{index_url}" class="navbar-brand" style="text-decoration:none;color:inherit">Microsoft Sentinel &mdash; Solutions Analyzer</a>
+    <div class="navbar-nav-links">
+        <a href="{asim_browser_url}" class="nav-doc-link" title="ASIM Schema Browser">🔎 ASIM Browser</a>
+    </div>
 </nav>
 <div class="doc-content">
 {body}
@@ -1726,6 +1740,7 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
       works entirely within the HTML entity pages.
     * Writes a ``page.css`` stylesheet to ``{html_output_dir}/css/``.
     """
+    import time as _time
     try:
         import markdown as _markdown_lib
     except ImportError:
@@ -1748,96 +1763,100 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         'methods': 'connectors',   # methods are shown via the Connectors tab
     }
 
-    md_extensions = ['tables', 'fenced_code', 'sane_lists', 'toc']
-    count = 0
+    # Map index page filenames to tab hash fragments (for browse-bar rewriting)
+    _index_to_tab = {
+        'solutions-index.html': '#solutions',
+        'connectors-index.html': '#connectors',
+        'methods-index.html': '#connectors',
+        'tables-index.html': '#tables',
+        'content-index.html': '#content',
+        'parsers-index.html': '#parsers',
+        'asim-index.html': '#asim',
+        'asim-products-index.html': '#asim',
+    }
 
-    for md_file in sorted(docs_dir.rglob('*.md')):
+    # Pre-compile regex patterns used in the per-file loop
+    _re_h1 = re.compile(r'^#\s+(.+)$', re.MULTILINE)
+    _re_strip_md_fmt = re.compile(r'[*_`\[\]()]')
+    _re_md_links = re.compile(r'href="(?!https?://|mailto:)([^"]*?)\.md"')
+    _re_index_links = re.compile(
+        r'href="(?:[^"]*/)?((?:solutions|connectors|methods|tables|content|parsers|asim(?:-products)?)-index\.html)"'
+    )
+    _re_home_link = re.compile(r'href="[^"]*README\.html"')
+    _re_interactive_link = re.compile(r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>')
+    _re_schema_table = re.compile(
+        r'(<h2>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
+        re.DOTALL,
+    )
+
+    # Reuse a single Markdown converter instance (reset between files)
+    # Note: 'toc' extension intentionally omitted — we don't generate a
+    # [TOC] block and it adds significant per-file overhead.
+    md_extensions = ['tables', 'fenced_code', 'sane_lists']
+    md_converter = _markdown_lib.Markdown(extensions=md_extensions)
+
+    # Collect files first to know total count for progress reporting
+    md_files = sorted(docs_dir.rglob('*.md'))
+    total = len(md_files)
+    count = 0
+    t_start = _time.perf_counter()
+
+    print(f"  Converting {total} markdown files to HTML...", flush=True)
+
+    for md_file in md_files:
+        file_t0 = _time.perf_counter()
         md_content = md_file.read_text(encoding='utf-8')
 
         # Extract title from first H1
-        title_match = re.search(r'^#\s+(.+)$', md_content, re.MULTILINE)
+        title_match = _re_h1.search(md_content)
         if title_match:
-            title = title_match.group(1)
-            # Strip markdown formatting artefacts from the title
-            title = re.sub(r'[*_`\[\]()]', '', title).strip()
+            title = _re_strip_md_fmt.sub('', title_match.group(1)).strip()
         else:
             title = md_file.stem
 
         # Determine the parent directory (used for tab linking and schema detection)
         parent_name = md_file.parent.name
 
-        # Convert markdown → HTML body
-        html_body = _markdown_lib.markdown(md_content, extensions=md_extensions)
+        # Convert markdown → HTML body (reuse converter, reset state)
+        md_converter.reset()
+        html_body = md_converter.convert(md_content)
 
         # Rewrite relative .md links → .html  (leave http(s) and mailto alone)
-        html_body = re.sub(
-            r'href="(?!https?://|mailto:)([^"]*?)\.md"',
-            r'href="\1.html"',
-            html_body,
-        )
+        html_body = _re_md_links.sub(r'href="\1.html"', html_body)
 
-        # Compute base index URL (without tab hash) for browse-bar rewriting
-        if index_url.startswith(('http://', 'https://')):
-            base_index_url = index_url
-        else:
-            base_index_url = os.path.relpath(
-                html_output_dir / index_url,
-                md_file.parent,
-            ).replace('\\', '/')
+        # Compute base index URL (without tab hash) for browse-bar rewriting.
+        # Always use relative paths — HTML entity pages coexist with index.html
+        # in the same served directory structure, so relative links work both
+        # locally (file://) and on GitHub Pages.
+        base_index_url = os.path.relpath(
+            html_output_dir / 'index.html',
+            md_file.parent,
+        ).replace('\\', '/')
 
         # Rewrite browse-bar links: static index pages → index.html#tab
-        # Map index page filenames to tab hash fragments
-        _index_to_tab = {
-            'solutions-index.html': '#solutions',
-            'connectors-index.html': '#connectors',
-            'methods-index.html': '#connectors',
-            'tables-index.html': '#tables',
-            'content-index.html': '#content',
-            'parsers-index.html': '#parsers',
-            'asim-index.html': '#asim',
-            'asim-products-index.html': '#asim',
-        }
-
-        def _rewrite_index_link(m: re.Match) -> str:
+        def _rewrite_index_link(m: re.Match, _base=base_index_url) -> str:
             """Replace static index page links with index.html#tab links."""
             filename = m.group(1)
             if filename in _index_to_tab:
-                return f'href="{base_index_url}{_index_to_tab[filename]}"'
+                return f'href="{_base}{_index_to_tab[filename]}"'
             return m.group(0)
 
-        # Match href="(optional-path/)index-page.html"
-        html_body = re.sub(
-            r'href="(?:[^"]*/)?((?:solutions|connectors|methods|tables|content|parsers|asim(?:-products)?)-index\.html)"',
-            _rewrite_index_link,
-            html_body,
-        )
+        html_body = _re_index_links.sub(_rewrite_index_link, html_body)
 
         # Rewrite 🏠 home link: README.html → index.html (no tab hash)
-        html_body = re.sub(
-            r'href="[^"]*README\.html"',
-            f'href="{base_index_url}"',
-            html_body,
-        )
+        html_body = _re_home_link.sub(f'href="{base_index_url}"', html_body)
 
         # Remove the 🔍 Interactive link from the browse bar (if still present)
-        html_body = re.sub(
-            r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>',
-            '',
-            html_body,
-        )
+        html_body = _re_interactive_link.sub('', html_body)
 
         # For table docs with a Schema section, tag the schema <table> with
         # an id so DataTables.js can enhance it with sort + filter.
         has_schema_table = False
         if parent_name == 'tables':
-            # The schema table directly follows an <h2>Schema … heading.
-            # Inject id="schema-table" on the first <table> after that heading.
-            html_body, n = re.subn(
-                r'(<h2>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
+            html_body, n = _re_schema_table.subn(
                 r'\1<table id="schema-table">',
                 html_body,
                 count=1,
-                flags=re.DOTALL,
             )
             has_schema_table = n > 0
 
@@ -1854,20 +1873,24 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         tab_fragment = _dir_to_tab.get(parent_name, '')
         tab_hash = f'#{tab_fragment}' if tab_fragment else ''
 
-        # Compute index URL (use absolute URL if provided, else relative)
-        if index_url.startswith(('http://', 'https://')):
-            page_index_url = index_url + tab_hash
-        else:
-            page_index_url = os.path.relpath(
-                html_output_dir / index_url,
-                md_file.parent,
-            ).replace('\\', '/') + tab_hash
+        # Compute index URL — always relative (same rationale as base_index_url)
+        page_index_url = os.path.relpath(
+            html_output_dir / 'index.html',
+            md_file.parent,
+        ).replace('\\', '/') + tab_hash
+
+        # Compute ASIM browser URL — relative from this page to asim-browser.html
+        page_asim_url = os.path.relpath(
+            html_output_dir / 'asim-browser.html',
+            md_file.parent,
+        ).replace('\\', '/')
 
         # Assemble final page
         html_page = _PAGE_HTML_TEMPLATE.format(
             title=esc(title),
             css_path=css_path,
             index_url=esc(page_index_url),
+            asim_browser_url=esc(page_asim_url),
             body=html_body,
             head_extra=head_extra,
             body_extra=body_extra,
@@ -1877,7 +1900,20 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         html_file.write_text(html_page, encoding='utf-8')
         count += 1
 
-    print(f"  Generated {count} HTML entity pages under {docs_dir}")
+        # Warn about slow individual files (>5s)
+        file_dt = _time.perf_counter() - file_t0
+        if file_dt > 5:
+            print(f"    SLOW ({file_dt:.1f}s): {md_file.relative_to(docs_dir)}", flush=True)
+
+        # Progress reporting every 200 converted files
+        if count % 200 == 0:
+            elapsed = _time.perf_counter() - t_start
+            rate = count / elapsed if elapsed > 0 else 0
+            remaining = (total - count) / rate if rate > 0 else 0
+            print(f"    {count:,}/{total:,} pages ({elapsed:.1f}s elapsed, ~{remaining:.0f}s remaining)", flush=True)
+
+    elapsed = _time.perf_counter() - t_start
+    print(f"  Generated {count:,} HTML entity pages in {elapsed:.1f}s")
 
 
 # ---------------------------------------------------------------------------
@@ -1973,7 +2009,7 @@ def generate_interactive(
 
     print("  Building data tables...")
     solutions_data = build_solutions_table_data(by_solution, solutions_ref, content_items)
-    connectors_data = build_connectors_table_data(by_solution, connectors_ref)
+    connectors_data = build_connectors_table_data(by_solution, connectors_ref, solutions_ref)
     tables_data = build_tables_table_data(by_solution, tables_ref, content_tables, tables_with_schemas)
     content_data = build_content_table_data(content_items)
 
