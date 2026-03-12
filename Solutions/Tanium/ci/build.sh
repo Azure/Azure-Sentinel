@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-set -Eeuo pipefail
-
+###########################################
+#  RESPONSE FUNCTIONS
+###########################################
 _msg() {  
   echo >&2 -e "${1-}"  
 }
@@ -19,7 +20,7 @@ _msg_error() {
 }
 
 _msg_success() {
-  echo >&2 -e "\033[0;32m$1\033[0m"
+  _msg "  ✅ $1"
 }
 
 _shout() {
@@ -30,78 +31,63 @@ _shout() {
 
 _die() {
   local msg=$1
-  local code=${2-1} # default exit status 1
+  local code=${2:-1} # default exit status 1 when $2 unset or empty
   _msg_error "😢  $msg"
-  exit "$code"
+  exit "${code:-1}"
 }
 
+###########################################
+#  CONSTANTS
+###########################################
+_solution_folder_path="./Solutions/Tanium"
 _solution_data_folder_path="./Solutions/Tanium/Data"
-_package_folder_path="./Solutions/Tanium/Package"
+_package_folder_path="../Package"
 
-
-build_solution() {
-  pwsh ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 "$_solution_data_folder_path"
-
+###########################################
+#  VALIDATION
+###########################################
+validate_arm_files(){
   _msg "💪 checking arm-ttk results"
 
-  _msg "  🕵️  did the arm-ttk check pass?" 
-    
-  _msg "*********************************************************************************************************************"
-  _msg "**  NOTE: "
-  _msg "**"
-  _msg "**      The following error is an IGNORABLE error"
-  _msg "**      \033[0;31mProperty: \"id\" must use one of the following expressions for an resourceId property\033[0m"
-  _msg "**      Citation: https://github.com/Azure/Azure-Sentinel/tree/e92286da7d185c99c6d30c2cb8c86bbeca1a99ba/Tools/Create-Azure-Sentinel-Solution/V3#arm-ttk-failue-for-contentproductid-id-issues"
-  _msg "*********************************************************************************************************************"
-
-  read -p "Enter Y if they passed: " ttk_passed
-
-  if [ "$ttk_passed" != "Y" ] && [ "$ttk_passed" != "y" ]; then
+  if ! pwsh ./run-arm-ttk-accurately.ps1 "Tanium"; then
+    echo "ARM Validation failed"
     return 1
+  else
+      _msg_success "Passed!"
   fi
+}
 
+validate_json_files(){
   _msg "\n📄 checking package json file validation"
 
-  _msg "  🕵️  were all the package json files valid?" 
-  read -p "    Enter Y if they were all valid: " json_passed
-
-  if [ "$json_passed" != "Y" ] && [ "$json_passed" != "y" ]; then
+  if ! pwsh ./run-json-validation.ps1 "$_solution_folder_path"; then
+    echo "JSON Validation failed"
     return 1
+  else
+    _msg_success "Passed!"
   fi
+}
 
+validate_build(){
   _msg "\n📦 checking package build result"
 
-  current_published_version=$(pwsh ./Solutions/Tanium/get-offer-id.ps1 "$_solution_data_folder_path")
+  build_solution
+
+  current_published_version=$(pwsh ./get-published-version.ps1 "$_solution_data_folder_path")
   _msg "  🏷️  current published version is ${current_published_version}"
-  read -p "    what version was built? " built_version
+
+  built_version=$(pwsh ./get-new-version.ps1  "$_solution_data_folder_path")
+  _msg "  🏷️  new publish version is ${built_version}"
 
   if [ "$current_published_version" == "$built_version" ]; then
     _msg_error "New version was not published! Did you forget to increment?"
     return 1
   fi
-
-  _msg "\n🚀 deploying to azure for review"
-
-  read -p "    resource group: " target_resource_group
-  read -p "    log analytics workspace: " target_workspace
-  read -p "    workspace location: " target_location
-
-  # TODO Now push up the templates to the demo/qa environment for review
-  if ( ! az deployment group create \
-    --resource-group "$target_resource_group" \
-    --name "${built_version}-Preview${RANDOM}"  \
-    --template-file "${_package_folder_path}/mainTemplate.json" \
-    --parameters workspace-location="${target_location}" \
-    --parameters workspace="${target_workspace}" \
-    --parameters workbook1-name="Tanium Workbook v${built_version}" \
-    --output none ) then
-      _msg_error "Deployment failed! Check resource group activity for details."
-      return 1
-  fi
-
-  _msg_warning "\n⚠️ Please verify all the template data in the the workspace ${target_workspace} and complete any final QA tasks."
 }
 
+############################################
+#  TOOLING FUNCTIONS
+###########################################
 check-command() {
   _msg "  🔧 checking $1"
   if ! command -v "$1" >/dev/null; then
@@ -111,11 +97,14 @@ check-command() {
 
 check-arm-ttk() {
   _msg "  🔧 checking arm-ttk module in powershell"
-  if ! pwsh -c Get-Module arm-ttk | grep -q arm-ttk; then
+  if ! pwsh -c Get-Command Test-AzTemplate -ErrorAction SilentlyContinue | grep -q arm-ttk; then
     _die "arm-ttk module not found in your powershell"
   fi
 }
 
+###########################################
+#  MANIFEST FUNCTIONS
+###########################################
 # Verifies that all items are being included in the solution as expected. By
 #  1. Checking that all files of the specified contribution type are in the manifest
 #  2. Checking that all items declared in the manifest exist in the expected folder
@@ -134,9 +123,9 @@ _validate_solution_resources() {
 
   local json_property
   json_property=".\"${expected_folder}\"[]"
-
-  actual_files=$(find "Solutions/Tanium/${expected_folder}" -name "*.${expected_file_type}" ! -name connect-module-connections.json | sort | sed -e 's|Solutions/Tanium/||')
-  declared_files=$(jq -r "$json_property" Solutions/Tanium/Data/Solution_Tanium.json | sort)
+ 
+  actual_files=$(find "../${expected_folder}" -name "*.${expected_file_type}" ! -name connect-module-connections.json | sort | sed -e 's|../||')
+  declared_files=$(jq -r "$json_property" ../Data/Solution_Tanium.json | sort)
 
   _msg "    🕵️  checking all files are all declared in the manifest"
   # comm -23 : omit lines in common and lines only in the second file
@@ -172,7 +161,6 @@ check-matching-playbook-declarations() {
   fi
 }
 
-
 # Verifies that all workbooks are being included in the solution as expected. By
 #  1. Checking that all .json files under the /Solutions/Tanium/Workbooks folder are in the /Solutions/Tanium/Data/Solution_Tanium.json file
 #  2. Checking that all workbooks declared in /Solutions/Tanium/Data/Solution_Tanium.json exist in /Solutions/Tanium/Workbooks
@@ -191,70 +179,96 @@ check-matching-analytic-rules-declarations() {
   fi
 }
 
+############################################
+#  COMMANDS
+###########################################
 check_spelling(){
 
-  local has_errors  
-  if ! cspell --quiet ./Solutions/Tanium --exclude ./Solutions/Tanium/Workbooks/connect-module-connections.json --exclude ./Solutions/Tanium/Package/mainTemplate.json ; then
-    
-    _msg "  🕵️  Are the only misspellings variables names due to javascript limitations?"   
-    read -p "Enter Y to continue: " ignore_spelling_errors
-    if [ "$ignore_spelling_errors" != "Y" ] && [ "$ignore_spelling_errors" != "y" ]; then
-      return 1
-    fi
+  _shout "Checking spelling errors"
 
+  # Change directories, because if you specify the directory to cspell it won't check recursively
+  local current_dir
+  current_dir=$(pwd)
+  cd ..
+
+  local error_file
+  error_file="./ci/cspell-results.json"
+
+  # Delete the current spell check file if it exists 
+  [ -f "$error_file" ] && rm "$error_file"
+
+  local error_count  
+  if ! cspell --quiet . --exclude ./Workbooks/connect-module-connections.json --exclude ./Package/mainTemplate.json --reporter @cspell/cspell-json-reporter > "$error_file"; then
+    error_count=$(jq '.issues | length' "$error_file")
+    _msg_error "Found ${error_count} misspellings!"
+      return 1
+  else
+    # Delete the results, since we passed
+    [ -f "$error_file" ] && rm "$error_file"
+    _msg_success "Passed!"
   fi  
+
+  # Don't forget to go back to the original folder
+  cd "$current_dir"
 }
 
 check_prerequisites() {
-  _msg "🧰 checking prerequisites"
-  check-command "jq"
+  _shout "Checking prerequisites"
 
+  _msg "🧰 checking required tools are installed"
+  check-command "jq"
   check-command "git"
   check-command "unzip"
   check-command "pwsh" "powershell"  
   check-command "cspell"
   check-arm-ttk
+
   _msg "\n🧾 checking the package manifest"
   check-matching-playbook-declarations
   check-matching-workbook-declarations
   check-matching-analytic-rules-declarations
 }
 
-usage() {
-  _msg "build_solution.sh"
-  _msg ""
-  _msg "Builds a Sentinel package for Solutions/Tanium"
-  _msg ""
-  _msg "Will build a Sentinel package using the manifest Solutions/Tanium/Data/Solution_Tanium.json via Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1"
-  _msg ""
-  _msg "The built package will land in Solutions/Tanium/Package"
-  _msg ""
-  exit 0
+check_validations(){
+  _shout "Running Validations"
+  validate_arm_files
+  validate_json_files
+  validate_build
 }
 
-main() {
-  (cd "$(git rev-parse --show-toplevel)" || _die "Unable to cd to top level repo directory"
-    while :; do
-      case "${1-}" in
-      -h | --help) usage ;;
-      -?*) _die "Unknown option: $1" ;;
-      *) break ;;
-      esac
-      shift
-    done
+build_solution() {
+  local repo_root
+  repo_root=$(git rev-parse --show-toplevel)
+  pwsh ./build-silently.ps1 "$_solution_data_folder_path" || _die "build-silently.ps1 failed"
+  _msg_success "Build finished"
+}
 
-    _shout "Checking prerequisites"
-    check_prerequisites
+deploy_to_azure(){
+  local resource_group=$1
+  local workspace=$2
+  local region=$3
+  local version=$4
+  local build_number
+  build_number=$(bash -c 'echo $RANDOM')
 
-    _shout "Checking spelling errors"
-    if ! check_spelling ; then
-      _msg_error "Found 1 or more misspellings!"
+  _shout "Deploying"
+
+  _msg "\n🚀 deploying to azure for review"
+
+  # TODO Now push up the templates to the demo/qa environment for review
+  if ( ! az deployment group create \
+    --resource-group "$resource_group" \
+    --name "${version}-Preview${build_number}"  \
+    --template-file "${_package_folder_path}/mainTemplate.json" \
+    --parameters workspace-location="${region}" \
+    --parameters workspace="${workspace}" \
+    --parameters workbook1-name="Tanium Workbook v${version}" \
+    --output none ) then
+      _msg_error "Deployment failed! Check resource group activity for details."
       return 1
-    fi
-    
-    _shout "Building Solution"
-    build_solution
-  )
-}
+  else 
+    _msg_success "Deployment completed!"
+  fi
 
-main "$@"
+  _msg_warning "\n⚠️  Please verify all the template data in the the workspace ${workspace} and complete any final QA tasks."
+}
