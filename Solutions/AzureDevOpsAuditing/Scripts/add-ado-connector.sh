@@ -17,12 +17,21 @@
 #     Organization Settings > Policies > Log Audit Events = On
 #   - The connecting user must have "View audit log" permission set to Allow
 #     in the target org
+#   - az CLI, curl, jq, and python3 must be installed
 #
 # Usage:
 #   chmod +x add-ado-connector.sh
 #   ./add-ado-connector.sh
 
 set -euo pipefail
+
+# ——— Check prerequisites ———
+for cmd in az curl jq python3; do
+    if ! command -v "${cmd}" &>/dev/null; then
+        echo "ERROR: '${cmd}' is required but not installed."
+        exit 1
+    fi
+done
 
 # ——— Prompt for inputs ———
 read -rp "Subscription ID: " SUBSCRIPTION_ID
@@ -59,68 +68,73 @@ echo "  ${AUTH_ENDPOINT}?client_id=${CLIENT_ID}&response_type=code&redirect_uri=
 echo ""
 read -rp "Paste the authorization code from the redirect URL: " AUTH_CODE
 
-# ——— Build request body ———
-BODY=$(cat <<EOF
-{
-    "kind": "RestApiPoller",
-    "properties": {
-        "connectorDefinitionName": "AzureDevOpsAuditLogs",
-        "dataType": "ADOAuditLogs_CL",
-        "dcrConfig": {
-            "streamName": "Custom-ADOAuditLogs",
-            "dataCollectionEndpoint": "${DCE_URI}",
-            "dataCollectionRuleImmutableId": "${DCR_IMMUTABLE_ID}"
-        },
-        "auth": {
-            "type": "OAuth2",
-            "ClientSecret": "${CLIENT_SECRET}",
-            "ClientId": "${CLIENT_ID}",
-            "GrantType": "authorization_code",
-            "AuthorizationCode": "${AUTH_CODE}",
-            "RedirectUri": "${REDIRECT_URI}",
-            "scope": "499b84ac-1321-427f-aa17-267ca6975798/.default openid offline_access",
-            "TokenEndpoint": "${TOKEN_ENDPOINT}",
-            "AuthorizationEndpoint": "${AUTH_ENDPOINT}",
-            "TokenEndpointQueryParameters": {},
-            "TokenEndpointHeaders": {
-                "Content-Type": "application/x-www-form-urlencoded"
-            }
-        },
-        "request": {
-            "apiEndpoint": "${API_ENDPOINT}",
-            "httpMethod": "GET",
-            "queryWindowInMin": 5,
-            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-            "rateLimitQps": 1,
-            "retryCount": 3,
-            "timeoutInSeconds": 60,
-            "StartTimeAttributeName": "startTime",
-            "EndTimeAttributeName": "endTime",
-            "queryParameters": {
-                "from": "{_QueryWindowStartTime}",
-                "to": "{_QueryWindowEndTime}"
+# ——— Build request body (using jq to safely handle special characters in secrets) ———
+BODY=$(jq -n \
+    --arg clientSecret      "${CLIENT_SECRET}" \
+    --arg clientId          "${CLIENT_ID}" \
+    --arg authCode          "${AUTH_CODE}" \
+    --arg dceUri            "${DCE_URI}" \
+    --arg dcrId             "${DCR_IMMUTABLE_ID}" \
+    --arg apiEndpoint        "${API_ENDPOINT}" \
+    --arg tokenEndpoint     "${TOKEN_ENDPOINT}" \
+    --arg authEndpoint      "${AUTH_ENDPOINT}" \
+    --arg redirectUri       "${REDIRECT_URI}" \
+    '{
+        kind: "RestApiPoller",
+        properties: {
+            connectorDefinitionName: "AzureDevOpsAuditLogs",
+            dataType: "ADOAuditLogs_CL",
+            dcrConfig: {
+                streamName: "Custom-ADOAuditLogs",
+                dataCollectionEndpoint: $dceUri,
+                dataCollectionRuleImmutableId: $dcrId
             },
-            "headers": {
-                "Accept": "application/json",
-                "User-Agent": "Scuba"
+            auth: {
+                type: "OAuth2",
+                ClientSecret: $clientSecret,
+                ClientId: $clientId,
+                GrantType: "authorization_code",
+                AuthorizationCode: $authCode,
+                RedirectUri: $redirectUri,
+                scope: "499b84ac-1321-427f-aa17-267ca6975798/.default openid offline_access",
+                TokenEndpoint: $tokenEndpoint,
+                AuthorizationEndpoint: $authEndpoint,
+                TokenEndpointQueryParameters: {},
+                TokenEndpointHeaders: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+            },
+            request: {
+                apiEndpoint: $apiEndpoint,
+                httpMethod: "GET",
+                queryWindowInMin: 5,
+                queryTimeFormat: "yyyy-MM-ddTHH:mm:ss.000000+00:00",
+                rateLimitQps: 1,
+                retryCount: 3,
+                timeoutInSeconds: 60,
+                StartTimeAttributeName: "startTime",
+                EndTimeAttributeName: "endTime",
+                queryParameters: {
+                    from: "{_QueryWindowStartTime}",
+                    to: "{_QueryWindowEndTime}"
+                },
+                headers: {
+                    Accept: "application/json",
+                    "User-Agent": "Scuba"
+                }
+            },
+            response: {
+                eventsJsonPaths: ["$.decoratedAuditLogEntries"],
+                format: "json"
+            },
+            paging: {
+                pagingType: "NextPageToken",
+                nextPageTokenJsonPath: "$.continuationToken",
+                nextPageParaName: "continuationToken",
+                hasNextFlagJsonPath: "$.hasMore"
             }
-        },
-        "response": {
-            "eventsJsonPaths": [
-                "$.decoratedAuditLogEntries"
-            ],
-            "format": "json"
-        },
-        "paging": {
-            "pagingType": "NextPageToken",
-            "nextPageTokenJsonPath": "$.continuationToken",
-            "nextPageParaName": "continuationToken",
-            "hasNextFlagJsonPath": "$.hasMore"
         }
-    }
-}
-EOF
-)
+    }')
 
 # ——— Get Azure access token ———
 echo ""
