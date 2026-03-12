@@ -125,11 +125,8 @@ def _fetch_set_events(fetch_func, dispatcher_url: str, token: str, filter_date: 
     events = response_json.get('events') or []
     cursor = response_json.get('nextCursor')
     if cursor:
-        events += _fetch_set_events(fetch_func, token=token, filter_date=filter_date, set_id=set_id, next_cursor=cursor)
-    for event in events:
-        if isinstance(event, dict):
-            event['set_name'] = set_id.get('Name')
-    return events
+        events += _fetch_set_events(fetch_func, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id, next_cursor=cursor)
+    return [e | {"SetName": set_id.get("Name")} for e in events if isinstance(e, dict)]
 
 
 def _get_dispatcher_url(auth_token: str):
@@ -183,31 +180,22 @@ def collect_events() -> list:
 
     all_events: list = []
     for set_id in sets:
-        logging.info(f"Collecting aggregated events from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_aggregated_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
-            if isinstance(e, dict):
-                e['event_type'] = 'aggregated_events'
-            all_events.append(e)
+        aggregated_events = _fetch_set_events(get_aggregated_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        logging.info(f"Fetched {len(aggregated_events)} aggregated events from {set_id.get('Name')}")
+        all_events.extend([e | {"eventType": 'aggregated_events'} for e in aggregated_events if isinstance(e, dict)])
 
-        logging.info(f"Collecting raw events from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_detailed_raw_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
-            if isinstance(e, dict):
-                e['event_type'] = 'raw_event'
-            all_events.append(e)
+        detailed_raw_events =  _fetch_set_events(get_detailed_raw_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        logging.info(f"Fetched {len(detailed_raw_events)} detailed raw events from {set_id.get('Name')}")
+        all_events.extend([e | {"eventType": 'raw_event'} for e in detailed_raw_events if isinstance(e, dict)])
 
-        logging.info(f"Collecting aggregated policy audits from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_aggregated_policy_audits, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
-            if isinstance(e, dict):
-                e['event_type'] = 'aggregated_policy_audits'
-            all_events.append(e)
+        aggregated_policy_audits = _fetch_set_events(get_aggregated_policy_audits, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        logging.info(f"Fetched {len(aggregated_policy_audits)} aggregated policy audits from {set_id.get('Name')}")
+        all_events.extend([e | {"eventType": 'aggregated_policy_audits'} for e in aggregated_policy_audits if isinstance(e, dict)])
 
-        logging.info(f"Collecting policy audit raw event details from {set_id.get('Name')}")
-        for e in _fetch_set_events(get_policy_audit_raw_event_details, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id):
-            if isinstance(e, dict):
-                e['event_type'] = 'policy_audit_raw_event_details'
-            all_events.append(e)
+        audit_raw_event_details = _fetch_set_events(get_policy_audit_raw_event_details, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        logging.info(f"Fetched {len(audit_raw_event_details)} policy audit raw events from {set_id.get('Name')}")
+        all_events.extend([e | {"eventType": 'policy_audit_raw_event_details'} for e in audit_raw_event_details if isinstance(e, dict)])
 
-        logging.info(f"Collecting Admin Audit Data from {set_id.get('Name')}")
         try:
             admin_events = get_admin_audit_events(
                 epm_server=dispatcher_url,
@@ -217,8 +205,8 @@ def collect_events() -> list:
                 end_time=end_time,
                 limit=100,
             )
-            for e in admin_events:
-                all_events.append(e)
+            logging.info(f"Fetched {len(admin_events)} admin audit events from {set_id.get('Name')}")
+            all_events.extend(admin_events)
         except Exception as err:
             logging.warning(f'Failed fetching Admin Audit Data: {err}')
 

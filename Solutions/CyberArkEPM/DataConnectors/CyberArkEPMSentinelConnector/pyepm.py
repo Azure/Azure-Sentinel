@@ -199,6 +199,6 @@ def get_admin_audit_events(epm_server, epm_token, set_id, start_time, end_time, 
             break
     if len(events_json) > 0:
         for admin_audit_event in events_json:
-            admin_audit_event["event_type"] = "admin_audit"
+            admin_audit_event["eventType"] = "admin_audit"
 
     return events_json
