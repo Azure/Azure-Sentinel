@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                        |
 |-------------|--------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.6       | 10-02-2026                     | Removed hardcoded PII-like sample values in the UEBA workbook by replacing specific "value" fields with empty strings      |
+| 3.0.5       | 05-02-2026                     | Resolved the UEBA Behaviors Analysis **Workbook** loading issue      |
 | 3.0.4       | 29-01-2026                     | Added new UEBA Behaviors Analysis **Workbook** to solution      |      
 | 3.0.3       | 24-11-2025                     | Added new **Hunting Queries**                                          	               |
 | 3.0.2       | 04-11-2025                     | Enhance UEBA Essentials with multi-cloud detection capabilities        	               |
