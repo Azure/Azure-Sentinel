@@ -126,6 +126,12 @@ ParserQuery: |
               "ClassTypeDescription", ClassTypeDescription,
               "HostName", HostName
           ), dynamic([]))
+      | where eventresult == "*" or (EventResult == eventresult)
+      | extend ActionType = toupper(tostring(split(Operation, " ")[0]))
+      | lookup SqlAuditEventTypeLookup on ActionType
+      | extend EventType = iff(isempty(EventType), "Other", EventType)
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+      | project-away ActionType
       ;
     let SqlSecurityAuditDiag =
       AzureDiagnostics
@@ -162,6 +168,12 @@ ParserQuery: |
               "ClassTypeDescription", class_type_description_s,
               "HostName", host_name_s
           ), dynamic([]))
+      | where eventresult == "*" or (EventResult == eventresult)
+      | extend ActionType = toupper(tostring(split(Operation, " ")[0]))
+      | lookup SqlAuditEventTypeLookup on ActionType
+      | extend EventType = iff(isempty(EventType), "Other", EventType)
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+      | project-away ActionType
       ;
     union isfuzzy=true SqlSecurityAuditDedicated, SqlSecurityAuditDiag
     | extend
@@ -177,14 +189,6 @@ ParserQuery: |
         ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
         ActorUserIdType = iff(isnotempty(ActorUserId), "SID", ""),
         EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    // Filter by eventresult
-    | where eventresult == "*" or (EventResult == eventresult)
-    // Map EventType from action name
-    | extend ActionType = toupper(tostring(split(Operation, " ")[0]))
-    | lookup SqlAuditEventTypeLookup on ActionType
-    | extend EventType = iff(isempty(EventType), "Other", EventType)
-    // Filter by eventtype
-    | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
     // Recommended fields
     | extend
         EventUid = EventOriginalUid,
