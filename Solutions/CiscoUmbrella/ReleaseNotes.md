@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
 |-------------|--------------------------------|-------------------------------------------------------------|
+| 3.0.9       | 13-03-2026                     | Moved csv.field_size_limit to module level so all 12 CSV parsers are covered. Added csv.Error guardrail to prevent a single oversized row from stalling ingestion. |
 | 3.0.8       | 29-01-2026                     | The Data connector has been updated to support large fields. |
 | 3.0.7       | 28-11-2025                     | The Data connector has been updated to support up to version 14 log versioning for the Cisco log format, and the parser to include all tables. |
 | 3.0.6       | 01-09-2025                     | Added a new data connector, 'CiscoUmbrella_API_FunctionApp_elasticpremium.json'    |
