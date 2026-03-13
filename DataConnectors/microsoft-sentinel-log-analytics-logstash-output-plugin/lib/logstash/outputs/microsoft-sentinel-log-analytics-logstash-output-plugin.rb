@@ -65,6 +65,9 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # This will set the amount of time given for retransmitting messages once sending is failed
   config :retransmission_time, :validate => :number, :default => 10
 
+  # Delay in seconds between each retry attempt when sending fails
+  config :retransmission_delay, :validate => :number, :default => 2
+
   # Compress the message body before sending to LA
   config :compress_data, :validate => :boolean, :default => false
 
@@ -114,6 +117,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     logstash_configuration.proxy_aad = @proxy_aad || @proxy || ENV['http_proxy']
     logstash_configuration.proxy_endpoint = @proxy_endpoint || @proxy || ENV['http_proxy']
     logstash_configuration.retransmission_time = @retransmission_time
+    logstash_configuration.retransmission_delay = @retransmission_delay
     logstash_configuration.azure_cloud = @azure_cloud || "AzureCloud"
 
     return logstash_configuration

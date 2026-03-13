@@ -1,0 +1,760 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "Xbow",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 11,
+            "metadata": {
+                "description": "Name prefix for the Azure Function App and related resources."
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Log Analytics workspace where Microsoft Sentinel is deployed."
+            }
+        },
+        "XbowApiToken": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "XBOW Personal Access Token. Generate one in the XBOW console under Settings > Personal Access Tokens."
+            }
+        },
+        "XbowOrgId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "XBOW Organization ID. Find this in the XBOW console URL or via the API."
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Azure Active Directory Tenant ID."
+            }
+        },
+        "ClientId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "App Registration (Service Principal) Client ID."
+            }
+        },
+        "ClientSecret": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "App Registration Client Secret."
+            }
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Full Resource ID of the Log Analytics workspace used for Application Insights. Format: /subscriptions/{subscriptionId}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}"
+            }
+        },
+        "FunctionAppLocation": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Azure region for Function App resources (Function App, plan, storage, and Application Insights). Can be different from the Resource Group location."
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageAccountName": "[take(toLower(variables('FunctionName')), 24)]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')), 'LogsEndpoint', variables('suffix'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')), 'CollectionRule', variables('suffix'))]",
+        "assetsTableName": "XbowAssets_CL",
+        "findingsTableName": "XbowFindings_CL",
+        "assessmentsTableName": "XbowAssessments_CL",
+        "assetsStreamName": "Custom-XbowAssets_CL",
+        "findingsStreamName": "Custom-XbowFindings_CL",
+        "assessmentsStreamName": "Custom-XbowAssessments_CL",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data Collection Endpoint for XBOW Microsoft Sentinel connector",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('assetsTableName'))]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('assetsTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "AssetId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Lifecycle",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OrganizationId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "StartUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Sku",
+                            "type": "string"
+                        },
+                        {
+                            "name": "MaxRequestsPerSecond",
+                            "type": "int"
+                        },
+                        {
+                            "name": "CreatedAt",
+                            "type": "string"
+                        },
+                        {
+                            "name": "UpdatedAt",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetReachableState",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetReachableMessage",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Checks",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ApprovedTimeWindows",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DnsBoundaryRules",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HttpBoundaryRules",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Headers",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RawAsset",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('findingsTableName'))]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('findingsTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "FindingId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "FindingName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "State",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Summary",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Evidence",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Impact",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Mitigations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Recipe",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OrganizationId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CreatedAt",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('assessmentsTableName'))]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('assessmentsTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "AssessmentId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssessmentName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "State",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Progress",
+                            "type": "real"
+                        },
+                        {
+                            "name": "AttackCredits",
+                            "type": "int"
+                        },
+                        {
+                            "name": "RecentEvents",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AssetName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OrganizationId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "CreatedAt",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('assetsTableName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('findingsTableName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('assessmentsTableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "Custom-XbowAssets_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "AssetId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Lifecycle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "OrganizationId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "StartUrl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Sku",
+                                "type": "string"
+                            },
+                            {
+                                "name": "MaxRequestsPerSecond",
+                                "type": "int"
+                            },
+                            {
+                                "name": "CreatedAt",
+                                "type": "string"
+                            },
+                            {
+                                "name": "UpdatedAt",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetReachableState",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetReachableMessage",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Checks",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ApprovedTimeWindows",
+                                "type": "string"
+                            },
+                            {
+                                "name": "DnsBoundaryRules",
+                                "type": "string"
+                            },
+                            {
+                                "name": "HttpBoundaryRules",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Headers",
+                                "type": "string"
+                            },
+                            {
+                                "name": "RawAsset",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-XbowFindings_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "FindingId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "FindingName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "State",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Summary",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Evidence",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Impact",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Mitigations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Recipe",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "OrganizationId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "CreatedAt",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-XbowAssessments_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "AssessmentId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssessmentName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "State",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Progress",
+                                "type": "real"
+                            },
+                            {
+                                "name": "AttackCredits",
+                                "type": "int"
+                            },
+                            {
+                                "name": "RecentEvents",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AssetName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "OrganizationId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "CreatedAt",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('logWsResId')]",
+                            "name": "XbowSentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-XbowAssets_CL"
+                        ],
+                        "destinations": [
+                            "XbowSentinelWorkspace"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-XbowAssets_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-XbowFindings_CL"
+                        ],
+                        "destinations": [
+                            "XbowSentinelWorkspace"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-XbowFindings_CL"
+                    },
+                    {
+                        "streams": [
+                            "Custom-XbowAssessments_CL"
+                        ],
+                        "destinations": [
+                            "XbowSentinelWorkspace"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-XbowAssessments_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('FunctionAppLocation')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[parameters('FunctionAppLocation')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "minimumTlsVersion": "TLS1_2"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('FunctionAppLocation')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "kind": "linux",
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('FunctionAppLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value, ';EndpointSuffix=', toLower(variables('StorageSuffix')))]",
+                        "TENANT_ID": "[parameters('TenantId')]",
+                        "CLIENT_ID": "[parameters('ClientId')]",
+                        "CLIENT_SECRET": "[parameters('ClientSecret')]",
+                        "DCE_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "DCR_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]",
+                        "ASSETS_STREAM_NAME": "[variables('assetsStreamName')]",
+                        "FINDINGS_STREAM_NAME": "[variables('findingsStreamName')]",
+                        "ASSESSMENTS_STREAM_NAME": "[variables('assessmentsStreamName')]",
+                        "XBOW_API_TOKEN": "[parameters('XbowApiToken')]",
+                        "XBOW_ORG_ID": "[parameters('XbowOrgId')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/XBOW/Data%20Connectors/Xbow.zip"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/', variables('StorageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ],
+    "outputs": {
+        "DceEndpoint": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]"
+        },
+        "DcrImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]"
+        },
+        "AssetsStreamName": {
+            "type": "string",
+            "value": "[variables('assetsStreamName')]"
+        },
+        "FindingsStreamName": {
+            "type": "string",
+            "value": "[variables('findingsStreamName')]"
+        },
+        "AssessmentsStreamName": {
+            "type": "string",
+            "value": "[variables('assessmentsStreamName')]"
+        }
+    }
+}
