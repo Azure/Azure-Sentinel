@@ -1,5 +1,15 @@
 # Changelog for imAuditEvent.yaml
 
+## Version 0.1.6
+
+- (2026-03-10) [ASIM] AuditEvent - Azure Key Vault (New Parser) - [PR #13757](https://github.com/Azure/Azure-Sentinel/pull/13757)
+- Add Azure Key Vault parser to imAuditEvent
+
+## Version 0.1.5
+
+- (2026-02-17) [ASIM] AuditEvent - AWS Cloud Trail (New Parser) - [PR #13428](https://github.com/Azure/Azure-Sentinel/pull/13428)
+- Add AWSCloudTrail parser to imAuditEvent
+
 ## Version 0.1.4
 
 - (2024-12-13) Audit Native Parser - [PR #11561](https://github.com/Azure/Azure-Sentinel/pull/11561)
