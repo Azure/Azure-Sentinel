@@ -323,7 +323,8 @@ class UmbrellaClient:
         return date_string
 
     def parse_csv_ip(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 7:
@@ -344,7 +345,8 @@ class UmbrellaClient:
                 
     def parse_csv_dlp(self, csv_file):
         csv.field_size_limit(1 * 1024 * 1024)  # Set 1MB limit for large fields
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 25:
@@ -575,7 +577,8 @@ class UmbrellaClient:
 
     def parse_csv_dns(self, csv_file):
         csv.field_size_limit(1 * 1024 * 1024)  # Set 1MB limit for large fields
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 10:
@@ -622,7 +625,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_cdfw(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 14:
@@ -740,7 +744,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_ravpn(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 14:
@@ -824,7 +829,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_audit(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 9:
@@ -845,7 +851,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_ztna(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 29:
@@ -995,7 +1002,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_ztaflow(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 23:
@@ -1043,7 +1051,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_fileevent(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 19:
@@ -1086,7 +1095,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_intrusion(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 16:
@@ -1178,8 +1188,9 @@ class UmbrellaClient:
                 event['EventType'] = 'intrusionlogs'
                 yield event
     
-    def parse_csv_fw(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+    def parse_csv_fw(self, csv_file):   
+        sanitized_csv_file = csv_file.replace('\x00', '')
+        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 14:
