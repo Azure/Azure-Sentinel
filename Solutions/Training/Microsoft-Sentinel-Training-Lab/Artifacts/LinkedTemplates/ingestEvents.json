@@ -1,0 +1,153 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Log Analytics workspace name"
+            }
+        },
+        "scheduleStartTime": {
+            "type": "string",
+            "metadata": {
+                "description": "UTC start time for the one-time schedule"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for the resources"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {
+        "automationAccountName": "[concat('sentineltraining', uniqueString(resourceGroup().id))]",
+        "runbookName": "IngestTrainingTelemetry",
+        "scheduleName": "IngestTrainingTelemetryOnce"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Automation/automationAccounts",
+            "apiVersion": "2024-10-23",
+            "name": "[variables('automationAccountName')]",
+            "location": "[parameters('location')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "sku": {
+                    "name": "Basic"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/runbooks",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/', variables('runbookName'))]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "runbookType": "PowerShell",
+                "logProgress": true,
+                "logVerbose": true,
+                "publishContentLink": {
+                    "uri": "[concat('https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Microsoft-Sentinel-Training-Lab/Artifacts/Scripts/RunIngest.ps1', '?v=', parameters('scheduleStartTime'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/schedules",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/', variables('scheduleName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "frequency": "OneTime",
+                "startTime": "[parameters('scheduleStartTime')]",
+                "timeZone": "UTC"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/SentinelTrainingSubscriptionId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', subscription().subscriptionId, '\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/SentinelTrainingResourceGroupName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', resourceGroup().name, '\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/SentinelTrainingLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', parameters('location'), '\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/SentinelTrainingWorkspaceName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', parameters('WorkspaceName'), '\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+            "apiVersion": "2024-10-23",
+            "name": "[concat(variables('automationAccountName'), '/', guid(variables('automationAccountName'), variables('runbookName'), variables('scheduleName'), deployment().name))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks', variables('automationAccountName'), variables('runbookName'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/schedules', variables('automationAccountName'), variables('scheduleName'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingSubscriptionId')]",
+                "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingResourceGroupName')]",
+                "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingLocation')]",
+                "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingWorkspaceName')]"
+            ],
+            "properties": {
+                "runbook": {
+                    "name": "[variables('runbookName')]"
+                },
+                "schedule": {
+                    "name": "[variables('scheduleName')]"
+                },
+                "parameters": {
+                    "SubscriptionId": "[subscription().subscriptionId]",
+                    "ResourceGroupName": "[resourceGroup().name]",
+                    "Location": "[parameters('location')]",
+                    "WorkspaceName": "[parameters('WorkspaceName')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
