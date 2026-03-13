@@ -1,0 +1,179 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "scheduleStartTime": {
+            "type": "string",
+            "metadata": {
+                "description": "UTC start time for the one-time detection-rules schedule (should run before data ingestion)"
+            }
+        },
+        "userAssignedIdentityResourceId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Full resource ID of a pre-created User-Assigned Managed Identity that has been granted the Microsoft Graph CustomDetection.ReadWrite.All application permission. Required when using Managed Identity auth (leave SPN params empty)."
+            }
+        },
+        "spnTenantId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Microsoft Entra tenant ID for service principal authentication. Provide together with spnClientId and spnClientSecret to use SPN auth instead of Managed Identity."
+            }
+        },
+        "spnClientId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Application (client) ID of the service principal with CustomDetection.ReadWrite.All permission."
+            }
+        },
+        "spnClientSecret": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Client secret of the service principal."
+            }
+        }
+    },
+    "variables": {
+        "automationAccountName": "[concat('sentineldetections', uniqueString(resourceGroup().id))]",
+        "runbookName": "DeployDetectionRules",
+        "scheduleName": "[concat('DeployDetectionRulesOnce-', uniqueString(resourceGroup().id, parameters('scheduleStartTime')))]",
+        "useSpn": "[and(not(empty(parameters('spnTenantId'))), not(empty(parameters('spnClientId'))), not(empty(parameters('spnClientSecret'))))]",
+        "useManagedIdentity": "[and(not(variables('useSpn')), not(empty(parameters('userAssignedIdentityResourceId'))))]"
+    },
+    "resources": [
+        {
+            "condition": "[variables('useManagedIdentity')]",
+            "type": "Microsoft.Automation/automationAccounts",
+            "apiVersion": "2023-11-01",
+            "name": "[variables('automationAccountName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "[if(variables('useManagedIdentity'), parameters('userAssignedIdentityResourceId'), 'placeholder')]": {}
+                }
+            },
+            "properties": {
+                "sku": {
+                    "name": "Basic"
+                }
+            }
+        },
+        {
+            "condition": "[variables('useSpn')]",
+            "type": "Microsoft.Automation/automationAccounts",
+            "apiVersion": "2023-11-01",
+            "name": "[variables('automationAccountName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "name": "Basic"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/runbooks",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/', variables('runbookName'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "runbookType": "PowerShell",
+                "logProgress": true,
+                "logVerbose": true,
+                "publishContentLink": {
+                    "uri": "[concat('https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Microsoft-Sentinel-Training-Lab/Artifacts/Scripts/DeployDetectionRules.ps1', '?v=', parameters('scheduleStartTime'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/schedules",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/', variables('scheduleName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "frequency": "OneTime",
+                "startTime": "[parameters('scheduleStartTime')]",
+                "timeZone": "UTC"
+            }
+        },
+        {
+            "condition": "[variables('useManagedIdentity')]",
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/DetectionRulesManagedIdentityClientId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[if(variables('useManagedIdentity'), concat('\"', reference(parameters('userAssignedIdentityResourceId'), '2023-01-31').clientId, '\"'), '\"\"')]"
+            }
+        },
+        {
+            "condition": "[variables('useSpn')]",
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/DetectionRulesTenantId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', parameters('spnTenantId'), '\"')]"
+            }
+        },
+        {
+            "condition": "[variables('useSpn')]",
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/DetectionRulesClientId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": false,
+                "value": "[concat('\"', parameters('spnClientId'), '\"')]"
+            }
+        },
+        {
+            "condition": "[variables('useSpn')]",
+            "type": "Microsoft.Automation/automationAccounts/variables",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/DetectionRulesClientSecret')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+            ],
+            "properties": {
+                "isEncrypted": true,
+                "value": "[concat('\"', parameters('spnClientSecret'), '\"')]"
+            }
+        },
+        {
+            "type": "Microsoft.Automation/automationAccounts/jobSchedules",
+            "apiVersion": "2023-11-01",
+            "name": "[concat(variables('automationAccountName'), '/', guid(variables('automationAccountName'), variables('runbookName'), variables('scheduleName')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Automation/automationAccounts/runbooks', variables('automationAccountName'), variables('runbookName'))]",
+                "[resourceId('Microsoft.Automation/automationAccounts/schedules', variables('automationAccountName'), variables('scheduleName'))]"
+            ],
+            "properties": {
+                "runbook": {
+                    "name": "[variables('runbookName')]"
+                },
+                "schedule": {
+                    "name": "[variables('scheduleName')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
