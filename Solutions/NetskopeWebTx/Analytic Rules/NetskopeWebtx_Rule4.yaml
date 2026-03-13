@@ -1,0 +1,71 @@
+id: 272f9bca-5fd0-4413-b494-03b2d9f0bb9b
+name: Netskope - Heavy Personal Cloud Storage Usage (Shadow IT)
+description: |
+  Detects heavy usage of personal cloud storage applications like personal Dropbox, Google Drive, OneDrive personal, etc. Indicates potential Shadow IT or data leakage risk.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1530
+query: |
+  let heavyUsageThresholdMB = 500;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername) and isnotempty(XCsApp)
+  | where XCsApp has_any ('Dropbox', 'Google Drive', 'OneDrive', 'Box', 'iCloud', 'pCloud', 'MEGA', 'MediaFire', 'WeTransfer')
+  | where XCsAppInstanceTag contains 'Personal' 
+      or XCsAppInstanceName contains 'Personal'
+      or XCsAppTags contains 'Unsanctioned'
+      or not(XCsAppTags contains 'Enterprise')
+  | summarize 
+      TotalBytes = sum(Bytes),
+      UploadBytes = sum(CsBytes),
+      DownloadBytes = sum(ScBytes),
+      FileCount = dcount(XCsAppObjectName),
+      Files = make_set(XCsAppObjectName, 10),
+      Activities = make_set(XCsAppActivity),
+      EventCount = count()
+      by CsUsername, XCsApp, XCsAppCategory, XCsAppInstanceName, XCsAppTags, XCDevice, XCCountry
+  | extend 
+      TotalMB = round(TotalBytes / 1048576.0, 2),
+      UploadMB = round(UploadBytes / 1048576.0, 2),
+      DownloadMB = round(DownloadBytes / 1048576.0, 2)
+  | where TotalMB > heavyUsageThresholdMB or FileCount > 50
+  | project 
+      TimeGenerated = now(),
+      User = CsUsername,
+      CloudApplication = XCsApp,
+      AppCategory = XCsAppCategory,
+      AppInstance = XCsAppInstanceName,
+      AppTags = XCsAppTags,
+      TotalDataMB = TotalMB,
+      UploadMB,
+      DownloadMB,
+      FileCount,
+      Files,
+      Activities,
+      Device = XCDevice,
+      Country = XCCountry,
+      EventCount
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApplication
+version: 1.0.0
+kind: Scheduled

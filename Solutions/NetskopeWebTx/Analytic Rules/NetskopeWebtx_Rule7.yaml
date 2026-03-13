@@ -1,0 +1,60 @@
+id: ba66b81c-2cf7-4c53-9db0-e8b6f537704a
+name: Netskope - New Risky App Access vs 7-Day Baseline
+description: |
+  Compares today's accessed applications against a 7-day baseline and triggers alerts when users access new risky applications not seen before.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Discovery
+relevantTechniques:
+  - T1199
+  - T1526
+query: |
+  let lookbackPeriod = 7d;
+  let currentPeriod = 1d;
+  let baseline = NetskopeWebTransactions_CL
+      | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))
+      | where isnotempty(CsUsername) and isnotempty(XCsApp)
+      | summarize BaselineApps = make_set(XCsApp) by CsUsername;
+  let current = NetskopeWebTransactions_CL
+      | where TimeGenerated > ago(currentPeriod)
+      | where isnotempty(CsUsername) and isnotempty(XCsApp)
+      | where XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low' or XCsAppCcl =~ 'medium' or XCsAppCci < 70
+      | summarize 
+          CurrentApps = make_set(XCsApp),
+          arg_max(TimeGenerated, XCsAppCcl, XCsAppCci, XCsAppCategory)
+          by CsUsername, XCsApp;
+  current
+  | join kind=leftouter baseline on CsUsername
+  | extend BaselineApps = coalesce(BaselineApps, dynamic([]))
+  | where not(set_has_element(BaselineApps, XCsApp))
+  | where isnotempty(XCsApp)
+  | where XCsAppCci < 70 or XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low'
+  | project 
+      TimeGenerated,
+      User = CsUsername,
+      NewRiskyApp = XCsApp,
+      AppCCL = XCsAppCcl,
+      AppCCI = XCsAppCci,
+      AppCategory = XCsAppCategory,
+      BaselineAppCount = array_length(BaselineApps)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: NewRiskyApp
+version: 1.0.0
+kind: Scheduled
