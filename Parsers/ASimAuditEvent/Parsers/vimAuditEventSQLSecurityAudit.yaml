@@ -47,6 +47,9 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 
 ParserQuery: |
   let parser=(
@@ -59,7 +62,8 @@ ParserQuery: |
     operation_has_any:dynamic=dynamic([]),
     object_has_any:dynamic=dynamic([]),
     newvalue_has_any:dynamic=dynamic([]),
-    disabled:bool = false
+    disabled:bool = false,
+    pack:bool = false
   ){
     let SqlAuditEventTypeLookup = datatable (ActionType:string, EventType:string)
     [
@@ -112,7 +116,8 @@ ParserQuery: |
           ActorSessionId = tostring(SessionId),
           EventResult = iff(Succeeded == true, "Success", "Failure"),
           TargetAppName = strcat(LogicalServerName, "/", DatabaseName),
-          AdditionalFields = bag_pack(
+          AdditionalFields = iff(pack, bag_pack(
+              "Statement", Statement,
               "SchemaName", SchemaName,
               "DurationMs", DurationMs,
               "AffectedRows", AffectedRows,
@@ -120,7 +125,7 @@ ParserQuery: |
               "ApplicationName", ApplicationName,
               "ClassTypeDescription", ClassTypeDescription,
               "HostName", HostName
-          )
+          ), dynamic([]))
       ;
     let SqlSecurityAuditDiag =
       AzureDiagnostics
@@ -147,7 +152,8 @@ ParserQuery: |
           ActorSessionId = tostring(session_id_d),
           EventResult = iff(succeeded_s == "true", "Success", "Failure"),
           TargetAppName = strcat(LogicalServerName_s, "/", database_name_s),
-          AdditionalFields = bag_pack(
+          AdditionalFields = iff(pack, bag_pack(
+              "Statement", statement_s,
               "SchemaName", schema_name_s,
               "DurationMs", duration_milliseconds_d,
               "AffectedRows", affected_rows_d,
@@ -155,7 +161,7 @@ ParserQuery: |
               "ApplicationName", application_name_s,
               "ClassTypeDescription", class_type_description_s,
               "HostName", host_name_s
-          )
+          ), dynamic([]))
       ;
     union isfuzzy=true SqlSecurityAuditDedicated, SqlSecurityAuditDiag
     | extend
@@ -238,5 +244,6 @@ ParserQuery: |
     operation_has_any = operation_has_any,
     object_has_any=object_has_any,
     newvalue_has_any=newvalue_has_any,
-    disabled=disabled
+    disabled=disabled,
+    pack=pack
   )
