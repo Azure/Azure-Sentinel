@@ -48,6 +48,16 @@ $output = & {
 if ($output -match "Error occurred in catch of createSolutionV3 file") {
     exit 1
 }
+if ($output -match "Error occurred in ReadFileContent\. Error details : Cannot bind argument to parameter 'Path' because it is an empty string\.") {
+    exit 1
+}
+# createSolutionV3.ps1 writes these but does not exit; script may continue with partial state
+if ($output -match "Failed to download.*Please ensure that it exists in") {
+    exit 1
+}
+if ($output -match "Failed to load Metadata file.*Please ensure that") {
+    exit 1
+}
 
 # Don't forget to go back to the original folder
 Set-Location $currentPath
