@@ -1,0 +1,722 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "subscription": {
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "type": "string",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "defaultValue": "[resourceGroup().name]",
+      "type": "string",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_solutionName": "CrowdStrike API Apps",
+    "_solutionVersion": "2.0.0",
+    "_solutionAuthor": "Eric.Lamer@roberthalf.com",
+    "_packageIcon": "microsoft_logo",
+    "_solutionId": "azuresentinel.azure-sentinel-solution-CrowdStrike-apps",
+    "dataConnectorVersionConnectorDefinition": "1.0.0",
+    "dataConnectorVersionConnections": "1.0.0",
+    "_solutionTier": "User",
+    "_dataConnectorContentIdConnectorDefinition": "CrowdStrikeAPIConnectorApps",
+    "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+    "_dataConnectorContentIdConnections": "Connections",
+    "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+    "_logAnalyticsTableId6": "CrowdstrikeApps_CL"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2025-09-01",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorVersionConnections')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CrowdStrikeAppsDataConnector",
+                  "title": "CrowdStrike Apps Data Connector",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting logs from the CrowdStrike API into Microsoft Sentinel. This connector is built on the Microsoft Sentinel Codeless Connector Platform and uses the CrowdStrike API to fetch logs for Alerts, Detections, Hosts, Incidents, and Vulnerabilities. It supports DCR-based ingestion time transformations so that queries can run more efficiently.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Application logs received",
+                      "legend": "CrowdStrike Application Logs",
+                      "baseQuery": "CrowdstrikeApps_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of CrowdStrike Application logs",
+                      "query": "CrowdstrikeApps_CL | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CrowdstrikeApps_CL",
+                      "lastDataReceivedQuery": "CrowdstrikeApps_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": null
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+					    {
+						"type": "DataConnectorsGrid",
+						"parameters": {
+							"mapping": [
+							{
+								"columnName": "Connection Name",
+								"columnValue": "properties.addOnAttributes.connectionName"
+							},
+							{
+								"columnName": "Connection Type",
+								"columnValue": "properties.addOnAttributes.connectionType"
+							}
+							],
+							"menuItems": [
+							"DeleteConnector"
+							]
+							}
+						},
+					    {
+							"type": "ContextPane",
+							"parameters": {
+								"isPrimary": true,
+								"label": "Add",
+								"title": "Add Crowdstrike Tenant",
+								"subtitle": "Add Crowdstrike Tenant",
+								"contextPaneType": "DataConnectorsContextPane",
+								"instructionSteps": [
+									{
+									"instructions": [
+										{
+											"type": "Textbox",
+											"parameters": {
+												"label": "Name",
+												"placeholder": "Name of the config.",
+												"type": "string",
+												"name": "connectionName"
+											}
+										},
+										{
+											"type": "Textbox",
+											"parameters": {
+												"label": "Base API URL",
+												"placeholder": "https://api.us-2.crowdstrike.com",
+												"type": "string",
+												"name": "apiUrl"
+											}
+										},
+										{
+											"type": "Textbox",
+											"parameters": {
+												"label": "Client ID",
+												"placeholder": "Your Client ID",
+												"type": "string",
+												"name": "clientId"
+											}
+										},
+										{
+											"type": "Textbox",
+											"parameters": {
+												"label": "Client Secret",
+												"placeholder": "Your Client Secret",
+												"type": "password",
+												"name": "clientSecret"
+											}
+										}
+									]
+								}
+							]
+							}
+					    },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "innerSteps": null
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "CrowdStrikeDCRApps",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-CrowdstrikeApps": {
+                    "columns": [
+                      { "name": "TimeGenerated", "type": "datetime" },
+                      { "name": "id", "type": "string" },
+                      { "name": "cid", "type": "string" },
+                      { "name": "name", "type": "string" },
+                      { "name": "vendor", "type": "string" },
+                      { "name": "version", "type": "string" },
+                      { "name": "software_type", "type": "string" },
+                      { "name": "name_vendor", "type": "string" },
+                      { "name": "name_vendor_version", "type": "string" },
+                      { "name": "versioning_scheme", "type": "string" },
+                      { "name": "category", "type": "string" },
+                      { "name": "architectures", "type": "dynamic" },
+                      { "name": "installation_paths", "type": "dynamic" },
+                      { "name": "installation_timestamp", "type": "datetime" },
+                      { "name": "first_seen_timestamp", "type": "datetime" },
+                      { "name": "last_updated_timestamp", "type": "datetime" },
+                      { "name": "is_suspicious", "type": "boolean" },
+                      { "name": "is_normalized", "type": "boolean" },
+                      { "name": "host", "type": "dynamic" },
+					  { "name": "connectionName", "type": "string" }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CrowdstrikeApps"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project TimeGenerated = now(), Id = id, Cid = cid, Name = name, Vendor = vendor, Version = version, SoftwareType = software_type, NameVendor = name_vendor, NameVendorVersion = name_vendor_version, VersioningScheme = versioning_scheme, Category = category, Architectures = todynamic(architectures), InstallationPaths = todynamic(installation_paths), InstallationTimestamp = installation_timestamp, FirstSeenTimestamp = first_seen_timestamp, LastUpdatedTimestamp = last_updated_timestamp, IsSuspicious = is_suspicious, IsNormalized = is_normalized, Host = host,ConnectionName = connectionName",
+                    "outputStream": "Custom-CrowdstrikeApps_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/', parameters('subscription'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Insights/dataCollectionEndpoints/', parameters('workspace'))]"
+              }
+            },
+            {
+              "name": "[variables('_logAnalyticsTableId6')]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "schema": {
+                  "name": "[variables('_logAnalyticsTableId6')]",
+                  "columns": [
+                    { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "Ingestion time." },
+                    { "name": "Id", "type": "string", "description": "ID value" },
+                    { "name": "Cid", "type": "string", "description": "CID Value" },
+                    { "name": "Name", "type": "string", "description": "Name of the software" },
+                    { "name": "Vendor", "type": "string", "description": "Vendor of the software" },
+                    { "name": "Version", "type": "string", "description": "Version of the software" },
+                    { "name": "SoftwareType", "type": "string", "description": "Type of the software" },
+                    { "name": "NameVendor", "type": "string", "description": "Name and vendor of the software" },
+                    { "name": "NameVendorVersion", "type": "string", "description": "version of the software" },
+                    { "name": "VersioningScheme", "type": "string", "description": "Versioning scheme of the software" },
+                    { "name": "Category", "type": "string", "description": "Category of the software" },
+                    { "name": "Architectures", "type": "dynamic", "description": "Architectures supported by the software" },
+                    { "name": "InstallationPaths", "type": "dynamic", "description": "Installation paths of the software" },
+                    { "name": "InstallationTimestamp", "type": "datetime", "description": "Installation timestamp of the software" },
+                    { "name": "FirstSeenTimestamp", "type": "datetime", "description": "First seen timestamp of the software" },
+                    { "name": "LastUpdatedTimestamp", "type": "datetime", "description": "Last updated timestamp of the software" },
+                    { "name": "IsSuspicious", "type": "boolean", "description": "Indicates if the software is suspicious" },
+                    { "name": "IsNormalized", "type": "boolean", "description": "Indicates if the software is normalized" },
+                    { "name": "Host", "type": "dynamic", "description": "Host details" },
+					{ "name": "ConnectionName", "type": "string", "description": "Connection name." }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+      "apiVersion": "2025-09-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CrowdStrikeAPIAppsConnector",
+          "title": "CrowdStrike API Apps Connector",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting logs from the CrowdStrike API into Microsoft Sentinel. This connector is built on the Microsoft Sentinel Codeless Connector Platform and uses the CrowdStrike API to fetch logs for Alerts, Detections, Hosts, Incidents, and Vulnerabilities. It supports DCR-based ingestion time transformations so that queries can run more efficiently.",
+          "graphQueries": [
+            {
+              "metricName": "Total Application logs received",
+              "legend": "CrowdStrike Application Logs",
+              "baseQuery": "CrowdstrikeApps_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of CrowdStrike Application logs",
+              "query": "CrowdstrikeApps_CL | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CrowdstrikeApps_CL",
+              "lastDataReceivedQuery": "CrowdstrikeApps_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+			  {
+			    "type": "DataConnectorsGrid",
+                    "parameters": {
+                    "mapping": [
+					{
+                        "columnName": "Connection Name",
+                        "columnValue": "properties.addOnAttributes.connectionName"
+                    },
+					{
+                        "columnName": "Connection Type",
+                        "columnValue": "properties.addOnAttributes.connectionType"
+                    }
+                    ],
+                    "menuItems": [
+                        "DeleteConnector"
+                    ]
+                    }
+			  },
+			  {
+                "type": "ContextPane",
+                    "parameters": {
+                        "isPrimary": true,
+                        "label": "Add",
+                        "title": "Add Crowdstrike Tenant",
+                        "subtitle": "Add Crowdstrike Tenant",
+                        "contextPaneType": "DataConnectorsContextPane",
+                        "instructionSteps": [
+                        {
+                            "instructions": [
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Name",
+                                    "placeholder": "Name of the config.",
+                                    "type": "string",
+                                    "name": "connectionName"
+                                }
+                            },
+							{
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Base API URL",
+                                    "placeholder": "https://api.us-2.crowdstrike.com",
+                                    "type": "string",
+                                    "name": "apiUrl"
+                                }
+                            },
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Client ID",
+                                    "placeholder": "Your Client ID",
+                                    "type": "string",
+                                    "name": "clientId"
+                                }
+                            },
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Client Secret",
+                                    "placeholder": "Your Client Secret",
+                                    "type": "password",
+                                    "name": "clientSecret"
+                                }
+                            }
+                            ]
+                        }
+                        ]
+                    }
+                }
+              ],
+              "innerSteps": null
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+      "apiVersion": "2025-09-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]",
+          "tier": "[variables('_solutionTier')]"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorVersionConnections')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2025-09-01",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnections')]",
+          "parameters": {
+            "connectorDefinitionName": {
+              "defaultValue": "connectorDefinitionName",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+			"workspace-temp": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+			"connectionName": {
+				"defaultValue": "name",
+				"type": "string",
+				"minLength": 1
+			},
+            "apiUrl": {
+              "defaultValue": "apiUrl",
+              "type": "string",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorVersionConnections')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                }
+              }
+            },
+            {
+			  "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeApps', parameters('connectionName') )]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+				"addOnAttributes": {
+				  "connectionName": "[[parameters('connectionName')]",
+				  "connectionType": "Apps"
+				},  
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dataType": "CrowdstrikeApps_CL",
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "httpMethod": "Get",
+				  "rateLimitQPS": 1,
+				  "queryWindowInMin": 60,
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/discover/combined/applications/v1')]",
+                  "queryParameters": {
+                    "facet": [
+                      "browser_extension",
+                      "host_info",
+                      "install_usage"
+                    ]
+                  },
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [ "$.resources" ]
+                },                
+                "dcrConfig": {
+                  "streamName": "Custom-CrowdstrikeApps",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "Paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "PageSizeParameterName": "limit",
+                  "PageSize": 400
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "apiVersion": "2025-09-01",
+      "properties": {
+        "version": "[variables('_solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('_solutionName')]",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+              "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-24",
+        "providers": [
+          "[variables('_solutionAuthor')]"
+        ],
+        "contentKind": "Solution",
+        "packageId": "[variables('_solutionId')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+        "displayName": "[variables('_solutionName')]",
+        "publisherDisplayName": "[variables('_solutionId')]",
+        "descriptionHtml": "test",
+        "icon": "[variables('_packageIcon')]"
+      }
+    }
+  ]
+}
