@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.3       | 06-03-2026                     | Deprecated `RFI-Playbook-Alert-Importer-LAW-Sentinel` in preparation for Microsoft Defender Portal. Added Analytic Rule that will handle incident creation.|
 | 3.1.2       | 29-04-2025                     | Removed `Get Risky User` action from **Playbooks** due to Recorded Future can act as a authority on compromise.|
 | 3.1.1       | 02-04-2025                     | Updated documentation, restructured solution and added correct paths for **Playbooks**.|
 | 3.1.0       | 10-02-2025                     | Refactored solution to be based on Recorded Future **Playbook** Alerts, moved old solution to `v3.0` folder.<br> Added new **Playbooks**. |
