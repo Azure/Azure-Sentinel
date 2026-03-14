@@ -1,0 +1,415 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Log Analytics / Microsoft Sentinel workspace."
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Full resource ID of the Log Analytics workspace: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{name}"
+      }
+    },
+    "MajorBuildAPIKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Major.build Bearer API token (begins with MJR_)."
+      }
+    }
+  },
+  "variables": {
+    "location": "[resourceGroup().location]",
+    "dceName": "[concat('dce-majorbuild-', uniqueString(resourceGroup().id))]",
+    "dcrName": "MajorBuildInvocationsDCR",
+    "connectorDefinitionName": "MajorBuildInvocationsCCF",
+    "connectorName": "majorBuildInvocationsPoller",
+    "tableName": "MajorBuildInvocations_CL",
+    "streamName": "Custom-MajorBuildInvocations_CL",
+    "workspaceSubscriptionId": "[split(parameters('workspaceResourceId'), '/')[2]]",
+    "workspaceResourceGroup": "[split(parameters('workspaceResourceId'), '/')[4]]"
+  },
+  "resources": [
+    {
+      "comments": "1. Data Collection Endpoint",
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[variables('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "comments": "2. Custom Log Analytics Table",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "createMajorBuildTable",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "tags": {
+                "DataSource": "Major.build",
+                "Category": "SecurityInsights",
+                "CreatedFrom": "DCR-StreamDeclaration",
+                "Method": "CustomTransformation"
+              },
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "[variables('tableName')]",
+                  "description": "Major.build AI agent invocation logs — captures user, application, resource, and full request payload for every agent invocation.",
+                  "columns": [
+                    { "name": "TimeGenerated", "type": "datetime" },
+                    { "name": "invocationId", "type": "string" },
+                    { "name": "invocationTime", "type": "string" },
+                    { "name": "resourceName", "type": "string" },
+                    { "name": "applicationName", "type": "string" },
+                    { "name": "resourceType", "type": "string" },
+                    { "name": "environment", "type": "string" },
+                    { "name": "userName", "type": "string" },
+                    { "name": "userEmail", "type": "string" },
+                    { "name": "status", "type": "string" },
+                    { "name": "payload", "type": "dynamic" },
+                    { "name": "payloadSubtype", "type": "string" },
+                    { "name": "payloadTimeoutMs", "type": "int" },
+                    { "name": "payloadType", "type": "string" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "comments": "3. Data Collection Rule",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "createMajorBuildDCR",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Resources/deployments', 'createMajorBuildTable')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "dcrName": { "value": "[variables('dcrName')]" },
+          "dceName": { "value": "[variables('dceName')]" },
+          "workspaceResourceId": { "value": "[parameters('workspaceResourceId')]" },
+          "workspaceSubscriptionId": { "value": "[variables('workspaceSubscriptionId')]" },
+          "workspaceResourceGroup": { "value": "[variables('workspaceResourceGroup')]" }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "dcrName": { "type": "string" },
+            "dceName": { "type": "string" },
+            "workspaceResourceId": { "type": "string" },
+            "workspaceSubscriptionId": { "type": "string" },
+            "workspaceResourceGroup": { "type": "string" }
+          },
+          "resources": [
+            {
+              "name": "[parameters('dcrName')]",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2022-06-01",
+              "location": "[resourceGroup().location]",
+              "properties": {
+                "dataCollectionEndpointId": "[resourceId(parameters('workspaceSubscriptionId'), parameters('workspaceResourceGroup'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+                "streamDeclarations": {
+                  "Custom-MajorBuildInvocations_CL": {
+                    "columns": [
+                      { "name": "invocationId", "type": "string" },
+                      { "name": "time", "type": "string" },
+                      { "name": "resourceName", "type": "string" },
+                      { "name": "applicationName", "type": "string" },
+                      { "name": "resourceType", "type": "string" },
+                      { "name": "environment", "type": "string" },
+                      { "name": "userName", "type": "string" },
+                      { "name": "userEmail", "type": "string" },
+                      { "name": "status", "type": "string" },
+                      { "name": "payload", "type": "dynamic" }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [ "Custom-MajorBuildInvocations_CL" ],
+                    "destinations": [ "clv2ws1" ],
+                    "outputStream": "Custom-MajorBuildInvocations_CL",
+                    "transformKql": "source | extend TimeGenerated = todatetime(['time']), invocationTime = tostring(['time']), payloadSubtype = tostring(payload.subtype), payloadTimeoutMs = toint(payload.timeoutMs), payloadType = tostring(payload.type) | project TimeGenerated, invocationId, invocationTime, resourceName, applicationName, resourceType, environment, userName, userEmail, status, payload, payloadSubtype, payloadTimeoutMs, payloadType"
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "dcrImmutableId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2022-06-01').immutableId]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "comments": "4. CCF Connector Definition + REST API Poller Data Connector",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "createMajorBuildConnector",
+      "subscriptionId": "[variables('workspaceSubscriptionId')]",
+      "resourceGroup": "[variables('workspaceResourceGroup')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'createMajorBuildDCR')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "workspace": { "value": "[parameters('workspace')]" },
+          "workspaceResourceId": { "value": "[parameters('workspaceResourceId')]" },
+          "MajorBuildAPIKey": { "value": "[parameters('MajorBuildAPIKey')]" },
+          "location": { "value": "[variables('location')]" },
+          "connectorDefinitionName": { "value": "[variables('connectorDefinitionName')]" },
+          "connectorName": { "value": "[variables('connectorName')]" },
+          "streamName": { "value": "[variables('streamName')]" },
+          "tableName": { "value": "[variables('tableName')]" },
+          "dcrImmutableId": { "value": "[reference(resourceId('Microsoft.Resources/deployments', 'createMajorBuildDCR'), '2022-09-01').outputs.dcrImmutableId.value]" },
+          "dceEndpoint": { "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]" }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "workspace": { "type": "string" },
+            "workspaceResourceId": { "type": "string" },
+            "MajorBuildAPIKey": { "type": "securestring" },
+            "location": { "type": "string" },
+            "connectorDefinitionName": { "type": "string" },
+            "connectorName": { "type": "string" },
+            "streamName": { "type": "string" },
+            "tableName": { "type": "string" },
+            "dcrImmutableId": { "type": "string" },
+            "dceEndpoint": { "type": "string" }
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', parameters('connectorDefinitionName'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[parameters('connectorDefinitionName')]",
+                  "title": "Major.build Invocations",
+                  "publisher": "Major.build",
+                  "descriptionMarkdown": "The **[Major.build](https://major.build) Invocations** connector ingests AI agent invocation logs from the Major.build platform into Microsoft Sentinel. Each record captures which user triggered an invocation, which application and resource integration was used, and the full request payload — including API paths called or SQL queries executed by AI agents.\n\nUse this data to monitor user activity, detect anomalous AI-driven API patterns, audit database queries executed by agents, and correlate automation activity with your broader security posture.",
+                  "graphQueriesTableName": "[parameters('tableName')]",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total invocations received",
+                      "legend": "Major.build Invocations",
+                      "baseQuery": "[parameters('tableName')]"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All invocations — most recent first",
+                      "query": "MajorBuildInvocations_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Invocations by user (last 7 days)",
+                      "query": "MajorBuildInvocations_CL\n| where TimeGenerated > ago(7d)\n| summarize InvocationCount = count() by userEmail, userName\n| sort by InvocationCount desc"
+                    },
+                    {
+                      "description": "Failed invocations (last 24 hours)",
+                      "query": "MajorBuildInvocations_CL\n| where TimeGenerated > ago(24h) and status != 'success'\n| project TimeGenerated, userEmail, applicationName, resourceName, resourceType, status, payloadType, payload.path"
+                    },
+                    {
+                      "description": "Database queries executed by AI agents",
+                      "query": "MajorBuildInvocations_CL\n| where TimeGenerated > ago(24h) and payloadType == 'database'\n| project TimeGenerated, userEmail, applicationName, resourceName, payload['sql']\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Top API paths called by AI agents",
+                      "query": "MajorBuildInvocations_CL\n| where TimeGenerated > ago(7d) and payloadType == 'api'\n| summarize Count = count() by tostring(payload.method), tostring(payload.path)\n| sort by Count desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "[parameters('tableName')]",
+                      "lastDataReceivedQuery": "MajorBuildInvocations_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Major.build API Bearer Token",
+                        "description": "A valid API Bearer token from your Major.build account is required. Tokens begin with **MJR_** and can be generated from the Major.build platform settings."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Obtain your Major.build API Bearer Token",
+                      "description": "To authenticate this connector, you need an API token from your Major.build account.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Steps to retrieve your API token\n\n1. Log in to the **[Major.build platform](https://major.build)**\n2. Navigate to **Settings → API Keys** (or your account profile)\n3. Generate a new API token or copy an existing one\n4. The token will begin with **`MJR_`** — copy the full value\n\n> **Note:** Keep your token secure. Anyone with this token can query your organization's invocation history, including SQL queries and API paths executed by AI agents."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Configure the connector",
+                      "description": "Enter your Major.build API Bearer token below. The connector will poll `https://api.prod.major.build/api/public/invocations` using a rolling time window and ingest results into `MajorBuildInvocations_CL`.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Major.build API Bearer Token",
+                            "placeholder": "MJR_sF_...",
+                            "type": "password",
+                            "name": "MajorBuildAPIKey"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "3. Connect",
+                      "description": "Click **Connect** to enable polling. Data will appear in `MajorBuildInvocations_CL` within the first polling cycle.",
+                      "instructions": [
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', parameters('connectorName'))]",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "apiVersion": "2022-12-01-preview",
+              "location": "[parameters('location')]",
+              "kind": "RestApiPoller",
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', parameters('connectorDefinitionName'))]"
+              ],
+              "properties": {
+                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
+                "dataType": "[parameters('tableName')]",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[parameters('MajorBuildAPIKey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "https://api.prod.major.build/api/public/invocations",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 5,
+                  "queryWindowInMin": 60,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "limit": 100
+                  },
+                  "queryParametersTemplate": "{\"startTime\": \"{_QueryWindowStartTime}\", \"endTime\": \"{_QueryWindowEndTime}\"}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.invocations"
+                  ],
+                  "format": "json"
+                },
+                "dcrConfig": {
+                  "streamName": "[parameters('streamName')]",
+                  "dataCollectionEndpoint": "[parameters('dceEndpoint')]",
+                  "dataCollectionRuleImmutableId": "[parameters('dcrImmutableId')]"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "tableName": {
+      "type": "string",
+      "value": "[variables('tableName')]"
+    },
+    "dcrName": {
+      "type": "string",
+      "value": "[variables('dcrName')]"
+    },
+    "connectorDefinitionName": {
+      "type": "string",
+      "value": "[variables('connectorDefinitionName')]"
+    }
+  }
+}
