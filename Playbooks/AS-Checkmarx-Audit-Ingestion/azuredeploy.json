@@ -14,7 +14,7 @@
             "1. Add the Logic App managed identity to Key Vault with 'Key Vault Secrets User' role",
             "2. Add the Logic App managed identity to the DCR with 'Monitoring Metrics Publisher' role"
         ],
-        "lastUpdateTime": "2026-03-06T00:00:00Z",
+        "lastUpdateTime": "2026-03-13T00:00:00Z",
         "support": {
             "tier": "partner"
         },
@@ -168,7 +168,14 @@
                                 "headers": {
                                     "Content-Type": "application/x-www-form-urlencoded"
                                 },
-                                "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]"
+                                "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]",
+                                "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 3,
+                                    "interval": "PT10S",
+                                    "minimumInterval": "PT10S",
+                                    "maximumInterval": "PT1M"
+                                }
                             },
                             "runAfter": {
                                 "Get_secret": [
@@ -234,13 +241,21 @@
                                         "headers": {
                                             "Accept": "application/json",
                                             "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                        },
+                                        "retryPolicy": {
+                                            "type": "exponential",
+                                            "count": 3,
+                                            "interval": "PT10S",
+                                            "minimumInterval": "PT10S",
+                                            "maximumInterval": "PT1M"
                                         }
                                     },
                                     "runAfter": {},
                                     "runtimeConfiguration": {
                                         "secureData": {
                                             "properties": [
-                                                "inputs"
+                                                "inputs",
+                                                "outputs"
                                             ]
                                         }
                                     }
@@ -251,14 +266,14 @@
                                         "and": [
                                             {
                                                 "greater": [
-                                                    "@length(body('HTTP_-_Get_Audit_Logs_Page')?['events'])",
+                                                    "@length(coalesce(body('HTTP_-_Get_Audit_Logs_Page')?['events'], json('[]')))",
                                                     0
                                                 ]
                                             }
                                         ]
                                     },
                                     "actions": {
-                                        "Compose_-_Audit_Events": {
+                                        "Select_-_Map_Audit_Events": {
                                             "type": "Select",
                                             "inputs": {
                                                 "from": "@body('HTTP_-_Get_Audit_Logs_Page')?['events']",
@@ -285,7 +300,7 @@
                                                 "headers": {
                                                     "Content-Type": "application/json"
                                                 },
-                                                "body": "@body('Compose_-_Audit_Events')",
+                                                "body": "@body('Select_-_Map_Audit_Events')",
                                                 "authentication": {
                                                     "type": "ManagedServiceIdentity",
                                                     "audience": "https://monitor.azure.com"
@@ -299,7 +314,7 @@
                                                 }
                                             },
                                             "runAfter": {
-                                                "Compose_-_Audit_Events": [
+                                                "Select_-_Map_Audit_Events": [
                                                     "Succeeded"
                                                 ]
                                             }
@@ -332,7 +347,7 @@
                                         "and": [
                                             {
                                                 "less": [
-                                                    "@length(body('HTTP_-_Get_Audit_Logs_Page')?['events'])",
+                                                    "@length(coalesce(body('HTTP_-_Get_Audit_Logs_Page')?['events'], json('[]')))",
                                                     100
                                                 ]
                                             }
