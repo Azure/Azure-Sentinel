@@ -8,16 +8,25 @@ It runs the CreateSolutionV3 silently so that we can keep our output clean for b
 .PARAMETER SolutionDataFolderPath
 Specifies the path to the Data folder for the particular package you are attempting to test.
 
+.PARAMETER VersionBump
+Optional. When provided, uses local version mode and bumps the solution version by this type. Must be one of: major, minor, patch. If not provided, createSolutionV3 is called with its default (catalog mode).
+
 .OUTPUTS
 Creates a new package version zip file in the Package folder, and also updates the other build outputs, like the manifest, test parameters and UI definitions.
 
 .EXAMPLE
 PS ./Solutions/Tanium/ci/build-silently.ps1 "./Solutions/Tanium/Data"
+
+.EXAMPLE
+PS ./Solutions/Tanium/ci/build-silently.ps1 "./Solutions/Tanium/Data" -VersionBump minor
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$SolutionDataFolderPath
+    [string]$SolutionDataFolderPath,
+    [Parameter(Mandatory = $false)]
+    [ValidateSet("major", "minor", "patch")]
+    [string]$VersionBump
 )
 
 # Reject empty or whitespace-only (Mandatory only prevents omitted param)
@@ -41,9 +50,13 @@ if (-not [System.IO.Path]::IsPathRooted($SolutionDataFolderPath)) {
 
 # createSolutionV3.ps1 catches all errors and only writes "Error occurred in catch..."
 # without exiting non-zero, so we detect failure by that message and exit 1 for build.sh.
-$output = & {
-    . ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 $pathToPass
-} *>&1
+# Use & (call operator) so the script runs in a child scope and receives parameters correctly;
+# dot-sourcing can fail to bind VersionMode/VersionBump and produce the wrong zip version.
+if ($PSBoundParameters.ContainsKey('VersionBump')) {
+    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $pathToPass -VersionMode "local" -VersionBump $VersionBump *>&1
+} else {
+    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $pathToPass *>&1
+}
 
 if ($output -match "Error occurred in catch of createSolutionV3 file") {
     exit 1
