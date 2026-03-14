@@ -74,6 +74,7 @@ validate_manifest(){
   check-matching-playbook-declarations
   check-matching-workbook-declarations
   check-matching-analytic-rules-declarations
+  check-matching-data-connector-declarations
 }
 
 validate_build(){
@@ -119,6 +120,8 @@ check-arm-ttk() {
 # Verifies that all items are being included in the solution as expected. By
 #  1. Checking that all files of the specified contribution type are in the manifest
 #  2. Checking that all items declared in the manifest exist in the expected folder
+# The 3rd parameter is either a file extension (e.g. "json", "yaml") for find -name "*.ext",
+# or a full filename (e.g. "ConnectorDefinition.json") for find -name "filename".
 _validate_solution_resources() {
   local contribution_type=$1
   local expected_folder=$2
@@ -134,8 +137,12 @@ _validate_solution_resources() {
 
   local json_property
   json_property=".\"${expected_folder}\"[]"
- 
-  actual_files=$(find "../${expected_folder}" -name "*.${expected_file_type}" ! -name connect-module-connections.json | sort | sed -e 's|../||')
+
+  if [[ "$expected_file_type" == *.* ]]; then
+    actual_files=$(find "../${expected_folder}" -name "$expected_file_type" | sort | sed -e 's|../||')
+  else
+    actual_files=$(find "../${expected_folder}" -name "*.${expected_file_type}" ! -name connect-module-connections.json | sort | sed -e 's|../||')
+  fi
   declared_files=$(jq -r "$json_property" ../Data/Solution_Tanium.json | sort)
 
   _msg "    🕵️  checking all files are all declared in the manifest"
@@ -186,6 +193,15 @@ check-matching-workbook-declarations() {
 #  2. Checking that all analytic rules declared in /Solutions/Tanium/Data/Solution_Tanium.json exist in /Solutions/Tanium/Analytic Rules
 check-matching-analytic-rules-declarations() {
   if ! _validate_solution_resources "analytic rule" "Analytic Rules" "yaml" "🔎" ; then
+    return 1
+  fi
+}
+
+# Verifies that all data connectors are being included in the solution as expected. By
+#  1. Checking that each subfolder under Data Connectors with ConnectorDefinition.json is in the manifest as "Data Connectors/SubFolderName/ConnectorDefinition.json"
+#  2. Checking that each data connector declared in the manifest has a matching subfolder with ConnectorDefinition.json
+check-matching-data-connector-declarations() {
+  if ! _validate_solution_resources "data connector" "Data Connectors" "ConnectorDefinition.json" "🔌" ; then
     return 1
   fi
 }
