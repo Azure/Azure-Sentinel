@@ -1,0 +1,770 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Censys Related Asset Details",
+        "description": "This playbook is triggered manually via HTTP request from the Censys Related Asset Details workbook. It performs on-demand searches against the Censys API to find related assets based on a field-value query (e.g., host.location.country='United States' or host.services.port=80). When triggered, it validates the input format, retrieves the Censys API token from Azure Key Vault, executes a search query against the Censys platform API with pagination support (up to 1000 records), and ingests the related asset details (host IP, certificate fingerprint SHA256, web hostname, and port) into the CensysRelatedAssetsDetails Log Analytics table for visualization in the workbook dashboard.",
+        "prerequisites": [
+            "1. Obtain a Censys API token and store it in Azure Key Vault as a secret named 'Censys-Access-Token'.",
+            "2. Obtain the Censys Organization ID from your Censys platform account.",
+            "3. Create or identify an Azure Key Vault and note its name and Tenant ID.",
+            "4. Ensure you have a Log Analytics Workspace configured for Microsoft Sentinel.",
+            "5. Deploy the Censys Related Asset Details workbook to use this playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select Key Vault connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for Log Analytics Data Collector connection",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity to read secrets from Key Vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select Get and List permissions for Secrets. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create."
+        ],
+        "entities": [
+            "IP",
+            "DNS",
+            "FileHash"
+        ],
+        "tags": [
+            "Related Infra",
+            "Enrichment",
+            "History"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Censys"
+        },
+        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CensysRelatedAssetDetails",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook. Do not change this value."
+            }
+        },
+        "OrganizationID": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Censys Organization ID from the Censys platform account settings"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Azure Key Vault where the Censys API token is stored as a secret named 'Censys-Access-Token'"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal → Azure AD → Overview"
+            }
+        }
+    },
+    "variables": {
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]",
+        "Azureloganalyticsdatacollector-ConnectionName": "[concat('Azureloganalyticsdatacollector-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "field_value": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Censys_API_Secret": {
+                            "runAfter": {
+                                "Condition_To_Validate_User_Input": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Censys-Access-Token')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_General_Variables_": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "run_query",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "run_search_query_fetch_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "run_search_query_error",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "https://api.platform.censys.io"
+                                    },
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3"
+                                    },
+                                    {
+                                        "name": "organization_id",
+                                        "type": "string",
+                                        "value": "e48bb962-9a41-4a49-9912-55205baecd12"
+                                    },
+                                    {
+                                        "name": "final_result",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "break_loop",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "temp_json",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "more_than_1000_records",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Break_Loop_Flag_for_Run_Search_Query_as_False": {
+                            "runAfter": {
+                                "Get_Censys_API_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "break_loop",
+                                "value": false
+                            }
+                        },
+                        "Until_Run_Search_Query_Complete": {
+                            "actions": {
+                                "HTTP_Call_for_Run_Search_Query": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/search/query",
+                                        "method": "POST",
+                                        "headers": {
+                                            "content-type": "application/json",
+                                            "Authorization": "Bearer @{body('Get_Censys_API_Secret')?['value']}",
+                                            "X-Organization-ID": "@{variables('organization_id')}",
+                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                        },
+                                        "body": {
+                                            "fields": [
+                                                "host.ip",
+                                                "cert.fingerprint_sha256",
+                                                "web.hostname",
+                                                "web.port"
+                                            ],
+                                            "query": "@variables('run_query')",
+                                            "page_size": 100,
+                                            "page_token": "@variables('page_token')"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Switch_Case_for_API_Status_Codes_for_Run_Search_Query": {
+                                    "runAfter": {
+                                        "HTTP_Call_for_Run_Search_Query": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_200_for_Run_Search_Query": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Parse_JSON_for_Run_Search_Query_Respones": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_Call_for_Run_Search_Query')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "result": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "total_hits": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "next_page_token": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "previous_page_token": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "query_duration_millis": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "hits": {
+                                                                            "type": "array"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_To_Process_Data_If_Total_Hits_are_not_more_than_1000": {
+                                                    "actions": {
+                                                        "For_each_Hits": {
+                                                            "foreach": "@body('Parse_JSON_for_Run_Search_Query_Respones')?['result']?['hits']",
+                                                            "actions": {
+                                                                "Append_Query_Result_to_Final_Result": {
+                                                                    "runAfter": {
+                                                                        "Add_Query_To_Each_Object": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "final_result",
+                                                                        "value": "@variables('temp_json')"
+                                                                    }
+                                                                },
+                                                                "Add_Query_To_Each_Object": {
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "temp_json",
+                                                                        "value": "@setProperty(items('For_each_Hits'), 'field_values', triggerBody()?['field_value'])"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "type": "Foreach",
+                                                            "runtimeConfiguration": {
+                                                                "concurrency": {
+                                                                    "repetitions": 1
+                                                                }
+                                                            }
+                                                        },
+                                                        "Set_Next_Page_Token": {
+                                                            "runAfter": {
+                                                                "For_each_Hits": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "page_token",
+                                                                "value": "@body('Parse_JSON_for_Run_Search_Query_Respones')?['result']?['next_page_token']"
+                                                            }
+                                                        },
+                                                        "Condition_to_Break_Loop_If_Not_Next_Page": {
+                                                            "actions": {
+                                                                "Set_Break_Loop_True_for_Complete_Fetching_of_all_page": {
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "break_loop",
+                                                                        "value": true
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_Next_Page_Token": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {}
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@variables('page_token')",
+                                                                            ""
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_for_Run_Search_Query_Respones": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Break_Loop_True_For_More_Than_1000_Records": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "break_loop",
+                                                                    "value": true
+                                                                }
+                                                            },
+                                                            "Set_More_Than_1000_Records_As_True": {
+                                                                "runAfter": {
+                                                                    "Set_Break_Loop_True_For_More_Than_1000_Records": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "more_than_1000_records",
+                                                                    "value": true
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "lessOrEquals": [
+                                                                    "@body('Parse_JSON_for_Run_Search_Query_Respones')?['result']?['total_hits']",
+                                                                    1000
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "Case_401_for_Run_Search_Query": {
+                                            "case": 401,
+                                            "actions": {
+                                                "Set_Run_Search_Query_Fetch_Error_True_for_401": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Run_Search_Query_Error_Message_for_401": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Fetch_Error_True_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_error",
+                                                        "value": "@body('HTTP_Call_for_Run_Search_Query')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Run_Search_Query_as_True_for_401": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Error_Message_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_403_for_Run_Search_Query": {
+                                            "case": 403,
+                                            "actions": {
+                                                "Set_Run_Search_Query_Fetch_Error_True_for_403": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Run_Search_Query_Error_Message_for_403": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Fetch_Error_True_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_error",
+                                                        "value": "@body('HTTP_Call_for_Run_Search_Query')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Run_Search_Query_as_True_for_403": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Error_Message_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_422_for_Run_Search_Query": {
+                                            "case": 422,
+                                            "actions": {
+                                                "Set_Run_Search_Query_Fetch_Error_True_for_422": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Run_Search_Query_Error_Message_for_422": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Fetch_Error_True_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_error",
+                                                        "value": "@body('HTTP_Call_for_Run_Search_Query')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Run_Search_Query_as_True_for_422": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Error_Message_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_400_for_Run_Search_Query": {
+                                            "case": 400,
+                                            "actions": {
+                                                "Set_Run_Search_Query_Fetch_Error_True_for_400": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Run_Search_Query_Error_Message_for_400": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Fetch_Error_True_for_400": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "run_search_query_error",
+                                                        "value": "@body('HTTP_Call_for_Run_Search_Query')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Run_Search_Query_as_True_for_400": {
+                                                    "runAfter": {
+                                                        "Set_Run_Search_Query_Error_Message_for_400": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@outputs('HTTP_Call_for_Run_Search_Query')?['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Next_page_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('break_loop'), true)",
+                            "limit": {
+                                "count": 3,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Initialize_Next_page_Token": {
+                            "runAfter": {
+                                "Initialize_Break_Loop_Flag_for_Run_Search_Query_as_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "page_token",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_To_Terminate_Execution_If_API_Failure": {
+                            "actions": {},
+                            "runAfter": {
+                                "Send_Related_Asset_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_Due_to_Failure_While_Executing_Playbook_for_Related_Asset_Details": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "@outputs('HTTP_Call_for_Run_Search_Query')?['statusCode']",
+                                                "message": "@string(variables('run_search_query_error'))"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('run_search_query_fetch_error')",
+                                            false
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Cancel_The_Execution_If_More_Than_1000_Records_Found": {
+                            "actions": {
+                                "Terminate_Due_To_Largs_Amount_of_Records": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Run_Search_Query_Complete": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('more_than_1000_records')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Validate_User_Input": {
+                            "actions": {
+                                "Set_Query_From_User_Input": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "run_query",
+                                        "value": "@concat(split(triggerBody()?['field_value'], '=')[0], '=', split(triggerBody()?['field_value'], '=')[1])"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_General_Variables_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Cancelling_Execution_Due_To_Invalid_Input": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Cancelled"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@triggerBody()?['field_value']",
+                                            "="
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Send_Related_Asset_Data": {
+                            "runAfter": {
+                                "Condition_To_Cancel_The_Execution_If_More_Than_1000_Records_Found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@{variables('final_result')}",
+                                "headers": {
+                                    "Log-Type": "CensysRelatedAssetsDetails"
+                                },
+                                "path": "/api/logs"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {}
+                            },
+                            "Azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Azureloganalyticsdatacollector-ConnectionName'))]",
+                                "connectionName": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]",
+                                "connectionProperties": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "CensysRelatedAssetDetails",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Azureloganalyticsdatacollector-ConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}
