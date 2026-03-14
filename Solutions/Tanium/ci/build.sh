@@ -68,6 +68,14 @@ validate_json_files(){
   fi
 }
 
+validate_manifest(){
+  _msg "\n🧾 checking the package manifest"
+  
+  check-matching-playbook-declarations
+  check-matching-workbook-declarations
+  check-matching-analytic-rules-declarations
+}
+
 validate_build(){
   local version_bump=$1
   _msg "\n📦 checking package build result"
@@ -225,11 +233,6 @@ check_prerequisites() {
   check-command "pwsh" "powershell"  
   check-command "cspell"
   check-arm-ttk
-
-  _msg "\n🧾 checking the package manifest"
-  check-matching-playbook-declarations
-  check-matching-workbook-declarations
-  check-matching-analytic-rules-declarations
 }
 
 # Optional first argument: VersionBump (major, minor, or patch). When provided, uses local
