@@ -14,7 +14,7 @@
             "1. Add the Logic App managed identity to Key Vault with 'Key Vault Secrets User' role",
             "2. Add the Logic App managed identity to the SAST DCR with 'Monitoring Metrics Publisher' role"
         ],
-        "lastUpdateTime": "2026-03-06T00:00:00Z",
+        "lastUpdateTime": "2026-03-13T00:00:00Z",
         "support": {
             "tier": "partner"
         },
@@ -90,6 +90,8 @@
         },
         "BatchSize": {
             "type": "int",
+            "minValue": 1,
+            "maxValue": 500,
             "metadata": {
                 "description": "Number of SAST results to send per batch to the DCR endpoint (to stay under the 1 MB payload limit). Recommended: 200"
             }
@@ -145,7 +147,6 @@
                         }
                     },
                     "actions": {
-
                         "Initialize_BatchSize": {
                             "type": "InitializeVariable",
                             "inputs": {
@@ -159,7 +160,6 @@
                             },
                             "runAfter": {}
                         },
-
                         "Initialize_CurrentIndex": {
                             "type": "InitializeVariable",
                             "inputs": {
@@ -172,10 +172,11 @@
                                 ]
                             },
                             "runAfter": {
-                                "Initialize_BatchSize": [ "Succeeded" ]
+                                "Initialize_BatchSize": [
+                                    "Succeeded"
+                                ]
                             }
                         },
-
                         "Initialize_TotalResults": {
                             "type": "InitializeVariable",
                             "inputs": {
@@ -188,10 +189,11 @@
                                 ]
                             },
                             "runAfter": {
-                                "Initialize_CurrentIndex": [ "Succeeded" ]
+                                "Initialize_CurrentIndex": [
+                                    "Succeeded"
+                                ]
                             }
                         },
-
                         "Get_secret": {
                             "type": "ApiConnection",
                             "inputs": {
@@ -204,7 +206,9 @@
                                 "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
                             },
                             "runAfter": {
-                                "Initialize_TotalResults": [ "Succeeded" ]
+                                "Initialize_TotalResults": [
+                                    "Succeeded"
+                                ]
                             },
                             "runtimeConfiguration": {
                                 "secureData": {
@@ -215,7 +219,6 @@
                                 }
                             }
                         },
-
                         "HTTP_-_Get_Token": {
                             "type": "Http",
                             "inputs": {
@@ -224,10 +227,19 @@
                                 "headers": {
                                     "Content-Type": "application/x-www-form-urlencoded"
                                 },
-                                "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]"
+                                "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]",
+                                "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 3,
+                                    "interval": "PT10S",
+                                    "minimumInterval": "PT10S",
+                                    "maximumInterval": "PT1M"
+                                }
                             },
                             "runAfter": {
-                                "Get_secret": [ "Succeeded" ]
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
                             },
                             "runtimeConfiguration": {
                                 "secureData": {
@@ -238,7 +250,6 @@
                                 }
                             }
                         },
-
                         "HTTP_-_Get_Scans": {
                             "type": "Http",
                             "inputs": {
@@ -247,10 +258,19 @@
                                 "headers": {
                                     "Accept": "application/json",
                                     "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                },
+                                "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 3,
+                                    "interval": "PT10S",
+                                    "minimumInterval": "PT10S",
+                                    "maximumInterval": "PT1M"
                                 }
                             },
                             "runAfter": {
-                                "HTTP_-_Get_Token": [ "Succeeded" ]
+                                "HTTP_-_Get_Token": [
+                                    "Succeeded"
+                                ]
                             },
                             "runtimeConfiguration": {
                                 "secureData": {
@@ -260,13 +280,11 @@
                                 }
                             }
                         },
-
                         "For_Each_Scan": {
                             "type": "Foreach",
-                            "foreach": "@body('HTTP_-_Get_Scans')?['scans']",
+                            "foreach": "@coalesce(body('HTTP_-_Get_Scans')?['scans'], json('[]'))",
                             "operationOptions": "Sequential",
                             "actions": {
-
                                 "HTTP_-_Get_SAST_Results_Page": {
                                     "type": "Http",
                                     "inputs": {
@@ -275,6 +293,13 @@
                                         "headers": {
                                             "Accept": "application/json",
                                             "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                        },
+                                        "retryPolicy": {
+                                            "type": "exponential",
+                                            "count": 3,
+                                            "interval": "PT10S",
+                                            "minimumInterval": "PT10S",
+                                            "maximumInterval": "PT1M"
                                         }
                                     },
                                     "runAfter": {},
@@ -286,7 +311,6 @@
                                         }
                                     }
                                 },
-
                                 "Condition_-_SAST_Results_Exist": {
                                     "type": "If",
                                     "expression": {
@@ -332,38 +356,28 @@
                                             },
                                             "runAfter": {}
                                         },
-                                        "Compose_TotalResults": {
-                                            "type": "Compose",
-                                            "inputs": "@length(body('Select_SAST_Results'))",
-                                            "runAfter": {
-                                                "Select_SAST_Results": [ "Succeeded" ]
-                                            }
-                                        },
                                         "Set_TotalResults": {
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "TotalResults",
-                                                "value": "@outputs('Compose_TotalResults')"
+                                                "value": "@length(body('Select_SAST_Results'))"
                                             },
                                             "runAfter": {
-                                                "Compose_TotalResults": [ "Succeeded" ]
-                                            }
-                                        },
-                                        "Compose_ResetIndex": {
-                                            "type": "Compose",
-                                            "inputs": 0,
-                                            "runAfter": {
-                                                "Set_TotalResults": [ "Succeeded" ]
+                                                "Select_SAST_Results": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         },
                                         "Set_CurrentIndex_to_Zero": {
                                             "type": "SetVariable",
                                             "inputs": {
                                                 "name": "CurrentIndex",
-                                                "value": "@outputs('Compose_ResetIndex')"
+                                                "value": 0
                                             },
                                             "runAfter": {
-                                                "Compose_ResetIndex": [ "Succeeded" ]
+                                                "Set_TotalResults": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         },
                                         "Until_All_Batches_Sent": {
@@ -401,14 +415,9 @@
                                                         }
                                                     },
                                                     "runAfter": {
-                                                        "Compose_Current_Batch": [ "Succeeded" ]
-                                                    }
-                                                },
-                                                "Compose_Next_Index": {
-                                                    "type": "Compose",
-                                                    "inputs": "@add(variables('CurrentIndex'), variables('BatchSize'))",
-                                                    "runAfter": {
-                                                        "HTTP_-_Send_SAST_Batch_to_DCR": [ "Succeeded" ]
+                                                        "Compose_Current_Batch": [
+                                                            "Succeeded"
+                                                        ]
                                                     }
                                                 },
                                                 "Set_CurrentIndex": {
@@ -418,12 +427,25 @@
                                                         "value": "@outputs('Compose_Next_Index')"
                                                     },
                                                     "runAfter": {
-                                                        "Compose_Next_Index": [ "Succeeded" ]
+                                                        "Compose_Next_Index": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                },
+                                                "Compose_Next_Index": {
+                                                    "type": "Compose",
+                                                    "inputs": "@add(variables('CurrentIndex'), variables('BatchSize'))",
+                                                    "runAfter": {
+                                                        "HTTP_-_Send_SAST_Batch_to_DCR": [
+                                                            "Succeeded"
+                                                        ]
                                                     }
                                                 }
                                             },
                                             "runAfter": {
-                                                "Set_CurrentIndex_to_Zero": [ "Succeeded" ]
+                                                "Set_CurrentIndex_to_Zero": [
+                                                    "Succeeded"
+                                                ]
                                             }
                                         }
                                     },
@@ -431,12 +453,16 @@
                                         "actions": {}
                                     },
                                     "runAfter": {
-                                        "HTTP_-_Get_SAST_Results_Page": [ "Succeeded" ]
+                                        "HTTP_-_Get_SAST_Results_Page": [
+                                            "Succeeded"
+                                        ]
                                     }
                                 }
                             },
                             "runAfter": {
-                                "HTTP_-_Get_Scans": [ "Succeeded" ]
+                                "HTTP_-_Get_Scans": [
+                                    "Succeeded"
+                                ]
                             }
                         }
                     },
