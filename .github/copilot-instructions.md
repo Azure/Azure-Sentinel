@@ -41,10 +41,12 @@ python map_solutions_connectors_tables.py
 
 #### Documentation Generator
 ```powershell
-python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation
+python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation --html-output-dir "C:\Users\ofshezaf\GitHub\sentinelninja" --html-docs-path "Solutions Docs/" --html-index-url "https://oshezaf.github.io/sentinelninja/index.html"
 ```
 
 **IMPORTANT:** Never run without `--output-dir` flag.
+
+**IMPORTANT:** Always use `--html-output-dir`, `--html-docs-path`, and `--html-index-url` when generating docs to the sentinelninja repo. The interactive index.html must be at the repo root (`C:\Users\ofshezaf\GitHub\sentinelninja`) for GitHub Pages. Use a relative `--html-docs-path` (e.g. `"Solutions Docs/"`) so that both the interactive index links and the HTML entity pages are served directly from GitHub Pages. When `--html-output-dir` is set and `--html-docs-path` is relative, the generator automatically produces HTML versions of all markdown entity pages alongside the `.md` files and updates index.html links to point to the `.html` versions. Use the GitHub Pages URL for `--html-index-url` so that the navigation bar on both HTML entity pages and static markdown pages links back to the interactive index.
 
 **IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
 
@@ -80,3 +82,29 @@ Use `--force-refresh` with these types when modifying analysis logic:
 - Any output file changes, including changes to CSV files (new columns, renamed columns, removed columns)
 - Any changes to analysis methods or logic
 - Update the primary readme.md if needed and add the change to the change log. Do not add a version if the previous version as manifested by the changelog, was not committed yet.
+- When adding or removing a CSV output file from the mapper, also update `upload_to_kusto.py` to add or remove the file from the `SOLUTION_ANALYZER_FILES` list.
+
+### Static and Interactive Index Synchronization
+
+The documentation generator produces **two parallel sets of index pages** that must stay in sync:
+
+1. **Static indexes** (`generate_connector_docs.py`): Markdown index pages — `solutions-index.md`, `connectors-index.md`, `tables-index.md`, `content/content-index.md`, etc.
+2. **Interactive index** (`generate_interactive_docs.py`): HTML page with DataTables.js — `index.html` with tabs for Solutions, Connectors, Tables, and Content.
+
+**When modifying any index generation logic**, apply the same change to BOTH the static and interactive indexes:
+- Data filtering/inclusion rules (e.g., which connectors or tables to show)
+- Status classification logic (Active/Deprecated/Unpublished/Discovered)
+- Icon usage and legend entries
+- Special-case handling (e.g., placeholder names like `<PlaybookName>`, "GitHub Only" solution name)
+- Link generation (e.g., collection method links, content item links, parser routing)
+- Column additions or removals
+- Description cleanup (quote stripping, truncation)
+
+### Markdown and HTML Entity Page Synchronization
+
+The documentation generator produces **both static markdown and HTML versions** of every entity page. When modifying entity page content (solution pages, connector pages, table pages, content item pages, parser pages, statistics page, etc.), ensure the change is reflected in **both outputs**:
+
+- **Markdown pages** (`generate_connector_docs.py`): The primary data source — all content, counts, tables, and formatting are defined here.
+- **HTML entity pages** (`generate_interactive_docs.py` → `_generate_html_pages()`): Auto-generated from the markdown pages via Python `markdown` library. Changes to markdown content flow through automatically, but changes to link rewriting, heading structure, or HTML-specific formatting may need updates in `_generate_html_pages()`.
+
+In most cases, changing `generate_connector_docs.py` is sufficient because HTML pages are derived from the markdown. But if the change involves navigation, link targets, or HTML-specific rendering (e.g., DataTables on schema tables), also update `generate_interactive_docs.py`.

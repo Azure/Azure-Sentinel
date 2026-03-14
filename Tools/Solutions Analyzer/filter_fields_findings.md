@@ -6,7 +6,7 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 536 | 110 | 20.5% |
+| Connectors | 540 | 111 | 20.6% |
 | Content Items | 6606 | 1023 | 15.5% |
 | ASIM Parsers | 191 | 81 | 42.4% |
 
@@ -64,6 +64,7 @@ The following table.field combinations were detected in queries:
 | ASimDnsActivityLogs.EventVendor | 1 |
 | ASimNetworkSessionLogs.EventType | 1 |
 | ASimWebSessionLogs.EventType | 1 |
+| AzureDiagnostics.Resource | 1 |
 | _Im_ProcessEvent.EventType | 1 |
 
 ## Filter Field Format
@@ -109,7 +110,7 @@ The following fields are extracted from queries:
 
 ## Connectors with Filter Fields
 
-Total: 110 connectors
+Total: 111 connectors
 
 | Connector ID | Title | Filter Fields | File |
 |--------------|-------|---------------|------|
@@ -204,6 +205,7 @@ Total: 110 connectors
 | RidgeBotDataConnector | [Deprecated] RIDGEBOT - data connector for Microsoft Sentine | CommonSecurityLog.DeviceEventClassID == "4001"  \|  CommonSecurityLog.DeviceVendor == "RidgeSecurity" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
 | SemperisDSP | Semperis Directory Services Protector | SecurityEvent.EventID in "9211,9212" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 | SilverfortAma | Silverfort Admin Console | CommonSecurityLog.DeviceEventClassID == "NewIncident"  \|  CommonSecurityLog.DeviceProduct == "Admin Console"  \|  CommonSecurityLog.DeviceProduct has "Admin Console"  \|  CommonSecurityLog.DeviceVendor == "Silverfort"  \|  CommonSecurityLog.DeviceVendor has "Silverfort" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
+| SlashNextFunctionApp | SlashNext Function App | AzureDiagnostics.Resource == "SlashnextFunctionApp" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/Data%20Connectors/SlashNext_FunctionApp.json) |
 | SonicWallFirewall | [Deprecated] SonicWall Firewall via Legacy Agent | CommonSecurityLog.DeviceVendor == "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/SonicwallFirewall.json) |
 | SonicWallFirewallAma | [Deprecated] SonicWall Firewall via AMA | CommonSecurityLog.DeviceVendor =~ "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/template_SonicwallFirewallAMA.json) |
 | Syslog | Syslog via Legacy Agent | Syslog.Facility != "cron" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Data%20Connectors/template_Syslog.json) |

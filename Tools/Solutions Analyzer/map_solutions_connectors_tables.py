@@ -67,6 +67,7 @@ FILTER_FIELDS = {
     # AzureDiagnostics / AzureActivity fields
     'ResourceType': 'AzureDiagnostics',
     'Category': 'AzureDiagnostics',
+    'Resource': None,  # AzureDiagnostics, AzureMetrics, AzureActivity (identifies specific Azure resource instance)
     'ResourceProvider': None,  # Both AzureDiagnostics and AzureActivity (determined by context)
     # Windows event fields
     'EventID': None,  # WindowsEvent, SecurityEvent, or Event (determined by context)
@@ -725,6 +726,17 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
                 table_name = 'AzureActivity'
             else:
                 return  # Skip - ResourceProvider without AzureDiagnostics or AzureActivity table context
+        # Resource field (Azure resource instance name)
+        elif field_lower == 'resource':
+            # Resource identifies a specific Azure resource instance across diagnostic tables
+            if 'azurediagnostics' in tables_lower:
+                table_name = 'AzureDiagnostics'
+            elif 'azuremetrics' in tables_lower:
+                table_name = 'AzureMetrics'
+            elif 'azureactivity' in tables_lower:
+                table_name = 'AzureActivity'
+            else:
+                return  # Skip - Resource without a known Azure diagnostic table context
         # Microsoft Defender XDR / MDE ActionType field
         elif field_lower == 'actiontype':
             # ActionType is used in Defender XDR tables (DeviceEvents, DeviceFileEvents, etc.)
@@ -1396,6 +1408,22 @@ def parse_filter_fields_string(filter_fields_str: str) -> Dict[str, Dict[str, Se
     return result
 
 
+# Override mapping: AzureDiagnostics Category values that imply a specific ResourceType.
+# This encodes prior knowledge that certain diagnostic log categories are produced only by
+# specific Azure resource types, so a Category filter is implicitly a subset of the
+# corresponding ResourceType filter.  Used by is_filter_subset() when a connector filters
+# on ResourceType but the target (parser/content) only filters on Category.
+CATEGORY_TO_RESOURCE_TYPE: Dict[str, str] = {
+    # Azure Firewall categories → AZUREFIREWALLS
+    "azurefirewallnetworkrule": "AZUREFIREWALLS",
+    "azurefirewallapplicationrule": "AZUREFIREWALLS",
+    "azurefirewallnatrule": "AZUREFIREWALLS",
+    "azurefirewallthreatintel": "AZUREFIREWALLS",
+    "azurefirewallidpssignature": "AZUREFIREWALLS",
+    "azurefirewalldnsproxy": "AZUREFIREWALLS",
+}
+
+
 def is_filter_subset(connector_filters: Dict[str, Dict[str, Set[str]]], 
                      target_filters: Dict[str, Dict[str, Set[str]]],
                      shared_tables: Set[str]) -> bool:
@@ -1406,6 +1434,10 @@ def is_filter_subset(connector_filters: Dict[str, Dict[str, Set[str]]],
     - All connector filter field values are contained within the target's filter values
     - If the connector filters on a field that the target doesn't filter on, no match
       (the target expects different data than what the connector provides)
+    - Special case: if the connector filters on ResourceType for AzureDiagnostics and the
+      target filters on Category instead, the CATEGORY_TO_RESOURCE_TYPE override is
+      consulted to check whether the target's Category values imply the connector's
+      ResourceType (i.e. the target is more restrictive).
     
     Args:
         connector_filters: Parsed filter fields from connector
@@ -1431,9 +1463,23 @@ def is_filter_subset(connector_filters: Dict[str, Dict[str, Set[str]]],
         for field_name, conn_values in conn_table_filters.items():
             target_values = target_table_filters.get(field_name, set())
             
-            # If target doesn't filter on this field, the connector's filter is orthogonal
-            # to the target's expectations - no match (they're looking for different data)
+            # If target doesn't filter on this field, check for cross-field overrides
+            # before declaring orthogonal.
             if not target_values:
+                # AzureDiagnostics: Category implies ResourceType
+                if (table == 'azurediagnostics'
+                        and field_name == 'ResourceType'
+                        and 'Category' in target_table_filters):
+                    # Check if ALL target Category values map to one of the
+                    # connector's ResourceType values
+                    target_categories = target_table_filters['Category']
+                    conn_rt_lower = {v.lower() for v in conn_values}
+                    implied = all(
+                        CATEGORY_TO_RESOURCE_TYPE.get(cat.lower(), '').lower() in conn_rt_lower
+                        for cat in target_categories
+                    )
+                    if implied:
+                        continue  # cross-field match satisfied
                 return False
             
             # Connector values must be a subset of target values
@@ -1680,7 +1726,9 @@ def normalize_table_case(table_name: str) -> str:
 PIPE_BLOCK_COMMANDS = {
     "project",
     "project-away",
+    "project-keep",
     "project-rename",
+    "project-reorder",
     "extend",
     "summarize",
     "sort",
@@ -1759,31 +1807,12 @@ def is_valid_table_candidate(
     if lowered.endswith("_cl"):
         return True
     
-    # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
-    # Also allow without underscore prefix (e.g., imDns, ASimNetworkSession, imProcessCreate)
-    # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
-    # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
-    if lowered.startswith("_im_") or lowered.startswith("_asim_"):
-        # Check if this is an empty parser (ends with _empty)
-        if lowered.endswith("_empty"):
-            return False  # Empty parsers only contain datatable definitions
-        # Check if this is a helper function (contains verb patterns after prefix)
-        # _im_ is 4 chars, _asim_ is 6 chars
-        after_prefix = lowered[6:] if lowered.startswith("_asim_") else lowered[4:]
-        helper_verbs = ("get", "lookup", "resolve", "check", "build", "extract", "parse")
-        if any(after_prefix.startswith(verb) for verb in helper_verbs):
-            return False  # This is a helper function, not a table/view
-        return True
+    # ASIM parser function names (e.g., ASimAuditEvent, imDns, _Im_Dns, _ASim_NetworkSession)
+    # are NOT treated as tables. They are neither _CL tables nor in the Azure Monitor table
+    # reference. Real ASIM log tables (e.g., ASimAuditEventLogs, ASimDnsActivityLogs) ARE in
+    # the reference and pass the KNOWN_TABLES_LOWER check below.
     
-    # Allow ASIM parser functions without underscore prefix (imDns, ASimNetworkSession, imProcessCreate)
-    # These are commonly used view functions that wrap ASIM parsers
-    if lowered.startswith("im") or lowered.startswith("asim"):
-        # Verify it looks like an ASIM parser (has a schema name after prefix)
-        # Examples: imDns, imNetworkSession, ASimProcessEvent, imProcessCreate
-        if len(lowered) > 4:  # At least "im" + something meaningful
-            return True
-    
-    # Reject other names starting with underscore (except _CL which was handled above)
+    # Reject names starting with underscore (parser functions like _Im_*, _ASim_*, etc.)
     if lowered.startswith("_"):
         return False
     
@@ -1983,6 +2012,117 @@ def load_connector_association_overrides(overrides_path: Path) -> List[Connector
         print(f"Warning: Could not load connector association overrides from {overrides_path}: {e}")
     
     return overrides
+
+
+def load_synthetic_connectors(overrides_path: Path) -> Dict[str, List[Dict[str, str]]]:
+    """Load synthetic connector definitions from the main overrides CSV file.
+    
+    Synthetic connectors are connectors that cannot be auto-discovered from the
+    repository (e.g., the SAP connector which uses Docker agents and has no standard
+    connector definition files). They are defined via the overrides CSV with
+    Entity='synthetic_connector'.
+    
+    CSV format:
+        Entity=synthetic_connector, Pattern=<solution_folder>, Field=<property>, Value=<value>
+    
+    Required fields per connector:
+        - connector_id: Unique connector identifier
+        - title: Display title
+        - publisher: Publisher name
+    
+    Optional fields:
+        - description: Connector description (Markdown)
+        - tables: Semicolon-separated list of table names
+        - instruction_steps: JSON-encoded instruction steps
+        - permissions: JSON-encoded permissions
+    
+    Multiple connectors can be defined for the same solution_folder by using
+    different connector_id values. Rows are grouped by (solution_folder, connector_id).
+    
+    Returns:
+        Dict mapping solution_folder (case-insensitive key) to list of connector dicts.
+        Each connector dict has keys: connector_id, title, publisher, description,
+        tables (list of str), instruction_steps, permissions.
+    """
+    result: Dict[str, List[Dict[str, str]]] = {}
+    if not overrides_path.exists():
+        return result
+    
+    # First pass: collect all fields grouped by (solution_folder, connector_id)
+    raw: Dict[str, Dict[str, Dict[str, str]]] = {}  # folder -> {connector_id -> {field: value}}
+    
+    try:
+        with overrides_path.open("r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                entity = row.get("Entity", "").strip()
+                if entity.lower() != "synthetic_connector":
+                    continue
+                
+                pattern = row.get("Pattern", "").strip()  # solution_folder
+                field = row.get("Field", "").strip().lower()
+                value = row.get("Value", "")
+                
+                if not pattern or not field:
+                    continue
+                
+                folder_key = pattern.lower()
+                if folder_key not in raw:
+                    raw[folder_key] = {}
+                
+                # If this is the first field for this folder or we see connector_id,
+                # use it to group. For simple case (one connector per folder),
+                # all fields go into the same dict.
+                # For multiple connectors, connector_id must be set before other fields.
+                if field == "connector_id":
+                    cid = value.strip()
+                    if cid not in raw[folder_key]:
+                        raw[folder_key][cid] = {"connector_id": cid}
+                    else:
+                        raw[folder_key][cid]["connector_id"] = cid
+                else:
+                    # Add to the last connector_id seen, or to a default one
+                    if raw[folder_key]:
+                        # Add to the last connector entry
+                        last_cid = list(raw[folder_key].keys())[-1]
+                        raw[folder_key][last_cid][field] = value
+                    else:
+                        # No connector_id yet - use placeholder
+                        raw[folder_key]["_default"] = {field: value}
+    except Exception as e:
+        print(f"Warning: Could not load synthetic connectors from {overrides_path}: {e}")
+        return result
+    
+    # Second pass: validate and build connector dicts
+    for folder_key, connectors in raw.items():
+        folder_connectors = []
+        for cid, fields in connectors.items():
+            connector_id = fields.get("connector_id", cid if cid != "_default" else "")
+            title = fields.get("title", "")
+            publisher = fields.get("publisher", "")
+            
+            if not connector_id or not title or not publisher:
+                print(f"Warning: Synthetic connector for folder '{folder_key}' missing required fields (connector_id, title, publisher)")
+                continue
+            
+            # Parse tables (semicolon-separated)
+            tables_str = fields.get("tables", "")
+            tables = [t.strip() for t in tables_str.split(";") if t.strip()] if tables_str else []
+            
+            folder_connectors.append({
+                "connector_id": connector_id,
+                "title": title,
+                "publisher": publisher,
+                "description": fields.get("description", ""),
+                "tables": tables,
+                "instruction_steps": fields.get("instruction_steps", ""),
+                "permissions": fields.get("permissions", ""),
+            })
+        
+        if folder_connectors:
+            result[folder_key] = folder_connectors
+    
+    return result
 
 
 def apply_overrides_to_row(
@@ -2794,6 +2934,16 @@ def extract_schema_from_dcr_json(dcr_json_path: Path) -> List[Dict[str, str]]:
                 continue
             
             for table_name, transform_kql in outputs:
+                # When a non-trivial transformKql is present, the stream columns represent
+                # the INPUT schema (vendor's raw data), not the OUTPUT table schema.
+                # The transform reshapes the data into the output table format.
+                # Only emit columns when there's no transform (columns map 1:1 to output).
+                transform_stripped = transform_kql.strip() if transform_kql else ""
+                if transform_stripped and transform_stripped != "source":
+                    # Transform present - stream columns are input schema, not output table columns.
+                    # Still record the DCR relationship but don't emit individual columns.
+                    continue
+                
                 for col in columns:
                     if not isinstance(col, dict):
                         continue
@@ -2908,6 +3058,122 @@ def extract_schema_from_custom_tables_dir(custom_tables_dir: Path) -> Dict[str, 
             for col in columns:
                 col['source_file'] = json_file.name
             result[table_name] = columns
+    
+    return result
+
+
+def extract_schema_from_arm_table_files(solutions_dir: Path) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Extract table column schemas from ARM table definition JSON files in connector directories.
+    
+    These files (commonly in CCP/CCF connector folders) have the ARM resource format:
+        {"type": "Microsoft.OperationalInsights/workspaces/tables",
+         "properties": {"schema": {"name": "TableName", "columns": [...]}}}
+    
+    Each column has: name, type, and optionally description and isDefaultDisplay.
+    
+    Type values are normalized to lowercase KQL types.
+    
+    This source is preferred over CustomTables (.script/tests/KqlvalidationsTests)
+    because it's the authoritative definition from the connector, often with descriptions.
+    
+    Args:
+        solutions_dir: Path to the Solutions directory
+        
+    Returns:
+        Dict mapping table_name -> list of column dicts with keys:
+        column_name, column_type, description, source_file, source_dir
+    """
+    # Normalize type strings to standard KQL types
+    TYPE_MAP = {
+        "string": "string",
+        "datetime": "datetime",
+        "date/time": "datetime",
+        "system.datetime": "datetime",
+        "timestamp": "datetime",
+        "timetamp": "datetime",
+        "dynamic": "dynamic",
+        "object": "dynamic",
+        "system.object": "dynamic",
+        "real": "real",
+        "double": "real",
+        "system.double": "real",
+        "int": "int",
+        "int32": "int",
+        "integer": "int",
+        "long": "long",
+        "int64": "long",
+        "bigint": "long",
+        "bool": "bool",
+        "boolean": "bool",
+        "guid": "guid",
+        "sbyte": "int",
+        "system.sbyte": "int",
+        "system.string": "string",
+    }
+    
+    result: Dict[str, List[Dict[str, str]]] = {}
+    
+    if not solutions_dir.is_dir():
+        return result
+    
+    for sol_dir in sorted(solutions_dir.iterdir()):
+        dc_dir = sol_dir / "Data Connectors"
+        if not dc_dir.is_dir():
+            continue
+        for json_file in dc_dir.rglob("*.json"):
+            try:
+                raw = json_file.read_text(encoding="utf-8-sig")
+                # Handle trailing commas
+                raw = re.sub(r',\s*([}\]])', r'\1', raw)
+                data = json.loads(raw)
+            except Exception:
+                continue
+            
+            if not isinstance(data, dict):
+                continue
+            
+            # Check if this is an ARM table definition
+            res_type = data.get("type", "")
+            if res_type != "Microsoft.OperationalInsights/workspaces/tables":
+                continue
+            
+            # Extract schema from properties.schema.columns
+            props = data.get("properties", {})
+            if not isinstance(props, dict):
+                continue
+            schema = props.get("schema", {})
+            if not isinstance(schema, dict):
+                continue
+            
+            table_name = schema.get("name", "") or data.get("name", "")
+            if not table_name:
+                continue
+            
+            raw_columns = schema.get("columns", [])
+            if not isinstance(raw_columns, list):
+                continue
+            
+            columns: List[Dict[str, str]] = []
+            for col in raw_columns:
+                if not isinstance(col, dict):
+                    continue
+                col_name = (col.get("name") or "").strip()
+                col_type_raw = (col.get("type") or "").strip()
+                col_desc = (col.get("description") or "").strip()
+                if not col_name:
+                    continue
+                col_type = TYPE_MAP.get(col_type_raw.lower(), col_type_raw.lower())
+                columns.append({
+                    "column_name": col_name,
+                    "column_type": col_type,
+                    "description": col_desc,
+                    "source_file": json_file.name,
+                    "source_dir": str(json_file.parent.relative_to(solutions_dir)),
+                })
+            
+            if columns and table_name not in result:
+                result[table_name] = columns
     
     return result
 
@@ -3346,6 +3612,24 @@ def extract_tables(data: Any) -> Dict[str, Dict[str, Any]]:
                                     cache,
                                     allow_parser_tokens=True,
                                 )
+                            # Handle Table(Qualifier) pattern in dataTypes.name
+                            # e.g., "Event(ThreatIntelligenceIndicator)" where the inner
+                            # part is the actual table.  When a lastDataReceivedQuery
+                            # exists, the existing mismatch logic already resolves this.
+                            # When no query is present, use the inner part as the
+                            # cross-check candidate so mismatch resolution can pick
+                            # the correct table.
+                            if not primary_actual and name_token:
+                                raw_name = item.get("name", "")
+                                if isinstance(raw_name, str):
+                                    paren_match = re.match(
+                                        r'^(\w+)\((\w+(?:\.\w+)*)\)$',
+                                        raw_name.strip(),
+                                    )
+                                    if paren_match:
+                                        inner_name = paren_match.group(2)
+                                        if inner_name.lower() != name_token.lower():
+                                            primary_actual = inner_name
                             mismatch = False
                             if name_token and primary_actual and name_token.lower() != primary_actual.lower():
                                 mismatch = True
@@ -3409,6 +3693,128 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
             stack.extend(current.values())
         elif isinstance(current, list):
             stack.extend(current)
+    return connectors
+
+
+def find_connectors_in_main_template(data: Any) -> List[Dict[str, Any]]:
+    """
+    Find connector definitions in ARM mainTemplate.json files.
+    
+    Some connectors (e.g., PurviewAudit kind) are only defined as ARM resources
+    within the solution Package/mainTemplate.json, not as standalone JSON files
+    in the Data Connectors folder. This function searches for
+    ``dataConnectorDefinitions`` resources containing ``connectorUiConfig``
+    with id, title, and publisher fields.
+    
+    Returns connector entry dicts compatible with find_connector_objects() output,
+    with an additional ``tables_from_datatypes`` key containing table names
+    extracted from the ``dataTypes`` section of the connector UI config.
+    
+    Args:
+        data: Parsed JSON data from mainTemplate.json
+        
+    Returns:
+        List of connector entry dicts with keys: id, publisher, title,
+        id_generated, description, instructionSteps, permissions,
+        tables_from_datatypes
+    """
+    connectors: List[Dict[str, Any]] = []
+    if not isinstance(data, dict):
+        return connectors
+    
+    resources = data.get("resources", [])
+    if not isinstance(resources, list):
+        return connectors
+    
+    # DFS through all resources including nested contentTemplates
+    stack = list(resources)
+    seen_ids: Set[str] = set()
+    
+    while stack:
+        resource = stack.pop()
+        if not isinstance(resource, dict):
+            continue
+        
+        resource_type = resource.get("type", "")
+        
+        # Look for dataConnectorDefinitions resources
+        if isinstance(resource_type, str) and "dataconnectordefinitions" in resource_type.lower():
+            properties = resource.get("properties", {})
+            if isinstance(properties, dict):
+                ui_config = properties.get("connectorUiConfig", {})
+                if isinstance(ui_config, dict):
+                    connector_id = ui_config.get("id", "")
+                    title = ui_config.get("title", "")
+                    publisher = ui_config.get("publisher", "")
+                    
+                    # Resolve ARM variable references in the ID
+                    # Generate a clean ID from the title (same as find_connector_objects)
+                    id_generated = False
+                    if isinstance(connector_id, str) and "[variables(" in connector_id.lower():
+                        if isinstance(title, str) and title:
+                            connector_id = title.replace(" ", "").replace("-", "")
+                            id_generated = True
+                        else:
+                            continue
+                    
+                    # Resolve ARM variable references in publisher
+                    if isinstance(publisher, str) and "[variables(" in publisher.lower():
+                        publisher = "Unknown (ARM variable)"
+                    
+                    if (
+                        isinstance(connector_id, str) and connector_id
+                        and isinstance(title, str) and title
+                        and isinstance(publisher, str) and publisher
+                        and connector_id not in seen_ids
+                    ):
+                        seen_ids.add(connector_id)
+                        
+                        # Build connector entry compatible with find_connector_objects
+                        entry: Dict[str, Any] = {
+                            "id": connector_id,
+                            "publisher": publisher,
+                            "title": title,
+                            "id_generated": id_generated,
+                        }
+                        
+                        if "descriptionMarkdown" in ui_config:
+                            entry["description"] = ui_config["descriptionMarkdown"]
+                        
+                        if "instructionSteps" in ui_config:
+                            entry["instructionSteps"] = json.dumps(ui_config["instructionSteps"])
+                        
+                        if "permissions" in ui_config:
+                            entry["permissions"] = json.dumps(ui_config["permissions"])
+                        
+                        # Extract table names from dataTypes
+                        tables: List[str] = []
+                        data_types = ui_config.get("dataTypes", [])
+                        if isinstance(data_types, list):
+                            for dt in data_types:
+                                if isinstance(dt, dict):
+                                    tbl_name = dt.get("name", "")
+                                    if isinstance(tbl_name, str) and tbl_name.strip():
+                                        # Skip ARM template placeholders like {{graphQueriesTableName}}
+                                        if not tbl_name.startswith("{{"):
+                                            tables.append(tbl_name.strip())
+                        
+                        entry["tables_from_datatypes"] = tables
+                        connectors.append(entry)
+        
+        # Recurse into nested resources
+        nested_resources = resource.get("resources", [])
+        if isinstance(nested_resources, list):
+            stack.extend(nested_resources)
+        
+        # Also check inside properties.mainTemplate.resources for nested ARM templates
+        properties = resource.get("properties", {})
+        if isinstance(properties, dict):
+            main_template = properties.get("mainTemplate", {})
+            if isinstance(main_template, dict):
+                nested = main_template.get("resources", [])
+                if isinstance(nested, list):
+                    stack.extend(nested)
+    
     return connectors
 
 
@@ -3600,187 +4006,281 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
 
 
 # Marketplace cache filename (stored in .cache folder)
-MARKETPLACE_CACHE_FILENAME = "marketplace_availability.csv"
+MARKETPLACE_CACHE_FILENAME = "marketplace_data.json"
+
+# Fields extracted from marketplace API response
+MARKETPLACE_FIELDS = [
+    'mp_is_published',
+    'mp_url',
+    'mp_display_name',
+    'mp_summary',
+    'mp_long_summary',
+    'mp_publisher_display_name',
+    'mp_is_preview',
+    'mp_is_stop_sell',
+    'mp_creation_date',
+    'mp_last_modified_date',
+    'mp_categories',
+    'mp_keywords',
+    'mp_popularity',
+    'mp_rating_average',
+    'mp_rating_count',
+    'mp_is_free',
+    'mp_is_byol',
+    'mp_is_microsoft_product',
+    'mp_last_checked',
+]
 
 
-def load_marketplace_cache(cache_dir: Path) -> Dict[str, Tuple[bool, str, str]]:
+def _parse_marketplace_response(data: dict, legacy_id: str) -> Dict[str, str]:
     """
-    Load marketplace availability cache from CSV file.
-    
+    Parse marketplace API JSON response into a flat dict of string values.
+
+    Args:
+        data: Parsed JSON response from the Azure Marketplace catalog API
+        legacy_id: The publisher.offer legacy ID
+
+    Returns:
+        Dictionary with mp_* prefixed string fields
+    """
+    marketplace_url = f"https://azuremarketplace.microsoft.com/en-us/marketplace/apps/{legacy_id}"
+
+    # Extract popularity (prefer azurePortalApps, fall back to ampApps)
+    popularity = ''
+    enriched = data.get('enrichedData', {})
+    pop_data = enriched.get('popularity', {})
+    if pop_data:
+        popularity = str(pop_data.get('azurePortalApps', pop_data.get('ampApps', '')))
+
+    # Extract rating
+    rating_avg = ''
+    rating_count = ''
+    rating_data = enriched.get('rating', {})
+    if rating_data:
+        all_ratings = rating_data.get('all', {})
+        if all_ratings:
+            rating_avg = str(all_ratings.get('averageRating', ''))
+            rating_count = str(all_ratings.get('totalRatings', ''))
+
+    # Extract is_free from first plan
+    is_free = ''
+    plans = data.get('plans', [])
+    if plans:
+        is_free = 'true' if plans[0].get('isFree', False) else 'false'
+
+    # Format dates to just date portion
+    creation_date = data.get('creationDate', '')
+    if creation_date and 'T' in creation_date:
+        creation_date = creation_date.split('T')[0]
+    last_modified = data.get('bigCatLastModifiedDate', '')
+    if last_modified and 'T' in last_modified:
+        last_modified = last_modified.split('T')[0]
+
+    return {
+        'mp_is_published': 'true',
+        'mp_url': marketplace_url,
+        'mp_display_name': data.get('displayName', ''),
+        'mp_summary': data.get('summary', ''),
+        'mp_long_summary': data.get('longSummary', ''),
+        'mp_publisher_display_name': data.get('publisherDisplayName', ''),
+        'mp_is_preview': 'true' if data.get('isPreview', False) else 'false',
+        'mp_is_stop_sell': 'true' if data.get('isStopSell', False) else 'false',
+        'mp_creation_date': creation_date,
+        'mp_last_modified_date': last_modified,
+        'mp_categories': ';'.join(data.get('categoryIds', [])),
+        'mp_keywords': ';'.join(data.get('keywords', [])),
+        'mp_popularity': popularity,
+        'mp_rating_average': rating_avg,
+        'mp_rating_count': rating_count,
+        'mp_is_free': is_free,
+        'mp_is_byol': 'true' if data.get('isByol', False) else 'false',
+        'mp_is_microsoft_product': 'true' if data.get('isMicrosoftProduct', False) else 'false',
+        'mp_last_checked': datetime.now().strftime('%Y-%m-%d'),
+    }
+
+
+def _empty_marketplace_record(is_published: bool = False) -> Dict[str, str]:
+    """Return an empty marketplace record (for unpublished or error cases)."""
+    return {field: '' for field in MARKETPLACE_FIELDS} | {
+        'mp_is_published': 'true' if is_published else 'false',
+        'mp_last_checked': datetime.now().strftime('%Y-%m-%d'),
+    }
+
+
+def load_marketplace_cache(cache_dir: Path) -> Dict[str, Dict[str, str]]:
+    """
+    Load marketplace data cache from JSON file.
+
     Args:
         cache_dir: Path to the cache directory
-        
+
     Returns:
-        Dictionary mapping legacy_id (publisher.offer) to (is_published, marketplace_url, last_checked) tuples
+        Dictionary mapping legacy_id (publisher.offer) to marketplace data dicts
     """
     cache_file = cache_dir / MARKETPLACE_CACHE_FILENAME
-    cache: Dict[str, Tuple[bool, str, str]] = {}
-    
+    cache: Dict[str, Dict[str, str]] = {}
+
     if not cache_file.exists():
+        # Try loading old CSV cache and migrate
+        old_csv = cache_dir / "marketplace_availability.csv"
+        if old_csv.exists():
+            log_print("  Migrating old marketplace_availability.csv cache to new JSON format...")
+            try:
+                with old_csv.open("r", encoding="utf-8", newline='') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        legacy_id = row.get('legacy_id', '')
+                        if legacy_id:
+                            is_published = row.get('is_published', 'true').lower() == 'true'
+                            record = _empty_marketplace_record(is_published)
+                            record['mp_url'] = row.get('marketplace_url', '')
+                            record['mp_last_checked'] = row.get('last_checked', '')
+                            cache[legacy_id] = record
+                log_print(f"    Migrated {len(cache)} entries from old CSV cache")
+            except Exception as e:
+                log_print(f"    Warning: Could not migrate old cache: {e}")
         return cache
-    
+
     try:
-        with cache_file.open("r", encoding="utf-8", newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                legacy_id = row.get('legacy_id', '')
-                if legacy_id:
-                    is_published = row.get('is_published', 'true').lower() == 'true'
-                    marketplace_url = row.get('marketplace_url', '')
-                    last_checked = row.get('last_checked', '')
-                    cache[legacy_id] = (is_published, marketplace_url, last_checked)
+        with cache_file.open("r", encoding="utf-8") as f:
+            cache = json.load(f)
     except Exception as e:
         print(f"Warning: Could not load marketplace cache: {e}")
-    
+
     return cache
 
 
-def save_marketplace_cache(cache_dir: Path, cache: Dict[str, Tuple[bool, str, str]]) -> None:
+def save_marketplace_cache(cache_dir: Path, cache: Dict[str, Dict[str, str]]) -> None:
     """
-    Save marketplace availability cache to CSV file.
-    
+    Save marketplace data cache to JSON file.
+
     Args:
         cache_dir: Path to the cache directory
-        cache: Dictionary mapping legacy_id to (is_published, marketplace_url, last_checked) tuples
+        cache: Dictionary mapping legacy_id to marketplace data dicts
     """
     cache_file = cache_dir / MARKETPLACE_CACHE_FILENAME
-    
+
     # Ensure cache directory exists
     cache_dir.mkdir(parents=True, exist_ok=True)
-    
+
     try:
-        with cache_file.open("w", encoding="utf-8", newline='') as f:
-            fieldnames = ['legacy_id', 'is_published', 'marketplace_url', 'last_checked']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for legacy_id in sorted(cache.keys()):
-                is_published, marketplace_url, last_checked = cache[legacy_id]
-                writer.writerow({
-                    'legacy_id': legacy_id,
-                    'is_published': 'true' if is_published else 'false',
-                    'marketplace_url': marketplace_url,
-                    'last_checked': last_checked,
-                })
+        with cache_file.open("w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Warning: Could not save marketplace cache: {e}")
 
 
-def check_marketplace_availability(publisher_id: str, offer_id: str) -> Tuple[bool, str]:
+def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str, str]:
     """
-    Check if a solution is available on Azure Marketplace.
-    
+    Check if a solution is available on Azure Marketplace and retrieve its metadata.
+
     Args:
         publisher_id: The publisher ID from SolutionMetadata.json
         offer_id: The offer ID from SolutionMetadata.json
-        
+
     Returns:
-        Tuple of (is_published, marketplace_url)
-        - is_published: True if found on marketplace, False otherwise
-        - marketplace_url: URL to the marketplace listing if found, empty string otherwise
+        Dictionary with mp_* prefixed marketplace fields.
+        mp_is_published is 'true' if found, 'false' if 404.
     """
     if not HAS_URLLIB:
-        return True, ""  # Assume published if we can't check
-        
+        return _empty_marketplace_record(True)  # Assume published if we can't check
+
     if not publisher_id or not offer_id:
-        return False, ""  # Can't check without both IDs
-    
+        return _empty_marketplace_record(False)  # Can't check without both IDs
+
     # Build the API URL
     legacy_id = f"{publisher_id}.{offer_id}"
     api_url = f"{AZURE_MARKETPLACE_API_URL}/{legacy_id}?api-version={AZURE_MARKETPLACE_API_VERSION}"
-    
+
     try:
         request = urllib.request.Request(api_url)
         request.add_header('Accept', 'application/json')
-        
+
         with urllib.request.urlopen(request, timeout=10) as response:
             if response.status == 200:
-                # Solution found on marketplace
-                marketplace_url = f"https://azuremarketplace.microsoft.com/en-us/marketplace/apps/{legacy_id}"
-                return True, marketplace_url
+                data = json.loads(response.read().decode('utf-8'))
+                return _parse_marketplace_response(data, legacy_id)
     except urllib.error.HTTPError as e:
         if e.code == 404:
             # Solution not found on marketplace
-            return False, ""
+            return _empty_marketplace_record(False)
         # Other HTTP errors - assume published to avoid false negatives
-        return True, ""
+        return _empty_marketplace_record(True)
     except Exception:
         # Network errors, timeouts, etc. - assume published to avoid false negatives
-        return True, ""
-    
-    return True, ""
+        return _empty_marketplace_record(True)
+
+    return _empty_marketplace_record(True)
 
 
 def check_all_solutions_marketplace(
     solutions_info: Dict[str, Dict[str, str]],
     cache_dir: Path,
     force_refresh: bool = False
-) -> Dict[str, Tuple[bool, str]]:
+) -> Dict[str, Dict[str, str]]:
     """
     Check marketplace availability for all solutions, using cache when available.
-    
+
     Args:
         solutions_info: Dictionary mapping solution names to their info dictionaries
         cache_dir: Path to the cache directory for storing/loading cached results
         force_refresh: If True, ignore cache and check all solutions fresh
-        
+
     Returns:
-        Dictionary mapping solution names to (is_published, marketplace_url) tuples
+        Dictionary mapping solution names to marketplace data dicts (mp_* fields)
     """
-    results: Dict[str, Tuple[bool, str]] = {}
+    results: Dict[str, Dict[str, str]] = {}
     total = len(solutions_info)
-    
+
     # Load existing cache
     cache = load_marketplace_cache(cache_dir) if not force_refresh else {}
-    
+
     # Track stats
     cache_hits = 0
     api_calls = 0
-    today = datetime.now().strftime('%Y-%m-%d')
-    
+
     log_print(f"Checking marketplace availability for {total} solutions...")
     if cache and not force_refresh:
         log_print(f"  Using cached results from {cache_dir / MARKETPLACE_CACHE_FILENAME}")
     elif force_refresh:
         log_print(f"  Force refresh enabled - checking all solutions via API")
-    
+
     for i, (solution_name, info) in enumerate(sorted(solutions_info.items()), 1):
         publisher_id = info.get('solution_publisher_id', '')
         offer_id = info.get('solution_offer_id', '')
-        
+
         # Check cache first
         if publisher_id and offer_id:
             legacy_id = f"{publisher_id}.{offer_id}"
             if legacy_id in cache:
-                is_published, marketplace_url, _ = cache[legacy_id]
-                results[solution_name] = (is_published, marketplace_url)
+                results[solution_name] = cache[legacy_id]
                 cache_hits += 1
                 continue
-        
+
         # Not in cache, make API call
-        is_published, marketplace_url = check_marketplace_availability(publisher_id, offer_id)
-        results[solution_name] = (is_published, marketplace_url)
+        mp_data = check_marketplace_availability(publisher_id, offer_id)
+        results[solution_name] = mp_data
         api_calls += 1
-        
+
         # Update cache
         if publisher_id and offer_id:
             legacy_id = f"{publisher_id}.{offer_id}"
-            cache[legacy_id] = (is_published, marketplace_url, today)
-        
+            cache[legacy_id] = mp_data
+
         # Progress indicator every 25 API calls or every 100 solutions processed
         if api_calls > 0 and api_calls % 25 == 0:
             log_print(f"    [{i}/{total}] Made {api_calls} API calls, {cache_hits} cache hits...")
-    
+
     # Save updated cache
     if api_calls > 0:
         save_marketplace_cache(cache_dir, cache)
         log_print(f"  Updated marketplace cache with {api_calls} new entries")
-    
+
     # Count unpublished
-    unpublished_count = sum(1 for is_pub, _ in results.values() if not is_pub)
+    unpublished_count = sum(1 for mp in results.values() if mp.get('mp_is_published') != 'true')
     log_print(f"  Results: {cache_hits} from cache, {api_calls} API calls")
     log_print(f"  Found {unpublished_count} unpublished solutions out of {total}")
-    
+
     return results
 
 
@@ -4875,6 +5375,304 @@ def extract_log_analytics_tables(data: Any) -> Set[str]:
     return tables
 
 
+# ===================== DEPRECATION DETECTION =====================
+
+# Patterns for detecting solution-level deprecation from Solution JSON Description field.
+# These patterns are deliberately narrow to avoid false positives on solutions that merely
+# mention deprecated connectors (e.g., MMA retirement notes) without the solution itself
+# being deprecated.
+SOLUTION_DEPRECATED_PATTERNS = [
+    re.compile(r'this (?:integration|solution) is (?:considered )?deprecated', re.IGNORECASE),
+    re.compile(r'this (?:integration|solution) has been deprecated', re.IGNORECASE),
+]
+
+# Patterns for extracting deprecation dates from description text.
+# Matches dates like "Aug 31, 2024", "August 31, 2024", "2024-08-31" appearing near
+# deprecation-related keywords. Also handles markdown bold (**date**) wrapping.
+DEPRECATION_DATE_PATTERNS = [
+    # "deprecated ... <date>" or "retirement ... <date>" with optional markdown bold
+    re.compile(
+        r'(?:deprecated|retirement|retire[ds]?|removed|sunset|end.of.life)'
+        r'.{0,120}?'
+        r'\*{0,2}(\b(?:January|February|March|April|May|June|July|August|September|October|November|December|'
+        r'Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4})\*{0,2}',
+        re.IGNORECASE
+    ),
+    # ISO date near deprecation text
+    re.compile(
+        r'(?:deprecated|retirement|retire[ds]?|removed|sunset|end.of.life)'
+        r'.{0,120}?'
+        r'(\d{4}-\d{2}-\d{2})',
+        re.IGNORECASE
+    ),
+]
+
+
+def is_solution_deprecated(description: str) -> bool:
+    """Check if a solution description indicates the solution itself is deprecated.
+
+    Args:
+        description: The Solution JSON 'Description' field text.
+
+    Returns:
+        True if the description contains solution-level deprecation language.
+    """
+    for pattern in SOLUTION_DEPRECATED_PATTERNS:
+        if pattern.search(description):
+            return True
+    return False
+
+
+def extract_deprecation_date(text: str) -> str:
+    """Extract a deprecation/retirement date from free-text description.
+
+    Returns the first date string found near deprecation keywords, or empty
+    string if none is found.
+    """
+    for pattern in DEPRECATION_DATE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            return m.group(1).strip()
+    return ''
+
+
+def is_connector_deprecated_from_json(entry: Dict[str, Any]) -> bool:
+    """Check if a connector entry's availability.status indicates deprecated.
+
+    In the connector JSON schema, ``availability.status`` of 1 means available
+    and 2 means GA.  A value of 0 (or the field being absent) is treated as
+    potentially deprecated only when the field is explicitly present and zero.
+
+    Args:
+        entry: Parsed connector JSON entry from ``find_connector_objects``.
+
+    Returns:
+        True if ``availability.status`` is explicitly ``0``.
+    """
+    availability = entry.get('availability')
+    if isinstance(availability, dict):
+        status = availability.get('status')
+        if status == 0:
+            return True
+    return False
+
+
+# ===================== INGESTION API DETECTION =====================
+# Patterns for detecting Log Ingestion API vs HTTP Data Collector API
+
+# Azure Function code patterns for Log Ingestion API (new)
+LOG_INGESTION_API_PATTERNS = [
+    "LogsIngestionClient",
+    "azure.monitor.ingestion",
+    "logs_ingestion",
+    "data_collection_rule",
+    "data_collection_endpoint",
+    "upload.*rule_id",
+    "upload.*stream_name",
+    "LogIngestion",
+    "log_ingestion",
+]
+
+# Azure Function code patterns for HTTP Data Collector API (old)
+# Note: Deliberately excluded patterns that cause false positives:
+#   - post_data: common method name even in Log Ingestion API code
+#   - log_analytics_uri/logAnalyticsUri: often used for gov-cloud endpoint detection, not ingestion
+#   - log_type: generic variable name used by both APIs
+HTTP_COLLECTOR_API_PATTERNS = [
+    "SharedKey",
+    "build_signature",
+    "api/logs",
+    "Log-Type",
+    "LogAnalyticsData",
+]
+
+# Old HTTP Data Collector API column type suffixes
+HTTP_COLLECTOR_COLUMN_SUFFIXES = {"_s", "_d", "_b", "_t", "_g"}
+
+
+def _scan_python_files_for_api_patterns(
+    solution_dir: Path,
+) -> Tuple[bool, bool]:
+    """Scan Python files in a solution's Data Connectors folder for API patterns.
+    
+    Returns:
+        Tuple of (has_log_ingestion, has_http_collector) booleans
+    """
+    has_log_ingestion = False
+    has_http_collector = False
+    
+    # Check all possible Data Connectors folder names
+    dc_dirs = [
+        solution_dir / "Data Connectors",
+        solution_dir / "DataConnectors",
+        solution_dir / "Data Connector",
+    ]
+    
+    # Directories to skip (vendored dependencies, build artifacts)
+    SKIP_DIRS = {".python_packages", "__pycache__", "node_modules", ".venv", "venv"}
+    
+    for dc_dir in dc_dirs:
+        if not dc_dir.exists():
+            continue
+        # Scan Python files recursively, skipping vendored directories
+        for py_file in dc_dir.rglob("*.py"):
+            # Skip files in vendored/build directories
+            if any(skip_dir in py_file.parts for skip_dir in SKIP_DIRS):
+                continue
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            content_lower = content.lower()
+            
+            # Check for Log Ingestion API patterns
+            for pattern in LOG_INGESTION_API_PATTERNS:
+                if pattern.lower() in content_lower:
+                    has_log_ingestion = True
+                    break
+            
+            # Check for HTTP Data Collector API patterns
+            for pattern in HTTP_COLLECTOR_API_PATTERNS:
+                if pattern.lower() in content_lower:
+                    has_http_collector = True
+                    break
+            
+            if has_log_ingestion and has_http_collector:
+                return has_log_ingestion, has_http_collector
+    
+    return has_log_ingestion, has_http_collector
+
+
+def _check_table_column_suffixes(
+    connector_tables: List[str],
+    table_schemas_lookup: Dict[str, List[Dict[str, str]]],
+) -> Optional[str]:
+    """Check table column naming patterns to infer ingestion API.
+    
+    Old HTTP Data Collector API auto-appends type suffixes (_s, _d, _b, _t, _g)
+    to column names. If a significant proportion of columns have these suffixes,
+    the connector likely uses the old API.
+    
+    Args:
+        connector_tables: List of table names for this connector
+        table_schemas_lookup: Dict mapping table_name -> list of schema rows
+    
+    Returns:
+        "HTTP Data Collector API" if high proportion of suffixed columns,
+        "Log Ingestion API" if clean column names and DCR sourced,
+        None if insufficient data
+    """
+    total_columns = 0
+    suffixed_columns = 0
+    has_dcr_source = False
+    
+    for table_name in connector_tables:
+        schema_rows = table_schemas_lookup.get(table_name.lower(), [])
+        for row in schema_rows:
+            col_name = row.get("column_name", "")
+            source = row.get("source", "")
+            if source == "DCR":
+                has_dcr_source = True
+            if col_name and col_name not in ("TimeGenerated", "TenantId", "Type", "MG", "ManagementGroupName",
+                                              "SourceSystem", "_ResourceId", "_SubscriptionId"):
+                total_columns += 1
+                # Check if the column name ends with a type suffix
+                for suffix in HTTP_COLLECTOR_COLUMN_SUFFIXES:
+                    if col_name.endswith(suffix) and len(col_name) > len(suffix):
+                        suffixed_columns += 1
+                        break
+    
+    if total_columns == 0:
+        return None
+    
+    suffix_ratio = suffixed_columns / total_columns
+    
+    # If >40% of columns have type suffixes, it's likely HTTP Data Collector API
+    if suffix_ratio > 0.4:
+        return "HTTP Data Collector API"
+    
+    # If we have DCR-sourced schema and low suffix ratio, it's Log Ingestion API
+    if has_dcr_source and suffix_ratio < 0.1:
+        return "Log Ingestion API"
+    
+    return None
+
+
+def determine_ingestion_api(
+    collection_method: str,
+    connector_id: str,
+    json_content: str,
+    solution_dir: Optional[Path],
+    connector_tables: List[str],
+    table_schemas_lookup: Dict[str, List[Dict[str, str]]],
+) -> Tuple[str, str]:
+    """Determine whether a connector uses the Log Ingestion API or HTTP Data Collector API.
+    
+    This is only applicable to connectors that push data via an API:
+    CCF Push, Azure Function, REST Pull API, and Unknown (Custom Log).
+    
+    CCF and CCF (Legacy) are excluded because their ingestion mechanism is
+    platform-managed (Sentinel PaaS) — the connector definition doesn't configure
+    the ingestion API, so it's not meaningful to classify.
+    
+    Detection priority:
+    1. CCF Push → always Log Ingestion API (DCR-based, solution code pushes data)
+    2. Azure Function → scan Python code for API patterns
+    3. REST Pull API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
+    4. Fallback: table column suffix heuristic from table_schemas
+    
+    Args:
+        collection_method: The detected collection method
+        connector_id: The connector ID
+        json_content: Raw JSON content of the connector definition
+        solution_dir: Path to the solution directory (for scanning Python files)
+        connector_tables: List of table names associated with this connector
+        table_schemas_lookup: Dict mapping lowercase table_name -> list of schema rows
+    
+    Returns:
+        Tuple of (ingestion_api, detection_reason) where ingestion_api is one of:
+        - "Log Ingestion API" (new, DCR-based)
+        - "HTTP Data Collector API" (old, SharedKey-based)
+        - "" (not applicable or not determined)
+    """
+    # Only applicable to collection methods where the solution code pushes data via an API
+    # CCF and CCF (Legacy) are excluded — their ingestion is platform-managed
+    api_methods = {"CCF Push", "Azure Function", "REST Pull API", "Unknown (Custom Log)"}
+    if collection_method not in api_methods:
+        return "", ""
+    
+    # Rule 1: CCF Push always uses Log Ingestion API (solution code pushes via DCR)
+    if collection_method == "CCF Push":
+        return "Log Ingestion API", "CCF Push connectors use DCR-based Log Ingestion API"
+    
+    # Rule 2: Azure Function - scan Python code
+    if collection_method == "Azure Function" and solution_dir and solution_dir.exists():
+        has_log_ingestion, has_http_collector = _scan_python_files_for_api_patterns(solution_dir)
+        if has_log_ingestion and has_http_collector:
+            return "Undetermined", "Azure Function code contains both Log Ingestion API and HTTP Data Collector API patterns"
+        if has_log_ingestion:
+            return "Log Ingestion API", "Azure Function code uses LogsIngestionClient/Log Ingestion API"
+        if has_http_collector:
+            return "HTTP Data Collector API", "Azure Function code uses SharedKey/HTTP Data Collector API"
+    
+    # Rule 3: Check connector JSON content for HTTP Data Collector API patterns
+    if json_content:
+        has_shared_keys = "sharedKeys" in json_content or "SharedKey" in json_content
+        has_workspace_id = "WorkspaceId" in json_content or "workspaceId" in json_content
+        has_primary_key = "PrimaryKey" in json_content or "primaryKey" in json_content
+        
+        if has_shared_keys or (has_workspace_id and has_primary_key):
+            return "HTTP Data Collector API", "Connector definition requires workspace key (SharedKey pattern)"
+    
+    # Rule 4: Table column suffix heuristic
+    if connector_tables and table_schemas_lookup:
+        suffix_result = _check_table_column_suffixes(connector_tables, table_schemas_lookup)
+        if suffix_result:
+            return suffix_result, f"Inferred from table column naming patterns ({'type suffixes' if 'HTTP' in suffix_result else 'clean names with DCR schema'})"
+    
+    return "", "Could not determine ingestion API"
+
+
 def determine_collection_method(
     connector_id: str,
     connector_title: str,
@@ -4892,7 +5690,7 @@ def determine_collection_method(
     - AMA (Azure Monitor Agent): Uses Azure Monitor Agent for CEF/Syslog collection
     - MMA (Log Analytics Agent): Legacy agent using workspace ID/key
     - Azure Diagnostics: Uses Azure diagnostic settings
-    - REST API: Direct REST API integration
+    - REST Pull API: Direct REST Pull API integration
     - Native: Built-in Microsoft integrations
     
     Detection Priority:
@@ -4901,7 +5699,7 @@ def determine_collection_method(
     3. Native Microsoft integrations
     4. CCF patterns (content-based)
     5. Azure Function patterns
-    6. REST API patterns
+    6. REST Pull API patterns
     7. Table metadata fallback
     
     Args:
@@ -5059,15 +5857,15 @@ def determine_collection_method(
                                       'InstallAgentOnLinuxNonAzure' in content):
         all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
     
-    # === PRIORITY 9: REST API patterns ===
+    # === PRIORITY 9: REST Pull API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
-        all_matches.append(("REST API", "Title/description mentions REST API"))
+        all_matches.append(("REST Pull API", "Title/description mentions REST API"))
     if 'push' in conn_title_lower or 'push' in conn_id_lower:
-        all_matches.append(("REST API", "Push connector (REST API based)"))
+        all_matches.append(("REST Pull API", "Push connector (REST API based)"))
     if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
-        all_matches.append(("REST API", "Webhook pattern (REST API based)"))
+        all_matches.append(("REST Pull API", "Webhook pattern (REST API based)"))
     if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
-        all_matches.append(("REST API", "HTTP endpoint/trigger (REST API)"))
+        all_matches.append(("REST Pull API", "HTTP endpoint/trigger (REST API)"))
     
     # === PRIORITY 10: Table metadata-based detection (lowest content-based priority) ===
     # Only use if no stronger patterns detected - this is a fallback
@@ -5092,9 +5890,9 @@ def determine_collection_method(
     
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
-    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST API
+    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Pull API
     # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
-    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST API", "Unknown (Custom Log)", "Unknown"]
+    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -6537,6 +7335,12 @@ def main() -> None:
     if overrides:
         log_print(f"Loaded {len(overrides)} override(s) from {args.overrides_csv}")
 
+    # Load synthetic connector definitions from overrides
+    synthetic_connectors = load_synthetic_connectors(args.overrides_csv.resolve())
+    if synthetic_connectors:
+        total_synth = sum(len(v) for v in synthetic_connectors.values())
+        log_print(f"Loaded {total_synth} synthetic connector(s) for {len(synthetic_connectors)} solution(s)")
+
     grouped_rows: Dict[Tuple[str, ...], Dict[str, bool]] = defaultdict(dict)
     row_key_metadata: Dict[Tuple[str, ...], Dict[str, str]] = {}
     combo_with_non_azure: Set[Tuple[str, str, str]] = set()
@@ -6707,6 +7511,8 @@ def main() -> None:
         ]
         has_valid_connector = False
         has_data_connectors_dir = False
+        found_connector_ids: Set[str] = set()
+        found_connector_titles: Set[str] = set()
 
         for data_connectors_dir in data_connectors_dirs:
             if not data_connectors_dir.exists():
@@ -6831,8 +7637,10 @@ def main() -> None:
                 is_azuredeploy = json_path.name.lower().startswith("azuredeploy")
                 for entry in connector_entries:
                     connector_id = entry.get("id", "")
+                    found_connector_ids.add(connector_id)
                     connector_publisher = entry.get("publisher", "")
                     connector_title = entry.get("title", "")
+                    found_connector_titles.add(connector_title)
                     connector_id_generated = entry.get("id_generated", False)
                     # Replace newlines with <br> for GitHub CSV rendering
                     connector_description = entry.get("description", "").replace("\n", "<br>").replace("\r", "")
@@ -7051,6 +7859,214 @@ def main() -> None:
                             details=details,
                         )
 
+        # === Fallback: Check Package/mainTemplate.json for connectors ===
+        # Some connectors (e.g., PurviewAudit kind) only exist as ARM resources
+        # in the solution package template, not as standalone JSON files.
+        main_template_path = solution_dir / "Package" / "mainTemplate.json"
+        if main_template_path.exists():
+            main_template_data = read_json(main_template_path)
+            if main_template_data is not None:
+                arm_connectors = find_connectors_in_main_template(main_template_data)
+                # Filter out connectors already discovered via Data Connectors files
+                # Check both ID and title to avoid duplicates when generated IDs differ
+                new_arm_connectors = [
+                    c for c in arm_connectors
+                    if c.get("id", "") not in found_connector_ids
+                    and c.get("title", "") not in found_connector_titles
+                ]
+                if new_arm_connectors:
+                    log_print(f"  Found {len(new_arm_connectors)} additional connector(s) in mainTemplate.json for {solution_info['solution_name']}")
+                for arm_entry in new_arm_connectors:
+                    arm_connector_id = arm_entry.get("id", "")
+                    found_connector_ids.add(arm_connector_id)
+                    has_valid_connector = True
+                    has_data_connectors_dir = True  # Treat as having connectors
+                    # Mark as in-solution: these connectors are ARM resources
+                    # defined in the solution's package template
+                    mt_file_key = f"{solution_info['solution_folder']}:mainTemplate.json"
+                    connector_not_in_solution_json[mt_file_key] = "false"
+
+                    connector_id = arm_connector_id
+                    connector_publisher = arm_entry.get("publisher", "")
+                    connector_title = arm_entry.get("title", "")
+                    connector_id_generated = arm_entry.get("id_generated", False)
+                    connector_description = arm_entry.get("description", "").replace("\n", "<br>").replace("\r", "")
+                    connector_instruction_steps = arm_entry.get("instructionSteps", "")
+                    connector_permissions = arm_entry.get("permissions", "")
+
+                    # Use tables from dataTypes section of connectorUiConfig
+                    arm_tables = arm_entry.get("tables_from_datatypes", [])
+                    relative_path = "Package/mainTemplate.json"
+                    is_azuredeploy = False
+
+                    produced_rows = 0
+                    for table_name in arm_tables:
+                        if not table_name or not is_valid_table_candidate(table_name):
+                            continue
+
+                        normalized_table_name = normalize_table_case(table_name)
+                        row_key = (
+                            solution_info["solution_name"],
+                            solution_info["solution_folder"],
+                            solution_info["solution_publisher_id"],
+                            solution_info["solution_offer_id"],
+                            solution_info["solution_first_publish_date"],
+                            solution_info["solution_last_publish_date"],
+                            solution_info["solution_version"],
+                            solution_info["solution_support_name"],
+                            solution_info["solution_support_tier"],
+                            solution_info["solution_support_link"],
+                            solution_info["solution_author_name"],
+                            solution_info["solution_categories"],
+                            connector_id,
+                            connector_publisher,
+                            connector_title,
+                            connector_description,
+                            connector_instruction_steps,
+                            connector_permissions,
+                            connector_id_generated,
+                            normalized_table_name,
+                        )
+                        combo_key = (solution_info["solution_name"], connector_id, normalized_table_name)
+                        combo_with_non_azure.add(combo_key)
+
+                        grouped_rows[row_key][relative_path] = is_azuredeploy
+                        metadata_entry = row_key_metadata.setdefault(row_key, {
+                            "table_detection_methods": set(),
+                        })
+                        metadata_entry.setdefault("table_detection_methods", set()).add("mainTemplate:dataTypes")
+                        produced_rows += 1
+
+                    if produced_rows == 0:
+                        # Connector found but no valid tables - still include with empty table
+                        row_key = (
+                            solution_info["solution_name"],
+                            solution_info["solution_folder"],
+                            solution_info["solution_publisher_id"],
+                            solution_info["solution_offer_id"],
+                            solution_info["solution_first_publish_date"],
+                            solution_info["solution_last_publish_date"],
+                            solution_info["solution_version"],
+                            solution_info["solution_support_name"],
+                            solution_info["solution_support_tier"],
+                            solution_info["solution_support_link"],
+                            solution_info["solution_author_name"],
+                            solution_info["solution_categories"],
+                            connector_id,
+                            connector_publisher,
+                            connector_title,
+                            connector_description,
+                            connector_instruction_steps,
+                            connector_permissions,
+                            connector_id_generated,
+                            "",  # Empty table name
+                        )
+                        grouped_rows[row_key][relative_path] = is_azuredeploy
+                        add_issue(
+                            issues,
+                            solution_name=solution_info["solution_name"],
+                            solution_folder=solution_info["solution_folder"],
+                            connector_id=connector_id,
+                            connector_title=connector_title,
+                            connector_publisher=connector_publisher,
+                            relevant_file=str(relative_path),
+                            reason="no_table_definitions",
+                            details="mainTemplate connector definition did not expose any table dataTypes.",
+                        )
+
+        # === Override: Inject synthetic connectors from overrides ===
+        # Some connectors (e.g., SAP Docker agent) have no standard definition files
+        # and must be defined manually in the overrides CSV.
+        folder_key = solution_info["solution_folder"].lower()
+        if folder_key in synthetic_connectors:
+            synth_entries = synthetic_connectors[folder_key]
+            new_synth = [s for s in synth_entries if s["connector_id"] not in found_connector_ids]
+            if new_synth:
+                log_print(f"  Injecting {len(new_synth)} synthetic connector(s) for {solution_info['solution_name']}")
+            for synth in new_synth:
+                found_connector_ids.add(synth["connector_id"])
+                has_valid_connector = True
+                # Mark as in-solution: synthetic connectors are explicitly
+                # declared as part of a solution via the override CSV
+                synth_file_key = f"{solution_info['solution_folder']}:synthetic_connector_override"
+                connector_not_in_solution_json[synth_file_key] = "false"
+
+                connector_id = synth["connector_id"]
+                connector_publisher = synth["publisher"]
+                connector_title = synth["title"]
+                connector_id_generated = False
+                connector_description = synth.get("description", "").replace("\n", "<br>").replace("\r", "")
+                connector_instruction_steps = synth.get("instruction_steps", "")
+                connector_permissions = synth.get("permissions", "")
+
+                synth_tables = synth.get("tables", [])
+                relative_path = "synthetic_connector_override"
+                is_azuredeploy = False
+
+                produced_rows = 0
+                for table_name in synth_tables:
+                    if not table_name:
+                        continue
+
+                    normalized_table_name = normalize_table_case(table_name)
+                    row_key = (
+                        solution_info["solution_name"],
+                        solution_info["solution_folder"],
+                        solution_info["solution_publisher_id"],
+                        solution_info["solution_offer_id"],
+                        solution_info["solution_first_publish_date"],
+                        solution_info["solution_last_publish_date"],
+                        solution_info["solution_version"],
+                        solution_info["solution_support_name"],
+                        solution_info["solution_support_tier"],
+                        solution_info["solution_support_link"],
+                        solution_info["solution_author_name"],
+                        solution_info["solution_categories"],
+                        connector_id,
+                        connector_publisher,
+                        connector_title,
+                        connector_description,
+                        connector_instruction_steps,
+                        connector_permissions,
+                        connector_id_generated,
+                        normalized_table_name,
+                    )
+                    combo_key = (solution_info["solution_name"], connector_id, normalized_table_name)
+                    combo_with_non_azure.add(combo_key)
+
+                    grouped_rows[row_key][relative_path] = is_azuredeploy
+                    metadata_entry = row_key_metadata.setdefault(row_key, {
+                        "table_detection_methods": set(),
+                    })
+                    metadata_entry.setdefault("table_detection_methods", set()).add("synthetic_connector_override")
+                    produced_rows += 1
+
+                if produced_rows == 0:
+                    # Synthetic connector with no tables - still include with empty table
+                    row_key = (
+                        solution_info["solution_name"],
+                        solution_info["solution_folder"],
+                        solution_info["solution_publisher_id"],
+                        solution_info["solution_offer_id"],
+                        solution_info["solution_first_publish_date"],
+                        solution_info["solution_last_publish_date"],
+                        solution_info["solution_version"],
+                        solution_info["solution_support_name"],
+                        solution_info["solution_support_tier"],
+                        solution_info["solution_support_link"],
+                        solution_info["solution_author_name"],
+                        solution_info["solution_categories"],
+                        connector_id,
+                        connector_publisher,
+                        connector_title,
+                        connector_description,
+                        connector_instruction_steps,
+                        connector_permissions,
+                        connector_id_generated,
+                        "",  # Empty table name
+                    )
+                    grouped_rows[row_key][relative_path] = is_azuredeploy
+
         if has_data_connectors_dir and not has_valid_connector:
             missing_connector_json.append(solution_dir.name)
             add_issue(
@@ -7123,10 +8139,19 @@ def main() -> None:
         # Convert file paths to GitHub URLs
         github_urls = []
         for file_path in file_list:
-            # Convert backslashes to forward slashes and prepend Solutions/
-            normalized = file_path.replace("\\", "/")
-            # URL encode all path components to handle spaces
-            github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote('Data Connectors')}/{quote(normalized)}"
+            # Convert backslashes to forward slashes
+            normalized = str(file_path).replace("\\", "/")
+            # Skip synthetic/override paths that have no real file
+            if normalized == "synthetic_connector_override":
+                continue
+            # Paths from mainTemplate fallback already include their folder prefix (e.g., "Package/mainTemplate.json")
+            # Paths from Data Connectors scanning are relative to the Data Connectors folder
+            if normalized.startswith("Package/") or "/" in normalized.split("/", 1)[0]:
+                # Path includes its own folder prefix
+                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote(normalized)}"
+            else:
+                # Standard Data Connectors path
+                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote('Data Connectors')}/{quote(normalized)}"
             github_urls.append(github_url)
         
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
@@ -7180,6 +8205,12 @@ def main() -> None:
                 if connector_not_in_solution_json.get(connector_file_key) == "false":
                     is_documented = True
                     break
+            # Also check mainTemplate and synthetic connector entries
+            if not is_documented:
+                for suffix in ("mainTemplate.json", "synthetic_connector_override"):
+                    if connector_not_in_solution_json.get(f"{solution_folder}:{suffix}") == "false":
+                        is_documented = True
+                        break
             not_in_json = "false" if is_documented else "true"
             
             connector_info_map[connector_id] = {
@@ -7212,6 +8243,7 @@ def main() -> None:
     connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     connector_filter_fields: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {field_name -> set of values}}
     connector_ccf_config: Dict[str, Tuple[str, Path]] = {}  # connector_id -> (github_url, local_path)
+    connector_availability_deprecated: Dict[str, bool] = {}  # connector_id -> True if availability.status == 0
     
     log_print(f"\nAnalyzing connector collection methods and filter fields...")
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
@@ -7235,6 +8267,10 @@ def main() -> None:
                         if conn_id:
                             if conn_id not in connector_json_content:
                                 connector_json_content[conn_id] = (content, json_path.name)
+                            # Check availability.status for deprecation
+                            if conn_id not in connector_availability_deprecated:
+                                if is_connector_deprecated_from_json(entry):
+                                    connector_availability_deprecated[conn_id] = True
                             # Extract vendor/product from connector queries (aggregated) - legacy
                             vp = get_connector_vendor_product(data)
                             if vp['vendor'] or vp['product']:
@@ -7278,6 +8314,13 @@ def main() -> None:
                 except Exception:
                     continue
     
+    # Build set of deprecated solutions (for inheriting deprecation to connectors)
+    deprecated_solutions: Set[str] = set()
+    for solution_name, sol_info in all_solutions_info.items():
+        sol_description = sol_info.get('solution_description', '')
+        if is_solution_deprecated(sol_description):
+            deprecated_solutions.add(solution_name)
+
     # Build connectors with collection method info
     connectors_data: List[Dict[str, str]] = []
     
@@ -7325,9 +8368,20 @@ def main() -> None:
             if readme_rel_path:
                 connector_readme_file = f"Solutions/{quote(solution_folder)}/{readme_rel_path}"
         
-        # Determine if connector is deprecated based on title
+        # Determine if connector is deprecated based on title, availability.status, or solution deprecation
         connector_title = info['connector_title']
-        is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
+        solution_name = info.get('solution_name', '')
+        is_deprecated = (
+            '[DEPRECATED]' in connector_title.upper()
+            or connector_title.startswith('[Deprecated]')
+            or connector_availability_deprecated.get(connector_id, False)
+            or solution_name in deprecated_solutions
+        )
+        
+        # Extract deprecation date from connector description
+        connector_deprecation_date = ''
+        if is_deprecated:
+            connector_deprecation_date = extract_deprecation_date(info['connector_description'])
         
         # Get CCF config file and extract capabilities
         ccf_config_url = ''
@@ -7364,13 +8418,14 @@ def main() -> None:
             'not_in_solution_json': info.get('not_in_solution_json', 'false'),
             'solution_name': info.get('solution_name', ''),
             'is_deprecated': 'true' if is_deprecated else 'false',
+            'deprecation_date': connector_deprecation_date,
             'ccf_config_file': ccf_config_url,
             'ccf_capabilities': ccf_capabilities_str,
         })
     
     # Check marketplace availability (always runs, uses cache by default)
     # Use --force-refresh=marketplace to refresh the cache
-    marketplace_status: Dict[str, Tuple[bool, str]] = {}
+    marketplace_status: Dict[str, Dict[str, str]] = {}
     cache_dir = script_dir / ".cache"
     marketplace_status = check_all_solutions_marketplace(
         all_solutions_info, 
@@ -7379,28 +8434,29 @@ def main() -> None:
     )
     
     # Add is_published to content items based on their solution's marketplace status
+    _default_mp = _empty_marketplace_record(True)
     for item in all_content_items:
         solution_name = item.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        item['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        item['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to content table mappings
     for mapping in content_table_mappings:
         solution_name = mapping.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        mapping['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        mapping['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to connectors data
     for connector in connectors_data:
         solution_name = connector.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        connector['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        connector['is_published'] = mp.get('mp_is_published', 'true')
     
     # Add is_published to main mapping rows
     for row in rows:
         solution_name = row.get('solution_name', '')
-        is_pub, _ = marketplace_status.get(solution_name, (True, ""))
-        row['is_published'] = 'true' if is_pub else 'false'
+        mp = marketplace_status.get(solution_name, _default_mp)
+        row['is_published'] = mp.get('mp_is_published', 'true')
     
     # Collect standalone content items from top-level directories
     log_print("\nCollecting standalone content items from top-level directories...")
@@ -7622,12 +8678,16 @@ def main() -> None:
             readme_full_path = ""
         
         # Get marketplace status if available
-        is_published = True
-        marketplace_url = ""
+        mp_data = _empty_marketplace_record(True)
         if marketplace_status:
-            is_published, marketplace_url = marketplace_status.get(solution_name, (True, ""))
+            mp_data = marketplace_status.get(solution_name, _empty_marketplace_record(True))
         
-        solutions_data.append({
+        # Detect solution-level deprecation from description
+        sol_description = info.get('solution_description', '')
+        sol_is_deprecated = is_solution_deprecated(sol_description)
+        sol_deprecation_date = extract_deprecation_date(sol_description) if sol_is_deprecated else ''
+        
+        solution_row = {
             'solution_name': info['solution_name'],
             'solution_folder': info['solution_folder'],
             'solution_github_url': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
@@ -7643,12 +8703,18 @@ def main() -> None:
             'solution_categories': info['solution_categories'],
             'solution_readme_file': readme_full_path,
             'solution_logo_url': info.get('solution_logo_url', ''),
-            'solution_description': info.get('solution_description', ''),
+            'solution_description': sol_description,
             'solution_dependencies': info.get('solution_dependencies', ''),
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
-            'is_published': 'true' if is_published else 'false',
-            'marketplace_url': marketplace_url,
-        })
+            'is_deprecated': 'true' if sol_is_deprecated else 'false',
+            'deprecation_date': sol_deprecation_date,
+            'is_published': mp_data.get('mp_is_published', 'true'),
+            'marketplace_url': mp_data.get('mp_url', ''),
+        }
+        # Add all marketplace fields
+        for field in MARKETPLACE_FIELDS:
+            solution_row[field] = mp_data.get(field, '')
+        solutions_data.append(solution_row)
     
     # Build tables data from tables_reference.csv metadata (tables_reference was loaded early)
     # Collect all unique tables from connector data AND content items
@@ -7711,6 +8777,7 @@ def main() -> None:
             'basic_logs_eligible': ref.get('basic_logs_eligible', ''),
             'supports_transformations': ref.get('supports_transformations', ''),
             'ingestion_api_supported': ref.get('ingestion_api_supported', ''),
+            'is_clv1': '',
         })
         # Apply _CL table rules: custom log tables always support Ingestion API,
         # and those with lake-only support also support transformations
@@ -7942,6 +9009,37 @@ def main() -> None:
     else:
         log_print(f"  Note: {safe_relative(la_schemas_path, repo_root)} not found - run collect_table_info.py to generate it")
 
+    # Load schemas from ARM table definition files in connector directories
+    # These have richer metadata (descriptions) and are preferred over CustomTables
+    arm_table_count = 0
+    arm_table_tables = 0
+    existing_tables_before_arm = set(row['table_name'] for row in table_schemas_data)
+    arm_schemas = extract_schema_from_arm_table_files(solutions_dir)
+    for table_name, columns in arm_schemas.items():
+        if table_name in existing_tables_before_arm:
+            continue
+        arm_table_tables += 1
+        for col in columns:
+            source_dir = col.get('source_dir', '')
+            source_file = col.get('source_file', '')
+            source_url = f"{GITHUB_REPO_URL}/Solutions/{quote(source_dir)}/{quote(source_file)}" if source_dir and source_file else ""
+            table_schemas_data.append({
+                "table_name": table_name,
+                "column_name": col["column_name"],
+                "column_type": col["column_type"],
+                "description": col.get("description", ""),
+                "source": "Connector definition",
+                "source_url": source_url,
+                "stream_name": "",
+                "connector_id": "",
+                "solution_name": "",
+                "dcr_file": "",
+                "transform_kql": "",
+            })
+            arm_table_count += 1
+    arm_skipped = len(set(arm_schemas.keys()) & existing_tables_before_arm)
+    log_print(f"  Loaded {arm_table_count} column schemas across {arm_table_tables} new tables from connector ARM table definitions (skipped {arm_skipped} already-covered tables)")
+
     # Load schemas from CustomTables directory (only for tables not already covered)
     custom_tables_dir = args.custom_tables_dir.resolve()
     custom_tables_count = 0
@@ -7976,10 +9074,175 @@ def main() -> None:
     # Table schemas stats
     dcr_rows = sum(1 for row in table_schemas_data if row.get('source') == 'DCR')
     doc_rows = sum(1 for row in table_schemas_data if row.get('source') == 'Azure Monitor docs')
+    arm_rows = sum(1 for row in table_schemas_data if row.get('source') == 'Connector definition')
     ct_rows = sum(1 for row in table_schemas_data if row.get('source') == 'KQL validation')
     unique_schema_tables = len(set(row['table_name'] for row in table_schemas_data)) if table_schemas_data else 0
     unique_schema_connectors = len(set(row['connector_id'] for row in table_schemas_data if row['connector_id'])) if table_schemas_data else 0
-    log_print(f"  Total {len(table_schemas_data)} schema columns across {unique_schema_tables} tables ({dcr_rows} from DCR, {doc_rows} from docs, {ct_rows} from KQL validation)")
+    log_print(f"  Total {len(table_schemas_data)} schema columns across {unique_schema_tables} tables ({dcr_rows} from DCR, {doc_rows} from docs, {arm_rows} from connector defs, {ct_rows} from KQL validation)")
+
+    # ===================== INGESTION API DETECTION =====================
+    # Determine whether each API-based connector uses Log Ingestion API or HTTP Data Collector API
+    # This runs after table schemas are fully loaded so the column suffix heuristic has complete data
+    log_print("\nDetecting ingestion API for API-based connectors...")
+    
+    # Build table_schemas_lookup: lowercase table_name -> list of schema rows
+    table_schemas_lookup: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for schema_row in table_schemas_data:
+        table_schemas_lookup[schema_row["table_name"].lower()].append(schema_row)
+    
+    ingestion_api_counts: Dict[str, int] = defaultdict(int)
+    promoted_count = 0
+    for connector in connectors_data:
+        collection_method = connector.get('collection_method', '')
+        connector_id = connector.get('connector_id', '')
+        json_content, _ = connector_json_content.get(connector_id, ("", ""))
+        
+        # Get solution directory for Python code scanning
+        solution_folder = connector.get('solution_folder', '') or connector_info_map.get(connector_id, {}).get('solution_folder', '')
+        solution_dir_path = solutions_dir / solution_folder if solution_folder else None
+        
+        # Get tables for this connector
+        connector_tables = connector_tables_map.get(connector_id, [])
+        
+        ingestion_api, api_reason = determine_ingestion_api(
+            collection_method=collection_method,
+            connector_id=connector_id,
+            json_content=json_content,
+            solution_dir=solution_dir_path,
+            connector_tables=connector_tables,
+            table_schemas_lookup=table_schemas_lookup,
+        )
+        
+        connector['ingestion_api'] = ingestion_api
+        connector['ingestion_api_reason'] = api_reason
+        
+        # Promote Unknown (Custom Log) to REST Pull API if ingestion API was detected from JSON patterns
+        # The presence of sharedKeys/WorkspaceId/PrimaryKey in the connector definition proves
+        # the connector uses an API-based approach, so it should be classified as REST Pull API
+        if collection_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
+            connector['collection_method'] = "REST Pull API"
+            connector['collection_method_reason'] = f"Promoted from Unknown (Custom Log): {api_reason}"
+            promoted_count += 1
+        
+        if ingestion_api:
+            ingestion_api_counts[ingestion_api] += 1
+    
+    # Apply overrides after ingestion API detection (e.g., to fix dead code false positives)
+    if overrides:
+        connectors_data = apply_overrides_to_data(connectors_data, overrides, 'connector', 'connector_id')
+    
+    if promoted_count:
+        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Pull API based on ingestion API detection")
+    
+    # Recount after overrides
+    ingestion_api_counts = defaultdict(int)
+    for connector in connectors_data:
+        api = connector.get('ingestion_api', '')
+        if api:
+            ingestion_api_counts[api] += 1
+    
+    # Log summary
+    total_api_connectors = sum(ingestion_api_counts.values())
+    if total_api_connectors:
+        log_print(f"  Detected ingestion API for {total_api_connectors} connectors:")
+        for api_name, count in sorted(ingestion_api_counts.items(), key=lambda x: -x[1]):
+            log_print(f"    {api_name}: {count}")
+
+    # ===================== CUSTOM LOG V1 (CLv1) DETECTION =====================
+    # Detect tables using HTTP Data Collector API type suffixes (_s, _d, _b, _t, _g)
+    # These tables use the legacy Custom Log V1 schema format
+    log_print("\nDetecting Custom Log V1 (CLv1) tables...")
+    clv1_table_count = 0
+    clv1_tables_set: Set[str] = set()
+    for table_entry in tables_data:
+        table_name = table_entry['table_name']
+        schema_rows = table_schemas_lookup.get(table_name.lower(), [])
+        if not schema_rows:
+            continue
+        # Count non-standard columns with type suffixes
+        total_cols = 0
+        suffixed_cols = 0
+        for row in schema_rows:
+            col_name = row.get("column_name", "")
+            if col_name and col_name not in ("TimeGenerated", "TenantId", "Type", "MG", "ManagementGroupName",
+                                              "SourceSystem", "_ResourceId", "_SubscriptionId"):
+                total_cols += 1
+                for suffix in HTTP_COLLECTOR_COLUMN_SUFFIXES:
+                    if col_name.endswith(suffix) and len(col_name) > len(suffix):
+                        suffixed_cols += 1
+                        break
+        if total_cols > 0 and (suffixed_cols / total_cols) > 0.4:
+            table_entry['is_clv1'] = 'true'
+            clv1_tables_set.add(table_name)
+            clv1_table_count += 1
+
+    # Additional CLv1 rule: any _CL table from a connector using HTTP Data Collector API
+    # Build reverse map: table_name -> set of connector_ids
+    table_to_connectors: Dict[str, Set[str]] = defaultdict(set)
+    for cid, tbl_list in connector_tables_map.items():
+        for tbl in tbl_list:
+            table_to_connectors[tbl].add(cid)
+
+    # Build connector lookup for collection_method and ingestion_api
+    connector_lookup: Dict[str, Dict[str, str]] = {}
+    for connector in connectors_data:
+        cid = connector.get('connector_id', '')
+        if cid:
+            connector_lookup[cid] = connector
+
+    clv1_from_connector_count = 0
+    clv1_skipped_has_schema = 0
+    for table_entry in tables_data:
+        table_name = table_entry['table_name']
+        if table_name in clv1_tables_set:
+            continue  # Already marked by suffix detection
+        if not table_name.endswith('_CL'):
+            continue
+        # If schema data exists and shows no type suffixes, trust the schema
+        # This prevents false positives for tables that have both a legacy connector
+        # and a modern connector (e.g., CrowdStrike with both Azure Function and CCF)
+        schema_rows = table_schemas_lookup.get(table_name.lower(), [])
+        if schema_rows:
+            has_any_suffix = False
+            for row in schema_rows:
+                col_name = row.get("column_name", "")
+                if col_name and col_name not in ("TimeGenerated", "TenantId", "Type", "MG", "ManagementGroupName",
+                                                  "SourceSystem", "_ResourceId", "_SubscriptionId"):
+                    for suffix in HTTP_COLLECTOR_COLUMN_SUFFIXES:
+                        if col_name.endswith(suffix) and len(col_name) > len(suffix):
+                            has_any_suffix = True
+                            break
+                    if has_any_suffix:
+                        break
+            if not has_any_suffix:
+                clv1_skipped_has_schema += 1
+                continue  # Schema exists with no suffix columns - not CLv1
+        # Check if any connector for this table uses HTTP Data Collector API
+        for cid in table_to_connectors.get(table_name, set()):
+            conn = connector_lookup.get(cid, {})
+            api = conn.get('ingestion_api', '')
+            if api == 'HTTP Data Collector API':
+                table_entry['is_clv1'] = 'true'
+                clv1_tables_set.add(table_name)
+                clv1_from_connector_count += 1
+                break
+
+    if clv1_from_connector_count:
+        log_print(f"  Additionally marked {clv1_from_connector_count} _CL tables as CLv1 based on HTTP Data Collector connector")
+    if clv1_skipped_has_schema:
+        log_print(f"  Skipped {clv1_skipped_has_schema} _CL tables with schema showing no type suffixes (connector-based rule)")
+    clv1_table_count += clv1_from_connector_count
+
+    # Mark connectors that use CLv1 tables
+    clv1_connector_count = 0
+    for connector in connectors_data:
+        connector_id = connector.get('connector_id', '')
+        connector_tables = connector_tables_map.get(connector_id, [])
+        if any(t in clv1_tables_set for t in connector_tables):
+            connector['is_clv1'] = 'true'
+            clv1_connector_count += 1
+
+    log_print(f"  Found {clv1_table_count} CLv1 tables and {clv1_connector_count} connectors using CLv1 tables")
 
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
@@ -8037,9 +9300,13 @@ def main() -> None:
         'not_in_solution_json',
         'solution_name',
         'is_deprecated',
+        'deprecation_date',
         'is_published',
         'ccf_config_file',
         'ccf_capabilities',
+        'ingestion_api',
+        'ingestion_api_reason',
+        'is_clv1',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -8067,9 +9334,11 @@ def main() -> None:
         'solution_description',
         'solution_dependencies',
         'has_connectors',
+        'is_deprecated',
+        'deprecation_date',
         'is_published',
         'marketplace_url',
-    ]
+    ] + MARKETPLACE_FIELDS
     solutions_path = args.solutions_csv.resolve()
     with solutions_path.open("w", encoding="utf-8", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=solutions_fieldnames, quoting=csv.QUOTE_ALL)
@@ -8125,6 +9394,7 @@ def main() -> None:
         'basic_logs_eligible',
         'supports_transformations',
         'ingestion_api_supported',
+        'is_clv1',
     ]
     tables_path = args.tables_csv.resolve()
     with tables_path.open("w", encoding="utf-8", newline="") as csvfile:
