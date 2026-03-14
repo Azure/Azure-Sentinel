@@ -1,5 +1,7 @@
 # https://taskfile.dev
 
+# cspell:words esac tput
+
 version: '3'
 
 vars:
@@ -9,10 +11,11 @@ tasks:
   default:
     silent: true
     cmds:
-      - task: prereqs
-      - task: check-spelling
-      - task: run-validations
+      - task: validate
 
+  ##########################################################################
+  # Run the prerequisites for the scripts
+  ##########################################################################
   # cspell: words prereqs
   prereqs:
     silent: true
@@ -21,50 +24,199 @@ tasks:
       source ./build.sh
       check_prerequisites
   
-  check-spelling:
+  ##########################################################################
+  # Check the spelling
+  ##########################################################################
+  spelling:
     silent: true
     cmds:
     - |
       source ./build.sh
       check_spelling
 
-  run-validations:
+  ##########################################################################
+  # Verify version bump parameter (major, minor, or patch). Used by tasks
+  # that accept a version bump so the check is defined in one place.
+  ##########################################################################
+  verify-version-bump:*:
+    vars:
+      VERSION_BUMP: "{{index .MATCH 0}}"
+    silent: true
+    cmds:
+    - |
+      case "{{.VERSION_BUMP}}" in
+        major|minor|patch) ;;
+        *) echo "Invalid version bump '{{.VERSION_BUMP}}'. Must be major, minor, or patch."; exit 1 ;;
+      esac
+
+  ##########################################################################
+  # Run the validations for the Solution
+  ##########################################################################
+  #.........................................................................
+  # Usage:
+  #   Run all validations using catalog.
+  #     task validate
+  #
+  #   Run all validations using local with a version bump.
+  #     task validate:major
+  #     task validate:minor
+  #     task validate:patch
+  #.........................................................................
+  validate:
     silent: true
     cmds:
     - |
       source ./build.sh
-      check_validations
+      _shout "Running Validation(s)"
+    - task: validate:arm
+    - task: validate:json
+    - task: validate:build-version
 
-  check-arm:
+  validate:major:
+    silent: true
+    cmds:
+    - |
+      source ./build.sh
+      _shout "Running Validation(s)"
+    - task: validate:arm
+    - task: validate:json
+    - task: validate:build-version:major
+
+  validate:minor:
+    silent: true
+    cmds:
+    - |
+      source ./build.sh
+      _shout "Running Validation(s)"
+    - task: validate:arm
+    - task: validate:json
+    - task: validate:build-version:minor
+
+  validate:patch:
+    silent: true
+    cmds:
+    - |
+      source ./build.sh
+      _shout "Running Validation(s)"
+    - task: validate:arm
+    - task: validate:json
+    - task: validate:build-version:patch
+
+  #.........................................................................
+  # Run only the arm template validation
+  #
+  # Usage:
+  #     task validate:arm
+  #.........................................................................
+  validate:arm:
     silent: true
     cmds:
     - |
       source ./build.sh
       validate_arm_files
 
-  check-json:
+  #.........................................................................
+  # Run only the JSON validation
+  #
+  # Usage:
+  #     task validate:json
+  #.........................................................................
+  validate:json:
     silent: true
     cmds:
     - |
       source ./build.sh
       validate_json_files
   
-  check-build:
+  #.........................................................................
+  # Run only the build validation. Verifies the solution version changed.
+  #
+  # Usage:
+  #   Build using the catalog, then check it changed.
+  #     task validate:build-version
+  #
+  #   Build using local with a version bump, then check it changed.
+  #     task validate:build-version:major
+  #     task validate:build-version:minor
+  #     task validate:build-version:patch
+  #.........................................................................
+  validate:build-version:
     silent: true
     cmds:
     - |
       source ./build.sh
       validate_build
 
+  validate:build-version:*:
+    vars:
+      VERSION_BUMP: "{{index .MATCH 0}}"
+    silent: true
+    cmds:
+    - task: verify-version-bump:{{.VERSION_BUMP}}
+    - |
+      source ./build.sh
+      validate_build "{{.VERSION_BUMP}}"
+
+  ##########################################################################
+  # Build the solution
+  ##########################################################################
+  #.........................................................................
+  # Usage:
+  #   Build using the catalog.
+  #     task build
+  #
+  #   Build using local with a version bump.
+  #     task build:major
+  #     task build:minor
+  #     task build:patch
+  #.........................................................................
   build:
     silent: true
     cmds:
+    - task: prereqs
+    - task: spelling
+    - task: validate
     - |
       source ./build.sh
       build_solution
-  
-  # Usage
-  # deploy:my-rg-name:my-ws-name"Central US":3.3.0
+
+  build:major:
+    silent: true
+    cmds:
+    - task: prereqs
+    - task: spelling
+    - task: validate:major
+    - |
+      source ./build.sh
+      build_solution major
+
+  build:minor:
+    silent: true
+    cmds:
+    - task: prereqs
+    - task: spelling
+    - task: validate:minor
+    - |
+      source ./build.sh
+      build_solution minor
+
+  build:patch:
+    silent: true
+    cmds:
+    - task: prereqs
+    - task: spelling
+    - task: validate:patch
+    - |
+      source ./build.sh
+      build_solution patch
+
+  ##########################################################################
+  # Deploy the specified built solution
+  ##########################################################################
+  #.........................................................................
+  # Usage:
+  #     task deploy:my-rg-name:my-ws-name:"Central US":3.3.0
+  #.........................................................................
   deploy:*:*:*:*:
     vars:      
       RESOURCE_GROUP: "{{index .MATCH 0}}"
@@ -77,9 +229,20 @@ tasks:
       source ./build.sh
       deploy_to_azure "{{.RESOURCE_GROUP}}" "{{.WORKSPACE}}" "{{.REGION}}" "{{.DEPLOY_VERSION}}"
   
-  # Usage
-  # build-deploy:my-rg-name:my-ws-name:"Central US"
-  build-deploy:*:*:*:
+  ##########################################################################
+  # Build & Deploy the Solutions
+  ##########################################################################
+  #.........................................................................
+  # Usage:
+  #   Build using the catalog, then deploy.
+  #     task build:deploy:my-rg-name:my-ws-name:"Central US"
+  #
+  #   Build using local with a version bump, then deploy.
+  #     task build:major:deploy:my-rg-name:my-ws-name:"Central US"
+  #     task build:minor:deploy:my-rg-name:my-ws-name:"Central US"
+  #     task build:patch:deploy:my-rg-name:my-ws-name:"Central US"
+  #.........................................................................
+  build:deploy:*:*:*:
     vars:      
       RESOURCE_GROUP: "{{index .MATCH 0}}"
       WORKSPACE: "{{index .MATCH 1}}"
@@ -89,8 +252,21 @@ tasks:
         sh: pwsh -NoProfile -File ./get-new-version.ps1 Solutions/Tanium/Data
     silent: true
     cmds:
-    - task: prereqs
-    - task: check-spelling
-    - task: run-validations
+    - task: build
+    - task: deploy:{{.RESOURCE_GROUP}}:{{.WORKSPACE}}:{{.REGION}}:{{.DEPLOY_VERSION}}
+
+  build:*:deploy:*:*:*:
+    vars:
+      VERSION_BUMP: "{{index .MATCH 0}}"
+      RESOURCE_GROUP: "{{index .MATCH 1}}"
+      WORKSPACE: "{{index .MATCH 2}}"
+      REGION: "{{index .MATCH 3}}"
+      DEPLOY_VERSION:
+        # cspell: disable-next-line
+        sh: pwsh -NoProfile -File ./get-new-version.ps1 Solutions/Tanium/Data -VersionBump "{{.VERSION_BUMP}}"
+    silent: true
+    cmds:
+    - task: verify-version-bump:{{.VERSION_BUMP}}
+    - task: build:{{.VERSION_BUMP}}
     - task: deploy:{{.RESOURCE_GROUP}}:{{.WORKSPACE}}:{{.REGION}}:{{.DEPLOY_VERSION}}
     

@@ -69,14 +69,17 @@ validate_json_files(){
 }
 
 validate_build(){
+  local version_bump=$1
   _msg "\n📦 checking package build result"
-
-  build_solution
 
   current_published_version=$(pwsh ./get-published-version.ps1 "$_solution_data_folder_path")
   _msg "  🏷️  current published version is ${current_published_version}"
 
-  built_version=$(pwsh ./get-new-version.ps1  "$_solution_data_folder_path")
+  if [[ -n "$version_bump" ]]; then
+    built_version=$(pwsh ./get-new-version.ps1 "$_solution_data_folder_path" -VersionBump "$version_bump")
+  else
+    built_version=$(pwsh ./get-new-version.ps1 "$_solution_data_folder_path")
+  fi
   _msg "  🏷️  new publish version is ${built_version}"
 
   if [ "$current_published_version" == "$built_version" ]; then
@@ -194,8 +197,8 @@ check_spelling(){
   local error_file
   error_file="./ci/cspell-results.json"
 
-  # Delete the current spell check file if it exists 
-  [ -f "$error_file" ] && rm "$error_file"
+  # Remove the spelling output file from any previous run before running cspell
+  rm -f "$error_file"
 
   local error_count  
   if ! cspell --quiet . --exclude ./Workbooks/connect-module-connections.json --exclude ./Package/mainTemplate.json --reporter @cspell/cspell-json-reporter > "$error_file"; then
@@ -229,17 +232,17 @@ check_prerequisites() {
   check-matching-analytic-rules-declarations
 }
 
-check_validations(){
-  _shout "Running Validations"
-  validate_arm_files
-  validate_json_files
-  validate_build
-}
-
+# Optional first argument: VersionBump (major, minor, or patch). When provided, uses local
+# version mode for the build and get-new-version; when omitted, uses catalog mode.
 build_solution() {
+  local version_bump=$1
   local repo_root
   repo_root=$(git rev-parse --show-toplevel)
-  pwsh ./build-silently.ps1 "$_solution_data_folder_path" || _die "build-silently.ps1 failed"
+  if [[ -n "$version_bump" ]]; then
+    pwsh ./build-silently.ps1 "$_solution_data_folder_path" -VersionBump "$version_bump" || _die "build-silently.ps1 failed"
+  else
+    pwsh ./build-silently.ps1 "$_solution_data_folder_path" || _die "build-silently.ps1 failed"
+  fi
   _msg_success "Build finished"
 }
 
@@ -250,16 +253,31 @@ deploy_to_azure(){
   local version=$4
   local build_number
   build_number=$(bash -c 'echo $RANDOM')
-
+  
   _shout "Deploying"
 
-  _msg "\n🚀 deploying to azure for review"
+   local zip_path="${_package_folder_path}/${version}.zip"
+  if [[ ! -f "$zip_path" ]]; then
+    _die "Build package not found: $version. Please provide a valid package version."
+  fi
 
-  # TODO Now push up the templates to the demo/qa environment for review
+  _msg "🚀 deploying to azure for review"
+
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap "rm -rf ${tmpdir}" EXIT
+  if ! unzip -j -o "$zip_path" mainTemplate.json -d "$tmpdir" >/dev/null 2>&1; then
+    _die "Failed to extract mainTemplate.json from $zip_path. Is the zip valid?"
+  fi
+  if [[ ! -f "${tmpdir}/mainTemplate.json" ]]; then
+    _die "mainTemplate.json not found inside $zip_path."
+  fi
+
+  # Use mainTemplate.json from the zip so we deploy the exact version we requested
   if ( ! az deployment group create \
     --resource-group "$resource_group" \
     --name "${version}-Preview${build_number}"  \
-    --template-file "${_package_folder_path}/mainTemplate.json" \
+    --template-file "${tmpdir}/mainTemplate.json" \
     --parameters workspace-location="${region}" \
     --parameters workspace="${workspace}" \
     --parameters workbook1-name="Tanium Workbook v${version}" \
