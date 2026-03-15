@@ -4,6 +4,8 @@
   "parameters": {
     "FunctionName": {
       "defaultValue": "UpwindLogs",
+      "minLength": 1,
+      "maxLength": 11,
       "type": "String",
       "metadata": {
         "description": "Base name for all created resources. Must be globally unique (used in storage account and function app names)."
@@ -30,28 +32,28 @@
     "UpwindClientId": {
       "type": "String",
       "metadata": {
-        "description": "Upwind API client ID (from Upwind Settings → API Keys)."
+        "description": "Upwind API client ID (from Upwind Settings → Credentials)."
       }
     },
     "UpwindClientSecret": {
       "defaultValue": "",
       "type": "SecureString",
       "metadata": {
-        "description": "Upwind API client secret. Provide this OR an existing Key Vault name+URI, but not both. If provided, a new Key Vault will be created to store this secret."
+        "description": "Upwind API client secret. Provide this OR an existing Key Vault (name and optionally secret name), but not both. If provided, a new Key Vault will be created to store this secret."
       }
     },
     "keyVaultName": {
       "defaultValue": "",
       "type": "String",
       "metadata": {
-        "description": "Name of an existing Key Vault that already contains the 'upwind-client-secret'. Provide this OR UpwindClientSecret, but not both."
+        "description": "Name of an existing Key Vault (in the same resource group) that already contains the Upwind client secret. Provide this OR UpwindClientSecret, but not both."
       }
     },
-    "keyVaultUri": {
+    "keyVaultSecretName": {
       "defaultValue": "",
       "type": "String",
       "metadata": {
-        "description": "URI of the existing Key Vault (e.g. https://my-vault.vault.azure.net/). Required when keyVaultName is provided."
+        "description": "Name of the secret in the Key Vault above that holds the Upwind client secret. Only used when keyVaultName is provided. Defaults to 'upwind-client-secret'."
       }
     },
     "UpwindAuthUrl": {
@@ -115,15 +117,17 @@
     "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
     "StorageAccountName": "[take(concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id)), 24)]",
     "identityName": "[format('uami-{0}', variables('FunctionName'))]",
-    "generatedKeyVaultName": "[take(concat('kv-upwind-', uniqueString(resourceGroup().id)), 24)]",
+    "generatedKeyVaultName": "[take(concat('kv-', toLower(parameters('FunctionName')), uniqueString(resourceGroup().id)), 24)]",
     "effectiveKeyVaultName": "[if(empty(parameters('keyVaultName')), variables('generatedKeyVaultName'), parameters('keyVaultName'))]",
     "hasKeyVault": "[not(empty(parameters('keyVaultName')))]",
     "hasClientSecret": "[not(empty(parameters('UpwindClientSecret')))]",
+    "effectiveSecretName": "[if(empty(parameters('keyVaultSecretName')), 'upwind-client-secret', parameters('keyVaultSecretName'))]",
     "endpointName": "[concat('upwind-dce-', uniqueString(resourceGroup().id))]",
     "mainRuleName": "[concat('upwind-dcr-', uniqueString(resourceGroup().id))]",
     "tableName": "UpwindLogsAssets_CL",
     "streamName": "Custom-UpwindLogsAssets_CL",
     "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "storageSuffix": "[environment().suffixes.storage]",
     "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
   },
   "resources": [
@@ -477,6 +481,8 @@
       },
       "kind": "StorageV2",
       "properties": {
+        "allowBlobPublicAccess": false,
+        "minimumTlsVersion": "TLS1_2",
         "networkAcls": {
           "bypass": "AzureServices",
           "virtualNetworkRules": [],
@@ -569,9 +575,12 @@
       },
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+        "httpsOnly": true,
         "keyVaultReferenceIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
         "siteConfig": {
           "linuxFxVersion": "Python|3.11",
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
           "appSettings": [
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
@@ -583,7 +592,7 @@
             },
             {
               "name": "AzureWebJobsStorage",
-              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value)]"
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value, ';EndpointSuffix=', toLower(variables('storageSuffix')))]"
             },
             {
               "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
@@ -615,11 +624,11 @@
             },
             {
               "name": "KEY_VAULT_URI",
-              "value": "[if(variables('hasKeyVault'), parameters('keyVaultUri'), reference(resourceId('Microsoft.KeyVault/vaults', variables('generatedKeyVaultName')), '2023-07-01').vaultUri)]"
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('effectiveKeyVaultName')), '2023-07-01').vaultUri]"
             },
             {
               "name": "UPWIND_SECRET_NAME",
-              "value": "upwind-client-secret"
+              "value": "[if(variables('hasKeyVault'), variables('effectiveSecretName'), 'upwind-client-secret')]"
             },
             {
               "name": "AZURE_CLIENT_ID",
