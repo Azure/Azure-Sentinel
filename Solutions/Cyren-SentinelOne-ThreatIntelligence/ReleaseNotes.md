@@ -1,6 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------|
-| 3.0.3      | 16-03-2026                    | **Specific marketplace links:** Replaced generic Data443 marketplace URL with direct links to the IP Reputation feed and Malware URL feed offers on Azure Marketplace so customers can request a trial token for the exact feed they need. |
-| 3.0.2      | 16-03-2026                    | **Feed ID clarity:** Removed default value from Cyren_FeedId parameter — customer must now explicitly enter 'ip_reputation' or 'malware_urls' matching their purchased subscription, preventing silent misconfiguration. |
-| 3.0.1      | 16-03-2026                    | **Optional JWT token + Marketplace link:** Made Cyren JWT token optional (minLength:0) with conditional Logic App deployment — connector only deploys when a token is provided. Added Azure Marketplace trial link to connector UI. Customers purchasing only one Cyren feed (IP Reputation or Malware URL) can now install without providing both tokens. |
+| 3.0.0       | 16-03-2026                     | Content Hub playbook visibility fix (dependency contentId corrected), optional JWT token with conditional deployment, explicit FeedId selection, and per-feed Azure Marketplace trial links. |
 | 3.0.0       | 23-02-2026                     | Initial release — Cyren CCF feed polling with NDJSON parsing, SentinelOne IOC push via Threat Intelligence API, PersistentToken pagination, 6-hour recurrence, cost safety parameters enforced. |
