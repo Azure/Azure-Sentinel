@@ -1,4 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------|
+| 3.0.2      | 16-03-2026                    | **Feed ID clarity:** Removed default value from Cyren_FeedId parameter — customer must now explicitly enter 'ip_reputation' or 'malware_urls' matching their purchased subscription, preventing silent misconfiguration. |
 | 3.0.1      | 16-03-2026                    | **Optional JWT token + Marketplace link:** Made Cyren JWT token optional (minLength:0) with conditional Logic App deployment — connector only deploys when a token is provided. Added Azure Marketplace trial link to connector UI. Customers purchasing only one Cyren feed (IP Reputation or Malware URL) can now install without providing both tokens. |
 | 3.0.0       | 23-02-2026                     | Initial release — Cyren CCF feed polling with NDJSON parsing, CrowdStrike Falcon Custom IOC push via /iocs/entities/indicators/v1 endpoint with OAuth2 Bearer token, PersistentToken pagination, 6-hour recurrence, cost safety parameters enforced. Hidden Sentinel tags applied for Content Hub visibility. |
