@@ -35,14 +35,14 @@ if ([string]::IsNullOrWhiteSpace($SolutionDataFolderPath)) {
     exit 1
 }
 
+$scriptDirectory = $PSScriptRoot
+if (-not $scriptDirectory) { $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path }
+. (Join-Path $scriptDirectory 'validation-functions.ps1')
+
+$solutionData = Resolve-SolutionDataPath -SolutionDataFolderPath $SolutionDataFolderPath
+
 $currentPath = $PWD.Path
 $repoRoot = $(git rev-parse --show-toplevel).ToString().Trim()
-
-# Resolve path so it is valid from repo root when invoked from Task (cwd = ci)
-$pathToUse = $SolutionDataFolderPath
-if (-not [System.IO.Path]::IsPathRooted($SolutionDataFolderPath)) {
-    $pathToUse = (Join-Path -Path $repoRoot -ChildPath ($SolutionDataFolderPath -replace '^\.\/', '' -replace '^\.\\', '')).Replace('\', '/')
-}
 
 # We must change dirs, since the Azure team wrote this script to run at the root
 Set-Location $repoRoot
@@ -83,15 +83,7 @@ try {
         return "$majorInt.$minorInt.$patchInt"
     }
 
-    # Derive solution manifest file from Data folder (same convention as createSolutionV3.ps1)
-    $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json", "testParameters.json")
-    $solutionManifestItem = Get-ChildItem -Path $pathToUse -File | Where-Object { $_.Name -notin $excluded } | Select-Object -First 1
-    if (-not $solutionManifestItem) {
-        Write-Error "Solution manifest file not found in $pathToUse"
-        exit 1
-    }
-    $solutionFile = $solutionManifestItem.FullName
-    $contentToImport = Get-Content -Raw $solutionFile | Out-String | ConvertFrom-Json
+    $contentToImport = Get-Content -Raw $solutionData.SolutionFilePath | ConvertFrom-Json
     $packageVersionAttribute = [bool]($contentToImport.PSobject.Properties.Name -match "version")
     $userInputPackageVersion = $contentToImport.version
 
@@ -147,7 +139,7 @@ try {
     function global:Write-Host() {}
 
     # Get the offerId value
-    $offerId = GetOfferIdSilently $pathToUse
+    $offerId = GetOfferIdSilently $solutionData.DataFolder
 
     # Get the offer details
     $offerDetails = GetOfferDetailsSilently $offerId
