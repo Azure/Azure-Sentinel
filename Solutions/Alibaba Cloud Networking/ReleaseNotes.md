@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 								|
 |-------------|--------------------------------|----------------------------------------------------------------------------------------------------| 
-| 3.0.0       | 23-13-2026                     | Added Alibaba Cloud Networking CCF connector. to support ApiGW, VPC and firewall data   	        |
+| 3.0.0       | 16-03-2026                     | Added Alibaba Cloud Networking CCF connector. to support ApiGW, VPC and firewall data   	        |
