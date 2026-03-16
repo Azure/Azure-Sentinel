@@ -28,13 +28,6 @@ When reviewing pull requests, follow these rules strictly.
 
 ---
 
-## Files to review
-Only review files in:
-
-- Solutions/**/Data/Solution_*.json - **USE: solution-data.instructions.md**
-- Solutions/**/SolutionMetadata.json - **USE: solution-metadata.instructions.md**
-- Solutions/**/ReleaseNotes.md - **USE: releasenotes.instructions.md**
-
 ## Files and folders to ignore
 Do NOT review or add comments for changes in the following paths:
 
