@@ -35,6 +35,12 @@ if ([string]::IsNullOrWhiteSpace($SolutionDataFolderPath)) {
     exit 1
 }
 
+$scriptDirectory = $PSScriptRoot
+if (-not $scriptDirectory) { $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path }
+. (Join-Path $scriptDirectory 'validation-functions.ps1')
+
+$solutionData = Resolve-SolutionDataPath -SolutionDataFolderPath $SolutionDataFolderPath
+
 $currentPath = $PWD.Path
 # Trim so trailing newline from git (e.g. when run under Task/sh) doesn't break Set-Location
 $repoRoot = $(git rev-parse --show-toplevel).ToString().Trim()
@@ -42,20 +48,14 @@ $repoRoot = $(git rev-parse --show-toplevel).ToString().Trim()
 # We must change dirs, since the Azure team wrote this script to run at the root
 Set-Location $repoRoot
 
-# Pass path that is valid from repo root (absolute if needed), so createSolutionV3.ps1 works when invoked from Task (cwd was ci)
-$pathToPass = $SolutionDataFolderPath
-if (-not [System.IO.Path]::IsPathRooted($SolutionDataFolderPath)) {
-    $pathToPass = (Join-Path -Path $repoRoot -ChildPath ($SolutionDataFolderPath -replace '^\.\/', '' -replace '^\.\\', '')).Replace('\', '/')
-}
-
 # createSolutionV3.ps1 catches all errors and only writes "Error occurred in catch..."
 # without exiting non-zero, so we detect failure by that message and exit 1 for build.sh.
 # Use & (call operator) so the script runs in a child scope and receives parameters correctly;
 # dot-sourcing can fail to bind VersionMode/VersionBump and produce the wrong zip version.
 if ($PSBoundParameters.ContainsKey('VersionBump')) {
-    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $pathToPass -VersionMode "local" -VersionBump $VersionBump *>&1
+    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $solutionData.DataFolder -VersionMode "local" -VersionBump $VersionBump *>&1
 } else {
-    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $pathToPass *>&1
+    $output = & ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath $solutionData.DataFolder *>&1
 }
 
 if ($output -match "Error occurred in catch of createSolutionV3 file") {

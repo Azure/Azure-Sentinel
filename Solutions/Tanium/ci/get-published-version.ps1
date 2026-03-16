@@ -26,14 +26,14 @@ if ([string]::IsNullOrWhiteSpace($SolutionDataFolderPath)) {
     exit 1
 }
 
+$scriptDirectory = $PSScriptRoot
+if (-not $scriptDirectory) { $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path }
+. (Join-Path $scriptDirectory 'validation-functions.ps1')
+
+$solutionData = Resolve-SolutionDataPath -SolutionDataFolderPath $SolutionDataFolderPath
+
 $currentPath = $PWD.Path
 $repoRoot = $(git rev-parse --show-toplevel).ToString().Trim()
-
-# Resolve path so it is valid from repo root when invoked from Task (cwd = ci)
-$pathToUse = $SolutionDataFolderPath
-if (-not [System.IO.Path]::IsPathRooted($SolutionDataFolderPath)) {
-    $pathToUse = (Join-Path -Path $repoRoot -ChildPath ($SolutionDataFolderPath -replace '^\.\/', '' -replace '^\.\\', '')).Replace('\', '/')
-}
 
 # We must change dirs, since the Azure team wrote this script to run at the root
 Set-Location $repoRoot
@@ -67,7 +67,7 @@ try {
     function global:Write-Host() {}
 
     # Get the offerId value
-    $offerId = GetOfferIdSilently $pathToUse
+    $offerId = GetOfferIdSilently $solutionData.DataFolder
 
     # Get the offer details
     $offerDetails = GetOfferDetailsSilently $offerId
