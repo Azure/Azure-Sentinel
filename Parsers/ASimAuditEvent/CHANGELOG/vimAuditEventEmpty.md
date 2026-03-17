@@ -1,5 +1,9 @@
 # Changelog for vimAuditEventEmpty.yaml
 
+## Version 0.3.0
+
+- (2026-03-17) Update empty parser alphabetically and align with columns from ASimTester.csv - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)
+
 ## Version 0.2
 
 - (2023-02-22) updated incorrect versions - [PR #7410](https://github.com/Azure/Azure-Sentinel/pull/7410)
