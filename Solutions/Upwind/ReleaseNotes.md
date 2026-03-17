@@ -1,3 +1,3 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**        |
+| **Version** | **Date Modified (DD-MM-YYY)** | **Change History**        |
 |-------------|--------------------------------|---------------------------|
-| 3.0.0       | 10-03-2026                     | Initial solution release. |
+| 3.0       | 2026-02-01                     | Initial solution release. |
