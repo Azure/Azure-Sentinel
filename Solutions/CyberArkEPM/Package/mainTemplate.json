@@ -16,7 +16,7 @@
     },
     "workspace-location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
+      "defaultValue": "",
       "metadata": {
         "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
       }
@@ -235,7 +235,7 @@
               "kind": "GenericUI",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "[variables('_uiConfigId1')]",
+                  "id": "CyberArkEPM",
                   "title": "CyberArkEPM (using Azure Functions)",
                   "publisher": "CyberArk",
                   "descriptionMarkdown": "The [CyberArk Endpoint Privilege Manager](https://www.cyberark.com/products/endpoint-privilege-manager/) data connector provides the capability to retrieve security event logs of the CyberArk EPM services and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
@@ -395,8 +395,8 @@
         "contentId": "[variables('_dataConnectorContentId1')]",
         "contentKind": "DataConnector",
         "displayName": "CyberArkEPM (using Azure Functions)",
-        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
-        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
         "version": "[variables('dataConnectorVersion1')]"
       }
     },
@@ -557,7 +557,7 @@
               "description": "**2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select ** New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\t\tCyberArkEPMUsername\n\t\tCyberArkEPMPassword\n\t\tCyberArkEPMServerURL\n\t\tWorkspaceID\n\t\tWorkspaceKey\n\t\tlogAnalyticsUri (optional)\n> - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.\n4. Once all application settings have been entered, click **Save**."
             }
           ],
-          "id": "[variables('_uiConfigId1')]",
+          "id": "CyberArkEPM",
           "additionalRequirementBanner": ">This data connector depends on a parser based on a Kusto Function to work as expected [**CyberArkEPM**](https://aka.ms/sentinel-CyberArkEPM-parser) which is deployed with the Microsoft Sentinel Solution."
         }
       }
@@ -712,7 +712,6 @@
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
               "apiVersion": "2022-01-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-              "location": "[parameters('workspace-location')]",
               "properties": {
                 "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
                 "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
@@ -1016,6 +1015,7 @@
         "packageVersion": "[variables('_solutionVersion')]",
         "packageName": "[variables('_solutionName')]",
         "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "id": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
@@ -1208,16 +1208,6 @@
               "defaultValue": "[parameters('workspace')]",
               "type": "securestring"
             },
-            "queryTimeWindowStart": {
-              "defaultValue": "-NA-",
-              "type": "securestring",
-              "minLength": 1
-            },
-            "queryTimeWindowEnd": {
-              "defaultValue": "-NA-",
-              "type": "securestring",
-              "minLength": 1
-            },
             "connectorDefinitionName": {
               "defaultValue": "CyberArk EPM",
               "type": "securestring",
@@ -1323,7 +1313,7 @@
                   "type": "OAuth2",
                   "ClientSecret": "[[parameters('clientSecret')]",
                   "ClientId": "[[parameters('clientId')]",
-                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/OAuth2/Token/',parameters('WebAppID'))]",
+                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/oauth2/token/',parameters('WebAppID'))]",
                   "tokenEndpointHeaders": {
                     "Accept": "application/json",
                     "Content-Type": "application/x-www-form-urlencoded"
@@ -1332,11 +1322,15 @@
                   "grantType": "client_credentials"
                 },
                 "request": {
-                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/api/AggregatedEvents')]",
+                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/API/Sets/',parameters('SetId'),'/events/aggregations/search')]",
                   "httpMethod": "POST",
+                  "queryParameters": {
+                    "nextCursor": "start",
+                    "limit": 1000
+                  },
+                  "queryWindowInMin": 60,
                   "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-                  "rateLimitQPS": 10,
-                  "queryWindowInMin": 5,
+                  "rateLimitQps": 10,
                   "retryCount": 3,
                   "timeoutInSeconds": 60,
                   "headers": {
@@ -1344,11 +1338,243 @@
                     "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0="
                   },
                   "isPostPayloadJson": true,
-                  "queryParametersTemplate": "[[concat('{\"SetId\":\"',parameters('SetId'),'\",\"TimeFilter\":{\"From\":\"',parameters('queryTimeWindowStart'),'\",\"To\":\"',parameters('queryTimeWindowEnd'),'\"}}')]"
+                  "queryParametersTemplate": "{\"filter\":\"arrivalTime GE {_QueryWindowStartTime} AND arrivalTime LE {_QueryWindowEndTime}\"}"
                 },
                 "response": {
                   "eventsJsonPaths": [
-                    "$"
+                    "$.events"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.nextCursor",
+                  "nextPageParaName": "nextCursor"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CyberArk EPM Raw Events Polling Config', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CyberArkEPMCCPDefinition",
+                "dataType": "CyberArk_EPMEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CyberArkEPM"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/oauth2/token/',parameters('WebAppID'))]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/API/Sets/',parameters('SetId'),'/Events/Search')]",
+                  "httpMethod": "POST",
+                  "queryParameters": {
+                    "nextCursor": "start",
+                    "limit": 1000
+                  },
+                  "queryWindowInMin": 60,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0="
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "{\"filter\":\"arrivalTime GE {_QueryWindowStartTime} AND arrivalTime LE {_QueryWindowEndTime}\"}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.events"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.nextCursor",
+                  "nextPageParaName": "nextCursor"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CyberArk EPM Aggregated Policy Audits Polling Config', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CyberArkEPMCCPDefinition",
+                "dataType": "CyberArk_EPMEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CyberArkEPM"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/oauth2/token/',parameters('WebAppID'))]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/API/Sets/',parameters('SetId'),'/policyaudits/aggregations/search')]",
+                  "httpMethod": "POST",
+                  "queryParameters": {
+                    "nextCursor": "start",
+                    "limit": 1000
+                  },
+                  "queryWindowInMin": 60,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0="
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "{\"filter\":\"arrivalTime GE {_QueryWindowStartTime} AND arrivalTime LE {_QueryWindowEndTime}\"}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.events"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.nextCursor",
+                  "nextPageParaName": "nextCursor"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CyberArk EPM Policy Audit Raw Event Details Polling Config', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CyberArkEPMCCPDefinition",
+                "dataType": "CyberArk_EPMEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CyberArkEPM"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/oauth2/token/',parameters('WebAppID'))]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/API/Sets/',parameters('SetId'),'/policyaudits/search')]",
+                  "httpMethod": "POST",
+                  "queryParameters": {
+                    "nextCursor": "start",
+                    "limit": 1000
+                  },
+                  "queryWindowInMin": 60,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0="
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "{\"filter\":\"arrivalTime GE {_QueryWindowStartTime} AND arrivalTime LE {_QueryWindowEndTime}\"}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.events"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.nextCursor",
+                  "nextPageParaName": "nextCursor"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CyberArk EPM Admin Audit Polling Config', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CyberArkEPMCCPDefinition",
+                "dataType": "CyberArk_EPMEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CyberArkEPM"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "TokenEndpoint": "[[concat('https://',parameters('IdentityEndpoint'),'/oauth2/token/',parameters('WebAppID'))]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {},
+                  "grantType": "client_credentials"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://',parameters('TenantUrl'),'/EPM/API/Sets/',parameters('SetId'),'/AdminAudit')]",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "DateFrom": "{_QueryWindowStartTime}",
+                    "DateTo": "{_QueryWindowEndTime}",
+                    "limit": 100,
+                    "offset": 0
+                  },
+                  "queryWindowInMin": 60,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0="
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.AdminAudits"
                   ],
                   "format": "json"
                 }
@@ -1360,6 +1586,7 @@
         "packageVersion": "[variables('_solutionVersion')]",
         "packageName": "[variables('_solutionName')]",
         "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "id": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
         "version": "[variables('dataConnectorCCPVersion')]"
@@ -2384,10 +2611,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2398,13 +2625,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2488,10 +2715,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2502,13 +2729,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2592,10 +2819,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2606,13 +2833,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2696,10 +2923,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2712,13 +2939,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2802,10 +3029,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2816,13 +3043,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -2906,10 +3133,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -2922,13 +3149,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "File",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "FileCustomEntity"
+                        "columnName": "FileCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "File"
                   }
                 ]
               }
@@ -3012,10 +3239,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3030,13 +3257,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -3078,8 +3305,8 @@
         "contentId": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
         "contentKind": "AnalyticsRule",
         "displayName": "CyberArkEPM - Uncommon process Internet access",
-        "contentProductId": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
-        "id": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','9d0d44ab-54dc-472a-9931-53521e888932','-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','9d0d44ab-54dc-472a-9931-53521e888932','-', '1.0.0')))]",
         "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
       }
     },
@@ -3120,10 +3347,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3136,13 +3363,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -3226,10 +3453,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3242,13 +3469,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
@@ -3332,10 +3559,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CyberArkEPM",
                     "dataTypes": [
                       "CyberArkEPM"
-                    ],
-                    "connectorId": "CyberArkEPM"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -3348,13 +3575,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "AccountCustomEntity"
+                        "columnName": "AccountCustomEntity",
+                        "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ]
               }
