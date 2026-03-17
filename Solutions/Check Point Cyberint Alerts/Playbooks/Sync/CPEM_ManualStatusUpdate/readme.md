@@ -37,10 +37,10 @@ On-demand playbook that reads the current Sentinel incident status and pushes it
 | Sentinel Status | Sentinel Classification | Argos Status | Argos Closure Reason |
 |----------------|------------------------|--------------|---------------------|
 | Active | — | `open` | — |
-| Closed | True Positive | `closed` | `true_positive` |
+| Closed | True Positive | `closed` | `resolved` |
 | Closed | False Positive | `closed` | `false_positive` |
-| Closed | Benign Positive | `closed` | `benign_positive` |
-| Closed | Undetermined | `closed` | `undetermined` |
+| Closed | Benign Positive | `closed` | `no_longer_a_threat` |
+| Closed | Undetermined | `closed` | `other` |
 
 ## API Endpoints Used
 

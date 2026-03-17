@@ -38,10 +38,10 @@ When a Microsoft Sentinel incident status changes, this playbook pushes the upda
 | Sentinel Status | Sentinel Classification | Argos Status | Argos Closure Reason |
 |----------------|------------------------|--------------|---------------------|
 | Active | — | `open` | — |
-| Closed | True Positive | `closed` | `true_positive` |
+| Closed | True Positive | `closed` | `resolved` |
 | Closed | False Positive | `closed` | `false_positive` |
-| Closed | Benign Positive | `closed` | `benign_positive` |
-| Closed | Undetermined | `closed` | `undetermined` |
+| Closed | Benign Positive | `closed` | `no_longer_a_threat` |
+| Closed | Undetermined | `closed` | `other` |
 
 ## Loop Prevention
 
