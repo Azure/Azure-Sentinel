@@ -118,8 +118,8 @@ From the left menu blade, click **Overview** and take note of the **Subscription
 
 The custom table **CheckmarxSASTFindings_CL** must be created before deploying the DCR.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeploySASTTable.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeploySASTTable.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeploySASTTable.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeploySASTTable.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
@@ -144,8 +144,8 @@ The DCE provides the ingestion endpoint URL for the Logic App.
 > [!NOTE]
 > If you have already deployed the **AS-Checkmarx-Audit-Ingestion** playbook, a DCE already exists in your workspace. You may skip this step and use the existing DCE's Logs Ingestion Endpoint URL and Resource ID for the DCR deployment below. Navigate to your existing DCE resource to find these values.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeployDCE.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeployDCE.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeployDCE.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeployDCE.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
@@ -172,8 +172,8 @@ After deployment, navigate to the "**Outputs**" section and take note of the val
 
 The DCR defines the schema and destination for the ingested SAST findings data.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeploySASTDCR.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2FAzureDeploySASTDCR.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeploySASTDCR.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2FAzureDeploySASTDCR.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
@@ -202,8 +202,8 @@ After deployment, navigate to the "**Outputs**" section and take note of the **d
 
 The Logic App performs the daily ingestion of Checkmarx SAST scan findings.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
