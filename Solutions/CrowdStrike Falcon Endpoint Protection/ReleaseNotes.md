@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.2       | 16-03-2026                     | Update *CrowdStrike API Data Connector* to GA with adding rate limits to inner steps for Alerts and Detections data types |
 | 3.3.1       | 05-03-2026                     | Update *CrowdStrike API Data Connector* to fix Alerts and Detections data types |
 | 3.3.0       | 26-01-2026                     | Refresh *CrowdStrike API Data Connector* with Cases data type and multiple improvements |
 | 3.2.0       | 07-01-2026                     | Updated *CrowdStrike Falcon Adversary Data Connector* Change table name to be "ThreatIntelIndicators" instead of "ThreatIntelligenceIndicator" |
