@@ -1,0 +1,80 @@
+id: a1b2c3d4-0004-4000-8000-000000000004
+name: Valimail Enforce - Unusual Rate of Configuration Changes or User Additions
+description: |
+  Detects when a single user performs more than 3 configuration changes or user
+  additions within a 1-hour window on any domain. An unusual burst of changes may
+  indicate a compromised admin account, unauthorized automation, or insider threat.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - DefenseEvasion
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1562
+  - T1531
+  - T1078
+query: |
+  let threshold = 3;
+  let timeWindow = 1h;
+  ValimailEnforceEvents_CL
+  | where EventCategory in (
+      "DMARCPolicy",
+      "SPFConfiguration",
+      "DKIMConfiguration",
+      "DomainManagement",
+      "UserManagement"
+    )
+  | summarize
+      ChangeCount       = count(),
+      HighValueCount    = countif(IsHighValueEvent == true),
+      Domains           = make_set(Subject),
+      DomainCount       = dcount(Subject),
+      Actions           = make_set(EventType),
+      Categories        = make_set(EventCategory),
+      FirstSeen         = min(PerformedAt),
+      LastSeen          = max(PerformedAt)
+    by User, bin(PerformedAt, timeWindow)
+  | where ChangeCount > threshold
+  | extend
+      AccountName   = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1]),
+      DomainName    = tostring(Domains[0]),
+      ChangesPerMin = round(todouble(ChangeCount) / 60.0, 2)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+alertDetailsOverride:
+  alertDisplayNameFormat: "Unusual change rate by {{User}} — {{ChangeCount}} changes in 1h across {{DomainCount}} domain(s)"
+  alertDescriptionFormat: |
+    User '{{User}}' made {{ChangeCount}} configuration changes ({{HighValueCount}} high-value)
+    across {{DomainCount}} domain(s) within one hour. Categories affected: {{Categories}}.
+    Actions: {{Actions}}.
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+version: 1.0.0
+kind: Scheduled

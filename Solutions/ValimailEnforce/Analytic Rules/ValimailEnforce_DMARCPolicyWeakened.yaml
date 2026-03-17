@@ -1,0 +1,63 @@
+id: a1b2c3d4-0001-4000-8000-000000000001
+name: Valimail Enforce - DMARC Policy Weakened to None
+description: |
+  Detects when a DMARC policy is changed to 'none', which disables enforcement
+  and leaves the domain vulnerable to spoofing and phishing attacks.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1566
+  - T1562
+query: |
+  ValimailEnforceEvents_CL
+  | where EventSeverity == "High"
+  | where EventType == "dmarc_policy_set_to_none"
+  | summarize
+      EventCount = count(),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt),
+      Changes = make_set(EventChange)
+    by Subject, User, EventCategory
+  | extend
+      AccountName = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1]),
+      DomainName = Subject
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+alertDetailsOverride:
+  alertDisplayNameFormat: "DMARC policy set to NONE on domain {{Subject}} by {{User}}"
+  alertDescriptionFormat: |
+    The DMARC policy for domain '{{Subject}}' was set to 'none' by '{{User}}',
+    disabling email authentication enforcement. This may expose the domain to spoofing.
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+    groupByAlertDetails: []
+version: 1.0.0
+kind: Scheduled

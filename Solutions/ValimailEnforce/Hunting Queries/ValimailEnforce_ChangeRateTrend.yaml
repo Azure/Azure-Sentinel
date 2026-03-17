@@ -1,0 +1,55 @@
+id: b1b2c3d4-0004-4000-8000-000000000004
+name: Valimail Enforce - Configuration Change Rate Trend
+description: |
+  Hunt for configuration change and user addition activity grouped by user and
+  domain over hourly buckets. Use this to establish baselines, spot unusual
+  spikes, and investigate specific users or domains flagged by the
+  corresponding analytics rule.
+tactics:
+  - Impact
+  - DefenseEvasion
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1562
+  - T1531
+  - T1078
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+query: |
+  let threshold = 3;
+  ValimailEnforceEvents_CL
+  | where EventCategory in (
+      "DMARCPolicy",
+      "SPFConfiguration",
+      "DKIMConfiguration",
+      "DomainManagement",
+      "UserManagement"
+    )
+  | summarize
+      ChangeCount    = count(),
+      HighValueCount = countif(IsHighValueEvent == true),
+      Actions        = make_set(EventType),
+      Categories     = make_set(EventCategory),
+      Domains        = make_set(Subject),
+      DomainCount    = dcount(Subject)
+    by User, bin(PerformedAt, 1h)
+  | extend
+      ExceedsThreshold = ChangeCount > threshold,
+      ChangesPerMin    = round(todouble(ChangeCount) / 60.0, 2),
+      AccountName      = tostring(split(User, "@")[0]),
+      AccountDomain    = tostring(split(User, "@")[1])
+  | project
+      PerformedAt,
+      User,
+      ChangeCount,
+      HighValueCount,
+      DomainCount,
+      ChangesPerMin,
+      ExceedsThreshold,
+      Domains,
+      Actions,
+      Categories
+  | order by PerformedAt desc
+version: 1.0.0

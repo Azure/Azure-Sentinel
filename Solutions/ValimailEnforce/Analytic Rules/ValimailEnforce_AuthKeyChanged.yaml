@@ -1,0 +1,63 @@
+id: a1b2c3d4-0003-4000-8000-000000000003
+name: Valimail Enforce - Email Authentication Key Deleted
+description: |
+  Detects deletion of SPF delegations or DKIM keys, which are medium-severity events
+  that could degrade email authentication posture for a domain.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  ValimailEnforceEvents_CL
+  | where EventSeverity == "Medium"
+  | where EventCategory in ("SPFConfiguration", "DKIMConfiguration")
+  | where IsHighValueEvent == true
+  | summarize
+      EventCount = count(),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt),
+      AffectedDomains = make_set(Subject),
+      Actions = make_set(EventType)
+    by User, EventCategory
+  | extend
+      AccountName = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1]),
+      DomainName = tostring(AffectedDomains[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{EventCategory}} key deleted on {{EventCount}} domain(s) by {{User}}"
+  alertDescriptionFormat: |
+    User '{{User}}' deleted one or more {{EventCategory}} records affecting
+    domains: {{AffectedDomains}}. This may weaken email authentication posture.
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+version: 1.0.0
+kind: Scheduled

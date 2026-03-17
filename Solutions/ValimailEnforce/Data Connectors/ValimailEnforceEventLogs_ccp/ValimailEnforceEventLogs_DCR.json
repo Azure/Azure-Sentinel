@@ -1,0 +1,55 @@
+{
+  "name": "ValimailEnforceEvents",
+  "apiVersion": "2024-03-11",
+  "location": "[parameters('workspace-location')]",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "properties": {
+    "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "streamDeclarations": {
+      "Custom-ValimailReporting_API": {
+        "columns": [
+          {
+            "name": "subject",
+            "type": "string"
+          },
+          {
+            "name": "user",
+            "type": "string"
+          },
+          {
+            "name": "event-type",
+            "type": "string"
+          },
+          {
+            "name": "event-change",
+            "type": "string"
+          },
+          {
+            "name": "performed-at",
+            "type": "datetime"
+          }
+        ]
+      }
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "workspaceResourceId": "{{workspaceResourceId}}",
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Custom-ValimailReporting_API"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source | extend EventTypeNorm = tolower(strcat_delim('_', split(['event-type'], ' '))) | project Subject = subject, User = user, EventType = ['event-type'], EventChange = ['event-change'], PerformedAt = ['performed-at'], TimeGenerated = ['performed-at'], SourceSystem = \"Valimail\", Computer = user, EventCategory = case(EventTypeNorm contains \"user\", \"UserManagement\", EventTypeNorm contains \"dmarc\", \"DMARCPolicy\", EventTypeNorm contains \"spf\", \"SPFConfiguration\", EventTypeNorm contains \"dkim\", \"DKIMConfiguration\", EventTypeNorm contains \"domain\", \"DomainManagement\", EventTypeNorm contains \"service\", \"ServiceManagement\", \"Other\"), EventSeverity = case(EventTypeNorm == \"dmarc_policy_set_to_none\", \"High\", EventTypeNorm == \"user_deleted\", \"High\", EventTypeNorm contains \"deleted\", \"Medium\", EventTypeNorm == \"dmarc_policy_set_to_quarantine\", \"Medium\", EventTypeNorm == \"dmarc_policy_set_to_reject\", \"Low\", EventTypeNorm contains \"added\", \"Low\", \"Informational\"), IsHighValueEvent = EventTypeNorm in (\"user_added\", \"user_deleted\", \"user_deactivated\", \"spf_delegation_started\", \"spf_delegation_stopped\", \"dkim_key_added\", \"dkim_key_deleted\", \"dmarc_policy_set_to_quarantine\", \"dmarc_policy_set_to_reject\", \"dmarc_policy_set_to_none\")",
+        "outputStream": "Custom-ValimailEnforceEvents_CL"
+      }
+    ]
+  }
+}

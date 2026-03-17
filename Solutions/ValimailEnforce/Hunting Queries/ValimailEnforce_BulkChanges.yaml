@@ -1,0 +1,34 @@
+id: b1b2c3d4-0002-4000-8000-000000000002
+name: Valimail Enforce - Bulk Domain Changes by Single User
+description: |
+  Hunt for users who have made configuration changes to an unusually high number
+  of domains in a short period. May indicate a compromised admin account or
+  unauthorized bulk reconfiguration.
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+  - T1531
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+query: |
+  let threshold = 5; // flag users who touched more than this many domains
+  ValimailEnforceEvents_CL
+  | where IsHighValueEvent == true
+  | summarize
+      DomainCount = dcount(Subject),
+      Domains = make_set(Subject),
+      Actions = make_set(EventType),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt)
+    by User, bin(PerformedAt, 1h)
+  | where DomainCount > threshold
+  | extend
+      AccountName = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1])
+  | project FirstSeen, LastSeen, User, DomainCount, Domains, Actions
+  | order by DomainCount desc
+version: 1.0.0
