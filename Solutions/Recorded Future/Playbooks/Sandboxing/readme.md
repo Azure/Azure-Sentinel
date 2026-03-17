@@ -17,7 +17,9 @@ If you use the Enterprise Sandbox, you need to provide an additional key `Enterp
 > - Email notifications are still sent (Outlook playbook only)
 > - We provide Analytic Rules that will handle **incident creation**, see [Incident Creation](../readme.md#incident-creation)
 
-The Recorded Future Sandbox integration requires a API key for ```Recorded Future Sandbox for Microsoft Sentinel``` API key that is different than the one used in the ```Recorded Future for Microsoft Sentinel``` integration. If a ```Enterprise Sandox API``` token is to be used, it should be added in the corresponding logic apps under ```Sandbox API token``` parameter.
+The Recorded Future Sandbox integration requires an API key for `Recorded Future Sandbox for Microsoft Sentinel`. **Note**: this is different from the one used in the `Recorded Future for Microsoft Sentinel` integration.
+
+If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Sandbox API token`.
 
 Refer to [Recorded Future API Key](../readme.md#recorded-future-api-key) for guidance on obtaining and using the necessary API keys.
 
