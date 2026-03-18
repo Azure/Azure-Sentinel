@@ -320,7 +320,19 @@ build_solution() {
 		pwsh ./build-silently.ps1 "$_solution_data_folder_path" || _die "build-silently.ps1 failed"
 	fi
 
-	(cd "$ci_directory" && pwsh ./set-connector-versions.ps1 -SolutionDataFolderPath "$data_directory" -BuildVersion "$new_version") || _die "set-connector-versions.ps1 failed"
+	# Uncomment this line if we ever publish multiple data connectors
+	# (cd "$ci_directory" && pwsh ./set-connector-versions.ps1 -SolutionDataFolderPath "$data_directory" -BuildVersion "$new_version") || _die "set-connector-versions.ps1 failed"
+
+	local package_directory
+	package_directory="${ci_directory}/../Package"
+	local zip_path
+	zip_path="${package_directory}/${new_version}.zip"
+	if [[ ! -f "$zip_path" ]]; then
+		_msg_error "Package zip was not created: ${zip_path}"
+		_msg_info "To see why, run the solution builder with output visible. From the repo root:"
+		_msg_info "  cd \"\$(git rev-parse --show-toplevel)\" && pwsh ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 -SolutionDataFolderPath ./Solutions/Tanium/Data -VersionMode local -VersionBump ${version_bump:-minor}"
+		return 1
+	fi
 
 	_msg_success "Build finished"
 }
