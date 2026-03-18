@@ -1,0 +1,842 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "LogAnalyticsWorkspaceResourceID": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Resource ID of the existing Log Analytics Workspace. Format: /subscriptions/xxxx/resourcegroups/xxxx/providers/microsoft.operationalinsights/workspaces/xxxx"
+      }
+    },
+    "SemperisApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Semperis Lightning API Key for authentication"
+      }
+    },
+    "SemperisZone": {
+      "type": "string",
+      "defaultValue": "na",
+      "allowedValues": [
+        "na",
+        "eu"
+      ],
+      "metadata": {
+        "description": "Semperis zone (na=North America, eu=Europe)"
+      }
+    },
+    "ConnectorSchedule": {
+      "type": "string",
+      "defaultValue": "0 * * * *",
+      "metadata": {
+        "description": "Connector ingestion schedule (hourly cron by default). Format: 'minute hour day month dayOfWeek'"
+      }
+    }
+  },
+  "variables": {
+    "deploymentVersion": "1.0.0",
+    "location": "[resourceGroup().location]",
+    "functionAppName": "[format('fa-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "storageAccountName": "[format('sasemperis{0}', uniqueString(resourceGroup().id))]",
+    "functionStorageAccountName": "[format('safasemperis{0}', uniqueString(resourceGroup().id))]",
+    "keyVaultName": "[format('kv-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "appInsightsName": "[format('appins-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "appServicePlanName": "[format('asp-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "dataCollectionEndpointName": "[format('dce-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "userManagedIdentityName": "[format('uami-semperis-{0}', uniqueString(resourceGroup().id))]",
+    "roleIdMonitoringMetricsPublisher": "/subscriptions/",
+    "roleIdStorageBlobDataOwner": "/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b",
+    "storageSuffix": "[environment().suffixes.storage]",
+    "packageUri": "https://aka.ms/sentinel-semperis-azuredeploy"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('userManagedIdentityName')]",
+      "location": "[variables('location')]"
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('functionStorageAccountName')]",
+      "location": "[variables('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[variables('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[variables('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "accessPolicies": [
+          {
+            "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName')), '2023-01-31').principalId]",
+            "permissions": {
+              "secrets": ["get", "set", "list", "delete"]
+            },
+            "tenantId": "[subscription().tenantId]"
+          }
+        ],
+        "publicNetworkAccess": "Enabled",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "bypass": "AzureServices"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/semperis-api-key', variables('keyVaultName'))]",
+      "properties": {
+        "value": "[parameters('SemperisApiKey')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), variables('roleIdStorageBlobDataOwner'), reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName')), '2023-01-31').principalId)]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName')), '2023-01-31').principalId]",
+        "roleDefinitionId": "[variables('roleIdStorageBlobDataOwner')]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "createCustomTables",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName'))]"
+      ],
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "LogAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+          },
+          "LogAnalyticsWorkspaceLocation": {
+            "value": "[variables('location')]"
+          },
+          "DataCollectionEndpointName": {
+            "value": "[variables('dataCollectionEndpointName')]"
+          },
+          "ServicePrincipalId": {
+            "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName')), '2023-01-31').principalId]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "LogAnalyticsWorkspaceResourceId": {
+              "type": "string"
+            },
+            "LogAnalyticsWorkspaceLocation": {
+              "type": "string"
+            },
+            "DataCollectionEndpointName": {
+              "type": "string"
+            },
+            "ServicePrincipalId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "roleIdMonitoringMetricsPublisher": "/subscriptions/",
+            "workspaceName": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[8]]",
+            "resourceGroupName": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[4]]",
+            "subscriptionId": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[2]]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "createTables",
+              "subscriptionId": "[variables('subscriptionId')]",
+              "resourceGroup": "[variables('resourceGroupName')]",
+              "properties": {
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "resources": [
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningTier0Nodes_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningTier0Nodes_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "NodeId", "type": "string"},
+                            {"name": "NodeType", "type": "string"},
+                            {"name": "Label", "type": "string"},
+                            {"name": "Domain", "type": "string"},
+                            {"name": "Zone", "type": "string"},
+                            {"name": "IdentitySource", "type": "string"},
+                            {"name": "DN", "type": "string"},
+                            {"name": "OID", "type": "string"},
+                            {"name": "UserAccountControl", "type": "int"},
+                            {"name": "PasswordLastSet", "type": "datetime"},
+                            {"name": "WhenChanged", "type": "datetime"},
+                            {"name": "LastLogonTimestamp", "type": "datetime"},
+                            {"name": "IncomingEdgesOfConcern", "type": "int"},
+                            {"name": "UnclassifiedIncomingEdges", "type": "int"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningAttackPaths_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningAttackPaths_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "PathId", "type": "string"},
+                            {"name": "TargetId", "type": "string"},
+                            {"name": "TargetLabel", "type": "string"},
+                            {"name": "TargetType", "type": "string"},
+                            {"name": "SourceId", "type": "string"},
+                            {"name": "SourceLabel", "type": "string"},
+                            {"name": "SourceType", "type": "string"},
+                            {"name": "Cost", "type": "int"},
+                            {"name": "RiskScore", "type": "int"},
+                            {"name": "Blowout", "type": "bool"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningAttackPathLinks_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningAttackPathLinks_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "PathId", "type": "string"},
+                            {"name": "LinkId", "type": "string"},
+                            {"name": "SourceId", "type": "string"},
+                            {"name": "TargetId", "type": "string"},
+                            {"name": "RelationshipType", "type": "string"},
+                            {"name": "IdentitySource", "type": "string"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningTier0Attackers_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningTier0Attackers_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "DomainId", "type": "string"},
+                            {"name": "DomainType", "type": "string"},
+                            {"name": "DomainName", "type": "string"},
+                            {"name": "ObjectId", "type": "string"},
+                            {"name": "ObjectType", "type": "string"},
+                            {"name": "Zone", "type": "string"},
+                            {"name": "DistinguishedName", "type": "string"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningIndicatorExecutions_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningIndicatorExecutions_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "Id", "type": "string"},
+                            {"name": "Name", "type": "string"},
+                            {"name": "CreatedTime", "type": "datetime"},
+                            {"name": "ExecutedTime", "type": "datetime"},
+                            {"name": "Status", "type": "string"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningIOEsMetadata_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningIOEsMetadata_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "Id", "type": "string"},
+                            {"name": "Name", "type": "string"},
+                            {"name": "Description", "type": "string"},
+                            {"name": "Severity", "type": "string"},
+                            {"name": "Category", "type": "string"}
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2023-09-01",
+                      "name": "[format('{0}/LightningIOEResults_CL', variables('workspaceName'))]",
+                      "properties": {
+                        "schema": {
+                          "name": "LightningIOEResults_CL",
+                          "tableType": "CustomLog",
+                          "tableSubType": "DataCollectionRuleBased",
+                          "columns": [
+                            {"name": "TimeGenerated", "type": "datetime"},
+                            {"name": "IndicatorExecutionId", "type": "string"},
+                            {"name": "ObjectId", "type": "string"},
+                            {"name": "ObjectName", "type": "string"},
+                            {"name": "ObjectType", "type": "string"},
+                            {"name": "RiskRating", "type": "string"},
+                            {"name": "Status", "type": "string"}
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionEndpoints",
+              "apiVersion": "2023-03-11",
+              "name": "[parameters('DataCollectionEndpointName')]",
+              "location": "[parameters('LogAnalyticsWorkspaceLocation')]",
+              "properties": {}
+            }
+          ],
+          "outputs": {
+            "DceUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName')), '2023-03-11').logsIngestion.endpoint]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "createDataCollectionRules",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+      ],
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "LogAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+          },
+          "LogAnalyticsWorkspaceLocation": {
+            "value": "[variables('location')]"
+          },
+          "DataCollectionEndpointName": {
+            "value": "[variables('dataCollectionEndpointName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "LogAnalyticsWorkspaceResourceId": {
+              "type": "string"
+            },
+            "LogAnalyticsWorkspaceLocation": {
+              "type": "string"
+            },
+            "DataCollectionEndpointName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "workspaceName": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[8]]",
+            "resourceGroupName": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[4]]",
+            "subscriptionId": "[split(parameters('LogAnalyticsWorkspaceResourceId'), '/')[2]]",
+            "dceId": "[resourceId(variables('subscriptionId'), variables('resourceGroupName'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2022-09-01",
+              "name": "createDCRs",
+              "subscriptionId": "[variables('subscriptionId')]",
+              "resourceGroup": "[variables('resourceGroupName')]",
+              "properties": {
+                "mode": "Incremental",
+                "parameters": {},
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "resources": [
+                    {
+                      "type": "Microsoft.Insights/dataCollectionRules",
+                      "apiVersion": "2023-03-11",
+                      "name": "[format('dcr-semperis-{0}', uniqueString(resourceGroup().id))]",
+                      "location": "[parameters('LogAnalyticsWorkspaceLocation')]",
+                      "properties": {
+                        "dataCollectionEndpointId": "[variables('dceId')]",
+                        "streamDeclarations": {
+                          "Custom-LightningTier0Nodes_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "NodeId", "type": "string"},
+                              {"name": "NodeType", "type": "string"},
+                              {"name": "Label", "type": "string"},
+                              {"name": "Domain", "type": "string"},
+                              {"name": "Zone", "type": "string"},
+                              {"name": "IdentitySource", "type": "string"},
+                              {"name": "DN", "type": "string"},
+                              {"name": "OID", "type": "string"},
+                              {"name": "UserAccountControl", "type": "int"},
+                              {"name": "PasswordLastSet", "type": "datetime"},
+                              {"name": "WhenChanged", "type": "datetime"},
+                              {"name": "LastLogonTimestamp", "type": "datetime"},
+                              {"name": "IncomingEdgesOfConcern", "type": "int"},
+                              {"name": "UnclassifiedIncomingEdges", "type": "int"}
+                            ]
+                          },
+                          "Custom-LightningAttackPaths_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "PathId", "type": "string"},
+                              {"name": "TargetId", "type": "string"},
+                              {"name": "TargetLabel", "type": "string"},
+                              {"name": "TargetType", "type": "string"},
+                              {"name": "SourceId", "type": "string"},
+                              {"name": "SourceLabel", "type": "string"},
+                              {"name": "SourceType", "type": "string"},
+                              {"name": "Cost", "type": "int"},
+                              {"name": "RiskScore", "type": "int"},
+                              {"name": "Blowout", "type": "bool"}
+                            ]
+                          },
+                          "Custom-LightningAttackPathLinks_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "PathId", "type": "string"},
+                              {"name": "LinkId", "type": "string"},
+                              {"name": "SourceId", "type": "string"},
+                              {"name": "TargetId", "type": "string"},
+                              {"name": "RelationshipType", "type": "string"},
+                              {"name": "IdentitySource", "type": "string"}
+                            ]
+                          },
+                          "Custom-LightningTier0Attackers_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "DomainId", "type": "string"},
+                              {"name": "DomainType", "type": "string"},
+                              {"name": "DomainName", "type": "string"},
+                              {"name": "ObjectId", "type": "string"},
+                              {"name": "ObjectType", "type": "string"},
+                              {"name": "Zone", "type": "string"},
+                              {"name": "DistinguishedName", "type": "string"}
+                            ]
+                          },
+                          "Custom-LightningIndicatorExecutions_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "Id", "type": "string"},
+                              {"name": "Name", "type": "string"},
+                              {"name": "CreatedTime", "type": "datetime"},
+                              {"name": "ExecutedTime", "type": "datetime"},
+                              {"name": "Status", "type": "string"}
+                            ]
+                          },
+                          "Custom-LightningIOEsMetadata_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "Id", "type": "string"},
+                              {"name": "Name", "type": "string"},
+                              {"name": "Description", "type": "string"},
+                              {"name": "Severity", "type": "string"},
+                              {"name": "Category", "type": "string"}
+                            ]
+                          },
+                          "Custom-LightningIOEResults_CL": {
+                            "columns": [
+                              {"name": "TimeGenerated", "type": "datetime"},
+                              {"name": "IndicatorExecutionId", "type": "string"},
+                              {"name": "ObjectId", "type": "string"},
+                              {"name": "ObjectName", "type": "string"},
+                              {"name": "ObjectType", "type": "string"},
+                              {"name": "RiskRating", "type": "string"},
+                              {"name": "Status", "type": "string"}
+                            ]
+                          }
+                        },
+                        "destinations": {
+                          "logAnalytics": [
+                            {
+                              "name": "[variables('workspaceName')]",
+                              "workspaceResourceId": "[parameters('LogAnalyticsWorkspaceResourceId')]"
+                            }
+                          ]
+                        },
+                        "dataFlows": [
+                          {
+                            "streams": ["Custom-LightningTier0Nodes_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningTier0Nodes_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningAttackPaths_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningAttackPaths_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningAttackPathLinks_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningAttackPathLinks_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningTier0Attackers_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningTier0Attackers_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningIndicatorExecutions_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningIndicatorExecutions_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningIOEsMetadata_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningIOEsMetadata_CL"
+                          },
+                          {
+                            "streams": ["Custom-LightningIOEResults_CL"],
+                            "destinations": ["[variables('workspaceName')]"],
+                            "transformKql": "source",
+                            "outputStream": "Custom-LightningIOEResults_CL"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "outputs": {
+                    "DcrImmutableId": {
+                      "type": "string",
+                      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', format('dcr-semperis-{0}', uniqueString(resourceGroup().id))), '2023-03-11').immutableId]"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "DcrImmutableId": {
+              "type": "string",
+              "value": "[reference('createDCRs').outputs.DcrImmutableId.value]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('appServicePlanName')]",
+      "location": "[variables('location')]",
+      "sku": {
+        "name": "EP1",
+        "tier": "ElasticPremium"
+      },
+      "kind": "linux",
+      "properties": {
+        "reserved": true,
+        "elasticScaleEnabled": true
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('appInsightsName')]",
+      "location": "[variables('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "Request_Source": "rest",
+        "WorkspaceResourceId": "[parameters('LogAnalyticsWorkspaceResourceID')]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[variables('location')]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('functionStorageAccountName'))]",
+        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'semperis-api-key')]",
+        "[resourceId('Microsoft.Resources/deployments', 'createCustomTables')]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+        "httpsOnly": true,
+        "functionsExtensionVersion": "~4",
+        "siteConfig": {
+          "linuxFxVersion": "PYTHON|3.11",
+          "keyVaultReferenceIdentity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName'))]",
+          "alwaysOn": true,
+          "appSettings": [
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('functionStorageAccountName')), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('functionStorageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=', toLower(variables('storageSuffix')))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+              "value": "true"
+            },
+            {
+              "name": "ENABLE_ORYX_BUILD",
+              "value": "true"
+            },
+            {
+              "name": "AZURE_TENANT_ID",
+              "value": "[subscription().tenantId]"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userManagedIdentityName')), '2023-01-31').clientId]"
+            },
+            {
+              "name": "KEY_VAULT_URI",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+            },
+            {
+              "name": "SEMPERIS_API_KEY",
+              "value": "[concat('@Microsoft.KeyVault(VaultName=', variables('keyVaultName'), ';SecretName=semperis-api-key)')]"
+            },
+            {
+              "name": "SEMPERIS_ZONE",
+              "value": "[parameters('SemperisZone')]"
+            },
+            {
+              "name": "SEMPERIS_AUTH_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/api/external/v1/auth/token"
+            },
+            {
+              "name": "SEMPERIS_TIER_0_NODE_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/idg/api/v1/QueryGraph"
+            },
+            {
+              "name": "SEMPERIS_ATTACK_PATHS_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/idg/api/v1/DetermineAttackPaths"
+            },
+            {
+              "name": "SEMPERIS_INDICATOR_RESULTS_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/api/external/v1/indicatorExecutions"
+            },
+            {
+              "name": "SEMPERIS_TIER_0_ATTACKERS_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/idg/api/v1/GetZoneAccessObjects"
+            },
+            {
+              "name": "SEMPERIS_INDICATOR_METADATA_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/api/external/v1/ioesMetadata"
+            },
+            {
+              "name": "SEMPERIS_INDICATOR_EXECUTIONS_ENDPOINT",
+              "value": "https://lightning.{SEMPERIS_ZONE}.cloud.semperis.com/api/external/v1/indicatorExecutions"
+            },
+            {
+              "name": "DCE_ENDPOINT",
+              "value": "[reference('createCustomTables').outputs.DceUri.value]"
+            },
+            {
+              "name": "DCR_IMMUTABLE_ID",
+              "value": "[reference('createDataCollectionRules').outputs.DcrImmutableId.value]"
+            },
+            {
+              "name": "LOG_ANALYTICS_WORKSPACE_ID",
+              "value": "[split(parameters('LogAnalyticsWorkspaceResourceID'), '/')[8]]"
+            },
+            {
+              "name": "T0_NODES_STREAM_NAME",
+              "value": "Custom-LightningTier0Nodes_CL"
+            },
+            {
+              "name": "INDICATOR_EXECUTIONS_STREAM_NAME",
+              "value": "Custom-LightningIndicatorExecutions_CL"
+            },
+            {
+              "name": "ATTACK_PATHS_STREAM_NAME",
+              "value": "Custom-LightningAttackPaths_CL"
+            },
+            {
+              "name": "ATTACK_PATH_LINKS_STREAM_NAME",
+              "value": "Custom-LightningAttackPathLinks_CL"
+            },
+            {
+              "name": "TIER_0_ATTACKERS_STREAM_NAME",
+              "value": "Custom-LightningTier0Attackers_CL"
+            },
+            {
+              "name": "INDICATOR_METADATA_STREAM_NAME",
+              "value": "Custom-LightningIOEsMetadata_CL"
+            },
+            {
+              "name": "INDICATOR_RESULTS_STREAM_NAME",
+              "value": "Custom-LightningIOEResults_CL"
+            },
+            {
+              "name": "TRIGGER_INTERVAL_HOURS",
+              "value": "1"
+            },
+            {
+              "name": "CONNECTOR_SCHEDULE",
+              "value": "[parameters('ConnectorSchedule')]"
+            },
+            {
+              "name": "LOG_LEVEL",
+              "value": "INFO"
+            }
+          ],
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
+          "http20Enabled": true,
+          "publicNetworkAccess": "Enabled",
+          "cors": {
+            "allowedOrigins": ["https://portal.azure.com"]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites/extensions",
+      "apiVersion": "2021-02-01",
+      "name": "[format('{0}/zipdeploy', variables('functionAppName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "packageUri": "[variables('packageUri')]"
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppName": {
+      "type": "string",
+      "value": "[variables('functionAppName')]"
+    },
+    "functionAppId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+    },
+    "appInsightsInstrumentationKey": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
+    }
+  }
+}
