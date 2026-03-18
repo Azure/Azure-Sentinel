@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.0       | 23-01-2024                     | Initial Solution for Censys with Playbooks and Workbook |
+| 3.0.0       | 05-03-2026                     | Initial Solution for Censys with Playbooks and Workbook |
