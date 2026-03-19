@@ -1,0 +1,135 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0",
+    "metadata": {
+        "title": "SOCRadar-Alarms-Infrastructure",
+        "description": "Creates DCE, Custom Table and DCR for storing SOCRadar alarms in Log Analytics",
+        "version": "1.0.0",
+        "author": "SOCRadar",
+        "lastUpdateTime": "2026-02-19T00:00:00.000Z"
+    },
+    "parameters": {
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": { "description": "Microsoft Sentinel Log Analytics Workspace Name" }
+        },
+        "WorkspaceLocation": {
+            "type": "string",
+            "metadata": { "description": "Location/region of the Log Analytics workspace (e.g., centralus, northeurope)" }
+        },
+        "TableRetentionDays": {
+            "type": "int",
+            "defaultValue": 90,
+            "minValue": 30,
+            "maxValue": 730,
+            "metadata": { "description": "Data retention in days (30-730)" }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2023-03-11",
+            "name": "SOCRadar-DCE",
+            "location": "[parameters('WorkspaceLocation')]",
+            "properties": {
+                "description": "Data Collection Endpoint for SOCRadar integration",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/SOCRadar_Alarms_CL')]",
+            "properties": {
+                "schema": {
+                    "name": "SOCRadar_Alarms_CL",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Ingestion timestamp" },
+                        { "name": "AlarmId", "type": "string", "description": "SOCRadar alarm ID" },
+                        { "name": "CompanyId", "type": "string", "description": "SOCRadar company ID" },
+                        { "name": "AlarmMainType", "type": "string", "description": "Main alarm category" },
+                        { "name": "AlarmSubType", "type": "string", "description": "Alarm sub-category" },
+                        { "name": "Severity", "type": "string", "description": "CRITICAL/HIGH/MEDIUM/LOW/INFO" },
+                        { "name": "Status", "type": "string", "description": "Alarm status" },
+                        { "name": "Title", "type": "string", "description": "Alarm title" },
+                        { "name": "AlarmText", "type": "string", "description": "Alarm description (truncated to 4000 chars)" },
+                        { "name": "AlarmDate", "type": "string", "description": "Original alarm date from SOCRadar" },
+                        { "name": "AlarmPayload", "type": "dynamic", "description": "Full SOCRadar alarm JSON" }
+                    ]
+                },
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "SOCRadar-Alarms-DCR",
+            "location": "[parameters('WorkspaceLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'SOCRadar-DCE')]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'SOCRadar_Alarms_CL')]"
+            ],
+            "properties": {
+                "description": "DCR for SOCRadar alarms ingestion",
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'SOCRadar-DCE')]",
+                "streamDeclarations": {
+                    "Custom-SOCRadar_Alarms_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "AlarmId", "type": "string" },
+                            { "name": "CompanyId", "type": "string" },
+                            { "name": "AlarmMainType", "type": "string" },
+                            { "name": "AlarmSubType", "type": "string" },
+                            { "name": "Severity", "type": "string" },
+                            { "name": "Status", "type": "string" },
+                            { "name": "Title", "type": "string" },
+                            { "name": "AlarmText", "type": "string" },
+                            { "name": "AlarmDate", "type": "string" },
+                            { "name": "AlarmPayload", "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "Custom-SOCRadar_Alarms_CL" ],
+                        "destinations": [ "workspace" ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-SOCRadar_Alarms_CL"
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "dceName": { "type": "string", "value": "SOCRadar-DCE" },
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'SOCRadar-DCE'), '2023-03-11').logsIngestion.endpoint]"
+        },
+        "alarmsTableName": { "type": "string", "value": "SOCRadar_Alarms_CL" },
+        "alarmsDcrName": { "type": "string", "value": "SOCRadar-Alarms-DCR" },
+        "alarmsDcrId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', 'SOCRadar-Alarms-DCR')]"
+        },
+        "alarmsDcrImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'SOCRadar-Alarms-DCR'), '2023-03-11').immutableId]"
+        },
+        "alarmsStreamName": { "type": "string", "value": "Custom-SOCRadar_Alarms_CL" }
+    }
+}
