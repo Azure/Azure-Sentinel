@@ -1,17 +1,53 @@
 id: a1b2c3d4-e5f6-7890-1234-567890abcde4
 Function:
   Title: ASIM Network Session Parser for Halcyon
-  Version: '1.0.0'
-  LastUpdated: '2025-12-01'
+  Version: '2.0.0'
+  LastUpdated: '2026-03-18'
 Category: Microsoft Sentinel Parser
 FunctionName: ASimNetworkSessionHalcyon
 FunctionAlias: ASimNetworkSessionHalcyon
 FunctionQuery: |
-  let parser = () {
-      HalcyonNetworkSession_CL
-      | project-away SourceSystem, Type, TenantId
+  let parser = (disabled: bool = false) {
+      HalcyonEvents_CL
+      | where not(disabled)
+      | where class_uid == 4001 // Network Activity
+      | extend
+          EventVendor            = tostring(metadata.product.vendor_name),
+          EventProduct           = tostring(metadata.product.name),
+          EventProductVersion    = tostring(metadata.product.version),
+          EventSchema            = 'NetworkSession',
+          EventSchemaVersion     = '0.2.6',
+          EventCount             = int(1),
+          EventStartTime         = TimeGenerated,
+          EventEndTime           = TimeGenerated,
+          EventType              = 'NetworkSession',
+          EventResult            = case(status_id == 1, 'Success', status_id == 2, 'Failure', 'NA'),
+          EventOriginalType      = tostring(type_uid),
+          EventOriginalSeverity  = severity,
+          EventSeverity          = case(severity_id == 1, 'Informational', severity_id == 2, 'Low', severity_id == 3, 'Medium', severity_id == 4, 'High', severity_id == 5, 'Critical', 'Informational'),
+          EventMessage           = message,
+          DvcAction              = action,
+          SrcIpAddr              = tostring(src_endpoint.ip),
+          SrcPortNumber          = toint(src_endpoint.port),
+          SrcHostname            = tostring(src_endpoint.hostname),
+          SrcDomain              = tostring(src_endpoint.domain),
+          SrcMacAddr             = tostring(src_endpoint.mac),
+          DstIpAddr              = tostring(dst_endpoint.ip),
+          DstPortNumber          = toint(dst_endpoint.port),
+          DstHostname            = tostring(dst_endpoint.hostname),
+          DstDomain              = tostring(dst_endpoint.domain),
+          DstMacAddr             = tostring(dst_endpoint.mac),
+          DvcHostname            = tostring(device.hostname),
+          DvcIpAddr              = tostring(device.ip),
+          DvcId                  = tostring(device.uid)
+      | extend
+          Src                    = SrcIpAddr,
+          Dst                    = DstIpAddr,
+          IpAddr                 = SrcIpAddr,
+          Dvc                    = DvcHostname
+      | project-away _ResourceId
   };
-  parser
+  parser(disabled=disabled)
 FunctionParams:
   - Name: disabled
     Type: bool

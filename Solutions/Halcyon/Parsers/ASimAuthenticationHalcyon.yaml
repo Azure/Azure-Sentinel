@@ -1,17 +1,43 @@
 id: a1b2c3d4-e5f6-7890-1234-567890abcde1
 Function:
   Title: ASIM Authentication Event Parser for Halcyon
-  Version: '1.0.0'
-  LastUpdated: '2025-12-01'
+  Version: '2.0.0'
+  LastUpdated: '2026-03-18'
 Category: Microsoft Sentinel Parser
 FunctionName: ASimAuthenticationHalcyon
 FunctionAlias: ASimAuthenticationHalcyon
 FunctionQuery: |
-  let parser = () {
-      HalcyonAuthenticationEvents_CL
-      | project-away SourceSystem, Type, TenantId
+  let parser = (disabled: bool = false) {
+      HalcyonEvents_CL
+      | where not(disabled)
+      | where class_uid == 3002 // Authentication
+      | extend
+          EventVendor            = tostring(metadata.product.vendor_name),
+          EventProduct           = tostring(metadata.product.name),
+          EventProductVersion    = tostring(metadata.product.version),
+          EventSchema            = 'Authentication',
+          EventSchemaVersion     = '0.1.3',
+          EventCount             = int(1),
+          EventStartTime         = TimeGenerated,
+          EventEndTime           = TimeGenerated,
+          EventType              = iff(activity_id == 1, 'Logon', iff(activity_id == 2, 'Logoff', 'Other')),
+          EventResult            = case(status_id == 1, 'Success', status_id == 2, 'Failure', 'NA'),
+          EventOriginalType      = tostring(type_uid),
+          EventOriginalSeverity  = severity,
+          EventSeverity          = case(severity_id == 1, 'Informational', severity_id == 2, 'Low', severity_id == 3, 'Medium', severity_id == 4, 'High', severity_id == 5, 'Critical', 'Informational'),
+          EventMessage           = message,
+          ActorUsername          = tostring(user.name),
+          ActorUserId            = tostring(user.uid),
+          ActorUsernameType      = 'Simple',
+          DvcHostname            = tostring(device.hostname),
+          DvcIpAddr              = tostring(device.ip),
+          DvcId                  = tostring(device.uid)
+      | extend
+          User                   = ActorUsername,
+          Dvc                    = DvcHostname
+      | project-away _ResourceId
   };
-  parser
+  parser(disabled=disabled)
 FunctionParams:
   - Name: disabled
     Type: bool
