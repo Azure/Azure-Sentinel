@@ -182,25 +182,38 @@
                       "metricName": "Basic Inventory",
                       "legend": "TaniumMainAsset_CL",
                       "baseQuery": "TaniumMainAsset_CL"
+                    },
+                    {
+                      "metricName": "Compliance Findings",
+                      "legend": "TaniumComplyCompliance_CL",
+                      "baseQuery": "TaniumComplyCompliance_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
                       "description": "Tanium - Basic Inventory",
                       "query": "TaniumMainAsset_CL\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Tanium - Compliance Findings",
+                      "query": "TaniumComplyCompliance_CL\n | sort by TimeGenerated desc"
                     }
                   ],
                   "dataTypes": [
                     {
                       "name": "TaniumMainAsset_CL",
                       "lastDataReceivedQuery": "TaniumMainAsset_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TaniumComplyCompliance_CL",
+                      "lastDataReceivedQuery": "TaniumComplyCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "TaniumMainAsset_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1h)"
+                        "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
                       ]
                     }
                   ],
@@ -308,6 +321,13 @@
                           "parameters": {
                             "label": "Basic Inventory Logs Stream Name",
                             "value": "Custom-SentinelBasicInventory"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Compliance Findings Logs Stream Name",
+                            "value": "Custom-TaniumComplyCompliance"
                           },
                           "type": "CopyableLabel"
                         }
@@ -431,6 +451,46 @@
                         "type": "real"
                       }
                     ]
+                  },
+                  "Custom-TaniumComplyCompliance": {
+                    "columns": [
+                      {
+                        "name": "ComputerName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OperatingSystemGeneration",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Rule",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Standard",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Profile",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Version",
+                        "type": "string"
+                      },
+                      {
+                        "name": "StatusCategory",
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "destinations": {
@@ -451,6 +511,16 @@
                     ],
                     "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Chassis_Type_s = ChassisType,\n    Computer_ID_s = ComputerID,\n    Computer_Name_s = ComputerName,\n    Computer_Serial_Number_s = ComputerSerialNumber,\n    Count_d = Count,\n    Domain_Name_s = DomainName,\n    IP_Address_s = IPAddress,\n    Manufacturer_s = Manufacturer,\n    Model_s = Model,\n    Operating_System_s = OperatingSystem,\n    OS_Platform_s = OSPlatform,\n    Service_Pack_s = ServicePack,\n    System_UUID_s = SystemUUID,\n    Username_s = Username",
                     "outputStream": "Custom-TaniumMainAsset_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-TaniumComplyCompliance"
+                    ],
+                    "destinations": [
+                      "[parameters('workspace')]"
+                    ],
+                    "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Computer_Name_s = ComputerName,\n    IP_Address_s = IPAddress,\n    Operating_System_Generation_s = OperatingSystemGeneration,\n    Profile_s = Profile,\n    Rule_ID_s = Rule,\n    Rule_s = RuleID,\n    Standard_s = Standard,\n    Status_Category_s = StatusCategory,\n    Version_s = Version",
+                    "outputStream": "Custom-TaniumComplyCompliance_CL"
                   }
                 ],
                 "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
@@ -531,6 +601,62 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "TaniumComplyCompliance_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "TaniumComplyCompliance_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The time at which the data was generated"
+                    },
+                    {
+                      "name": "Computer_Name_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IP_Address_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Operating_System_Generation_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Rule_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Rule_ID_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Standard_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Profile_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Version_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Status_Category_s",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
             }
           ]
         },
@@ -561,25 +687,38 @@
               "metricName": "Basic Inventory",
               "legend": "TaniumMainAsset_CL",
               "baseQuery": "TaniumMainAsset_CL"
+            },
+            {
+              "metricName": "Compliance Findings",
+              "legend": "TaniumComplyCompliance_CL",
+              "baseQuery": "TaniumComplyCompliance_CL"
             }
           ],
           "sampleQueries": [
             {
               "description": "Tanium - Basic Inventory",
               "query": "TaniumMainAsset_CL\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Tanium - Compliance Findings",
+              "query": "TaniumComplyCompliance_CL\n | sort by TimeGenerated desc"
             }
           ],
           "dataTypes": [
             {
               "name": "TaniumMainAsset_CL",
               "lastDataReceivedQuery": "TaniumMainAsset_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "TaniumComplyCompliance_CL",
+              "lastDataReceivedQuery": "TaniumComplyCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "TaniumMainAsset_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1h)"
+                "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
               ]
             }
           ],
@@ -687,6 +826,13 @@
                   "parameters": {
                     "label": "Basic Inventory Logs Stream Name",
                     "value": "Custom-SentinelBasicInventory"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Compliance Findings Logs Stream Name",
+                    "value": "Custom-TaniumComplyCompliance"
                   },
                   "type": "CopyableLabel"
                 }
@@ -12410,8 +12556,8 @@
                   "IntelId": "Intel_Id_d"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Alert from Tanium Threat Response. GUID: {{Alert_Id_g}}; Computer Name: {{Computer_Name_s}}; IP: {{Computer_IP_s}}",
-                  "alertDisplayNameFormat": "{{TaniumTHRLabel}}"
+                  "alertDisplayNameFormat": "{{TaniumTHRLabel}}",
+                  "alertDescriptionFormat": "Alert from Tanium Threat Response. GUID: {{Alert_Id_g}}; Computer Name: {{Computer_Name_s}}; IP: {{Computer_IP_s}}"
                 },
                 "incidentConfiguration": {
                   "createIncident": true,
