@@ -7,8 +7,9 @@ authentication, state management, data transformation mappings, and error
 handling for the Azure Function-based threat intelligence connector.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
+import re
 import requests
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.fileshare import ShareClient
@@ -33,6 +34,83 @@ STIX_PATTERN_MAPPING = {
     "coin_address": "x-wallet-addr:value",
     "bitcoin_address": "x-wallet-addr:value",
 }
+
+
+class ParseDurationInput:
+    """Input struct for parse_duration_to_seconds function."""
+
+    def __init__(self, duration_str):
+        """
+        Initialize ParseDurationInput.
+
+        Args:
+            duration_str: Duration string to parse (e.g., "30m", "2h", "7d")
+        """
+        self.duration_str = duration_str
+
+
+def parse_duration_to_seconds(input_params):
+    """
+    Parse a duration string to seconds.
+
+    Args:
+        input_params: ParseDurationInput containing duration_str
+
+    Returns:
+        int: Total seconds for the duration
+
+    Raises:
+        ValueError: If the format is invalid or unit is not allowed
+
+    Examples:
+        parse_duration_to_seconds(ParseDurationInput("30m")) -> 1800
+        parse_duration_to_seconds(ParseDurationInput("1h")) -> 3600
+        parse_duration_to_seconds(ParseDurationInput("7d")) -> 604800
+    """
+    duration_str = input_params.duration_str
+    if not duration_str:
+        raise ValueError("Duration string cannot be empty")
+
+    # Pattern: number followed by unit (m, h, or d)
+    pattern = r'^(\d+)(m|h|d)$'
+    match = re.match(pattern, duration_str.lower())
+
+    if not match:
+        raise ValueError(
+            f"Invalid duration format: '{duration_str}'. "
+            "Expected format: <number><unit> where unit is 'm' (minutes), "
+            "'h' (hours), or 'd' (days). Examples: 30m, 2h, 7d"
+        )
+
+    value = int(match.group(1))
+    unit = match.group(2)
+
+    # Convert to seconds based on unit
+    unit_to_seconds = {
+        'm': 60,        # minutes
+        'h': 3600,      # hours
+        'd': 86400,     # days
+    }
+
+    return value * unit_to_seconds[unit]
+
+
+def get_valid_until(seconds):
+    """
+    Calculate and return the valid_until timestamp in RFC 3339 format.
+
+    Args:
+        seconds: Number of seconds from now
+
+    Returns:
+        str: RFC 3339 formatted timestamp (e.g., "2024-01-01T12:30:00Z")
+
+    Examples:
+        If seconds=1800 and current time is 2024-01-01T12:00:00Z,
+        returns "2024-01-01T12:30:00Z"
+    """
+    future_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    return future_time.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 class UnauthorizedTokenException(Exception):
