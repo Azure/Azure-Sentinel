@@ -293,8 +293,8 @@ def extract_hidden_info_from_description(description: str) -> dict[str, str | No
 
     # Extract clientId and clientName from within the hidden span
     patterns = {
-        "clientId": r"clientId:\[([^\]]+)\]",
-        "hostName": r"clientName:\[([^\]]+)\]",
+        "clientId": r"ClientId:\[([^\]]+)\]",
+        "hostName": r"ClientName:\[([^\]]+)\]",
     }
     for key, pattern in patterns.items():
         match = re.search(pattern, span_content)
