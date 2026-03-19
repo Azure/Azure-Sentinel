@@ -13,7 +13,7 @@ This document provides detailed steps to configure the required permissions for 
 3. Go to the **Access Control (IAM)** section.
 4. Click on **Add Role Assignment**.
 5. In the **Role** dropdown, select **Automation Job Operator**.
-6. In the **Assign Access To** dropdown, select **Azure AD User, Group, or Service Principal**.
+6. In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
 7. Search for the **Managed Identity** of each Logic App:
    - `logic-app-disable-data-aging`
    - `logic-app-disable-saml-provider`
@@ -41,7 +41,7 @@ This document provides detailed steps to configure the required permissions for 
    - Go to the **Access Control (IAM)** section.
    - Click on **Add Role Assignment**.
    - In the **Role** dropdown, select **Key Vault Secrets Officer**.
-   - In the **Assign Access To** dropdown, select **Azure AD User, Group, or Service Principal**.
+   - In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
    - Search for the **Managed Identity** of each Logic App:
      - `logic-app-disable-data-aging`
      - `logic-app-disable-saml-provider`
