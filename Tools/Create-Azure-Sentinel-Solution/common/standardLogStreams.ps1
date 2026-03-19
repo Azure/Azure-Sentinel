@@ -209,6 +209,10 @@ $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-FlowLog'; Value = 
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-TlsLog'; Value = 'Microsoft-AWSNetworkFirewallTls' }
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-AlertLog'; Value = 'Microsoft-AWSNetworkFirewallAlert' }
 $standardStreamMapping += @{ Key = 'SENTINEL_QUALYSKNOWLEDGEBASE'; Value = 'Microsoft-SentinelQualysKnowledgeBase' }
+$standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDVPCFLOWLOGS'; Value = 'Microsoft-SentinelAlibabaCloudVPCFlowLogs' }
+$standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDWAFLOGS'; Value = 'Microsoft-SentinelAlibabaCloudWAFLogs' }
+$standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDAPIGATEWAYLOGS'; Value = 'Microsoft-SentinelAlibabaCloudAPIGatewayLogs' }
+
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
   param (
