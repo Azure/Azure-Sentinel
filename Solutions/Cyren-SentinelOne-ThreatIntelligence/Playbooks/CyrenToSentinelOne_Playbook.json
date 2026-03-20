@@ -1,6 +1,46 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Cyren to SentinelOne IOC Automation",
+    "description": "This playbook fetches IP reputation and malware URL threat intelligence indicators from the Cyren CCF API feed and creates corresponding IOC indicators in SentinelOne for automated threat detection and response.",
+    "prerequisites": [
+      "1. Cyren CCF JWT Bearer Token (obtain from your Cyren subscription portal)",
+      "2. Cyren Feed ID (ip_reputation or malware_urls, depending on your subscription)",
+      "3. SentinelOne API Token with Threat Intelligence IOC management permissions",
+      "4. SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)",
+      "5. SentinelOne Account ID"
+    ],
+    "postDeployment": [
+      "1. Configure the Cyren_JwtToken parameter with your Cyren CCF JWT Bearer Token.",
+      "2. Configure the Cyren_FeedId parameter (ip_reputation or malware_urls).",
+      "3. Configure the SentinelOne_ApiToken, SentinelOne_BaseUrl, and SentinelOne_AccountId parameters.",
+      "4. Enable the Logic App and verify the recurrence trigger is set to your desired interval."
+    ],
+    "lastUpdateTime": "2026-03-18T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "ThreatIntelligence",
+      "IOC",
+      "SentinelOne",
+      "Cyren"
+    ],
+    "support": {
+      "tier": "partner"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial release",
+        "notes": [
+          "Initial version of Cyren to SentinelOne IOC Automation playbook"
+        ]
+      }
+    ]
+  },
   "parameters": {
     "logicAppName": {
       "type": "string",
@@ -33,9 +73,9 @@
     },
     "SentinelOne_BaseUrl": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "https://usea1-001.sentinelone.net",
       "metadata": {
-        "description": "Your SentinelOne console URL (e.g. https://usea1-021.sentinelone.net). Log in to SentinelOne and copy the URL from your browser address bar."
+        "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
       }
     },
     "SentinelOne_AccountId": {
@@ -103,7 +143,7 @@
             },
             "SentinelOne_BaseUrl": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "https://usea1-001.sentinelone.net"
             },
             "SentinelOne_ApiToken": {
               "type": "string",
@@ -278,34 +318,59 @@
                         }
                       },
                       "actions": {
-                        "Post_IOC_to_SentinelOne": {
-                          "type": "Http",
-                          "inputs": {
-                            "method": "POST",
-                            "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
-                            "headers": {
-                              "Content-Type": "application/json",
-                              "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
-                            },
-                            "body": {
-                              "filter": {
-                                "accountIds": [
-                                  "@{parameters('SentinelOne_AccountId')}"
+                        "Check_LastSeen_Recent": {
+                          "type": "If",
+                          "expression": {
+                            "or": [
+                              {
+                                "equals": [
+                                  "@coalesce(item()?['last_seen'], '')",
+                                  ""
                                 ]
                               },
-                              "data": [
-                                {
-                                  "value": "@{item()?['identifier']}",
-                                  "type": "IPV4",
-                                  "source": "Cyren",
-                                  "method": "EQUALS",
-                                  "validUntil": "@{addDays(utcNow(), 90)}",
-                                  "externalId": "@{concat('cyren-', parameters('Cyren_FeedId'), '-', coalesce(item()?['identifier'], 'unknown'))}",
-                                  "description": "@{concat('Cyren ', parameters('Cyren_FeedId'), ': Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
+                              {
+                                "greaterOrEquals": [
+                                  "@coalesce(item()?['last_seen'], utcNow())",
+                                  "@addDays(utcNow(), -2)"
+                                ]
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Post_IOC_to_SentinelOne": {
+                              "type": "Http",
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                                },
+                                "body": {
+                                  "filter": {
+                                    "accountIds": [
+                                      "@{parameters('SentinelOne_AccountId')}"
+                                    ]
+                                  },
+                                  "data": [
+                                    {
+                                      "value": "@{if(equals(parameters('Cyren_FeedId'), 'malware_urls'), coalesce(item()?['url'], item()?['identifier']), item()?['identifier'])}",
+                                      "type": "@{if(equals(parameters('Cyren_FeedId'), 'malware_urls'), 'URL', 'IPV4')}",
+                                      "source": "Cyren",
+                                      "method": "EQUALS",
+                                      "validUntil": "@{addDays(utcNow(), 90)}",
+                                      "externalId": "@{concat('cyren-', parameters('Cyren_FeedId'), '-', coalesce(item()?['identifier'], 'unknown'))}",
+                                      "description": "@{concat('Cyren ', parameters('Cyren_FeedId'), ': Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
+                                    }
+                                  ]
                                 }
-                              ]
+                              }
                             }
-                          }
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "runAfter": {}
                         }
                       }
                     },
