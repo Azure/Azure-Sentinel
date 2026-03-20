@@ -1,0 +1,122 @@
+id: 9f3a2e6d-8f6b-4a9c-9d6c-1c7f5e8a4b21
+name: Prioritized Device Risk Overview
+description: >
+  Provides a unified, device-centric risk view by correlating
+  alerts, exposure, vulnerabilities, network activity, process
+  behavior, and logon activity.
+description-detailed: >
+  This query joins multiple Microsoft Defender Advanced Hunting
+  tables to build a comprehensive risk profile per device over
+  the last 30 days. It helps SOC teams prioritize investigation
+  by highlighting devices with high alert volume, broad attack
+  surface exposure, and elevated vulnerability counts.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceInfo
+  - AlertEvidence
+  - DeviceNetworkEvents
+  - DeviceProcessEvents
+  - DeviceLogonEvents
+  - DeviceTvmSoftwareVulnerabilities
+tactics:
+- Discovery
+- RiskAssessment
+query: |
+  // 1) Latest device inventory & risk posture
+  let DeviceBase =
+  DeviceInfo
+  | where Timestamp >= ago(30d)
+  | summarize arg_max(Timestamp, *) by DeviceId
+  | project
+      DeviceId,
+      DeviceName,
+      OSPlatform,
+      OSVersionInfo,
+      ExposureLevel,
+      AssetValue,
+      MachineGroup,
+      PublicIP,
+      IsInternetFacing;
+
+  // 2) Alert volume per device
+  let AlertSummary =
+  AlertEvidence
+  | where Timestamp >= ago(30d)
+  | where isnotempty(DeviceId)
+  | summarize
+      AlertsLast30d = dcount(AlertId),
+      HighSeverityAlerts = dcountif(AlertId, Severity == "High"),
+      MediumSeverityAlerts = dcountif(AlertId, Severity == "Medium"),
+      LowSeverityAlerts = dcountif(AlertId, Severity == "Low")
+      by DeviceId;
+
+  // 3) Network activity per device
+  let NetworkSummary =
+  DeviceNetworkEvents
+  | where Timestamp >= ago(30d)
+  | summarize
+      NetworkEvents = count(),
+      DistinctRemoteIPs = dcount(RemoteIP),
+      DistinctRemoteUrls = dcount(RemoteUrl)
+      by DeviceId;
+
+  // 4) Process activity per device
+  let ProcessSummary =
+  DeviceProcessEvents
+  | where Timestamp >= ago(30d)
+  | summarize
+      ProcessEvents = count(),
+      DistinctProcesses = dcount(FileName)
+      by DeviceId;
+
+  // 5) Logged-on account activity per device
+  let LogonSummary =
+  DeviceLogonEvents
+  | where Timestamp >= ago(30d)
+  | summarize
+      LogonEvents = count(),
+      DistinctAccounts = dcount(strcat(AccountDomain, "\\", AccountName)),
+      DistinctRemoteSources = dcount(RemoteIP)
+      by DeviceId;
+
+  // 6) Vulnerability status per device
+  let TvmSummary =
+  DeviceTvmSoftwareVulnerabilities
+  | summarize
+      VulnerableSoftwareCount = dcount(SoftwareName),
+      DistinctCveCount = dcount(CveId)
+      by DeviceId;
+
+  // 7) Final combined view
+  DeviceBase
+  | join kind=leftouter AlertSummary on DeviceId
+  | join kind=leftouter NetworkSummary on DeviceId
+  | join kind=leftouter ProcessSummary on DeviceId
+  | join kind=leftouter LogonSummary on DeviceId
+  | join kind=leftouter TvmSummary on DeviceId
+  | project
+      DeviceName,
+      OSPlatform,
+      OSVersionInfo,
+      ExposureLevel,
+      AssetValue,
+      MachineGroup,
+      PublicIP,
+      IsInternetFacing,
+      AlertsLast30d,
+      HighSeverityAlerts,
+      MediumSeverityAlerts,
+      LowSeverityAlerts,
+      NetworkEvents,
+      DistinctRemoteIPs,
+      DistinctRemoteUrls,
+      ProcessEvents,
+      DistinctProcesses,
+      LogonEvents,
+      DistinctAccounts,
+      DistinctRemoteSources,
+      VulnerableSoftwareCount,
+      DistinctCveCount
+  | order by AlertsLast30d desc, DistinctCveCount desc nulls last
+version: 1.0.
