@@ -152,7 +152,7 @@
             "name": "selectDepthLevel",
             "label": "Select the detail level",
             "type": 10,
-            "description": "Basic data (default) will load much faster than Advanced insight into the data",
+            "description": "Basic data will load much faster than Advanced, use Defender portal (default) for optimization in that portal",
             "isRequired": true,
             "typeSettings": {
               "additionalResourceOptions": [],
@@ -172,8 +172,7 @@
               "additionalResourceOptions": [],
               "showDefault": false
             },
-            "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n { \"value\": \"No\", \"label\": \"No\", \"selected\":true },\r\n { \"value\": \"Change Log\", \"label\": \"Change Log\"}\r\n]",
-            "value": "Yes"
+            "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n { \"value\": \"No\", \"label\": \"No\", \"selected\":true },\r\n { \"value\": \"Change Log\", \"label\": \"Change Log\"},\r\n { \"value\": \"search\", \"label\": \"Tenant Search\"}\r\n]"
           },
           {
             "id": "bd9b6f2d-3e7b-4d2c-83b4-f77154f6af42",
@@ -198,6 +197,30 @@
         "resourceType": "microsoft.operationalinsights/workspaces"
       },
       "name": "parameters - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "resources\r\n| where type =~ \"microsoft.operationsmanagement/solutions\"\r\n| where name has \"SecurityInsights\"\r\n| parse name with * \"(\" s_workspace \")\" *\r\n| project workspaceName = tolower(s_workspace), location, subscriptionId, name\r\n| join kind=leftouter (\r\n    ResourceContainers\r\n    | where type == \"microsoft.resources/subscriptions\"\r\n    | project subscriptionId, subscriptionName = name\r\n) on subscriptionId\r\n| join kind=leftouter (\r\n    ManagedServicesResources\r\n    | extend ManagedTenant =\r\n        coalesce(\r\n            tostring(properties.registrationDefinition.properties.manageeTenantName),\r\n            tostring(properties.manageeTenantName)\r\n        )\r\n    | extend ManagedTenant = trim(@\"[^\\w\\s\\.-]+\", ManagedTenant)\r\n    | where isnotempty(ManagedTenant)\r\n    | extend ManagedBy = tostring(properties.registrationDefinition.properties.registrationDefinitionName)\r\n    // Reduce to 1 row per subscription to avoid duplicating workspaces\r\n    | summarize\r\n        Directory = any(ManagedTenant),\r\n        ManagedBy = any(ManagedBy),\r\n        AzureLighthouse = \"Yes\"\r\n      by subscriptionId\r\n) on subscriptionId\r\n| extend AzureLighthouse = coalesce(AzureLighthouse, \"No\")\r\n| project subscriptionName, workspaceName, subscriptionId, location, AzureLighthouse, Directory, ManagedBy\r\n| order by AzureLighthouse desc, workspaceName asc",
+        "size": 1,
+        "title": "Find a Tenant or subscription , count: {$rowCount}",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "value::all"
+        ],
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Help",
+        "comparison": "isEqualTo",
+        "value": "search"
+      },
+      "name": "query - Tenant Search"
     },
     {
       "type": 11,
@@ -370,7 +393,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Workspace Usage Report \r\n### Change Log\r\nUse this report to analyze the the sizes of the different tables and Latency in your workspace and agents.  This report checks the overall workspace health.\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.1|Added Events Per Second (EPS) to Workspace Info Tab.| \r\n|v1.2|Added EPS with a breakdown for Device Vendor in CommonSecurityLog\r\n|v1.3|Added EPS Tab and Min, Max values\r\n|v1.4 | Added Checks Tab for Daily, Weekly and Monthly suggested checking routines.  Also Defender for Cloud info in Costs Tab.\r\n|v1.4.2 | Added Groups to all Tabs. Added Price info and Help button.\r\n|v1.4.3 | Added to [COST] tab and report of \"GBytes used per Computer\" \r\n|v1.4.4 | Quick fix to get the TableName duplicate removed.  Added value to Y axis of [Cost] trend graph, Remove content (EPS) that is planned for the Sentinel Health workbook.  \r\n|v1.4.5 | Added extra Cost info, improve Weekly reports and other grids , testing release ONLY\r\n|v1.4.6 | Moved Price to Costs Analysis Tab (all pricing is now in the same place). Added some table data, description and links to Latency grid.  Filter on Queries in Weekly report and Workspace audit filters |\r\n|v1.4.7 | Add Pie chart of % billable vs. free to Cost Analysis.  Add count of Rules, Rule Templates and Hunting Queries (just unique ones).  Extra Defender for Cloud  report for \"minimal\",\"common\" and \"all\". Additional troubleshooting displays, when Help toggle is on. % used for Tables. User filter for LAqueries.|\r\n|v1.4.8 | [Cost Analysis] is now a Tab with Sub Menus to aid load times and readability.  New features:Syslog Cost Analysis, CEF Cost Analysis, in the [OverView] sub menu, there are now reports on capacity / price per Subscription, Resource Group and Tags.  The Sentinel tab, has reports for Usage vs. Capacity Reservation and recommendtions for the settings you are on, for Log Analytics and Sentinel. |\r\n|v1.4.9 | Add extra filtering within 'Advanced Workspace Details', so you can select other Workspaces to audit, and provide a link to the related Workbook (if its installed).  Add a filter for a basic level of data in the complex reports (default) or selected Advanced for the original longer running query.  Added Automation rules to Alert Rules in Weekly reporting.  Removed Tags section for now in Overview report.  Added Sentinel cost estimate for retention.|\r\n|v1.5.0 | Added an ADX Tab (more to add here, maybe just a placeholder for now). Added some reports on Template rules vs Active Rule by *Type* (so you can see what is deployed vs. available by each rule type/category) in the Weekly reports.  Fix for Chart bug that can cause a “out of memory” error. Wording swapped to \"Commitment Tiers\" rather than Capacity Reservation. | \r\n|v1.5.1 | Performance tweaks. GB to GB correction.  Drill down on Computer costs. Add link to ADX insights |\r\n|v1.6 | Change to new product names + fix subscription issue | \r\n|v1.6.1 | Improve Weekly view and Rules. Add Funcytion Alias view, add DCR view  | \r\n|v1.6.2 | Add Table to Connectors / Solution mapping from external file |  \r\n|v1.6.3 | Update daily checks |  \r\n\r\n\r\n\r\n"
+        "json": "## Workspace Usage Report \r\n### Change Log\r\nUse this report to analyze the the sizes of the different tables and Latency in your workspace and agents.  This report checks the overall workspace health.\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.1|Added Events Per Second (EPS) to Workspace Info Tab.| \r\n|v1.2|Added EPS with a breakdown for Device Vendor in CommonSecurityLog\r\n|v1.3|Added EPS Tab and Min, Max values\r\n|v1.4 | Added Checks Tab for Daily, Weekly and Monthly suggested checking routines.  Also Defender for Cloud info in Costs Tab.\r\n|v1.4.2 | Added Groups to all Tabs. Added Price info and Help button.\r\n|v1.4.3 | Added to [COST] tab and report of \"GBytes used per Computer\" \r\n|v1.4.4 | Quick fix to get the TableName duplicate removed.  Added value to Y axis of [Cost] trend graph, Remove content (EPS) that is planned for the Sentinel Health workbook.  \r\n|v1.4.5 | Added extra Cost info, improve Weekly reports and other grids , testing release ONLY\r\n|v1.4.6 | Moved Price to Costs Analysis Tab (all pricing is now in the same place). Added some table data, description and links to Latency grid.  Filter on Queries in Weekly report and Workspace audit filters |\r\n|v1.4.7 | Add Pie chart of % billable vs. free to Cost Analysis.  Add count of Rules, Rule Templates and Hunting Queries (just unique ones).  Extra Defender for Cloud  report for \"minimal\",\"common\" and \"all\". Additional troubleshooting displays, when Help toggle is on. % used for Tables. User filter for LAqueries.|\r\n|v1.4.8 | [Cost Analysis] is now a Tab with Sub Menus to aid load times and readability.  New features:Syslog Cost Analysis, CEF Cost Analysis, in the [OverView] sub menu, there are now reports on capacity / price per Subscription, Resource Group and Tags.  The Sentinel tab, has reports for Usage vs. Capacity Reservation and recommendtions for the settings you are on, for Log Analytics and Sentinel. |\r\n|v1.4.9 | Add extra filtering within 'Advanced Workspace Details', so you can select other Workspaces to audit, and provide a link to the related Workbook (if its installed).  Add a filter for a basic level of data in the complex reports (default) or selected Advanced for the original longer running query.  Added Automation rules to Alert Rules in Weekly reporting.  Removed Tags section for now in Overview report.  Added Sentinel cost estimate for retention.|\r\n|v1.5.0 | Added an ADX Tab (more to add here, maybe just a placeholder for now). Added some reports on Template rules vs Active Rule by *Type* (so you can see what is deployed vs. available by each rule type/category) in the Weekly reports.  Fix for Chart bug that can cause a “out of memory” error. Wording swapped to \"Commitment Tiers\" rather than Capacity Reservation. | \r\n|v1.5.1 | Performance tweaks. GB to GB correction.  Drill down on Computer costs. Add link to ADX insights |\r\n|v1.6 | Change to new product names + fix subscription issue | \r\n|v1.6.1 | Improve Weekly view and Rules. Add Funcytion Alias view, add DCR view  | \r\n|v1.6.2 | Add Table to Connectors / Solution mapping from external file |  \r\n|v1.6.3 | Update daily checks | \r\n|v1.6.4 | Update Weekly checks |  \r\n\r\n\r\n\r\n\r\n"
       },
       "conditionalVisibility": {
         "parameterName": "Help",
@@ -844,7 +867,7 @@
               "query": "//Usage\r\n//| where StartTime {TimeRange:value}\r\n//| summarize ['Table Size'] =sum(Quantity)/1000 by ['Table Name'] =DataType,['IsBillable'] =IsBillable\r\n//| order by ['Table Size']  desc\r\n \r\nlet list_ = \r\nexternaldata (\r\n    Table:string, solution_Name:string, solution_Folder:string, solution_publisher_id:string, solution_offer_id:string,\r\n    solution_first_publish_date:datetime, solution_last_publish_date:datetime, solution_version:string,\r\n    solution_support_name:string, solution_support_tier:string, solution_support_link:string,\r\n    solution_author_name:string, solution_categories:string, connector_id:string, connector_publisher:string,\r\n    connector_title:string, connector_description:string, connector_instruction_steps:string, connector_permissions:string, connector_files:string, is_unique:bool\r\n)\r\n[\r\n @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Solutions%20Analyzer/solutions_connectors_tables_mapping.csv\"\r\n]\r\nwith (format=\"csv\", ignoreFirstRecord=true);\r\n// Pre-aggregate mapping per table\r\nlet mapping =\r\nlist_\r\n| summarize\r\n    solution_Names = array_sort_asc(make_set(solution_Name)),\r\n    connector_ids  = array_sort_asc(make_set(connector_id)), connector_description=any(connector_description), solution_support_link=any(solution_support_link)\r\n  by Table\r\n| extend solution_Names = trim(@\"[^\\w]+\",tostring(solution_Names))\r\n| extend solution_Names = replace(@\"\"\"\", \" \", tostring(solution_Names))\r\n| extend connector_ids = trim(@\"[^\\w]+\",tostring(connector_ids))\r\n| extend connector_ids = replace(@\"\"\"\", \" \", tostring(connector_ids))\r\n;\r\n// Main query: table size + enrichment\r\nUsage\r\n| summarize ['Table Size'] = sum(Quantity) / 1000\r\n    by ['Table Name'] = DataType, ['IsBillable'] = IsBillable\r\n| join kind=leftouter mapping\r\n    on $left.['Table Name'] == $right.Table\r\n| extend solution_Names = iif(isempty(solution_Names) and ['Table Name'] endswith '_CL',\"Custom Log\",solution_Names) \r\n//| extend solution_Names = iif(isempty(solution_Names) and ['Table Name'] startswith 'Device',\"Microsoft Defender\",solution_Names) \r\n| project\r\n    ['Table Name'],\r\n    ['Table Size'],\r\n    ['IsBillable'],\r\n    solution_Names,\r\n    connector_ids, connector_description\r\n| order by ['Table Size'] desc\r\n",
               "size": 0,
               "showAnalytics": true,
-              "title": " Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB",
+              "title": "Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB",
               "exportFieldName": "Table Name",
               "exportParameterName": "Table",
               "exportDefaultValue": "All Tables",
@@ -953,11 +976,225 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
+              "query": "//Usage\r\n//| where StartTime {TimeRange:value}\r\n//| summarize ['Table Size'] =sum(Quantity)/1000 by ['Table Name'] =DataType,['IsBillable'] =IsBillable\r\n//| order by ['Table Size']  desc\r\n \r\nlet list_ = \r\nexternaldata (\r\n    Table:string, solution_Name:string, solution_Folder:string, solution_publisher_id:string, solution_offer_id:string,\r\n    solution_first_publish_date:datetime, solution_last_publish_date:datetime, solution_version:string,\r\n    solution_support_name:string, solution_support_tier:string, solution_support_link:string,\r\n    solution_author_name:string, solution_categories:string, connector_id:string, connector_publisher:string,\r\n    connector_title:string, connector_description:string, connector_instruction_steps:string, connector_permissions:string, connector_files:string, is_unique:bool\r\n)\r\n[\r\n @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Solutions%20Analyzer/solutions_connectors_tables_mapping.csv\"\r\n]\r\nwith (format=\"csv\", ignoreFirstRecord=true);\r\n// Pre-aggregate mapping per table\r\nlet mapping =\r\nlist_\r\n| summarize\r\n    solution_Names = array_sort_asc(make_set(solution_Name)),\r\n    connector_ids  = array_sort_asc(make_set(connector_id)), connector_description=any(connector_description), solution_support_link=any(solution_support_link)\r\n  by Table\r\n| extend solution_Names = trim(@\"[^\\w]+\",tostring(solution_Names))\r\n| extend solution_Names = replace(@\"\"\"\", \" \", tostring(solution_Names))\r\n| extend connector_ids = trim(@\"[^\\w]+\",tostring(connector_ids))\r\n| extend connector_ids = replace(@\"\"\"\", \" \", tostring(connector_ids))\r\n;\r\n// Main query: table size + enrichment\r\nUsage\r\n| summarize ['Table Size'] = sum(Quantity) / 1000\r\n    by ['Table Name'] = DataType, ['IsBillable'] = IsBillable\r\n| join kind=leftouter mapping\r\n    on $left.['Table Name'] == $right.Table\r\n| extend solution_Names = iif(isempty(solution_Names) and ['Table Name'] endswith '_CL',\"Custom Log\",solution_Names) \r\n//| extend solution_Names = iif(isempty(solution_Names) and ['Table Name'] startswith 'Device',\"Microsoft Defender\",solution_Names) \r\n| project\r\n    ['Table Name'],\r\n    ['Table Size'],\r\n    ['IsBillable'],\r\n    solution_Names,\r\n    connector_ids, connector_description\r\n| order by ['Table Size'] desc\r\n",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB",
+              "exportFieldName": "Table Name",
+              "exportParameterName": "Table",
+              "exportDefaultValue": "All Tables",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Table Name",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "endsWith",
+                          "thresholdValue": "_CL",
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "text": "{0}{1}"
+                        }
+                      ],
+                      "customColumnWidthSetting": "30ch"
+                    }
+                  },
+                  {
+                    "columnMatch": "Table Size",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "greenRed",
+                      "customColumnWidthSetting": "300px"
+                    },
+                    "numberFormat": {
+                      "unit": 39,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": false
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "IsBillable",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "green",
+                          "text": "True"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "False",
+                          "representation": "blueDark",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "blue",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "solution_Names",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "solution_Names",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "selectDepthLevel",
+              "comparison": "isEqualTo",
+              "value": "Defender"
+            },
+            "name": "query -Usage Query Basic - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "",
+              "size": 0,
+              "showAnalytics": true,
+              "title": " Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB",
+              "exportFieldName": "Table Name",
+              "exportParameterName": "Table",
+              "exportDefaultValue": "All Tables",
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Table Name",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "endsWith",
+                          "thresholdValue": "_CL",
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "text": "{0}{1}"
+                        }
+                      ],
+                      "customColumnWidthSetting": "30ch"
+                    }
+                  },
+                  {
+                    "columnMatch": "Table Size",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "greenRed",
+                      "customColumnWidthSetting": "300px"
+                    },
+                    "numberFormat": {
+                      "unit": 39,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": false
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "IsBillable",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "green",
+                          "text": "True"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "False",
+                          "representation": "blueDark",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "blue",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "solution_Names",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "solution_Names",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "selectDepthLevel",
+                "comparison": "isEqualTo",
+                "value": "Basic"
+              },
+              {
+                "parameterName": "Help",
+                "comparison": "isEqualTo",
+                "value": "Yes"
+              }
+            ],
+            "name": "query -Usage Query Basic - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
               "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\",\"mergeType\":\"innerunique\",\"leftTable\":\"TableRetentionQuery\",\"rightTable\":\"query -Usage Query Basic\",\"leftColumn\":\"TableName\",\"rightColumn\":\"Table Name\"}],\"projectRename\":[{\"originalName\":\"[query -Usage Query Basic].Table Name\",\"mergedName\":\"TableName\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].Table Size\",\"mergedName\":\"Table Size\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[TableRetentionQuery].TablePlan\",\"mergedName\":\"TablePlan\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].IsBillable\",\"mergedName\":\"IsBillable\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].solution_Names\",\"mergedName\":\"solution_Names\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].connector_ids\",\"mergedName\":\"connector_ids\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].connector_description\",\"mergedName\":\"connector_description\",\"fromId\":\"unknown\"},{\"originalName\":\"[TableRetentionQuery].TableInteractivePeriod\",\"mergedName\":\"TableInteractivePeriod\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[TableRetentionQuery].TableArchivePeriod\",\"mergedName\":\"TableArchivePeriod\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[TableRetentionQuery].TotalRetentionPeriod\",\"mergedName\":\"TotalRetentionPeriod\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[TableRetentionQuery].lastPlanModifiedDate\",\"mergedName\":\"lastPlanModifiedDate\",\"fromId\":\"e5664cd1-2696-42e2-a85b-d8634f6bd0d9\"},{\"originalName\":\"[query -Usage Query Basic].solution_support_link\",\"mergedName\":\"solution_support_link\",\"fromId\":\"unknown\"},{\"originalName\":\"[TableRetentionQuery].TableName\"},{\"originalName\":\"[TableRetentionQuery].TableType\"}]}",
               "size": 0,
               "title": " Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB.  Click row for more details",
               "exportFieldName": "TableName",
-              "exportParameterName": "Table",
+              "exportParameterName": "exportTable",
               "showExportToExcel": true,
               "queryType": 7,
               "gridSettings": {
@@ -1047,6 +1284,11 @@
                 }
               ]
             },
+            "conditionalVisibility": {
+              "parameterName": "selectDepthLevel",
+              "comparison": "isEqualTo",
+              "value": "Basic"
+            },
             "showPin": false,
             "name": "query - 12"
           },
@@ -1054,9 +1296,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let getdata_=\r\nexternaldata (\r\n    Table:string, solution_Name:string, solution_Folder:string, solution_publisher_id:string, solution_offer_id:string,\r\n    solution_first_publish_date:datetime, solution_last_publish_date:datetime, solution_version:string,\r\n    solution_support_name:string, solution_support_tier:string, solution_support_link:string,\r\n    solution_author_name:string, solution_categories:string, connector_id:string, connector_publisher:string,\r\n    connector_title:string, connector_description:string, connector_instruction_steps:string, connector_permissions:string, connector_files:string, is_unique:bool\r\n)\r\n[\r\n @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Solutions%20Analyzer/solutions_connectors_tables_mapping.csv\"\r\n]\r\nwith (format=\"csv\", ignoreFirstRecord=true);\r\ngetdata_\r\n| where Table == '{Table}'\r\n| project-reorder Table, connector_title\r\n",
+              "query": "let getdata_=\r\nexternaldata (\r\n    Table:string, solution_Name:string, solution_Folder:string, solution_publisher_id:string, solution_offer_id:string,\r\n    solution_first_publish_date:datetime, solution_last_publish_date:datetime, solution_version:string,\r\n    solution_support_name:string, solution_support_tier:string, solution_support_link:string,\r\n    solution_author_name:string, solution_categories:string, connector_id:string, connector_publisher:string,\r\n    connector_title:string, connector_description:string, connector_instruction_steps:string, connector_permissions:string, connector_files:string, is_unique:bool\r\n)\r\n[\r\n @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Solutions%20Analyzer/solutions_connectors_tables_mapping.csv\"\r\n]\r\nwith (format=\"csv\", ignoreFirstRecord=true);\r\ngetdata_\r\n| where Table == '{exportTable}'\r\n| project-reorder Table, connector_title\r\n",
               "size": 0,
-              "title": "{Table}",
+              "title": "you selected: {exportTable} to gain extra insights, note: only works for a Table that has a Solution_Name",
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1115,7 +1357,7 @@
               ]
             },
             "conditionalVisibility": {
-              "parameterName": "Table",
+              "parameterName": "exportTable",
               "comparison": "isNotEqualTo"
             },
             "name": "query - 13"
@@ -6886,7 +7128,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "Usage\r\n| where StartTime {TimeRange:value}\r\n| summarize ['Table Size'] =sum(Quantity)/1000 by ['Table Name'] =DataType,['IsBillable'] =IsBillable\r\n| order by ['Table Size']  desc\r\n| extend AnalyticsCharge = ['Table Size'] * {Price},\r\n         datalakeprocessingCharge  = round(['Table Size'] * {datalakeProcessingUSD},4),\r\n         datalakeIngestion = round(['Table Size'] * {datalakeIngestionUSD},4),\r\n         datalakeStorage   = round(['Table Size'] * {datalakeStorageUSD}/6 ,4) // divide by 6 to add compression factor  \r\n//| extend estimatedCost = iif(['Table Name']=~'ConditionalAccessPolicies_CL',strcat(tostring( datalakeprocessingCharge + datalakeIngestion + datalakeStorage ), ' (USD)') ,tostring(estimatedCost)) ",
+                    "query": "Usage\r\n| where StartTime {TimeRange:value}\r\n| summarize ['Table Size'] =sum(Quantity)/1000 by ['Table Name'] =DataType,['IsBillable'] =IsBillable\r\n\r\n| extend AnalyticsCharge = ['Table Size'] * {Price},\r\n         datalakeprocessingCharge  = round(['Table Size'] * {datalakeProcessingUSD},4),\r\n         datalakeIngestion = round(['Table Size'] * {datalakeIngestionUSD},4),\r\n         datalakeStorage   = round(['Table Size'] * {datalakeStorageUSD}/6 ,4) // divide by 6 to add compression factor  \r\n//| extend estimatedCost = iif(['Table Name']=~'ConditionalAccessPolicies_CL',strcat(tostring( datalakeprocessingCharge + datalakeIngestion + datalakeStorage ), ' (USD)') ,tostring(estimatedCost)) \r\n| order by ['Table Size']  desc",
                     "size": 0,
                     "showAnalytics": true,
                     "title": "{Workspace:name} Status for {TimeRange:label}, Billable Tables have an  average use of: {GBperday} GB per day, Billable Tables have a Total size of {GBtotal} GB",
@@ -6973,23 +7215,23 @@
                       "filter": true,
                       "sortBy": [
                         {
-                          "itemKey": "Table Name",
-                          "sortOrder": 1
+                          "itemKey": "$gen_bar_Table Size_2",
+                          "sortOrder": 2
                         }
                       ]
                     },
                     "sortBy": [
                       {
-                        "itemKey": "Table Name",
-                        "sortOrder": 1
+                        "itemKey": "$gen_bar_Table Size_2",
+                        "sortOrder": 2
                       }
                     ]
                   },
                   "customWidth": "70",
                   "conditionalVisibility": {
-                    "parameterName": "Help",
+                    "parameterName": "selectDepthLevel",
                     "comparison": "isEqualTo",
-                    "value": "Yes"
+                    "value": "Defender"
                   },
                   "name": "query - 2 -basic Table "
                 },
@@ -6997,7 +7239,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\",\"mergeType\":\"innerunique\",\"leftTable\":\"TableRetentionQuery\",\"rightTable\":\"query - 2 -basic Table \",\"leftColumn\":\"TableName\",\"rightColumn\":\"Table Name\"}],\"projectRename\":[{\"originalName\":\"[TableRetentionQuery].TableName\",\"mergedName\":\"TableName\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].IsBillable\",\"mergedName\":\"IsBillable\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].Table Size\",\"mergedName\":\"Table Size\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableType\",\"mergedName\":\"TableType\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TablePlan\",\"mergedName\":\"TablePlan\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableInteractivePeriod\",\"mergedName\":\"TableInteractivePeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableArchivePeriod\",\"mergedName\":\"TableArchivePeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TotalRetentionPeriod\",\"mergedName\":\"TotalRetentionPeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].AnalyticsCharge\",\"mergedName\":\"AnalyticsCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].AnalyticsUSD\",\"mergedName\":\"AnalyticsUSD\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeprocessingCharge\",\"mergedName\":\"datalakeprocessingCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeIngestion\",\"mergedName\":\"datalakeIngestion\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeStorage\",\"mergedName\":\"datalakeStorage\",\"fromId\":\"unknown\"},{\"originalName\":\"[TableRetentionQuery].lastPlanModifiedDate\",\"mergedName\":\"lastPlanModifiedDate\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].Table Name\"}]}",
+                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\",\"mergeType\":\"innerunique\",\"leftTable\":\"TableRetentionQuery\",\"rightTable\":\"query - 2 -basic Table \",\"leftColumn\":\"TableName\",\"rightColumn\":\"Table Name\"}],\"projectRename\":[{\"originalName\":\"[query - 2 -basic Table ].AnalyticsCharge\",\"mergedName\":\"AnalyticsCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].AnalyticsUSD\",\"mergedName\":\"AnalyticsUSD\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeprocessingCharge\",\"mergedName\":\"datalakeprocessingCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeIngestion\",\"mergedName\":\"datalakeIngestion\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 2 -basic Table ].datalakeStorage\",\"mergedName\":\"datalakeStorage\",\"fromId\":\"unknown\"},{\"originalName\":\"[TableRetentionQuery].TableName\",\"mergedName\":\"TableName\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableType\",\"mergedName\":\"TableType\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TablePlan\",\"mergedName\":\"TablePlan\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableInteractivePeriod\",\"mergedName\":\"TableInteractivePeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TableArchivePeriod\",\"mergedName\":\"TableArchivePeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].TotalRetentionPeriod\",\"mergedName\":\"TotalRetentionPeriod\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[TableRetentionQuery].lastPlanModifiedDate\",\"mergedName\":\"lastPlanModifiedDate\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].Table Name\",\"mergedName\":\"Table Name\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].IsBillable\",\"mergedName\":\"IsBillable\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].Table Size\",\"mergedName\":\"Table Size\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c5f9\"},{\"originalName\":\"[query - 2 -basic Table ].Table Name\"}]}",
                     "size": 0,
                     "showExportToExcel": true,
                     "queryType": 7,
@@ -7201,20 +7443,9 @@
                         }
                       ],
                       "rowLimit": 1000,
-                      "filter": true,
-                      "sortBy": [
-                        {
-                          "itemKey": "$gen_thresholds_TablePlan_4",
-                          "sortOrder": 2
-                        }
-                      ]
+                      "filter": true
                     },
-                    "sortBy": [
-                      {
-                        "itemKey": "$gen_thresholds_TablePlan_4",
-                        "sortOrder": 2
-                      }
-                    ]
+                    "sortBy": []
                   },
                   "conditionalVisibility": {
                     "parameterName": "selectDepthLevel",
@@ -7228,7 +7459,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\",\"mergeType\":\"table\",\"leftTable\":\"query - 19\"}],\"projectRename\":[{\"originalName\":\"[query - 19].TablePlan\",\"mergedName\":\"TablePlan\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\"},{\"originalName\":\"[query - 19].Table Size\",\"mergedName\":\"Table Size\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\"},{\"originalName\":\"[query - 19].datalakeprocessingCharge\",\"mergedName\":\"datalakeprocessingCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].datalakeIngestion\",\"mergedName\":\"datalakeIngestion\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].datalakeStorage\",\"mergedName\":\"datalakeStorage\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].AnalyticsUSD\",\"mergedName\":\"AnalyticsUSD\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].AnalyticsCharge\",\"mergedName\":\"AnalyticsCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].TableName\"},{\"originalName\":\"[query - 19].IsBillable\"},{\"originalName\":\"[query - 19].TableType\"},{\"originalName\":\"[query - 19].TableInteractivePeriod\"},{\"originalName\":\"[query - 19].TotalRetentionPeriod\"},{\"originalName\":\"[query - 19].lastPlanModifiedDate\"},{\"originalName\":\"[query - 19].TableArchivePeriod\"}]}",
+                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\",\"mergeType\":\"table\",\"leftTable\":\"query - 19\"}],\"projectRename\":[{\"originalName\":\"[query - 19].TablePlan\",\"mergedName\":\"TablePlan\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\"},{\"originalName\":\"[query - 19].Table Size\",\"mergedName\":\"Table Size\",\"fromId\":\"ee0c7894-ecb7-4b92-81b2-4424f545c604\"},{\"originalName\":\"[query - 19].datalakeprocessingCharge\",\"mergedName\":\"datalakeprocessingCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].datalakeIngestion\",\"mergedName\":\"datalakeIngestion\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].datalakeStorage\",\"mergedName\":\"datalakeStorage\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].AnalyticsUSD\",\"mergedName\":\"AnalyticsUSD\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].AnalyticsCharge\",\"mergedName\":\"AnalyticsCharge\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].Table Name\",\"mergedName\":\"Table Name\",\"fromId\":\"unknown\"},{\"originalName\":\"[query - 19].TableName\"},{\"originalName\":\"[query - 19].IsBillable\"},{\"originalName\":\"[query - 19].TableType\"},{\"originalName\":\"[query - 19].TableInteractivePeriod\"},{\"originalName\":\"[query - 19].TotalRetentionPeriod\"},{\"originalName\":\"[query - 19].lastPlanModifiedDate\"},{\"originalName\":\"[query - 19].TableArchivePeriod\"}]}",
                     "size": 1,
                     "title": "{Workspace:name} split by Tier",
                     "queryType": 7,
@@ -7305,6 +7536,11 @@
                     }
                   },
                   "customWidth": "50",
+                  "conditionalVisibility": {
+                    "parameterName": "selectDepthLevel",
+                    "comparison": "isEqualTo",
+                    "value": "Basic"
+                  },
                   "showPin": false,
                   "name": "query - Tier pie chart"
                 },
@@ -10116,11 +10352,10 @@
                         "timeContext": {
                           "durationMs": 86400000
                         },
-                        "value": " 2",
+                        "value": "1",
                         "label": "SLA for HIGH in hours"
                       },
                       {
-                        "id": "1ee145ba-6384-48b5-b501-0d977832c21a",
                         "version": "KqlParameterItem/1.0",
                         "name": "slaMedium",
                         "label": "SLA for MEDIUM in hours",
@@ -10128,10 +10363,10 @@
                         "timeContext": {
                           "durationMs": 86400000
                         },
-                        "value": "8"
+                        "value": "8",
+                        "id": "3b148959-329b-4d65-bbe2-aa6ac48d3f48"
                       },
                       {
-                        "id": "1ee145ba-6384-48b5-b501-0d977832c21a",
                         "version": "KqlParameterItem/1.0",
                         "name": "slaLow",
                         "label": "SLA for Low in hours",
@@ -10139,10 +10374,10 @@
                         "timeContext": {
                           "durationMs": 86400000
                         },
-                        "value": "24"
+                        "value": "24",
+                        "id": "d59c2800-d4df-4695-a5ac-a3ea00232a59"
                       },
                       {
-                        "id": "1ee145ba-6384-48b5-b501-0d977832c21a",
                         "version": "KqlParameterItem/1.0",
                         "name": "slaInfo",
                         "label": "SLA for Informational in hours",
@@ -10150,7 +10385,8 @@
                         "timeContext": {
                           "durationMs": 86400000
                         },
-                        "value": "10000"
+                        "value": "10000",
+                        "id": "b96aee49-14e6-4e52-bb27-1aaa0264df73"
                       }
                     ],
                     "style": "pills",
@@ -11010,6 +11246,129 @@
                     }
                   ],
                   "name": "links - 47"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Workspace:subscriptionid}/resourceGroups/{Workspace:resourcegroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/tables\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-07-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$..value\",\"columns\":[{\"path\":\"name\",\"columnid\":\"name\"},{\"path\":\"properties.plan\",\"columnid\":\"plan\",\"columnType\":\"string\",\"substringRegexMatch\":\"Auxiliary\",\"substringReplace\":\"Auxiliary / data lake\"},{\"path\":\"properties.totalRetentionInDays\",\"columnid\":\"totalRetentionInDays\"},{\"path\":\"properties.archiveRetentionInDays\",\"columnid\":\"archiveRetentionInDays\"},{\"path\":\"properties.schema\",\"columnid\":\"schema\"},{\"path\":\"properties.provisioningState\",\"columnid\":\"provisioningState\"},{\"path\":\"properties.retentionInDays\",\"columnid\":\"retentionInDays\"}]}}]}",
+                    "size": 0,
+                    "title": "TABLES, from the API: Count: {$rowCount}",
+                    "exportFieldName": "descriptionHtml",
+                    "exportParameterName": "descriptionHtml",
+                    "showExportToExcel": true,
+                    "queryType": 12,
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "isNew",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "true",
+                                "representation": "success",
+                                "text": ""
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "false",
+                                "representation": "Blank",
+                                "text": ""
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Blank",
+                                "text": ""
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "isPreview",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "false",
+                                "representation": "Blank",
+                                "text": ""
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "true",
+                                "representation": "success",
+                                "text": ""
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Blank",
+                                "text": ""
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "isFeatured",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "true",
+                                "representation": "success",
+                                "text": ""
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "false",
+                                "representation": "Blank",
+                                "text": ""
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Blank",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "descriptionHtml",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "id",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "Resource",
+                            "linkIsContextBlade": true
+                          }
+                        }
+                      ],
+                      "rowLimit": 5000,
+                      "filter": true
+                    },
+                    "sortBy": []
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Help",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "query - Tables"
                 }
               ]
             },
@@ -11038,6 +11397,15 @@
                     "links": [
                       {
                         "id": "22b2f176-7f2b-4d52-be98-816801a90e07",
+                        "cellValue": "selectedTab",
+                        "linkTarget": "parameter",
+                        "linkLabel": "| ⚙️ Data Connectivity |",
+                        "subTarget": "connectors",
+                        "preText": "Agents",
+                        "style": "link"
+                      },
+                      {
+                        "id": "7879ae08-aee9-4089-bfa1-7c783c0df2f2",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
                         "linkLabel": "| 🕵️ Agents |",
@@ -11092,10 +11460,1518 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": " Weekly Operational Tasks\t\r\n1. Log Analytics Agent\r\nVerify the servers (or workstations) are showing a connected status in the workspace. Troubleshoot and remediate failed connections.\r\n2. Workbooks Updates \r\nVerify in the Sentinel Dashboard blade if an installed Workbook has an update that needs installed.\r\n3. GitHub Alert Rules, Workbooks, Hunting queries, Content Hub and Playbooks\t\r\nVisit and review the Sentinel GitHub repository and explore if there are new or updated Detection Rules, Workbooks, Hunting queries, Content Hub or Playbooks of value that can be added to the environment.\t\r\n\t",
+                    "json": " Weekly Operational Tasks\t\r\n1. Log Analytics Agent\r\nVerify the servers (or workstations) are showing a connected status in the workspace. Troubleshoot and remediate failed connections.\r\n2. Workbooks Updates \r\nVerify in the Sentinel Dashboard blade if an installed Workbook has an update that needs installed.\r\n3. GitHub Alert Rules, Workbooks, Hunting queries, Content Hub and Playbooks\t\r\nVisit and review the Sentinel GitHub repository and explore if there are new or updated Detection Rules, Workbooks, Hunting queries, Content Hub or Playbooks of value that can be added to the environment.\t\r\n4. Data Connector health\r\n\t",
                     "style": "success"
                   },
                   "name": "text - 46 - Copy"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "a415c344-6eb5-405a-99ab-6ad509237f0f",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "selectType",
+                        "type": 10,
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"'Microsoft','Partner','Community','Other'\", \"label\": \"All\", \"selected\":true },\r\n { \"value\": \"'Microsoft'\", \"label\": \"Microsoft Sentinel (1p)\"},\r\n { \"value\": \"'Partner'\", \"label\": \"Partner (3p)\"},\r\n { \"value\": \"'Community'\", \"label\": \"Community\"},\r\n { \"value\": \"'Other'\", \"label\": \"Other\"}\r\n]\r\n\r\n\r\n",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        }
+                      },
+                      {
+                        "id": "3f5d542a-082f-431c-8464-6a998ee779a7",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "staleHours",
+                        "type": 1,
+                        "description": "Highlight when a connector is temp offline",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "value": "1"
+                      },
+                      {
+                        "version": "KqlParameterItem/1.0",
+                        "name": "deadHours",
+                        "type": 1,
+                        "description": "Highlight when a connector is fatally offline",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "value": "24",
+                        "id": "9f1ef2c9-5281-4c16-b404-d0c761b38c5d"
+                      }
+                    ],
+                    "style": "above",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "customWidth": "50",
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "connectors"
+                  },
+                  "name": "parameters - 17"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "20864f9b-ceb1-4a4d-98d8-850da872c1ee",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "selectHealth",
+                        "type": 10,
+                        "description": "Choose to show unhealthy (default) state or \"All\" states",
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"'Healthy'\", \"label\": \"NOT Healthy\", \"selected\":true},\r\n { \"value\": \"'All'\", \"label\": \"All\" }\r\n\r\n]\r\n",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "value": "'All'"
+                      }
+                    ],
+                    "style": "above",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "customWidth": "50",
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "connectors"
+                  },
+                  "name": "parameters - 10"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "title": "SubGroup: Data Connectivity ",
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "// Workbook parameters (defaults if empty)\r\nlet staleHours = iff(isempty(trim(\" \", \"{staleHours}\")), 1, toint(\"{staleHours}\"));\r\nlet deadHours  = iff(isempty(trim(\" \", \"{deadHours}\")), 24, toint(\"{deadHours}\"));\r\n\r\n// Pull Microsoft’s Solutions/Connectors/Tables mapping (includes offer id)\r\nlet list_ = materialize(\r\n    externaldata (\r\n        Table:string,\r\n        solution_Name:string,\r\n        solution_Folder:string,\r\n        solution_publisher_id:string,\r\n        solution_offer_id:string,\r\n        solution_first_publish_date:datetime,\r\n        solution_last_publish_date:datetime,\r\n        solution_version:string,\r\n        solution_support_name:string,\r\n        solution_support_tier:string,\r\n        solution_support_link:string,\r\n        solution_author_name:string,\r\n        solution_categories:string,\r\n        connector_id:string,\r\n        connector_publisher:string,\r\n        connector_title:string,\r\n        connector_description:string,\r\n        connector_instruction_steps:string,\r\n        connector_permissions:string,\r\n        connector_files:string,\r\n        is_unique:bool\r\n    )\r\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Tools/Solutions%20Analyzer/solutions_connectors_tables_mapping.csv\"]\r\n    with (format=\"csv\", ignoreFirstRecord=true)\r\n);\r\n\r\n// Pre-aggregate to a compact lookup per table\r\nlet offersByTable = materialize(\r\n    list_\r\n    | summarize\r\n        OfferIds = make_set(solution_offer_id, 50),\r\n        Solutions = make_set(solution_Name, 50),\r\n        ConnectorTitles = make_set(connector_title, 50),\r\n        SupportLinks = make_set(solution_support_link, 10)\r\n      by Table\r\n);\r\n\r\nUsage\r\n| where TimeGenerated >= ago(7d)\r\n| where DataType !endswith \"_RST\" and DataType !endswith \"_SRCH\"\r\n| summarize\r\n    LastIngestSeen = max(TimeGenerated),\r\n    IngestGB_24h = sumif(Quantity, TimeGenerated >= ago(1d)) / 1024.0\r\n  by DataType, IsBillable\r\n| extend SecondsSinceLast = datetime_diff(\"second\", now(), LastIngestSeen)\r\n| extend Status = case(\r\n    SecondsSinceLast > deadHours*3600, \"Dead\",\r\n    SecondsSinceLast > staleHours*3600, \"Stale\",\r\n    \"Healthy\"\r\n)\r\n// Enrich with offer/solution metadata\r\n| join kind=leftouter offersByTable on $left.DataType == $right.Table\r\n| extend SupportLinks = iif(isempty(SupportLinks),'Other',SupportLinks) \r\n| extend SupportLinks = coalesce(SupportLinks, \"\")\r\n| where SupportLinks has_any ( {selectType} )\r\n| project\r\n    DataType,\r\n    Status,\r\n    LastIngestSeen,\r\n    SecondsSinceLast,\r\n    IngestGB_24h = round(IngestGB_24h, 2),\r\n    IsBillable,\r\n    OfferIds,\r\n    Solutions,\r\n    SupportLinks\r\n| order by Status desc, SecondsSinceLast desc",
+                          "size": 0,
+                          "title": "Data connector 7day check, count: {$rowCount} {selectType}",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Stale",
+                                      "representation": "3",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Dead",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "SecondsSinceLast",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack",
+                                  "customColumnWidthSetting": "22ch"
+                                },
+                                "numberFormat": {
+                                  "unit": 24,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "IngestGB_24h",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                },
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": true
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "changeInCount",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                }
+                              },
+                              {
+                                "columnMatch": "changeInPct",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "changePct",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "_ComputerName_",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "State",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "linkColumn": "Details",
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true,
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Unhealthy",
+                                      "representation": "4",
+                                      "text": "{0}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}"
+                                    }
+                                  ]
+                                },
+                                "tooltipFormat": {
+                                  "tooltip": "Click to see details of the last event sent by this computer."
+                                }
+                              },
+                              {
+                                "columnMatch": "Environment",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Azure",
+                                      "representation": "blue",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "magenta",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Heartbeat Trend",
+                                "formatter": 10,
+                                "formatOptions": {
+                                  "palette": "redGreen"
+                                },
+                                "tooltipFormat": {
+                                  "tooltip": "Each bar represents the bucket of time based on the Unhealthy Criteria. Showing last 30 buckets max."
+                                }
+                              },
+                              {
+                                "columnMatch": "Details",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Last Record Received",
+                                "formatter": 3,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                },
+                                "numberFormat": {
+                                  "unit": 24,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false,
+                                    "maximumSignificantDigits": 3
+                                  }
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "sortBy": [
+                              {
+                                "itemKey": "$gen_heatmap_IngestGB_24h_4",
+                                "sortOrder": 2
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "$gen_heatmap_IngestGB_24h_4",
+                              "sortOrder": 2
+                            }
+                          ],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "customWidth": "50",
+                        "name": "query - heartbeat"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "// 1) Weekday-aware baseline (Mon vs Mon, Tue vs Tue)\r\n// 2) Rolling 30-day median (responsive) and 90-day median (stable reference)\r\n// 3) Dynamic threshold using stdev (flags statistically significant drops, not just % drops)\r\n// 4) Connector health score (0–100)\r\n// 5) Ignore tiny tables (minimum baseline GB/day)\r\n\r\n\r\nlet lookback = 90d;\r\nlet minBaselineGB = 0.10;          // ignore tiny tables (0.1 GB/day)\r\nlet pctDropTrigger = 50.0;         // classic % drop\r\nlet sigmaTrigger = 2.0;            // dynamic threshold: >=2σ drop\r\nlet todayWindow = 1d;              // last 24h\r\n\r\n// 1) Daily ingestion per table (GB/day) + weekday\r\nlet daily =\r\nUsage\r\n| where TimeGenerated >= ago(lookback)\r\n| where DataType !endswith \"_RST\" and DataType !endswith \"_SRCH\"\r\n| summarize GB = sum(Quantity) / 1024.0 by DataType, Day = bin(TimeGenerated, 1d)\r\n| extend Weekday = dayofweek(Day);\r\n\r\n// \"Today\" bucket (last 24h) projected onto today's weekday\r\nlet today =\r\ndaily\r\n| where Day >= ago(todayWindow)\r\n| summarize TodayGB = sum(GB), TodayDay = max(Day) by DataType\r\n| extend Weekday = dayofweek(TodayDay);\r\n\r\n// 2) Weekday-aware rolling baselines (median) + 3) stdev for dynamic thresholds\r\nlet baseline30 =\r\ndaily\r\n| where Day between (ago(30d) .. ago(1d))        // exclude last 24h to avoid contamination\r\n| summarize\r\n    BaselineGB_30 = percentile(GB, 50),\r\n    StdevGB_30    = stdev(GB),\r\n    Samples_30    = count()\r\n  by DataType, Weekday;\r\n\r\nlet baseline90 =\r\ndaily\r\n| where Day between (ago(90d) .. ago(1d))\r\n| summarize\r\n    BaselineGB_90 = percentile(GB, 50),\r\n    StdevGB_90    = stdev(GB),\r\n    Samples_90    = count()\r\n  by DataType, Weekday;\r\n\r\ntoday\r\n| join kind=leftouter baseline30 on DataType, Weekday\r\n| join kind=leftouter baseline90 on DataType, Weekday\r\n\r\n// Prefer 30d median (more responsive). Fall back to 90d if 30d is missing.\r\n| extend BaselineGB = coalesce(BaselineGB_30, BaselineGB_90),\r\n         StdevGB    = coalesce(StdevGB_30,    StdevGB_90),\r\n         Samples    = coalesce(Samples_30,    Samples_90)\r\n\r\n// 5) prevent noise from small tables\r\n| where isnotnull(BaselineGB) and BaselineGB >= minBaselineGB\r\n\r\n// Drop metrics\r\n| extend DropGB  = BaselineGB - TodayGB\r\n| extend DropPct = iff(BaselineGB > 0, round(DropGB * 100.0 / BaselineGB, 2), real(null))\r\n| extend ZDrop   = iff(StdevGB > 0, round(DropGB / StdevGB, 2), real(null))   // how many σ below baseline\r\n\r\n// 4) Health / status (uses BOTH % and σ so it's stable)\r\n| extend Status = case(\r\n    TodayGB <= 0, \"Dead\",\r\n    (DropPct >= pctDropTrigger and ZDrop >= sigmaTrigger), \"Degraded\",\r\n    (DropPct >= 25.0 and ZDrop >= 1.0), \"Warning\",\r\n    \"Healthy\"\r\n)\r\n\r\n// 4) Simple 0–100 health score (penalize big % drops + big σ drops)\r\n| extend HealthScore =\r\n    toint(\r\n        max_of(\r\n            0.0,\r\n            100.0\r\n            - min_of(80.0, max_of(0.0, DropPct))            // % drop penalty (capped)\r\n            - min_of(20.0, max_of(0.0, (ZDrop - 1.0) * 10)) // σ penalty after 1σ\r\n        )\r\n    )\r\n\r\n| where \"All\" in ({selectHealth})  or Status !in ({selectHealth})\r\n\r\n| project\r\n    DataType,\r\n    Status,\r\n    HealthScore,\r\n    DropPct,\r\n    DropGB = round(DropGB, 2),\r\n    TodayGB = round(TodayGB, 2),\r\n    BaselineGB = round(BaselineGB, 2),\r\n    BaselineGB_30 = round(BaselineGB_30, 2),\r\n    BaselineGB_90 = round(BaselineGB_90, 2)\r\n    \r\n    \r\n   // ZDrop,\r\n   // Samples_30,\r\n   // Samples_90\r\n| order by Status desc, HealthScore asc, DropPct desc",
+                          "size": 0,
+                          "title": "Data connector Ingestion drop check: {$rowCount}. Median daily baseline over last 90 days (excluding last 1 day)",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Warning",
+                                      "representation": "3",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Healthy",
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Blank",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "HealthScore",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "DropPct",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                },
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "DropGB",
+                                "formatter": 3,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "TodayGB",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "BaselineGB",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "SecondsSinceLast",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed",
+                                  "customColumnWidthSetting": "22ch"
+                                },
+                                "numberFormat": {
+                                  "unit": 24,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "IngestGB_24h",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                },
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": true
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "changeInCount",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                }
+                              },
+                              {
+                                "columnMatch": "changeInPct",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "changePct",
+                                "formatter": 0,
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "_ComputerName_",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "State",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "linkColumn": "Details",
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true,
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Unhealthy",
+                                      "representation": "4",
+                                      "text": "{0}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}"
+                                    }
+                                  ]
+                                },
+                                "tooltipFormat": {
+                                  "tooltip": "Click to see details of the last event sent by this computer."
+                                }
+                              },
+                              {
+                                "columnMatch": "Environment",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Azure",
+                                      "representation": "blue",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "magenta",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Heartbeat Trend",
+                                "formatter": 10,
+                                "formatOptions": {
+                                  "palette": "redGreen"
+                                },
+                                "tooltipFormat": {
+                                  "tooltip": "Each bar represents the bucket of time based on the Unhealthy Criteria. Showing last 30 buckets max."
+                                }
+                              },
+                              {
+                                "columnMatch": "Details",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "Last Record Received",
+                                "formatter": 3,
+                                "formatOptions": {
+                                  "palette": "coldHot"
+                                },
+                                "numberFormat": {
+                                  "unit": 24,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false,
+                                    "maximumSignificantDigits": 3
+                                  }
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": [],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "customWidth": "50",
+                        "name": "query - heartbeat - Copy"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report provides a health overview of Microsoft Sentinel data ingestion.\r\n\r\nIt identifies tables as Healthy, Stale, or Dead based on when data was last received (configurable thresholds), shows ingestion volume for the past 24 hours, and maps each table to its associated Microsoft solution/offer.\r\n\r\nUse this view to quickly detect broken connectors, ingestion gaps, and prioritise remediation."
+                        },
+                        "customWidth": "50",
+                        "name": "text - 7"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report compares today’s ingestion to weekday-aware rolling medians (30d/90d) and uses standard deviation to detect statistically significant drops. Tables below the minimum baseline are ignored to reduce noise. Each table gets a Status (Healthy/Warning/Degraded/Dead) and a 0–100 HealthScore so you can quickly prioritise the most severe ingestion regressions."
+                        },
+                        "customWidth": "50",
+                        "name": "text - 7 - Copy"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "let Base7d =\r\nSecurityIncident\r\n| where TimeGenerated >= ago(7d)\r\n| summarize\r\n    LastIncidentSeen_7d = max(TimeGenerated),\r\n    Incidents_7d = count(),\r\n    Title_nonempty = arg_max(iif(isempty(Title), datetime(1900-01-01), TimeGenerated), Title).[1],\r\n    Title_latest   = arg_max(TimeGenerated, Title).[1]\r\n  by IncidentName\r\n| extend Title = tostring(coalesce(Title_nonempty, Title_latest));\r\n\r\nlet BasePrev90d =\r\nSecurityIncident\r\n| where TimeGenerated between (ago(90d) .. ago(7d))\r\n| summarize\r\n    LastIncidentSeen_prev90d = max(TimeGenerated),\r\n    Incidents_prev90d = count(),\r\n    Title_nonempty = arg_max(iif(isempty(Title), datetime(1900-01-01), TimeGenerated), Title).[1],\r\n    Title_latest   = arg_max(TimeGenerated, Title).[1]\r\n  by IncidentName\r\n| extend Title = tostring(coalesce(Title_nonempty, Title_latest));\r\n\r\nlet ByTitle7d =\r\nBase7d\r\n| summarize\r\n    LastIncidentSeen_7d = max(LastIncidentSeen_7d),\r\n    Incidents_7d = sum(Incidents_7d)\r\n  by Title;\r\n\r\nlet ByTitlePrev90d =\r\nBasePrev90d\r\n| summarize\r\n    LastIncidentSeen_prev90d = max(LastIncidentSeen_prev90d),\r\n    Incidents_prev90d = sum(Incidents_prev90d)\r\n  by Title;\r\n\r\n// ---- 90-day daily series by Title (for workbook charting) ----\r\nlet Series90d =\r\nSecurityIncident\r\n| where TimeGenerated >= ago(90d)\r\n| extend TitleNorm = tostring(Title)\r\n| where isnotempty(TitleNorm)\r\n| make-series CountsSeries_90d = count() default=0\r\n    on TimeGenerated from startofday(ago(90d)) to startofday(now()) step 1d\r\n  by Title = TitleNorm;\r\n\r\n// ---- Final output ----\r\nByTitlePrev90d\r\n| join kind=fullouter ByTitle7d on Title\r\n| join kind=leftouter Series90d on Title\r\n| extend\r\n    Incidents_7d = coalesce(Incidents_7d, 0),\r\n    Incidents_prev90d = coalesce(Incidents_prev90d, 0),\r\n    LastIncidentSeen_7d = todatetime(LastIncidentSeen_7d),\r\n    LastIncidentSeen_prev90d = todatetime(LastIncidentSeen_prev90d)\r\n| extend HealthFlag = case(\r\n    Incidents_7d > 0 and LastIncidentSeen_7d >= ago(1d), \"Healthy\",\r\n    Incidents_7d > 0 and LastIncidentSeen_7d <  ago(1d), \"Warning (no incidents <24h)\",\r\n    Incidents_7d == 0 and Incidents_prev90d > 0, \"Warning (No incidents 7d, had prev 90d)\",\r\n    Incidents_7d > 0 and Incidents_prev90d == 0, \"New (not seen in prev 90d)\",\r\n    Incidents_7d == 0 and Incidents_prev90d == 0, \"Unknown\",\r\n    \"Unknown\"\r\n)\r\n| where isnotempty(Title)\r\n| order by Incidents_7d desc, LastIncidentSeen_7d desc\r\n| project\r\n    HealthFlag,\r\n    Title,\r\n    LastIncidentSeen_7d,\r\n    Incidents_7d,\r\n    LastIncidentSeen_prev90d,\r\n    Incidents_prev90d,\r\n    CountsSeries_90d",
+                          "size": 0,
+                          "title": "Compare Incident count by Title, for 7days vs. 90days, count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "HealthFlag",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "LastIncidentSeen_7d",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed",
+                                  "customColumnWidthSetting": "162.996px"
+                                }
+                              },
+                              {
+                                "columnMatch": "Incidents_7d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "Incidents_prev90d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "CountsSeries_90d",
+                                "formatter": 10,
+                                "formatOptions": {
+                                  "palette": "blackWhite"
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": [],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "customWidth": "50",
+                        "name": "query - alerts  - Copy"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "//This query is a “rule firing drift” health check using SecurityAlert. It looks for alert names that were firing in the previous week but stopped or dropped sharply in the current week. \r\n \r\n  SecurityAlert\r\n  | where TimeGenerated between (ago(14d) .. now())\r\n  | extend Period = case(TimeGenerated >= ago(7d), \"Current\", \"Prior\")\r\n  | summarize Cnt=count() by AlertName, Period\r\n  | evaluate pivot(Period, sum(Cnt), AlertName)\r\n  | extend Prior=coalesce(Prior, 0), Current=coalesce(Current, 0)\r\n  | extend DropRatio = iff(Prior == 0, real(null), todouble(Prior - Current) / todouble(Prior))\r\n  | extend Status = case(\r\n      Prior > 0 and Current == 0, \"Stopped\",\r\n      Prior >= 10 and DropRatio >= 0.80, \"Dropped\",\r\n      \"OK\"\r\n    )\r\n  | where Status != \"OK\"\r\n  | extend Severity = case(Status==\"Stopped\",\"High\",\"Medium\")\r\n  | project\r\n     // Category=\"Analytics\",\r\n     // Check=\"Rule firing drift (SecurityAlert proxy)\",\r\n      Resource=tostring(AlertName),\r\n      Status,\r\n      Severity,\r\n     // When=now(),\r\n      Metric=strcat(\"CurrentWeek=\", Current, \"; PriorWeek=\", Prior,\r\n                    iff(isnull(DropRatio), \"\", strcat(\"; Drop%=\", round(DropRatio*100.0, 1)))),\r\n      Details=\"A sudden stop/drop often indicates rule disabled/edited, missing upstream data, or schema/volume changes.\",\r\n      Action=case(\r\n        Status==\"Stopped\", \"Verify rule enabled and query still returns results; validate upstream ingestion and schema.\",\r\n        \"Review recent tuning/threshold changes and upstream ingestion/volume shifts.\"\r\n        )",
+                          "size": 0,
+                          "title": "“Rule firing drift” looks for alert names that were firing in the previous week but stopped or dropped sharply in the current week, count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Stopped",
+                                      "representation": "3",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Blank",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "High",
+                                      "representation": "redBright",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Details",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "50ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "Action",
+                                "formatter": 0,
+                                "formatOptions": {
+                                  "customColumnWidthSetting": "50ch"
+                                }
+                              },
+                              {
+                                "columnMatch": "HealthFlag",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "LastIncidentSeen_7d",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "palette": "greenRed",
+                                  "customColumnWidthSetting": "162.996px"
+                                }
+                              },
+                              {
+                                "columnMatch": "Incidents_7d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "Incidents_prev90d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "CountsSeries_90d",
+                                "formatter": 10,
+                                "formatOptions": {
+                                  "palette": "blackWhite"
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": [],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "customWidth": "50",
+                        "name": "query - alerts  - Copy - Copy"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report groups incidents by Title and compares activity in the last 7 days against the previous 90-day period, producing a 90-day daily series for trend charts. Each Title receives a HealthFlag (Healthy / Warning / New / Unknown) based on counts and last-seen times to surface active, stale, or newly-emerging incident types. Use it to prioritise investigation, spot new incident classes, and monitor trends over time."
+                        },
+                        "customWidth": "50",
+                        "name": "text - 9"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report finds alert rules whose firing has stopped or dropped sharply by comparing the prior 7-day period to the most recent 7-day period. Alerts are flagged Stopped (went to zero) or Dropped (≥80% decline with prior ≥10 alerts), with severity and a compact metric string. Use this to rapidly detect disabled/edited rules, upstream ingestion/schema regressions, or unintended tuning changes."
+                        },
+                        "customWidth": "50",
+                        "name": "text - 9 - Copy"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "let Last7Days =\r\n    SecurityAlert\r\n    | where TimeGenerated >= ago(7d)\r\n    | summarize LastAlertSeen_7d = max(TimeGenerated),\r\n                Alerts_7d = count()\r\n        by ProductName;\r\nlet Previous90Days =\r\n    SecurityAlert\r\n    | where TimeGenerated between (ago(90d) .. ago(7d))\r\n    | summarize LastAlertSeen_90d = max(TimeGenerated),\r\n                Alerts_90d = count()\r\n        by ProductName;\r\nPrevious90Days\r\n| join kind=fullouter Last7Days on ProductName\r\n| extend\r\n    Alerts_7d = coalesce(Alerts_7d, 0),\r\n    Alerts_90d = coalesce(Alerts_90d, 0)\r\n| extend HealthFlag = case(\r\n        Alerts_7d > 0 and LastAlertSeen_7d >= ago(1d), \"Healthy\",\r\n        Alerts_7d > 0 and LastAlertSeen_7d <  ago(1d), \"Warning (no alerts <24h)\",\r\n        Alerts_7d == 0 and Alerts_90d > 0, \"Warning (Low or No alerts)\",\r\n        Alerts_7d > 0 and Alerts_90d == 0, \"New\",\r\n        \"Unknown\"\r\n    )\r\n| extend ProductName1 = iff(Alerts_7d > 0 and Alerts_90d == 0, ProductName1, \"\")\r\n| order by HealthFlag asc, LastAlertSeen_7d asc\r\n| project-rename PossiblyNewlyAdded = ProductName1\r\n| project HealthFlag, ProductName, LastAlertSeen_7d, Alerts_7d, LastAlertSeen_90d, Alerts_90d, PossiblyNewlyAdded",
+                          "size": 0,
+                          "title": "Heatmap and health check - compares Alerts counts from Products, which may indicate a data issue. Compares 90days to 7days",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "HealthFlag",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_7d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_90d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              }
+                            ],
+                            "filter": true,
+                            "sortBy": [
+                              {
+                                "itemKey": "LastAlertSeen_7d",
+                                "sortOrder": 1
+                              }
+                            ]
+                          },
+                          "sortBy": [
+                            {
+                              "itemKey": "LastAlertSeen_7d",
+                              "sortOrder": 1
+                            }
+                          ],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "name": "query - alerts "
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report compares alert counts for each ProductName over the last 7 days vs the previous 90-day window and assigns a HealthFlag (Healthy / Warning / New / Unknown). It highlights product sources that have stopped or reduced alerting, those with no recent alerts, and newly appearing sources — enabling quick prioritisation of ingestion, tuning, or onboarding checks."
+                        },
+                        "name": "text - 11"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "//Baseline comparison: last 7d vs previous 7d\r\n//Severity that flips to Warning/Critical on big increases\r\n//Metric = 7d GB (so the table still reads nicely)\r\n//Details includes % change + prior GB\r\n\r\nlet Window = 7d;\r\nlet Current =\r\nUsage\r\n| where TimeGenerated between (ago(Window) .. now())\r\n| where IsBillable == true\r\n| summarize GB_7d = sum(Quantity) / 1024.0 by DataType;\r\nlet Previous =\r\nUsage\r\n| where TimeGenerated between (ago(2*Window) .. ago(Window))\r\n| where IsBillable == true\r\n| summarize GB_prev7d = sum(Quantity) / 1024.0 by DataType;\r\nCurrent\r\n| join kind=fullouter Previous on DataType\r\n| extend\r\n    DataType = coalesce(DataType, DataType1),\r\n    GB_7d = coalesce(GB_7d, 0.0),\r\n    GB_prev7d = coalesce(GB_prev7d, 0.0)\r\n| extend \r\n    DeltaGB = GB_7d - GB_prev7d\r\n| extend DeltaPct = iif(GB_prev7d == 0.0 and GB_7d > 0.0, 100.0,\r\n                   iif(GB_prev7d == 0.0, 0.0, (DeltaGB / GB_prev7d) * 100.0))\r\n| extend\r\n    Status = case(\r\n        GB_prev7d > 0 and DeltaPct >= 50 and DeltaGB >= 5, \"Critical\",\r\n        GB_prev7d > 0 and DeltaPct >= 25 and DeltaGB >= 2, \"Warning\",\r\n        GB_prev7d == 0 and GB_7d >= 2, \"Warning\",   // new billable source\r\n        \"Info\"\r\n    )\r\n| extend Severity = Status\r\n| top 10 by GB_7d desc\r\n| project\r\n    //Category = \"Operations\",\r\n    //Check = \"Top billable tables (Usage) - 7d vs prev 7d\",\r\n    Resource = tostring(DataType),\r\n    Status,\r\n    Severity,\r\n    //When = now(),\r\n    Capacity = round(GB_7d, 2),\r\n    Details = strcat(\r\n        \"7d=\", round(GB_7d, 2), \"GB; prev7d=\", round(GB_prev7d, 2), \"GB; Δ=\",\r\n        round(DeltaGB, 2), \"GB (\", round(DeltaPct, 1), \"%).\"\r\n    ),\r\n    Action = case(\r\n        Status == \"Critical\", \"Investigate ingestion regression/noisy source; validate recent changes; tune diagnostics, DCR/DCE, connectors, or parsers.\",\r\n        Status == \"Warning\",  \"Review recent onboarding/changes; confirm expected volume; tune collection filters/parsers/diagnostics if unexpected.\",\r\n        \"Use weekly to catch ingestion/cost regressions and noisy sources.\"\r\n    )",
+                          "size": 0,
+                          "title": "Top billable Tables with Health check, count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "1",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "1",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Capacity",
+                                "formatter": 3,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                },
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": true
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "Action",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Review",
+                                      "representation": "gray",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Investigate",
+                                      "representation": "red",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "HealthFlag",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_7d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_90d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": [],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "name": "query - alerts  - Copy"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report lists the top 10 billable data tables by 7-day GB and compares each to the previous 7-day window, flagging large increases as Warning or Critical (thresholds use both % and absolute GB). It helps quickly identify noisy or newly onboarded billable sources driving cost so you can validate changes and tune collection."
+                        },
+                        "name": "text - 12"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "SentinelHealth\r\n  | where TimeGenerated between (ago(7d) .. now())\r\n  | where tostring(SentinelResourceType) has \"Analytics\"\r\n  | where Status in (\"Failure\",\"Failed\",\"Warning\",\"Partial Success\",\"PartialSuccess\")\r\n  | summarize\r\n      LastEvent=max(TimeGenerated),\r\n      Failures=countif(Status in (\"Failure\",\"Failed\")),\r\n      Warnings=countif(Status == \"Warning\"),\r\n      Partial=countif(Status in (\"Partial Success\",\"PartialSuccess\")),\r\n      SampleReason=any(Reason),\r\n      SampleDescription=any(Description)\r\n    by RuleName=tostring(SentinelResourceName), RuleKind=tostring(SentinelResourceKind), Operation=tostring(OperationName)\r\n  | extend Status = case(Failures>0, \"Failure\", Partial>0, \"Partial\", Warnings>0, \"Warning\", \"OK\")\r\n  | extend Severity = case(Status==\"Failure\",\"High\", Status in (\"Partial\",\"Warning\"),\"Medium\", \"Low\")\r\n  | project\r\n    //  Category=\"Analytics\",\r\n    //  Check=\"Rule execution health (SentinelHealth)\",\r\n      Resource=strcat(RuleName, iff(isempty(RuleKind), \"\", strcat(\" [\", RuleKind, \"]\"))),\r\n      Status,\r\n      Severity,\r\n      When=LastEvent,\r\n      Metric=strcat(\"Failures=\", Failures, \"; Partial=\", Partial, \"; Warnings=\", Warnings, \"; Op=\", Operation),\r\n      Details=strcat(\"Reason=\", tostring(SampleReason), \"; Desc=\", substring(tostring(SampleDescription), 0, 220)),\r\n      Action=case(\r\n        Status==\"Failure\", \"Open the health event; validate dependent tables, schema changes, query timeouts, thresholds; use rule insights/manual rerun.\",\r\n        Status==\"Partial\", \"Confirm ingestion delay/partial data and rule settings; validate impacted connector(s).\",\r\n        \"Review warning details; confirm rule remains effective.\"\r\n      )",
+                          "size": 0,
+                          "title": "Rule firing health check (required SentinelHealth Table), count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "crossComponentResources": [
+                            "{Workspace}"
+                          ],
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Partial",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Failure",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "1",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "High",
+                                      "representation": "redBright",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Medium",
+                                      "representation": "yellow",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Low",
+                                      "representation": "green",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": null,
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Action",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Review",
+                                      "representation": "gray",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Investigate",
+                                      "representation": "red",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Capacity",
+                                "formatter": 3,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                },
+                                "numberFormat": {
+                                  "unit": 39,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": true
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "HealthFlag",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Critical",
+                                      "representation": "4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "contains",
+                                      "thresholdValue": "Warning",
+                                      "representation": "2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_7d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "Alerts_90d",
+                                "formatter": 20,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": [],
+                          "tileSettings": {
+                            "titleContent": {
+                              "columnMatch": "State",
+                              "formatter": 1,
+                              "formatOptions": {}
+                            },
+                            "leftContent": {
+                              "columnMatch": "Count",
+                              "formatter": 12,
+                              "formatOptions": {},
+                              "numberFormat": {
+                                "unit": 17,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": false,
+                                  "maximumFractionDigits": 2,
+                                  "maximumSignificantDigits": 3
+                                }
+                              }
+                            },
+                            "rightContent": {
+                              "columnMatch": "State",
+                              "formatter": 18,
+                              "formatOptions": {
+                                "thresholdsOptions": "icons",
+                                "thresholdsGrid": [
+                                  {
+                                    "operator": "==",
+                                    "thresholdValue": "Unhealthy",
+                                    "representation": "4",
+                                    "text": ""
+                                  },
+                                  {
+                                    "operator": "Default",
+                                    "thresholdValue": null,
+                                    "representation": "success",
+                                    "text": ""
+                                  }
+                                ]
+                              }
+                            },
+                            "showBorder": false,
+                            "rowLimit": 100
+                          }
+                        },
+                        "name": "query - rule firing "
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "This report highlights Analytics rules with execution Failures, Partial runs, or Warnings in the last 7 days using SentinelHealth data. Each rule is assigned a severity and includes counts, last event time, and a sample reason/description. Use it to quickly detect and remediate rule execution issues before detection coverage is impacted."
+                        },
+                        "name": "text - 13"
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "connectors"
+                  },
+                  "name": "group - connectors"
                 },
                 {
                   "type": 12,
@@ -11811,9 +13687,32 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "resources\r\n | where type == \"microsoft.insights/workbooks\"\r\n | project properties.displayName, properties.timeModified, location, kind,\r\n           resourceGroup, properties.category, properties.serializedData, properties.version,  properties.tags[0] , properties.tags[1] , properties.userId, properties.sourceId\r\n| order by tostring(properties_timeModified) asc",
+                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/contentProductTemplates ?$filter=properties/contentKind eq 'Workbook'\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-09-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"properties.packageId\",\"columnid\":\"packageId\"},{\"path\":\"properties.version\",\"columnid\":\"Installedversion\"},{\"path\":\"properties.packageVersion\",\"columnid\":\"packageVersion\"},{\"path\":\"properties.contentSchemaVersion\",\"columnid\":\"contentSchemaVersion\"},{\"path\":\"properties.author\",\"columnid\":\"author\"},{\"path\":\"properties.support\",\"columnid\":\"support\"},{\"path\":\"properties.categories\",\"columnid\":\"categories\"},{\"path\":\"properties.contentKind\",\"columnid\":\"contentKind\"},{\"path\":\"properties.isNew\",\"columnid\":\"isNew\"},{\"path\":\"properties.isPreview\",\"columnid\":\"isPreview\"},{\"path\":\"properties.isFeatured\",\"columnid\":\"isFeatured\"},{\"path\":\"properties.isDeprecated\",\"columnid\":\"isDeprecated\"},{\"path\":\"properties\",\"columnid\":\"properties\"},{\"path\":\"properties.contentId\",\"columnid\":\"contentId\"},{\"path\":\"name\",\"columnid\":\"name\"},{\"path\":\"id\",\"columnid\":\"id\",\"columnType\":\"string\"}]}}]}",
                           "size": 1,
-                          "title": "2. Workbook Check with keyword search 🔍, count: {$rowCount}",
+                          "title": "Workbook contentProductTemplates  via Rest API. count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 12,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "id",
+                                "formatter": 1
+                              }
+                            ],
+                            "rowLimit": 500,
+                            "filter": true
+                          },
+                          "sortBy": []
+                        },
+                        "name": "query - content product templates"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "resources\r\n | where type == \"microsoft.insights/workbooks\"\r\n | project properties.displayName, properties.timeModified, location, kind,\r\n           resourceGroup, properties.category, properties.serializedData, properties.version,  properties.tags[0] , properties.tags[1] , properties.userId, properties.sourceId, properties, id, name, tags\r\n| order by tostring(properties_timeModified) asc\r\n\r\n",
+                          "size": 1,
+                          "title": "Workbook Check with keyword search (ARG) 🔍, count: {$rowCount}",
                           "showExportToExcel": true,
                           "queryType": 1,
                           "resourceType": "microsoft.resourcegraph/resources",
@@ -11833,39 +13732,217 @@
                               {
                                 "columnMatch": "properties_serializedData",
                                 "formatter": 5
+                              },
+                              {
+                                "columnMatch": "id",
+                                "formatter": 1
                               }
                             ],
-                            "filter": true,
-                            "labelSettings": [
-                              {
-                                "columnId": "properties_displayName",
-                                "label": "DisplayName"
-                              },
-                              {
-                                "columnId": "properties_timeModified",
-                                "label": "TimeLastModified"
-                              },
-                              {
-                                "columnId": "properties_category",
-                                "label": "Category"
-                              },
-                              {
-                                "columnId": "properties_version",
-                                "label": "Version"
-                              },
-                              {
-                                "columnId": "properties_tags_0",
-                                "label": "Tags"
-                              },
-                              {
-                                "columnId": "properties_tags_1",
-                                "label": "Tag1"
-                              }
-                            ]
+                            "filter": true
                           },
                           "sortBy": []
                         },
                         "name": "query - workbook - Private"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "Matcching is basic, so may NOT always find a exact match "
+                        },
+                        "name": "text - 6"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"99796294-0a70-4a31-8aae-d13948158155\",\"mergeType\":\"innerunique\",\"leftTable\":\"query - content product templates\",\"rightTable\":\"query - workbook - Private\",\"leftColumn\":\"packageId\",\"rightColumn\":\"properties_tags_0\"}],\"projectRename\":[{\"originalName\":\"[query - content product templates].displayName\",\"mergedName\":\"displayName\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].packageId\",\"mergedName\":\"packageId\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].Installedversion\",\"mergedName\":\"Installedversion\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].packageVersion\",\"mergedName\":\"packageVersion\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].contentSchemaVersion\",\"mergedName\":\"contentSchemaVersion\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].author\",\"mergedName\":\"author\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].support\",\"mergedName\":\"support\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].categories\",\"mergedName\":\"categories\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].contentKind\",\"mergedName\":\"contentKind\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].isNew\",\"mergedName\":\"isNew\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].isPreview\",\"mergedName\":\"isPreview\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].isFeatured\",\"mergedName\":\"isFeatured\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].isDeprecated\",\"mergedName\":\"isDeprecated\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].properties\",\"mergedName\":\"properties\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].contentId\",\"mergedName\":\"contentId\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].name\",\"mergedName\":\"name\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - content product templates].id\",\"mergedName\":\"id\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_displayName\",\"mergedName\":\"properties_displayName\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_timeModified\",\"mergedName\":\"properties_timeModified\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].location\",\"mergedName\":\"location\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].kind\",\"mergedName\":\"kind\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].resourceGroup\",\"mergedName\":\"resourceGroup\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_category\",\"mergedName\":\"properties_category\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_serializedData\",\"mergedName\":\"properties_serializedData\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_version\",\"mergedName\":\"properties_version\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_tags_0\",\"mergedName\":\"properties_tags_0\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_tags_1\",\"mergedName\":\"properties_tags_1\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_userId\",\"mergedName\":\"properties_userId\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties_sourceId\",\"mergedName\":\"properties_sourceId\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].properties\",\"mergedName\":\"properties1\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].id\",\"mergedName\":\"id1\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].name\",\"mergedName\":\"name1\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"},{\"originalName\":\"[query - workbook - Private].tags\",\"mergedName\":\"tags\",\"fromId\":\"99796294-0a70-4a31-8aae-d13948158155\"}]}",
+                          "size": 0,
+                          "title": "(preview) Check installed vs Content hub and enrich, Count: {$rowCount}",
+                          "queryType": 7,
+                          "sortBy": []
+                        },
+                        "showPin": false,
+                        "name": "query - 5"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/ContentPackages\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-09-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"properties.description\",\"columnid\":\"description\"},{\"path\":\"properties.id\",\"columnid\":\"id\"},{\"path\":\"properties.version\",\"columnid\":\"version\"},{\"path\":\"properties.source\",\"columnid\":\"source\"},{\"path\":\"properties.contentSchemaVersion\",\"columnid\":\"contentSchemaVersion\"},{\"path\":\"properties.author\",\"columnid\":\"author\"},{\"path\":\"properties.support\",\"columnid\":\"support\"},{\"path\":\"properties.categories\",\"columnid\":\"categories\"},{\"path\":\"properties.contentKind\",\"columnid\":\"contentKind\"}]}}]}",
+                          "size": 1,
+                          "title": "Content Packages via Rest API. count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 12,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "requiredDataConnectors",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkLabel": "Data Connectors",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "queryText",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                },
+                                "numberFormat": {
+                                  "unit": 0,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "resourcegroup",
+                                "formatter": 14,
+                                "formatOptions": {
+                                  "linkTarget": null,
+                                  "showIcon": true
+                                }
+                              },
+                              {
+                                "columnMatch": "id",
+                                "formatter": 5
+                              }
+                            ],
+                            "rowLimit": 500,
+                            "filter": true
+                          },
+                          "sortBy": []
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "Help",
+                          "comparison": "isEqualTo",
+                          "value": "Yes"
+                        },
+                        "name": "query - 21 - Rules"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/ContentTemplates?$filter=properties/contentKind eq 'Workbook'\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-09-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"properties.description\",\"columnid\":\"description\"},{\"path\":\"properties.id\",\"columnid\":\"id\"},{\"path\":\"properties.version\",\"columnid\":\"version\"},{\"path\":\"properties.source\",\"columnid\":\"source\"},{\"path\":\"properties.contentSchemaVersion\",\"columnid\":\"contentSchemaVersion\"},{\"path\":\"properties.author\",\"columnid\":\"author\"},{\"path\":\"properties.support\",\"columnid\":\"support\"},{\"path\":\"properties.categories\",\"columnid\":\"categories\"},{\"path\":\"properties.contentKind\",\"columnid\":\"contentKind\"}]}}]}",
+                          "size": 1,
+                          "title": "Content Templates via Rest API. count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 12,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "requiredDataConnectors",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkLabel": "Data Connectors",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "queryText",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                },
+                                "numberFormat": {
+                                  "unit": 0,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "resourcegroup",
+                                "formatter": 14,
+                                "formatOptions": {
+                                  "linkTarget": null,
+                                  "showIcon": true
+                                }
+                              },
+                              {
+                                "columnMatch": "id",
+                                "formatter": 5
+                              }
+                            ],
+                            "rowLimit": 500,
+                            "filter": true
+                          },
+                          "sortBy": []
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "Help",
+                          "comparison": "isEqualTo",
+                          "value": "Yes"
+                        },
+                        "name": "query - 21 - Rules - Copy"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.Insights/workbooks\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2023-06-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[]}}]}",
+                          "size": 1,
+                          "title": "Workbooks via Rest API. count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 12,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "requiredDataConnectors",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkLabel": "Data Connectors",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "queryText",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                },
+                                "numberFormat": {
+                                  "unit": 0,
+                                  "options": {
+                                    "style": "decimal",
+                                    "useGrouping": false
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "resourcegroup",
+                                "formatter": 14,
+                                "formatOptions": {
+                                  "linkTarget": null,
+                                  "showIcon": true
+                                }
+                              },
+                              {
+                                "columnMatch": "id",
+                                "formatter": 5
+                              }
+                            ],
+                            "rowLimit": 500,
+                            "filter": true
+                          },
+                          "sortBy": []
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "Help",
+                          "comparison": "isEqualTo",
+                          "value": "Yes"
+                        },
+                        "name": "query - 21 - Rules - Copy"
                       }
                     ]
                   },
@@ -13512,6 +15589,181 @@
                   "content": {
                     "version": "NotebookGroup/1.0",
                     "groupType": "editable",
+                    "title": "SubGroup: Content Hub Solutions",
+                    "items": [
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/metadata\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$..value\",\"columns\":[{\"path\":\"properties.source.name\",\"columnid\":\"friendlyName\"},{\"path\":\"type\",\"columnid\":\"type\"},{\"path\":\"properties.dependencies.criteria\",\"columnid\":\"dependencies\"},{\"path\":\"properties.firstPublishDate\",\"columnid\":\"firstPublished\"},{\"path\":\"properties.lastPublishDate\",\"columnid\":\"lastPublished\"},{\"path\":\"systemData.createdAt\",\"columnid\":\"createdAt\"},{\"path\":\"systemData.createdBy\",\"columnid\":\"createdBy\"},{\"path\":\"systemData.lastModifiedAt\",\"columnid\":\"lastModifiedAt\"},{\"path\":\"systemData.lastModifiedBy\",\"columnid\":\"lastModifiedBy\"},{\"path\":\"systemData\",\"columnid\":\"systemData\"},{\"path\":\"properties\",\"columnid\":\"properties\"},{\"path\":\"name\",\"columnid\":\"name\"}]}}]}",
+                          "size": 1,
+                          "title": "Content Hub, Solutions deployed. count: {$rowCount}",
+                          "showExportToExcel": true,
+                          "queryType": 12,
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "dependencies",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "triggerThreshold",
+                                "formatter": 8,
+                                "formatOptions": {
+                                  "palette": "whiteBlack"
+                                }
+                              },
+                              {
+                                "columnMatch": "eventGroupingSettings",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                },
+                                "numberFormat": {
+                                  "unit": 0,
+                                  "options": {
+                                    "style": "decimal"
+                                  }
+                                }
+                              },
+                              {
+                                "columnMatch": "severity",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Medium",
+                                      "representation": "Sev2",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Low",
+                                      "representation": "Sev3",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "Informational",
+                                      "representation": "Sev4",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "High",
+                                      "representation": "Sev1",
+                                      "text": "{0}{1}"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "Blank",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "id",
+                                "formatter": 5
+                              },
+                              {
+                                "columnMatch": "entityMappings",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "tactics",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "kind",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "colors",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "gray",
+                                      "text": "{0}{1}"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "status",
+                                "formatter": 18,
+                                "formatOptions": {
+                                  "thresholdsOptions": "icons",
+                                  "thresholdsGrid": [
+                                    {
+                                      "operator": "==",
+                                      "thresholdValue": "false",
+                                      "representation": "disabled",
+                                      "text": "Disabled"
+                                    },
+                                    {
+                                      "operator": "Default",
+                                      "thresholdValue": null,
+                                      "representation": "success",
+                                      "text": "Enabled"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "columnMatch": "queryText",
+                                "formatter": 7,
+                                "formatOptions": {
+                                  "linkTarget": "CellDetails",
+                                  "linkIsContextBlade": true
+                                }
+                              },
+                              {
+                                "columnMatch": "resourcegroup",
+                                "formatter": 14,
+                                "formatOptions": {
+                                  "linkTarget": null,
+                                  "showIcon": true
+                                }
+                              }
+                            ],
+                            "filter": true
+                          },
+                          "sortBy": []
+                        },
+                        "showPin": false,
+                        "name": "query - Solutions"
+                      }
+                    ]
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "selectedTab",
+                    "comparison": "isEqualTo",
+                    "value": "content"
+                  },
+                  "name": "group - content hub"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
                     "title": "SubGroup: Retention",
                     "items": [
                       {
@@ -13982,181 +16234,6 @@
                     "value": "retention"
                   },
                   "name": "Retention"
-                },
-                {
-                  "type": 12,
-                  "content": {
-                    "version": "NotebookGroup/1.0",
-                    "groupType": "editable",
-                    "title": "SubGroup: Content Hub Solutions",
-                    "items": [
-                      {
-                        "type": 3,
-                        "content": {
-                          "version": "KqlItem/1.0",
-                          "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/metadata\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$..value\",\"columns\":[{\"path\":\"properties.source.name\",\"columnid\":\"friendlyName\"},{\"path\":\"type\",\"columnid\":\"type\"},{\"path\":\"properties.dependencies.criteria\",\"columnid\":\"dependencies\"},{\"path\":\"properties.firstPublishDate\",\"columnid\":\"firstPublished\"},{\"path\":\"properties.lastPublishDate\",\"columnid\":\"lastPublished\"},{\"path\":\"systemData.createdAt\",\"columnid\":\"createdAt\"},{\"path\":\"systemData.createdBy\",\"columnid\":\"createdBy\"},{\"path\":\"systemData.lastModifiedAt\",\"columnid\":\"lastModifiedAt\"},{\"path\":\"systemData.lastModifiedBy\",\"columnid\":\"lastModifiedBy\"},{\"path\":\"systemData\",\"columnid\":\"systemData\"},{\"path\":\"properties\",\"columnid\":\"properties\"},{\"path\":\"name\",\"columnid\":\"name\"}]}}]}",
-                          "size": 1,
-                          "title": "Content Hub, Solutions deployed. count: {$rowCount}",
-                          "showExportToExcel": true,
-                          "queryType": 12,
-                          "gridSettings": {
-                            "formatters": [
-                              {
-                                "columnMatch": "dependencies",
-                                "formatter": 7,
-                                "formatOptions": {
-                                  "linkTarget": "CellDetails",
-                                  "linkIsContextBlade": true
-                                }
-                              },
-                              {
-                                "columnMatch": "triggerThreshold",
-                                "formatter": 8,
-                                "formatOptions": {
-                                  "palette": "whiteBlack"
-                                }
-                              },
-                              {
-                                "columnMatch": "eventGroupingSettings",
-                                "formatter": 7,
-                                "formatOptions": {
-                                  "linkTarget": "CellDetails",
-                                  "linkIsContextBlade": true
-                                },
-                                "numberFormat": {
-                                  "unit": 0,
-                                  "options": {
-                                    "style": "decimal"
-                                  }
-                                }
-                              },
-                              {
-                                "columnMatch": "severity",
-                                "formatter": 18,
-                                "formatOptions": {
-                                  "thresholdsOptions": "icons",
-                                  "thresholdsGrid": [
-                                    {
-                                      "operator": "==",
-                                      "thresholdValue": "Medium",
-                                      "representation": "Sev2",
-                                      "text": "{0}{1}"
-                                    },
-                                    {
-                                      "operator": "==",
-                                      "thresholdValue": "Low",
-                                      "representation": "Sev3",
-                                      "text": "{0}{1}"
-                                    },
-                                    {
-                                      "operator": "==",
-                                      "thresholdValue": "Informational",
-                                      "representation": "Sev4",
-                                      "text": "{0}{1}"
-                                    },
-                                    {
-                                      "operator": "==",
-                                      "thresholdValue": "High",
-                                      "representation": "Sev1",
-                                      "text": "{0}{1}"
-                                    },
-                                    {
-                                      "operator": "Default",
-                                      "thresholdValue": null,
-                                      "representation": "Blank",
-                                      "text": "{0}{1}"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "columnMatch": "id",
-                                "formatter": 5
-                              },
-                              {
-                                "columnMatch": "entityMappings",
-                                "formatter": 7,
-                                "formatOptions": {
-                                  "linkTarget": "CellDetails",
-                                  "linkIsContextBlade": true
-                                }
-                              },
-                              {
-                                "columnMatch": "tactics",
-                                "formatter": 7,
-                                "formatOptions": {
-                                  "linkTarget": "CellDetails",
-                                  "linkIsContextBlade": true
-                                }
-                              },
-                              {
-                                "columnMatch": "kind",
-                                "formatter": 18,
-                                "formatOptions": {
-                                  "thresholdsOptions": "colors",
-                                  "thresholdsGrid": [
-                                    {
-                                      "operator": "Default",
-                                      "thresholdValue": null,
-                                      "representation": "gray",
-                                      "text": "{0}{1}"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "columnMatch": "status",
-                                "formatter": 18,
-                                "formatOptions": {
-                                  "thresholdsOptions": "icons",
-                                  "thresholdsGrid": [
-                                    {
-                                      "operator": "==",
-                                      "thresholdValue": "false",
-                                      "representation": "disabled",
-                                      "text": "Disabled"
-                                    },
-                                    {
-                                      "operator": "Default",
-                                      "thresholdValue": null,
-                                      "representation": "success",
-                                      "text": "Enabled"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "columnMatch": "queryText",
-                                "formatter": 7,
-                                "formatOptions": {
-                                  "linkTarget": "CellDetails",
-                                  "linkIsContextBlade": true
-                                }
-                              },
-                              {
-                                "columnMatch": "resourcegroup",
-                                "formatter": 14,
-                                "formatOptions": {
-                                  "linkTarget": null,
-                                  "showIcon": true
-                                }
-                              }
-                            ],
-                            "filter": true
-                          },
-                          "sortBy": []
-                        },
-                        "showPin": false,
-                        "name": "query - Solutions"
-                      }
-                    ]
-                  },
-                  "conditionalVisibility": {
-                    "parameterName": "selectedTab",
-                    "comparison": "isEqualTo",
-                    "value": "content"
-                  },
-                  "name": "group - content hub"
                 }
               ]
             },
@@ -15393,11 +17470,11 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Usage // use a known table \r\n| limit 1\r\n| project a= split(trim(@\"[^\\w]+\",tostring('{countFunctions:value}')),\",\")\r\n| mv-expand a to typeof(string)\r\n| where isnotempty(a)\r\n| summarize count() by FunctionCategory=a",
+              "query": "// ARG-friendly: split a comma-separated workbook parameter and expand to rows\r\nResources\r\n| take 1\r\n| extend raw = tostring(\"{countFunctions}\")\r\n| extend items = split(raw, \",\")\r\n| mv-expand items to typeof(string)\r\n| extend FunctionCategory = trim(\" \", tostring(items))\r\n| where isnotempty(FunctionCategory)\r\n| summarize Count = count() by FunctionCategory",
               "size": 4,
-              "title": "FunctionAlias by Category",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
+              "title": "FunctionAlias by Category   ",
+              "queryType": 1,
+              "resourceType": "microsoft.resourcegraph/resources",
               "crossComponentResources": [
                 "{Workspace}"
               ],
@@ -15506,6 +17583,36 @@
               "comparison": "isNotEqualTo"
             },
             "name": "text - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Syslog\r\n  | where TimeGenerated between (ago(7d) .. now())\r\n  | summarize\r\n      Events=count(),\r\n      MissingHost=countif(isempty(Computer) and isempty(HostName)),\r\n      MissingProcess=countif(isempty(ProcessName)),\r\n      MissingFacility=countif(isempty(Facility)),\r\n      MissingSeverity=countif(isempty(SeverityLevel))\r\n    by SrcHost = coalesce(HostName, Computer, \"<unknown>\")\r\n  | where Events >= 200\r\n  | extend\r\n      MissingHostPct = todouble(MissingHost) / todouble(Events),\r\n      MissingProcessPct = todouble(MissingProcess) / todouble(Events),\r\n      MissingFacilityPct = todouble(MissingFacility) / todouble(Events),\r\n      MissingSeverityPct = todouble(MissingSeverity) / todouble(Events)\r\n  | extend WorstPct = max_of(MissingHostPct, MissingProcessPct, MissingFacilityPct, MissingSeverityPct)\r\n  | extend Status = case(WorstPct >= 0.30, \"Degraded\", WorstPct >= 0.10, \"Watch\", \"OK\")\r\n  | extend Severity = case(Status==\"Degraded\",\"High\", Status==\"Watch\",\"Medium\", \"Low\")\r\n  | project\r\n      Category=\"Parser\",\r\n      Check=\"Syslog header completeness\",\r\n      Resource=SrcHost,\r\n      Status,\r\n      Severity,\r\n      When=now(),\r\n      Metric=strcat(\"Events=\", Events,\r\n                    \"; MissingHost%=\", round(MissingHostPct*100.0, 1),\r\n                    \"; MissingProcess%=\", round(MissingProcessPct*100.0, 1),\r\n                    \"; MissingFacility%=\", round(MissingFacilityPct*100.0, 1),\r\n                    \"; MissingSeverity%=\", round(MissingSeverityPct*100.0, 1)),\r\n      Details=strcat(\"Counts: MissingHost=\", MissingHost,\r\n                     \", MissingProcess=\", MissingProcess,\r\n                     \", MissingFacility=\", MissingFacility,\r\n                     \", MissingSeverity=\", MissingSeverity),\r\n      Action=case(\r\n        Status==\"Degraded\", \"Check syslog forwarder/agent formatting; ensure RFC headers aren’t truncated and host/process fields are preserved.\",\r\n        Status==\"Watch\",    \"Spot-check forwarder configs and validate parsing after updates.\",\r\n        \"No action.\"\r\n      )",
+              "size": 0,
+              "title": "Syslog parser check",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - 5"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CommonSecurityLog\r\n  | where TimeGenerated between (ago(7d) .. now())\r\n  | summarize\r\n      Events=count(),\r\n      MissingVendor=countif(isempty(DeviceVendor)),\r\n      MissingProduct=countif(isempty(DeviceProduct)),\r\n      MissingIPs=countif(isempty(SourceIP) and isempty(DestinationIP)),\r\n      MissingAction=countif(isempty(Activity) and isempty(DeviceAction))\r\n    by DeviceVendor, DeviceProduct\r\n  | where Events >= 200\r\n  | extend\r\n      MissingVendorPct = todouble(MissingVendor) / todouble(Events),\r\n      MissingProductPct = todouble(MissingProduct) / todouble(Events),\r\n      MissingIPsPct     = todouble(MissingIPs) / todouble(Events),\r\n      MissingActionPct  = todouble(MissingAction) / todouble(Events)\r\n  | extend WorstPct = max_of(MissingVendorPct, MissingProductPct, MissingIPsPct, MissingActionPct)\r\n  | extend Status = case(WorstPct >= 0.30, \"Degraded\", WorstPct >= 0.10, \"Watch\", \"OK\")\r\n  | extend Severity = case(Status==\"Degraded\",\"High\", Status==\"Watch\",\"Medium\", \"Low\")\r\n  | project\r\n      Category=\"Parser\",\r\n      Check=\"CEF field completeness (CommonSecurityLog)\",\r\n      Resource=strcat(coalesce(DeviceVendor,\"<empty>\"), \" / \", coalesce(DeviceProduct,\"<empty>\")),\r\n      Status,\r\n      Severity,\r\n      When=now(),\r\n      Metric=strcat(\"Events=\", Events,\r\n                    \"; MissingVendor%=\", round(MissingVendorPct*100.0, 1),\r\n                    \"; MissingProduct%=\", round(MissingProductPct*100.0, 1),\r\n                    \"; MissingIPs%=\", round(MissingIPsPct*100.0, 1),\r\n                    \"; MissingAction%=\", round(MissingActionPct*100.0, 1)),\r\n      Details=strcat(\"Counts: MissingVendor=\", MissingVendor,\r\n                     \", MissingProduct=\", MissingProduct,\r\n                     \", MissingIPs=\", MissingIPs,\r\n                     \", MissingAction=\", MissingAction),\r\n      Action=case(\r\n        Status==\"Degraded\", \"Inspect raw CEF payload + parser mapping; ensure vendor/product/IP/action fields are extracted consistently.\",\r\n        Status==\"Watch\",    \"Spot-check forwarder/connector drift; validate normalization for vendor/product and IP/action mapping.\",\r\n        \"No action.\"\r\n      )",
+              "size": 0,
+              "title": "CommonSecurityLog parser check",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "name": "query - 5 - Copy"
           }
         ]
       },
