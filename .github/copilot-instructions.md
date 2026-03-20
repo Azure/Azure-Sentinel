@@ -1,5 +1,41 @@
 # GitHub Copilot Instructions for Azure-Sentinel Repository
 
+# Copilot Pull Request Review Guidelines
+
+When reviewing pull requests, follow these rules strictly.
+
+## IMPORTANT: Load Custom Instructions Based on File Type
+
+**Before reviewing any file, CHECK if it matches these patterns:**
+
+### For Solution Metadata Files (`Solutions/**/SolutionMetadata.json`)
+1. **LOAD and USE:** `.github/instructions/solution-metadata.instructions.md`
+2. Apply ALL guidelines from that file
+3. Check all validation rules, required fields, and review focus areas from that custom instruction file
+4. Do NOT use general instructions for these files - only use the solution-metadata custom instructions
+
+### For Solution Data Files (`Solutions/**/Data/Solution_*.json`)
+1. **LOAD and USE:** `.github/instructions/solution-data.instructions.md`
+2. Apply ALL guidelines from that file
+3. Check all validation rules, required fields, and review focus areas from that custom instruction file
+4. Do NOT use general instructions for these files - only use the solution-data custom instructions
+
+### For Release Notes Files (`Solutions/**/ReleaseNotes.md`)
+1. **LOAD and USE:** `.github/instructions/releasenotes.instructions.md`
+2. Apply ALL validation rules from that file (path, table structure, version format/order, DD-MM-YYYY date format)
+3. If this is the **only changed file in the PR**, still run full Release Notes validation and add findings
+4. Do NOT use generic fallback comments for these files
+
+---
+
+## Files and folders to ignore
+Do NOT review or add comments for changes in the following paths:
+
+- Solutions/**/Data Connectors/**
+- Solutions/**/Package/**
+
+If files from these paths appear in the PR, completely skip them and do not generate comments.
+
 ## Solutions Analyzer Tools
 
 When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`:
