@@ -158,7 +158,7 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 #### **query** (KQL Detection Query)
 - **Required**: Yes for `Scheduled` and `NRT` rules
 - **Required**: No for `Fusion`, `MLBehaviorAnalytics`, `MicrosoftSecurityIncidentCreation`
-- **Reference**: https://learn.microsoft.com/en-us/kusto/query/best-practices?view=microsoft-fabric
+- **Reference**: https://learn.microsoft.com/kusto/query/best-practices
 - **Rules**:
   - Must be valid KQL syntax
   - Should include filtering for performance
@@ -172,7 +172,7 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
   - **Avoid common mistakes**: Don't use wildcard `*` for full table scans; don't use `tolower()` on large datasets (use `=~` instead); don't create redundant columns for filtering
   - **Use materialization wisely**: Use `materialize()` for `let` statements referenced multiple times; extract fields from dynamic objects at ingestion time if querying millions of rows
   - **Limit unbounded queries**: Always use `limit [small number]` or `count` during development to avoid processing gigabytes of unexpected data
-  - **Refer to complete guide**: https://learn.microsoft.com/en-us/kusto/query/best-practices?view=microsoft-fabric
+  - **Refer to complete guide**: https://learn.microsoft.com/kusto/query/best-practices
 
 #### **queryFrequency** (Execution Frequency)
 - **Required**: Yes for `Scheduled` rules only
@@ -834,7 +834,7 @@ query: |
       | where TimeGenerated >= ago(30d)
       | where Active == true
       | where NetworkIP != ""
-      | project NetworkIP, ThreetType, Description;
+      | project NetworkIP, ThreatType, Description;
   
   CommonSecurityLog
   | join kind=inner TI_Indicators on $left.DestinationIP == $right.NetworkIP
