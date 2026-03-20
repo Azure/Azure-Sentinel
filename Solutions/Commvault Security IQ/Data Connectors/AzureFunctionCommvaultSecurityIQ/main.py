@@ -194,6 +194,8 @@ def gen_chunks(data: list[dict[str, Any]], logs_client: LogsIngestionClient):
         "7:349",
         "17:193",
         "17:195",
+        "69:65",
+        "69:66",
     }
 
     if showAllEvents == "true":
