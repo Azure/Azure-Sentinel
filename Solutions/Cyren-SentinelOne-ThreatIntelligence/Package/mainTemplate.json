@@ -36,9 +36,11 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "data443riskmitigationinc1761580347231.azure-sentinel-solution-cyren-s1-ioc-automation",
     "_solutionId": "[variables('solutionId')]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
     "blanks": "[replace('b', 'b', '')]",
-    "playbookVersion1": "1.0",
-    "playbookContentId1": "CyrenToSentinelOne",
+    "playbookVersion1": "1.0.0",
+    "playbookContentId1": "Playbooks",
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
@@ -56,7 +58,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CyrenToSentinelOne Playbook with template version 3.0.0",
+        "description": "Playbooks Playbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -69,15 +71,14 @@
               "type": "securestring",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. JWT Bearer Token for the Cyren CCF feed. Leave empty if not purchased. Get a trial: IP Reputation \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-ip-reputation-feed?tab=Overview | Malware URL \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-malware-urls-feed?tab=Overview"
-              },
-              "minLength": 0
+                "description": "Cyren CCF JWT Bearer Token for API authentication"
+              }
             },
             "Cyren_FeedId": {
               "type": "string",
-              "defaultValue": "",
+              "defaultValue": "ip_reputation",
               "metadata": {
-                "description": "Required. Enter exactly 'ip_reputation' if you purchased the IP Reputation feed, or 'malware_urls' if you purchased the Malware URL feed. Must match your Cyren subscription."
+                "description": "Cyren CCF Feed ID (e.g. ip_reputation, malware_urls)"
               }
             },
             "SentinelOne_ApiToken": {
@@ -89,9 +90,9 @@
             },
             "SentinelOne_BaseUrl": {
               "type": "string",
-              "defaultValue": "https://usea1-001.sentinelone.net",
+              "defaultValue": "",
               "metadata": {
-                "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
+                "description": "Your SentinelOne console URL (e.g. https://usea1-021.sentinelone.net). Log in to SentinelOne and copy the URL from your browser address bar."
               }
             },
             "SentinelOne_AccountId": {
@@ -100,10 +101,16 @@
               "metadata": {
                 "description": "SentinelOne Account ID"
               }
+            },
+            "workspace": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace name for Log Analytics"
+              }
             }
           },
           "variables": {
-            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name')]",
+            "workspaceResourceId": "[[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]"
           },
@@ -115,7 +122,7 @@
               "location": "[[variables('workspace-location-inline')]",
               "tags": {
                 "hidden-SentinelTemplateName": "CyrenToSentinelOne",
-                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelTemplateVersion": "1.0.0",
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
               },
               "properties": {
@@ -155,7 +162,7 @@
                     },
                     "SentinelOne_BaseUrl": {
                       "type": "string",
-                      "defaultValue": "https://usea1-001.sentinelone.net"
+                      "defaultValue": ""
                     },
                     "SentinelOne_ApiToken": {
                       "type": "string",
@@ -330,59 +337,34 @@
                                 }
                               },
                               "actions": {
-                                "Check_LastSeen_Recent": {
-                                  "type": "If",
-                                  "expression": {
-                                    "or": [
-                                      {
-                                        "equals": [
-                                          "@coalesce(item()?['last_seen'], '')",
-                                          ""
+                                "Post_IOC_to_SentinelOne": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "POST",
+                                    "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                                    },
+                                    "body": {
+                                      "filter": {
+                                        "accountIds": [
+                                          "@{parameters('SentinelOne_AccountId')}"
                                         ]
                                       },
-                                      {
-                                        "greaterOrEquals": [
-                                          "@coalesce(item()?['last_seen'], utcNow())",
-                                          "@addDays(utcNow(), -2)"
-                                        ]
-                                      }
-                                    ]
-                                  },
-                                  "actions": {
-                                    "Post_IOC_to_SentinelOne": {
-                                      "type": "Http",
-                                      "inputs": {
-                                        "method": "POST",
-                                        "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
-                                        "headers": {
-                                          "Content-Type": "application/json",
-                                          "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
-                                        },
-                                        "body": {
-                                          "filter": {
-                                            "accountIds": [
-                                              "@{parameters('SentinelOne_AccountId')}"
-                                            ]
-                                          },
-                                          "data": [
-                                            {
-                                              "value": "@{if(equals(parameters('Cyren_FeedId'), 'malware_urls'), coalesce(item()?['url'], item()?['identifier']), item()?['identifier'])}",
-                                              "type": "@{if(equals(parameters('Cyren_FeedId'), 'malware_urls'), 'URL', 'IPV4')}",
-                                              "source": "Cyren",
-                                              "method": "EQUALS",
-                                              "validUntil": "@{addDays(utcNow(), 90)}",
-                                              "externalId": "@{concat('cyren-', parameters('Cyren_FeedId'), '-', coalesce(item()?['identifier'], 'unknown'))}",
-                                              "description": "@{concat('Cyren ', parameters('Cyren_FeedId'), ': Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
-                                            }
-                                          ]
+                                      "data": [
+                                        {
+                                          "value": "@{item()?['identifier']}",
+                                          "type": "IPV4",
+                                          "source": "Cyren",
+                                          "method": "EQUALS",
+                                          "validUntil": "@{addDays(utcNow(), 90)}",
+                                          "externalId": "@{concat('cyren-', parameters('Cyren_FeedId'), '-', coalesce(item()?['identifier'], 'unknown'))}",
+                                          "description": "@{concat('Cyren ', parameters('Cyren_FeedId'), ': Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
                                         }
-                                      }
+                                      ]
                                     }
-                                  },
-                                  "else": {
-                                    "actions": {}
-                                  },
-                                  "runAfter": {}
+                                  }
                                 }
                               }
                             },
@@ -472,15 +454,14 @@
                     }
                   }
                 }
-              },
-              "condition": "[[not(empty(parameters('Cyren_JwtToken')))]"
+              }
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
               "properties": {
-                "parentId": "[[variables('playbookId1')]]",
+                "parentId": "[variables('playbookId1')]",
                 "contentId": "[variables('_playbookContentId1')]",
                 "kind": "Playbook",
                 "version": "[variables('playbookVersion1')]",
@@ -510,7 +491,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_playbookContentId1')]",
         "contentKind": "Playbook",
-        "displayName": "CyrenToSentinelOne",
+        "displayName": "Playbooks",
         "contentProductId": "[variables('_playbookcontentProductId1')]",
         "id": "[variables('_playbookcontentProductId1')]",
         "version": "[variables('playbookVersion1')]"
@@ -553,7 +534,7 @@
           "criteria": [
             {
               "kind": "Playbook",
-              "contentId": "[variables('_playbookContentId1')]",
+              "contentId": "[variables('_Playbooks')]",
               "version": "[variables('playbookVersion1')]"
             }
           ]
