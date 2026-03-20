@@ -338,7 +338,7 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 - **Rules**:
   - Column name must be an output from the query
   - Enables faster triaging, investigation, and response
-  - More info: [Surface Custom Details in Alerts](https://docs.microsoft.com/en-us/azure/sentinel/surface-custom-details-in-alerts)
+  - More info: [Surface Custom Details in Alerts](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts)
 
 #### **alertDetailsOverride** (Optional)
 - **Optional**: Yes
