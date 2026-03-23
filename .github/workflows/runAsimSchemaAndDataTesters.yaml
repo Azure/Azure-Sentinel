@@ -7,19 +7,19 @@ on:
     branches:
       - master
     paths:
-    - 'Parsers/ASimDns/Parsers/**'
-    - 'Parsers/ASimNetworkSession/Parsers/**'
-    - 'Parsers/ASimWebSession/Parsers/**'
-    - 'Parsers/ASimProcessEvent/Parsers/**'
-    - 'Parsers/ASimAuditEvent/Parsers/**'
-    - 'Parsers/ASimAuthentication/Parsers/**'
-    - 'Parsers/ASimFileEvent/Parsers/**'
-    - 'Parsers/ASimRegistryEvent/Parsers/**'
-    - 'Parsers/ASimUserManagement/Parsers/**'
-    - 'Parsers/ASimDhcpEvent/Parsers/**'
-    - 'Parsers/ASimAlertEvent/Parsers/**'
-    - 'Parsers/ASimAssetEntity/Parsers/**'
-    
+      - "Parsers/ASimDns/Parsers/**"
+      - "Parsers/ASimNetworkSession/Parsers/**"
+      - "Parsers/ASimWebSession/Parsers/**"
+      - "Parsers/ASimProcessEvent/Parsers/**"
+      - "Parsers/ASimAuditEvent/Parsers/**"
+      - "Parsers/ASimAuthentication/Parsers/**"
+      - "Parsers/ASimFileEvent/Parsers/**"
+      - "Parsers/ASimRegistryEvent/Parsers/**"
+      - "Parsers/ASimUserManagement/Parsers/**"
+      - "Parsers/ASimDhcpEvent/Parsers/**"
+      - "Parsers/ASimAlertEvent/Parsers/**"
+      - "Parsers/ASimAssetEntity/Parsers/**"
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -27,16 +27,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: asim-tests-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  # group: asim-tests-${{ github.event.pull_request.number || github.sha }}
+  # cancel-in-progress: true
+  group: >-
+    asim-tests-${{ github.event.pull_request.head.repo.fork
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event.pull_request.head.repo.fork }}
 
-jobs: 
+jobs:
   # Security gate: Fork PRs require manual approval via "SafeToRun" label
   # Internal PRs (same repo) can proceed without labels
   security-gate:
     name: Security approval gate for fork PRs
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
@@ -58,13 +63,13 @@ jobs:
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
-          
+
           log_info "Starting PR approval check..."
-          
+
           # Check if this is a fork PR
           is_fork="${{ github.event.pull_request.head.repo.fork }}"
           log_info "Fork PR: $is_fork"
-          
+
           if [ "$is_fork" = "true" ]; then
             log_info "FORK PR DETECTED - Proceeding with security checks"
             
@@ -135,7 +140,7 @@ jobs:
             echo "$modified_files" | grep "\.script/tests/asimParsersTest/" | sed 's/^/  - /'
             exit 1
           fi
-          
+
           log_success "No modifications to asimParsersTest folder detected"
 
       - name: Comment on fork PR for approval guidance
@@ -151,9 +156,9 @@ jobs:
               const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
               console.log(`${icons[level] || 'ℹ️'} ${message}`);
             };
-            
+
             log('info', 'Comment step triggered for fork PR approval guidance');
-            
+
             try {
               // Fetch existing comments
               const { data: comments } = await github.rest.issues.listComments({
@@ -239,46 +244,46 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@v3
         with:
-            ref: ${{github.event.pull_request.head.sha}}
-            repository: ${{github.event.pull_request.head.repo.full_name}}
-            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+          ref: ${{github.event.pull_request.head.sha}}
+          repository: ${{github.event.pull_request.head.repo.full_name}}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
-              git merge origin/master
-              Conflicts=$(git ls-files -u | wc -l)
-              if [ "$Conflicts" -gt 0 ] ; then
-                echo "There is a merge conflict. Aborting"
-                git merge --abort
-                exit 1
-              fi
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install requests
-              pip install PyYAML
-              pip install tabulate
+          python -m pip install --upgrade pip
+          pip install requests
+          pip install PyYAML
+          pip install tabulate
       - name: Run ASim parsers template validations python script
         run: |
-              filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              # Execute the script
-              python "$filePath" 
+          filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
+          # Check if file exists and delete if it does
+          if [ -f "$filePath" ]; then
+            rm -f "$filePath"
+          fi
+          # Download the file
+          echo "Downloading script from the master: $url"
+          curl -o "$filePath" "$url"
+          # Execute the script
+          python "$filePath"
   Run-ASim-Sample-Data-Ingest:
     needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
@@ -290,37 +295,37 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@v4
         with:
-            ref: ${{github.event.pull_request.head.sha}}
-            repository: ${{github.event.pull_request.head.repo.full_name}}
-            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+          ref: ${{github.event.pull_request.head.sha}}
+          repository: ${{github.event.pull_request.head.repo.full_name}}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
-              git merge origin/master
-              Conflicts=$(git ls-files -u | wc -l)
-              if [ "$Conflicts" -gt 0 ] ; then
-                echo "There is a merge conflict. Aborting"
-                git merge --abort
-                exit 1
-              fi
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install azure-identity
-              pip install requests
-              pip install PyYAML
-              pip install azure-monitor-ingestion
-              pip install azure-core
+          python -m pip install --upgrade pip
+          pip install azure-identity
+          pip install requests
+          pip install PyYAML
+          pip install azure-monitor-ingestion
+          pip install azure-core
       - name: Login to Azure Public Cloud
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -328,18 +333,18 @@ jobs:
       - name: Asim Sample Log Ingestion
         id: Ingestlogs
         run: |
-              filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              chmod +x "$filePath"
-              # Execute the script
-              python "$filePath" "${{ github.event.pull_request.number }}"
+          filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
+          # Check if file exists and delete if it does
+          if [ -f "$filePath" ]; then
+            rm -f "$filePath"
+          fi
+          # Download the file
+          echo "Downloading script from the master: $url"
+          curl -o "$filePath" "$url"
+          chmod +x "$filePath"
+          # Execute the script
+          python "$filePath" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
@@ -355,9 +360,9 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           persist-credentials: false
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-      
+
       - name: Login to Azure Public Cloud with AzPowershell
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -379,7 +384,7 @@ jobs:
             exit 1
           fi
       - name: Run ASIM Schema and Data tests PowerShell script
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
         with:
           inlineScript: |
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
@@ -421,8 +426,8 @@ jobs:
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
           git merge origin/master
@@ -435,15 +440,15 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install PyYAML
-              pip install azure-identity
-              pip install azure-monitor-query
+          python -m pip install --upgrade pip
+          pip install PyYAML
+          pip install azure-identity
+          pip install azure-monitor-query
       - name: Login to Azure Public Cloud
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
