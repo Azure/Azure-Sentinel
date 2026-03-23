@@ -76,9 +76,9 @@
         },
         "CrowdStrike_BaseUrl": {
             "type": "string",
-            "defaultValue": "https://api.crowdstrike.com",
+            "defaultValue": "",
             "metadata": {
-                "description": "CrowdStrike API Base URL (e.g. https://api.crowdstrike.com or https://api.us-2.crowdstrike.com)"
+                "description": "CrowdStrike API Base URL (e.g. https://api.crowdstrike.com or https://api.us-2.crowdstrike.com). Check your CrowdStrike region."
             }
         },
         "workspace": {
@@ -139,7 +139,7 @@
                         },
                         "CrowdStrike_BaseUrl": {
                             "type": "string",
-                            "defaultValue": "https://api.crowdstrike.com"
+                            "defaultValue": ""
                         },
                         "CrowdStrike_ClientId": {
                             "type": "string",
@@ -164,29 +164,65 @@
                         "Initialize_IpRep_PersistentToken": {
                             "type": "InitializeVariable",
                             "inputs": {
-                                "variables": [{ "name": "ipRepPersistentToken", "type": "string", "value": "" }]
+                                "variables": [
+                                    {
+                                        "name": "ipRepPersistentToken",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
                             },
                             "runAfter": {}
                         },
                         "Initialize_MalwareUrl_PersistentToken": {
                             "type": "InitializeVariable",
-                            "runAfter": { "Initialize_IpRep_PersistentToken": ["Succeeded"] },
+                            "runAfter": {
+                                "Initialize_IpRep_PersistentToken": [
+                                    "Succeeded"
+                                ]
+                            },
                             "inputs": {
-                                "variables": [{ "name": "malwareUrlPersistentToken", "type": "string", "value": "" }]
+                                "variables": [
+                                    {
+                                        "name": "malwareUrlPersistentToken",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
                             }
                         },
                         "Initialize_IpRep_ContinuePolling": {
                             "type": "InitializeVariable",
-                            "runAfter": { "Initialize_MalwareUrl_PersistentToken": ["Succeeded"] },
+                            "runAfter": {
+                                "Initialize_MalwareUrl_PersistentToken": [
+                                    "Succeeded"
+                                ]
+                            },
                             "inputs": {
-                                "variables": [{ "name": "ipRepContinuePolling", "type": "boolean", "value": true }]
+                                "variables": [
+                                    {
+                                        "name": "ipRepContinuePolling",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
                             }
                         },
                         "Initialize_MalwareUrl_ContinuePolling": {
                             "type": "InitializeVariable",
-                            "runAfter": { "Initialize_IpRep_ContinuePolling": ["Succeeded"] },
+                            "runAfter": {
+                                "Initialize_IpRep_ContinuePolling": [
+                                    "Succeeded"
+                                ]
+                            },
                             "inputs": {
-                                "variables": [{ "name": "malwareUrlContinuePolling", "type": "boolean", "value": true }]
+                                "variables": [
+                                    {
+                                        "name": "malwareUrlContinuePolling",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
                             }
                         },
                         "Get_CrowdStrike_Token": {
@@ -200,19 +236,39 @@
                                 },
                                 "body": "client_id=@{parameters('CrowdStrike_ClientId')}&client_secret=@{parameters('CrowdStrike_ClientSecret')}"
                             },
-                            "runAfter": { "Initialize_MalwareUrl_ContinuePolling": ["Succeeded"] }
+                            "runAfter": {
+                                "Initialize_MalwareUrl_ContinuePolling": [
+                                    "Succeeded"
+                                ]
+                            }
                         },
                         "Scope_IpReputation_Feed": {
                             "type": "If",
-                            "runAfter": { "Get_CrowdStrike_Token": ["Succeeded"] },
+                            "runAfter": {
+                                "Get_CrowdStrike_Token": [
+                                    "Succeeded"
+                                ]
+                            },
                             "expression": {
-                                "and": [{ "not": { "equals": ["@parameters('Cyren_IpReputation_JwtToken')", ""] } }]
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@parameters('Cyren_IpReputation_JwtToken')",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
                             },
                             "actions": {
                                 "Poll_IpRep_Cyren_Feed": {
                                     "type": "Until",
                                     "expression": "@equals(variables('ipRepContinuePolling'), false)",
-                                    "limit": { "count": 10, "timeout": "PT1H" },
+                                    "limit": {
+                                        "count": 10,
+                                        "timeout": "PT1H"
+                                    },
                                     "actions": {
                                         "Build_IpRep_Cyren_Url": {
                                             "type": "Compose",
@@ -220,7 +276,11 @@
                                         },
                                         "Get_IpRep_Indicators": {
                                             "type": "Http",
-                                            "runAfter": { "Build_IpRep_Cyren_Url": ["Succeeded"] },
+                                            "runAfter": {
+                                                "Build_IpRep_Cyren_Url": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "inputs": {
                                                 "method": "GET",
                                                 "uri": "@{outputs('Build_IpRep_Cyren_Url')}",
@@ -233,7 +293,11 @@
                                         "Split_IpRep_NDJSON": {
                                             "type": "Compose",
                                             "inputs": "@split(trim(string(body('Get_IpRep_Indicators'))), decodeUriComponent('%0A'))",
-                                            "runAfter": { "Get_IpRep_Indicators": ["Succeeded"] }
+                                            "runAfter": {
+                                                "Get_IpRep_Indicators": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         },
                                         "Filter_IpRep_Empty_Lines": {
                                             "type": "Query",
@@ -241,24 +305,55 @@
                                                 "from": "@outputs('Split_IpRep_NDJSON')",
                                                 "where": "@not(equals(trim(item()), ''))"
                                             },
-                                            "runAfter": { "Split_IpRep_NDJSON": ["Succeeded"] }
+                                            "runAfter": {
+                                                "Split_IpRep_NDJSON": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         },
                                         "Check_IpRep_Has_Data": {
                                             "type": "If",
-                                            "expression": { "and": [{ "greater": ["@length(body('Filter_IpRep_Empty_Lines'))", 0] }] },
-                                            "runAfter": { "Filter_IpRep_Empty_Lines": ["Succeeded"] },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_IpRep_Empty_Lines'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Filter_IpRep_Empty_Lines": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "actions": {
                                                 "For_Each_IpRep_Indicator": {
                                                     "type": "Foreach",
                                                     "foreach": "@body('Filter_IpRep_Empty_Lines')",
-                                                    "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    },
                                                     "actions": {
                                                         "Check_IpRep_LastSeen_Recent": {
                                                             "type": "If",
                                                             "expression": {
                                                                 "or": [
-                                                                    { "equals": ["@coalesce(item()?['last_seen'], '')", ""] },
-                                                                    { "greaterOrEquals": ["@coalesce(item()?['last_seen'], utcNow())", "@addDays(utcNow(), -2)"] }
+                                                                    {
+                                                                        "equals": [
+                                                                            "@coalesce(item()?['last_seen'], '')",
+                                                                            ""
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "greaterOrEquals": [
+                                                                            "@coalesce(item()?['last_seen'], utcNow())",
+                                                                            "@addDays(utcNow(), -2)"
+                                                                        ]
+                                                                    }
                                                                 ]
                                                             },
                                                             "actions": {
@@ -273,18 +368,27 @@
                                                                             "User-Agent": "data443-cyren-crowdstrike/1.0"
                                                                         },
                                                                         "body": {
-                                                                            "indicators": [{
-                                                                                "type": "ipv4",
-                                                                                "value": "@{item()?['identifier']}",
-                                                                                "action": "detect",
-                                                                                "severity": "medium",
-                                                                                "source": "Cyren Threat Intelligence",
-                                                                                "description": "Cyren ip_reputation | Risk: @{coalesce(item()?['detection']?['risk'], 'N/A')} | Last Seen: @{coalesce(item()?['last_seen'], 'N/A')}",
-                                                                                "expiration": "@{addDays(utcNow(), 30)}",
-                                                                                "platforms": ["windows", "mac", "linux"],
-                                                                                "tags": ["cyren", "ip_reputation"],
-                                                                                "applied_globally": true
-                                                                            }]
+                                                                            "indicators": [
+                                                                                {
+                                                                                    "type": "ipv4",
+                                                                                    "value": "@{item()?['identifier']}",
+                                                                                    "action": "detect",
+                                                                                    "severity": "medium",
+                                                                                    "source": "Cyren Threat Intelligence",
+                                                                                    "description": "Cyren ip_reputation | Risk: @{coalesce(item()?['detection']?['risk'], 'N/A')} | Last Seen: @{coalesce(item()?['last_seen'], 'N/A')}",
+                                                                                    "expiration": "@{addDays(utcNow(), 30)}",
+                                                                                    "platforms": [
+                                                                                        "windows",
+                                                                                        "mac",
+                                                                                        "linux"
+                                                                                    ],
+                                                                                    "tags": [
+                                                                                        "cyren",
+                                                                                        "ip_reputation"
+                                                                                    ],
+                                                                                    "applied_globally": true
+                                                                                }
+                                                                            ]
                                                                         }
                                                                     }
                                                                 }
@@ -297,15 +401,31 @@
                                                 "actions": {
                                                     "No_IpRep_Data_Stop": {
                                                         "type": "SetVariable",
-                                                        "inputs": { "name": "ipRepContinuePolling", "value": false }
+                                                        "inputs": {
+                                                            "name": "ipRepContinuePolling",
+                                                            "value": false
+                                                        }
                                                     }
                                                 }
                                             }
                                         },
                                         "Check_IpRep_Pagination": {
                                             "type": "If",
-                                            "expression": { "and": [{ "less": ["@length(body('Filter_IpRep_Empty_Lines'))", 1000] }] },
-                                            "runAfter": { "Check_IpRep_Has_Data": ["Succeeded"] },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "less": [
+                                                            "@length(body('Filter_IpRep_Empty_Lines'))",
+                                                            1000
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Check_IpRep_Has_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "actions": {
                                                 "Extract_IpRep_Last_Offset": {
                                                     "type": "Compose",
@@ -314,15 +434,25 @@
                                                 },
                                                 "Update_IpRep_PersistentToken": {
                                                     "type": "SetVariable",
-                                                    "runAfter": { "Extract_IpRep_Last_Offset": ["Succeeded"] },
-                                                    "inputs": { "name": "ipRepPersistentToken", "value": "@{outputs('Extract_IpRep_Last_Offset')}" }
+                                                    "runAfter": {
+                                                        "Extract_IpRep_Last_Offset": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "inputs": {
+                                                        "name": "ipRepPersistentToken",
+                                                        "value": "@{outputs('Extract_IpRep_Last_Offset')}"
+                                                    }
                                                 }
                                             },
                                             "else": {
                                                 "actions": {
                                                     "Stop_IpRep_Polling": {
                                                         "type": "SetVariable",
-                                                        "inputs": { "name": "ipRepContinuePolling", "value": false }
+                                                        "inputs": {
+                                                            "name": "ipRepContinuePolling",
+                                                            "value": false
+                                                        }
                                                     }
                                                 }
                                             }
@@ -333,15 +463,31 @@
                         },
                         "Scope_MalwareUrl_Feed": {
                             "type": "If",
-                            "runAfter": { "Scope_IpReputation_Feed": ["Succeeded"] },
+                            "runAfter": {
+                                "Scope_IpReputation_Feed": [
+                                    "Succeeded"
+                                ]
+                            },
                             "expression": {
-                                "and": [{ "not": { "equals": ["@parameters('Cyren_MalwareUrl_JwtToken')", ""] } }]
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@parameters('Cyren_MalwareUrl_JwtToken')",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
                             },
                             "actions": {
                                 "Poll_MalwareUrl_Cyren_Feed": {
                                     "type": "Until",
                                     "expression": "@equals(variables('malwareUrlContinuePolling'), false)",
-                                    "limit": { "count": 10, "timeout": "PT1H" },
+                                    "limit": {
+                                        "count": 10,
+                                        "timeout": "PT1H"
+                                    },
                                     "actions": {
                                         "Build_MalwareUrl_Cyren_Url": {
                                             "type": "Compose",
@@ -349,7 +495,11 @@
                                         },
                                         "Get_MalwareUrl_Indicators": {
                                             "type": "Http",
-                                            "runAfter": { "Build_MalwareUrl_Cyren_Url": ["Succeeded"] },
+                                            "runAfter": {
+                                                "Build_MalwareUrl_Cyren_Url": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "inputs": {
                                                 "method": "GET",
                                                 "uri": "@{outputs('Build_MalwareUrl_Cyren_Url')}",
@@ -362,7 +512,11 @@
                                         "Split_MalwareUrl_NDJSON": {
                                             "type": "Compose",
                                             "inputs": "@split(trim(string(body('Get_MalwareUrl_Indicators'))), decodeUriComponent('%0A'))",
-                                            "runAfter": { "Get_MalwareUrl_Indicators": ["Succeeded"] }
+                                            "runAfter": {
+                                                "Get_MalwareUrl_Indicators": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         },
                                         "Filter_MalwareUrl_Empty_Lines": {
                                             "type": "Query",
@@ -370,24 +524,55 @@
                                                 "from": "@outputs('Split_MalwareUrl_NDJSON')",
                                                 "where": "@not(equals(trim(item()), ''))"
                                             },
-                                            "runAfter": { "Split_MalwareUrl_NDJSON": ["Succeeded"] }
+                                            "runAfter": {
+                                                "Split_MalwareUrl_NDJSON": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         },
                                         "Check_MalwareUrl_Has_Data": {
                                             "type": "If",
-                                            "expression": { "and": [{ "greater": ["@length(body('Filter_MalwareUrl_Empty_Lines'))", 0] }] },
-                                            "runAfter": { "Filter_MalwareUrl_Empty_Lines": ["Succeeded"] },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_MalwareUrl_Empty_Lines'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Filter_MalwareUrl_Empty_Lines": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "actions": {
                                                 "For_Each_MalwareUrl_Indicator": {
                                                     "type": "Foreach",
                                                     "foreach": "@body('Filter_MalwareUrl_Empty_Lines')",
-                                                    "runtimeConfiguration": { "concurrency": { "repetitions": 1 } },
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    },
                                                     "actions": {
                                                         "Check_MalwareUrl_LastSeen_Recent": {
                                                             "type": "If",
                                                             "expression": {
                                                                 "or": [
-                                                                    { "equals": ["@coalesce(item()?['last_seen'], '')", ""] },
-                                                                    { "greaterOrEquals": ["@coalesce(item()?['last_seen'], utcNow())", "@addDays(utcNow(), -2)"] }
+                                                                    {
+                                                                        "equals": [
+                                                                            "@coalesce(item()?['last_seen'], '')",
+                                                                            ""
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "greaterOrEquals": [
+                                                                            "@coalesce(item()?['last_seen'], utcNow())",
+                                                                            "@addDays(utcNow(), -2)"
+                                                                        ]
+                                                                    }
                                                                 ]
                                                             },
                                                             "actions": {
@@ -402,18 +587,27 @@
                                                                             "User-Agent": "data443-cyren-crowdstrike/1.0"
                                                                         },
                                                                         "body": {
-                                                                            "indicators": [{
-                                                                                "type": "domain",
-                                                                                "value": "@{coalesce(item()?['url'], item()?['identifier'])}",
-                                                                                "action": "detect",
-                                                                                "severity": "medium",
-                                                                                "source": "Cyren Threat Intelligence",
-                                                                                "description": "Cyren malware_urls | Risk: @{coalesce(item()?['detection']?['risk'], 'N/A')} | Last Seen: @{coalesce(item()?['last_seen'], 'N/A')}",
-                                                                                "expiration": "@{addDays(utcNow(), 30)}",
-                                                                                "platforms": ["windows", "mac", "linux"],
-                                                                                "tags": ["cyren", "malware_urls"],
-                                                                                "applied_globally": true
-                                                                            }]
+                                                                            "indicators": [
+                                                                                {
+                                                                                    "type": "domain",
+                                                                                    "value": "@{coalesce(item()?['url'], item()?['identifier'])}",
+                                                                                    "action": "detect",
+                                                                                    "severity": "medium",
+                                                                                    "source": "Cyren Threat Intelligence",
+                                                                                    "description": "Cyren malware_urls | Risk: @{coalesce(item()?['detection']?['risk'], 'N/A')} | Last Seen: @{coalesce(item()?['last_seen'], 'N/A')}",
+                                                                                    "expiration": "@{addDays(utcNow(), 30)}",
+                                                                                    "platforms": [
+                                                                                        "windows",
+                                                                                        "mac",
+                                                                                        "linux"
+                                                                                    ],
+                                                                                    "tags": [
+                                                                                        "cyren",
+                                                                                        "malware_urls"
+                                                                                    ],
+                                                                                    "applied_globally": true
+                                                                                }
+                                                                            ]
                                                                         }
                                                                     }
                                                                 }
@@ -426,15 +620,31 @@
                                                 "actions": {
                                                     "No_MalwareUrl_Data_Stop": {
                                                         "type": "SetVariable",
-                                                        "inputs": { "name": "malwareUrlContinuePolling", "value": false }
+                                                        "inputs": {
+                                                            "name": "malwareUrlContinuePolling",
+                                                            "value": false
+                                                        }
                                                     }
                                                 }
                                             }
                                         },
                                         "Check_MalwareUrl_Pagination": {
                                             "type": "If",
-                                            "expression": { "and": [{ "less": ["@length(body('Filter_MalwareUrl_Empty_Lines'))", 1000] }] },
-                                            "runAfter": { "Check_MalwareUrl_Has_Data": ["Succeeded"] },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "less": [
+                                                            "@length(body('Filter_MalwareUrl_Empty_Lines'))",
+                                                            1000
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Check_MalwareUrl_Has_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
                                             "actions": {
                                                 "Extract_MalwareUrl_Last_Offset": {
                                                     "type": "Compose",
@@ -443,15 +653,25 @@
                                                 },
                                                 "Update_MalwareUrl_PersistentToken": {
                                                     "type": "SetVariable",
-                                                    "runAfter": { "Extract_MalwareUrl_Last_Offset": ["Succeeded"] },
-                                                    "inputs": { "name": "malwareUrlPersistentToken", "value": "@{outputs('Extract_MalwareUrl_Last_Offset')}" }
+                                                    "runAfter": {
+                                                        "Extract_MalwareUrl_Last_Offset": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "inputs": {
+                                                        "name": "malwareUrlPersistentToken",
+                                                        "value": "@{outputs('Extract_MalwareUrl_Last_Offset')}"
+                                                    }
                                                 }
                                             },
                                             "else": {
                                                 "actions": {
                                                     "Stop_MalwareUrl_Polling": {
                                                         "type": "SetVariable",
-                                                        "inputs": { "name": "malwareUrlContinuePolling", "value": false }
+                                                        "inputs": {
+                                                            "name": "malwareUrlContinuePolling",
+                                                            "value": false
+                                                        }
                                                     }
                                                 }
                                             }
