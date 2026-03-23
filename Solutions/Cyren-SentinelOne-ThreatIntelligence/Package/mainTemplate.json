@@ -36,9 +36,11 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "data443riskmitigationinc1761580347231.azure-sentinel-solution-cyren-s1-ioc-automation",
     "_solutionId": "[variables('solutionId')]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
     "blanks": "[replace('b', 'b', '')]",
-    "playbookVersion1": "1.0",
-    "playbookContentId1": "CyrenToSentinelOne",
+    "playbookVersion1": "1.0.0",
+    "playbookContentId1": "Playbooks",
     "_playbookContentId1": "[variables('playbookContentId1')]",
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
@@ -56,12 +58,12 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CyrenToSentinelOne Playbook with template version 3.0.0",
+        "description": "pb-cyren-to-sentinelone Playbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
           "parameters": {
-            "logicAppName": {
+            "PlaybookName": {
               "type": "string",
               "defaultValue": "pb-cyren-to-sentinelone"
             },
@@ -69,15 +71,14 @@
               "type": "securestring",
               "defaultValue": "",
               "metadata": {
-                "description": "Optional. JWT Bearer Token for the Cyren CCF feed. Leave empty if not purchased. Get a trial: IP Reputation \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-ip-reputation-feed?tab=Overview | Malware URL \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-malware-urls-feed?tab=Overview"
-              },
-              "minLength": 0
+                "description": "Cyren CCF JWT Bearer Token for API authentication"
+              }
             },
             "Cyren_FeedId": {
               "type": "string",
-              "defaultValue": "",
+              "defaultValue": "ip_reputation",
               "metadata": {
-                "description": "Required. Enter exactly 'ip_reputation' if you purchased the IP Reputation feed, or 'malware_urls' if you purchased the Malware URL feed. Must match your Cyren subscription."
+                "description": "Cyren CCF Feed ID (e.g. ip_reputation, malware_urls)"
               }
             },
             "SentinelOne_ApiToken": {
@@ -89,9 +90,9 @@
             },
             "SentinelOne_BaseUrl": {
               "type": "string",
-              "defaultValue": "https://usea1-001.sentinelone.net",
+              "defaultValue": "",
               "metadata": {
-                "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
+                "description": "Your SentinelOne console URL (e.g. https://usea1-021.sentinelone.net). Log in to SentinelOne and copy the URL from your browser address bar."
               }
             },
             "SentinelOne_AccountId": {
@@ -100,10 +101,16 @@
               "metadata": {
                 "description": "SentinelOne Account ID"
               }
+            },
+            "workspace": {
+              "type": "string",
+              "metadata": {
+                "description": "Workspace name for Log Analytics"
+              }
             }
           },
           "variables": {
-            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name')]",
+            "workspaceResourceId": "[[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]"
           },
@@ -111,11 +118,11 @@
             {
               "type": "Microsoft.Logic/workflows",
               "apiVersion": "2019-05-01",
-              "name": "[[parameters('logicAppName')]",
+              "name": "[[parameters('PlaybookName')]",
               "location": "[[variables('workspace-location-inline')]",
               "tags": {
                 "hidden-SentinelTemplateName": "CyrenToSentinelOne",
-                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelTemplateVersion": "1.0.0",
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
               },
               "properties": {
@@ -155,7 +162,7 @@
                     },
                     "SentinelOne_BaseUrl": {
                       "type": "string",
-                      "defaultValue": "https://usea1-001.sentinelone.net"
+                      "defaultValue": "[variables('blanks')]"
                     },
                     "SentinelOne_ApiToken": {
                       "type": "string",
@@ -284,7 +291,7 @@
                       "actions": {
                         "Build_Cyren_Api_Url": {
                           "type": "Compose",
-                          "inputs": "@{concat(parameters('Cyren_ApiUrl'), '?feedId=', encodeUriComponent(parameters('Cyren_FeedId')), '&count=1000&queryWindowInMin=360', if(equals(variables('persistentToken'), ''), '', concat('&token=', encodeUriComponent(variables('persistentToken')))))}"
+                          "inputs": "@{concat(parameters('Cyren_ApiUrl'), '?feedId=', encodeUriComponent(parameters('Cyren_FeedId')), '&count=1000&queryWindowInMin=360', if(equals(variables('persistentToken'), ''), '', uriComponentToString(uri('&token=', encodeUriComponent(variables('persistentToken'))))))}"
                         },
                         "Get_Cyren_Feed_Page": {
                           "type": "Http",
@@ -378,11 +385,7 @@
                                         }
                                       }
                                     }
-                                  },
-                                  "else": {
-                                    "actions": {}
-                                  },
-                                  "runAfter": {}
+                                  }
                                 }
                               }
                             },
@@ -472,15 +475,14 @@
                     }
                   }
                 }
-              },
-              "condition": "[[not(empty(parameters('Cyren_JwtToken')))]"
+              }
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
               "properties": {
-                "parentId": "[[variables('playbookId1')]]",
+                "parentId": "[variables('playbookId1')]",
                 "contentId": "[variables('_playbookContentId1')]",
                 "kind": "Playbook",
                 "version": "[variables('playbookVersion1')]",
@@ -501,7 +503,40 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "Cyren to SentinelOne IOC Automation",
+            "description": "This playbook fetches IP reputation and malware URL threat intelligence indicators from the Cyren CCF API feed and creates corresponding IOC indicators in SentinelOne for automated threat detection and response.",
+            "prerequisites": [
+              "1. Cyren CCF JWT Bearer Token (obtain from your Cyren subscription portal)",
+              "2. Cyren Feed ID (ip_reputation or malware_urls, depending on your subscription)",
+              "3. SentinelOne API Token with Threat Intelligence IOC management permissions",
+              "4. SentinelOne Console URL",
+              "5. SentinelOne Account ID"
+            ],
+            "postDeployment": [
+              "1. Configure the Cyren_JwtToken parameter with your Cyren CCF JWT Bearer Token.",
+              "2. Configure the Cyren_FeedId parameter (ip_reputation or malware_urls).",
+              "3. Configure the SentinelOne_ApiToken, SentinelOne_BaseUrl, and SentinelOne_AccountId parameters.",
+              "4. Enable the Logic App and verify the recurrence trigger is set to your desired interval."
+            ],
+            "lastUpdateTime": "2026-03-18T00:00:00Z",
+            "tags": [
+              "ThreatIntelligence",
+              "IOC",
+              "SentinelOne",
+              "Cyren"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "pb-cyren-to-sentinelone",
+                "notes": [
+                  "Initial version of Cyren to SentinelOne IOC Automation playbook"
+                ]
+              }
+            ]
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -510,7 +545,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_playbookContentId1')]",
         "contentKind": "Playbook",
-        "displayName": "CyrenToSentinelOne",
+        "displayName": "pb-cyren-to-sentinelone",
         "contentProductId": "[variables('_playbookcontentProductId1')]",
         "id": "[variables('_playbookcontentProductId1')]",
         "version": "[variables('playbookVersion1')]"
@@ -526,7 +561,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cyren-SentinelOne-ThreatIntelligence",
         "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>\u2022 Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyren-SentinelOne-ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>\u2022 There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyren SentinelOne Threat Intelligence solution polls the Cyren CCF (IP reputation, malware URLs) threat intelligence feed and pushes indicators of compromise (IOCs) to SentinelOne's Threat Intelligence API for automated detection and response.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyren-SentinelOne-ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyren SentinelOne Threat Intelligence solution polls the Cyren CCF (IP reputation, malware URLs) threat intelligence feed and pushes indicators of compromise (IOCs) to SentinelOne's Threat Intelligence API for automated detection and response.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -553,7 +588,7 @@
           "criteria": [
             {
               "kind": "Playbook",
-              "contentId": "[variables('_playbookContentId1')]",
+              "contentId": "[variables('_Playbooks')]",
               "version": "[variables('playbookVersion1')]"
             }
           ]
