@@ -187,6 +187,11 @@
                       "metricName": "Compliance Findings",
                       "legend": "TaniumComplyCompliance_CL",
                       "baseQuery": "TaniumComplyCompliance_CL"
+                    },
+                    {
+                      "metricName": "Compliance Vulnerabilities",
+                      "legend": "TaniumComplyVulnerabilities_CL",
+                      "baseQuery": "TaniumComplyVulnerabilities_CL"
                     }
                   ],
                   "sampleQueries": [
@@ -197,6 +202,10 @@
                     {
                       "description": "Tanium - Compliance Findings",
                       "query": "TaniumComplyCompliance_CL\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Tanium - Compliance Vulnerabilities",
+                      "query": "TaniumComplyVulnerabilities_CL\n | sort by TimeGenerated desc"
                     }
                   ],
                   "dataTypes": [
@@ -207,13 +216,17 @@
                     {
                       "name": "TaniumComplyCompliance_CL",
                       "lastDataReceivedQuery": "TaniumComplyCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TaniumComplyVulnerabilities_CL",
+                      "lastDataReceivedQuery": "TaniumComplyVulnerabilities_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
+                        "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
                       ]
                     }
                   ],
@@ -257,7 +270,7 @@
                         },
                         {
                           "parameters": {
-                            "label": "Deploy Basic Inventory connector resources",
+                            "label": "Deploy Tanium data connector resources",
                             "applicationDisplayName": "Tanium Connector Application"
                           },
                           "type": "DeployPushConnectorButton"
@@ -328,6 +341,13 @@
                           "parameters": {
                             "label": "Compliance Findings Logs Stream Name",
                             "value": "Custom-TaniumComplyCompliance"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Compliance Vulnerabilities Logs Stream Name",
+                            "value": "Custom-TaniumComplyVulnerabilities"
                           },
                           "type": "CopyableLabel"
                         }
@@ -491,6 +511,58 @@
                         "type": "string"
                       }
                     ]
+                  },
+                  "Custom-TaniumComplyVulnerabilities": {
+                    "columns": [
+                      {
+                        "name": "ComputerID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ComputerName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IpAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OperatingSystemGeneration",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CVE",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ScanType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CveYear",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CvssScore",
+                        "type": "real"
+                      },
+                      {
+                        "name": "CvssV3Score",
+                        "type": "real"
+                      },
+                      {
+                        "name": "CvssV3Severity",
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "destinations": {
@@ -521,6 +593,16 @@
                     ],
                     "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Computer_Name_s = ComputerName,\n    IP_Address_s = IPAddress,\n    Operating_System_Generation_s = OperatingSystemGeneration,\n    Profile_s = Profile,\n    Rule_ID_s = Rule,\n    Rule_s = RuleID,\n    Standard_s = Standard,\n    Status_Category_s = StatusCategory,\n    Version_s = Version",
                     "outputStream": "Custom-TaniumComplyCompliance_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-TaniumComplyVulnerabilities"
+                    ],
+                    "destinations": [
+                      "[parameters('workspace')]"
+                    ],
+                    "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Computer_ID_s = ComputerID,\n    Computer_Name_s = ComputerName,\n    CVE_s = CVE,\n    CVE_Year_s = CveYear,\n    CVSS_Score_d = CvssScore,\n    CVSS_v3_Score_d = CvssV3Score,\n    CVSS_v3_Severity_s = CvssV3Severity,\n    IP_Address_s = IpAddress,\n    Operating_System_Generation_s = OperatingSystemGeneration,\n    Scan_Type_s = ScanType,\n    Severity_s = Severity,\n    Title_s = Title",
+                    "outputStream": "Custom-TaniumComplyVulnerabilities_CL"
                   }
                 ],
                 "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
@@ -657,6 +739,74 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "TaniumComplyVulnerabilities_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "TaniumComplyVulnerabilities_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The time at which the data was generated"
+                    },
+                    {
+                      "name": "Computer_ID_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Computer_Name_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IP_Address_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Operating_System_Generation_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CVE_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Scan_Type_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CVE_Year_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Title_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Severity_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CVSS_Score_d",
+                      "type": "real"
+                    },
+                    {
+                      "name": "CVSS_v3_Severity_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CVSS_v3_Score_d",
+                      "type": "real"
+                    }
+                  ]
+                }
+              }
             }
           ]
         },
@@ -692,6 +842,11 @@
               "metricName": "Compliance Findings",
               "legend": "TaniumComplyCompliance_CL",
               "baseQuery": "TaniumComplyCompliance_CL"
+            },
+            {
+              "metricName": "Compliance Vulnerabilities",
+              "legend": "TaniumComplyVulnerabilities_CL",
+              "baseQuery": "TaniumComplyVulnerabilities_CL"
             }
           ],
           "sampleQueries": [
@@ -702,6 +857,10 @@
             {
               "description": "Tanium - Compliance Findings",
               "query": "TaniumComplyCompliance_CL\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Tanium - Compliance Vulnerabilities",
+              "query": "TaniumComplyVulnerabilities_CL\n | sort by TimeGenerated desc"
             }
           ],
           "dataTypes": [
@@ -712,13 +871,17 @@
             {
               "name": "TaniumComplyCompliance_CL",
               "lastDataReceivedQuery": "TaniumComplyCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "TaniumComplyVulnerabilities_CL",
+              "lastDataReceivedQuery": "TaniumComplyVulnerabilities_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
+                "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
               ]
             }
           ],
@@ -762,7 +925,7 @@
                 },
                 {
                   "parameters": {
-                    "label": "Deploy Basic Inventory connector resources",
+                    "label": "Deploy Tanium data connector resources",
                     "applicationDisplayName": "Tanium Connector Application"
                   },
                   "type": "DeployPushConnectorButton"
@@ -833,6 +996,13 @@
                   "parameters": {
                     "label": "Compliance Findings Logs Stream Name",
                     "value": "Custom-TaniumComplyCompliance"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Compliance Vulnerabilities Logs Stream Name",
+                    "value": "Custom-TaniumComplyVulnerabilities"
                   },
                   "type": "CopyableLabel"
                 }
@@ -12512,48 +12682,48 @@
                 "requiredDataConnectors": [],
                 "entityMappings": [
                   {
-                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "TaniumUrl",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "TaniumUrl"
                       }
-                    ]
+                    ],
+                    "entityType": "URL"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer_IP_s",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "Computer_IP_s"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "columnName": "Computer_Name_s",
-                        "identifier": "HostName"
+                        "identifier": "HostName",
+                        "columnName": "Computer_Name_s"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "Malware",
                     "fieldMappings": [
                       {
-                        "columnName": "TaniumTHRLabel",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "TaniumTHRLabel"
                       }
-                    ]
+                    ],
+                    "entityType": "Malware"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "TaniumAlertId": "Alert_Id_g",
-                  "IntelId": "Intel_Id_d"
+                  "IntelId": "Intel_Id_d",
+                  "TaniumAlertId": "Alert_Id_g"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "{{TaniumTHRLabel}}",
@@ -12564,8 +12734,8 @@
                   "groupingConfiguration": {
                     "reopenClosedIncident": false,
                     "enabled": false,
-                    "matchingMethod": "AllEntities",
-                    "lookbackDuration": "PT5H"
+                    "lookbackDuration": "PT5H",
+                    "matchingMethod": "AllEntities"
                   }
                 }
               }
