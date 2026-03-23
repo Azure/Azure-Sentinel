@@ -1496,7 +1496,9 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
                 $hasCsvDelimiterProperty = [bool]($armResource.properties.dataFormat.PSobject.Properties.name.tolower() -match "csvdelimiter")
                 if ($hasCsvDelimiterProperty) {
                     if ($armResource.properties.dataFormat.CsvDelimiter -eq " ") {
-                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        if (-not ($global:baseMainTemplate.variables.PSObject.Properties.Name -contains "TemplateEmptySpaceString")) {
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        }
                         $armResource.properties.dataFormat.CsvDelimiter = "[variables('TemplateEmptySpaceString')]"
                     }
                 }
