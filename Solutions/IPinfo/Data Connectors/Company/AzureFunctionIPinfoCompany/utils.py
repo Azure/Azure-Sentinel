@@ -42,7 +42,7 @@ def download_mmdbs():
     if success:
         logging.info(f"File '{MMDB_NAME}' downloaded successfully.")
     else:
-        logging.error(f"Failed to download the file '{MMDB_NAME}'.")
+        logging.error(f"Failed to download the file '{MMDB_NAME}'. Possible invalid IPinfo token.")
 
 def create_data_collection_endpoint(data_collection_endpoint_name, access_token):
     url = generate_url("dataCollectionEndpoint", endpoint_name=data_collection_endpoint_name)

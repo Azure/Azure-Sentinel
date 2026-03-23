@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------|
-| 3.0.2       | 03-03-2026                     | Added a **Analytic rules** for Microsoft Copilot Activity Monitoring and detection.  |
-| 3.0.1       | 12-12-2025                     | Update copilot table name from LLMActivity to CopilotActivity.       |
+| 3.0.3       | 03-03-2026                     | Added a **Analytic rules** for Microsoft Copilot Activity Monitoring and detection.  |
+| 3.0.2       | 16-03-2026                     | Update Solution and Connector Descriptions.                                                       |
+| 3.0.1       | 12-12-2025                     | Update copilot table name from LLMActivity to CopilotActivity.                                    |
 | 3.0.0       | 10-09-2025                     | Releasing a new Microsoft Copilot connector solution in Content Hub and **Data Connector** gallery.   |
