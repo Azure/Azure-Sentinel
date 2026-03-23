@@ -26,7 +26,7 @@ When reviewing pull requests, follow these rules strictly.
 3. If this is the **only changed file in the PR**, still run full Release Notes validation and add findings
 4. Do NOT use generic fallback comments for these files
 
-### For Analytic Rules Files (`Detections/**/*.yaml`, `Solutions/**/Analytic Rules/*.yaml`)
+### For Analytic Rules Files (`Detections/**/*.yaml`, `Detections/**/*.yml`, `Solutions/**/Analytic Rules/*.yaml`, `Solutions/**/Analytic Rules/*.yml`)
 1. **LOAD and USE:** `.github/instructions/detections.instructions.md`
 2. Apply ALL validation rules from that file
 3. Check all field requirements, MITRE ATT&CK mappings, KQL syntax, and formatting guidelines from that custom instruction file

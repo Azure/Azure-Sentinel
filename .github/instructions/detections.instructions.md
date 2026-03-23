@@ -101,7 +101,8 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 
 #### **kind** (Rule Type)
 - **Required**: Yes (all rule types)
-- **Valid Values**: `Scheduled`, `Fusion`, `MicrosoftSecurityIncidentCreation`, `MLBehaviorAnalytics`, `NRT`
+- **Valid Values for Community/ISV Submissions**: `Scheduled`, `NRT`
+- **Note**: `Fusion`, `MLBehaviorAnalytics`, and `MicrosoftSecurityIncidentCreation` are Microsoft-managed rule types and are not accepted from community or ISV submissions
 - **Determines**: Required fields for specific rule type
 - **Rules**:
   - Each kind has specific field requirements
@@ -307,16 +308,7 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
   - Entity type MUST match exactly (case-sensitive)
   - Identifiers MUST match property names for the entity type (case-sensitive)
   - Column name referenced for `columnName` must be an output from the query
-  - Use "CustomEntity" suffix for naming convention when possible
   - Use `FullName` as identifier for both Account and Host (special mapping)
-
-#### **productFilter** (Security Product Filter)
-- **Required**: Yes for `MicrosoftSecurityIncidentCreation` rules only
-- **Type**: String
-- **Valid Examples**: `Microsoft Cloud App Security`, `Microsoft Defender for Office 365`
-- **Rules**:
-  - Required only for this rule kind
-  - Should not appear in other rule types
 
 ---
 
@@ -753,14 +745,6 @@ query: |
 # Fusion rule with custom query (should not have query)
 kind: Fusion
 query: |                           # ❌ Fusion rules are managed by AI
-  SecurityEvent | where EventID == 4625
-```
-
-```yaml
-# MicrosoftSecurityIncidentCreation without productFilter
-kind: MicrosoftSecurityIncidentCreation
-# Missing: productFilter field is required
-query: |                           # ❌ Should not have custom query
   SecurityEvent | where EventID == 4625
 ```
 
