@@ -14,10 +14,9 @@ triggerOperator: gt
 triggerThreshold: 0
 status: Available
 tactics:
-  - Exfiltration
+  - Collection
 relevantTechniques:
-  - T1537 
-  - T1567
+  - T1213.006 
 tags:
   - SQL
 query: |
@@ -51,10 +50,9 @@ query: |
     | extend ZScoreVal = iff(N >= 20, round(todouble(QuantityColumn - AvgVal) / todouble(StdVal + 1), 2), 0.00),
              QScoreVal = iff(N >= 20, round(todouble(QuantityColumn - P99Val) / todouble(P99Val - P50Val + 1), 2), 0.00)
     | extend IsVolumeAnomalyOnVal = iff((ZScoreVal > volumeThresholdZ and QScoreVal > volumeThresholdQ and QuantityColumn > volumeThresholdHardcoded), true, false), AnomalyScore = round((ZScoreVal + QScoreVal)/2, 0)
+    | where IsVolumeAnomalyOnVal == 'true'
     | project TimeGenerated, Database, PrincipalName, ClientIp, HostName, ApplicationName, ActionName, Statement,
               IsSuccess, ResponseRows, AffectedRows, IsVolumeAnomalyOnVal, AnomalyScore, ResourceId
-    | where IsVolumeAnomalyOnVal == 'true'
-    | sort by AnomalyScore desc, TimeGenerated desc
     | extend Name = tostring(split(PrincipalName,'@',0)[0]), UPNSuffix = tostring(split(PrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
@@ -79,5 +77,9 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 1.1.2
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Response rows anomaly on database {{Database}}'
+  alertDescriptionFormat: 'An anomaly was detected on database {{Database}} with {{ResponseRows}} response rows in a statement, which is significantly higher than normal for this database. Investigate the database activity for potential malicious data changes or deletions.'
+version: 1.1.3
 kind: Scheduled
+`

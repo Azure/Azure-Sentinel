@@ -13,9 +13,11 @@ triggerOperator: gt
 triggerThreshold: 0
 status: Available
 tactics:
-  - InitialAccess
+  - Execution
 relevantTechniques:
-  - T1190
+  - T1059
+  - T1059.001
+  - T1059.003
 tags:
   - SQL
 query: |
@@ -64,7 +66,7 @@ query: |
     | extend IsHotwordAnomalyOnStatement = iff(((countStatementsWithHotwords >= monitoredStatementsThreshold) and (countSlicesWithHotwords <= trainingSlicesThreshold)), true, false)
         , anomalyScore = round(countStatementsWithHotwords/monitoredStatementsThreshold, 0)
     | where IsHotwordAnomalyOnStatement == 'true'
-    | sort by countSuccessfulStatementsWithHotwords desc,  anomalyScore desc, timeSlice desc
+    | project TimeGenerated = timeSlice, Database, ClientIp, ApplicationName, PrincipalName, HostName, ResourceId, countEvents, countStatements, countStatementsWithHotwords, anyMonitoredStatement, anyInfo, anomalyScore
     | extend Name = tostring(split(PrincipalName,'@',0)[0]), UPNSuffix = tostring(split(PrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
@@ -89,5 +91,10 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 1.1.1
+customDetails:
+  HotWords: hotWord
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Execution attempts stateful anomaly on database {{Database}}'
+  alertDescriptionFormat: 'An anomaly was detected on database {{Database}} with {{countStatementsWithHotwords}} statements with monitored hot words (xp_cmdshell, powershell, cmd.exe etc.) in the last hour. Investigate the database activity for potential malicious attempts to execute shell commands or run illegitimate code.'
+version: 1.1.2
 kind: Scheduled
