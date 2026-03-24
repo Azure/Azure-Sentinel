@@ -222,6 +222,11 @@
                       "metricName": "Patch List Compliance",
                       "legend": "TaniumPatchListCompliance_CL",
                       "baseQuery": "TaniumPatchListCompliance_CL"
+                    },
+                    {
+                      "metricName": "SCCM Client Health",
+                      "legend": "TaniumSCCMClientHealth_CL",
+                      "baseQuery": "TaniumSCCMClientHealth_CL"
                     }
                   ],
                   "sampleQueries": [
@@ -260,6 +265,10 @@
                     {
                       "description": "Tanium - Patch List Compliance",
                       "query": "TaniumPatchListCompliance_CL\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Tanium - SCCM Client Health",
+                      "query": "TaniumSCCMClientHealth_CL\n | sort by TimeGenerated desc"
                     }
                   ],
                   "dataTypes": [
@@ -298,13 +307,17 @@
                     {
                       "name": "TaniumPatchListCompliance_CL",
                       "lastDataReceivedQuery": "TaniumPatchListCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "TaniumSCCMClientHealth_CL",
+                      "lastDataReceivedQuery": "TaniumSCCMClientHealth_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL,\n\tTaniumDefenderHealth_CL,\n\tTaniumDiscoverUnmanagedAssets_CL,\n\tTaniumHighUptime_CL,\n\tTaniumPatchCoverageStatus_CL,\n\tTaniumPatchListApplicability_CL,\n\tTaniumPatchListCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
+                        "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL,\n\tTaniumDefenderHealth_CL,\n\tTaniumDiscoverUnmanagedAssets_CL,\n\tTaniumHighUptime_CL,\n\tTaniumPatchCoverageStatus_CL,\n\tTaniumPatchListApplicability_CL,\n\tTaniumPatchListCompliance_CL,\n\tTaniumSCCMClientHealth_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
                       ]
                     }
                   ],
@@ -468,6 +481,13 @@
                           "parameters": {
                             "label": "Patch List Compliance Logs Stream Name",
                             "value": "Custom-TaniumPatchListCompliance"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "SCCM Client Health Logs Stream Name",
+                            "value": "Custom-TaniumSCCMClientHealth"
                           },
                           "type": "CopyableLabel"
                         }
@@ -1079,6 +1099,34 @@
                         "type": "real"
                       }
                     ]
+                  },
+                  "Custom-TaniumSCCMClientHealth": {
+                    "columns": [
+                      {
+                        "name": "ComputerName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OSPlatform",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HealthStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Reason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Count",
+                        "type": "real"
+                      }
+                    ]
                   }
                 },
                 "destinations": {
@@ -1179,6 +1227,16 @@
                     ],
                     "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Compliance_Status_s = ComplianceStatus,\n    Computer_ID_s = ComputerID,\n    Computer_Name_s = ComputerName,\n    Count_d = Count,\n    Last_Logged_In_User_s = LastLoggedInUser,\n    Operating_System_s = OperatingSystem,\n    OS_Type_s = OSType,\n    Patch_List_Id_s = PatchListId,\n    Patch_List_Name_s = PatchListName",
                     "outputStream": "Custom-TaniumPatchListCompliance_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-TaniumSCCMClientHealth"
+                    ],
+                    "destinations": [
+                      "[parameters('workspace')]"
+                    ],
+                    "transformKql": "source\n| project\n    TimeGenerated = now(),\n    Computer_Name_s = ComputerName,\n    Count_d = Count,\n    Health_Status_s = HealthStatus,\n    IP_Address_s = IPAddress,\n    OS_Platform_s = OSPlatform,\n    Reason_s = Reason",
+                    "outputStream": "Custom-TaniumSCCMClientHealth_CL"
                   }
                 ],
                 "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
@@ -1875,6 +1933,50 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "TaniumSCCMClientHealth_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "TaniumSCCMClientHealth_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The time at which the data was generated"
+                    },
+                    {
+                      "name": "Computer_Name_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IP_Address_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OS_Platform_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Health_Status_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Reason_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Count_d",
+                      "type": "real"
+                    }
+                  ]
+                }
+              }
             }
           ]
         },
@@ -1945,6 +2047,11 @@
               "metricName": "Patch List Compliance",
               "legend": "TaniumPatchListCompliance_CL",
               "baseQuery": "TaniumPatchListCompliance_CL"
+            },
+            {
+              "metricName": "SCCM Client Health",
+              "legend": "TaniumSCCMClientHealth_CL",
+              "baseQuery": "TaniumSCCMClientHealth_CL"
             }
           ],
           "sampleQueries": [
@@ -1983,6 +2090,10 @@
             {
               "description": "Tanium - Patch List Compliance",
               "query": "TaniumPatchListCompliance_CL\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Tanium - SCCM Client Health",
+              "query": "TaniumSCCMClientHealth_CL\n | sort by TimeGenerated desc"
             }
           ],
           "dataTypes": [
@@ -2021,13 +2132,17 @@
             {
               "name": "TaniumPatchListCompliance_CL",
               "lastDataReceivedQuery": "TaniumPatchListCompliance_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "TaniumSCCMClientHealth_CL",
+              "lastDataReceivedQuery": "TaniumSCCMClientHealth_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL,\n\tTaniumDefenderHealth_CL,\n\tTaniumDiscoverUnmanagedAssets_CL,\n\tTaniumHighUptime_CL,\n\tTaniumPatchCoverageStatus_CL,\n\tTaniumPatchListApplicability_CL,\n\tTaniumPatchListCompliance_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
+                "union withsource=SourceTable\n\tTaniumMainAsset_CL,\n\tTaniumComplyCompliance_CL,\n\tTaniumComplyVulnerabilities_CL,\n\tTaniumDefenderHealth_CL,\n\tTaniumDiscoverUnmanagedAssets_CL,\n\tTaniumHighUptime_CL,\n\tTaniumPatchCoverageStatus_CL,\n\tTaniumPatchListApplicability_CL,\n\tTaniumPatchListCompliance_CL,\n\tTaniumSCCMClientHealth_CL\n| summarize LastLogReceived = max(TimeGenerated) by SourceTable\n| summarize IsConnected = min(LastLogReceived) >= ago(24h)"
               ]
             }
           ],
@@ -2191,6 +2306,13 @@
                   "parameters": {
                     "label": "Patch List Compliance Logs Stream Name",
                     "value": "Custom-TaniumPatchListCompliance"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "SCCM Client Health Logs Stream Name",
+                    "value": "Custom-TaniumSCCMClientHealth"
                   },
                   "type": "CopyableLabel"
                 }
@@ -13918,13 +14040,13 @@
                   "alertDisplayNameFormat": "{{TaniumTHRLabel}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "enabled": false,
-                    "lookbackDuration": "PT5H",
                     "matchingMethod": "AllEntities",
-                    "reopenClosedIncident": false
-                  },
-                  "createIncident": true
+                    "lookbackDuration": "PT5H",
+                    "reopenClosedIncident": false,
+                    "enabled": false
+                  }
                 }
               }
             },
