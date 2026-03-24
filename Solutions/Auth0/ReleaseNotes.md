@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
+| 3.1.3       | 20-03-2026                     | Rename to Auth0 Logs(via Codeless Connector Framework)|
 | 3.1.2       | 10-02-2025                     | Advancing CCP **Data Connector** from Public preview to Global Availability.           |
 | 3.1.1       | 22-01-2025                     | Added Preview tag to CCP **Data Connector**                                            |
 | 3.1.0       | 13-12-2024                     | Added new CCP **Data Connector** to the Solution                                       |
