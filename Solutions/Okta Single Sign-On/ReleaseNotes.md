@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.4       | 13-01-2026                     | Rename CCF solution to Okta Single Sign-On (via Codeless Connector Framework) |
 | 3.1.4       | 13-01-2026                     | Updated non-functional link from MFA Fatigue (OKTA) **Analytic rule** |
 | 3.1.3       | 05-02-2025                     | Version Update |
 | 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
