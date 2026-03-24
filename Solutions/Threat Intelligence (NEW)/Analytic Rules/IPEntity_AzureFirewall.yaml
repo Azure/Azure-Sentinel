@@ -48,14 +48,15 @@ query: |
      | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
     | join kind=innerunique (
-        AzureDiagnostics
+        union AZFWApplicationRule, AZFWNetworkRule
         | where TimeGenerated >= ago(dt_lookBack)
-        | where OperationName in ("AzureFirewallApplicationRuleLog", "AzureFirewallNetworkRuleLog")
-        | parse kind=regex flags=U msg_s with Protocol 'request from ' SourceHost 'to ' DestinationHost @'\.? Action: ' Firewall_Action @'\.' Rest_msg
-        | extend SourceAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?', 1, SourceHost)
-        | extend DestinationAddress = extract(@'([\.0-9]+)(:[\.0-9]+)?', 1, DestinationHost)
+        //| where OperationName in ("AzureFirewallApplicationRuleLog", "AzureFirewallNetworkRuleLog")
+        | parse kind=regex flags=U ActionReason with Protocol 'request from ' SourceHost 'to ' DestinationHost @'\.? Action: ' Firewall_Action @'\.' Rest_msg
+        | extend SourceAddress = SourceIp
+        | extend DestinationAddress = DestinationIp
         | extend RemoteIP = case(not(ipv4_is_private(DestinationAddress)), DestinationAddress, not(ipv4_is_private(SourceAddress)), SourceAddress, "")
         | where isnotempty(RemoteIP) // Filter out traffic involving public addresses only
+        | extend Firewall_Action = Action
         | project-rename AzureFirewall_TimeGenerated = TimeGenerated
     )
     on $left.TI_ipEntity == $right.RemoteIP
@@ -67,8 +68,8 @@ query: |
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
     | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence,
-      AzureFirewall_TimeGenerated, TI_ipEntity, Resource, Category, msg_s, SourceAddress, DestinationAddress, Firewall_Action, Protocol,
-      NetworkSourceIP, Type, Url
+      AzureFirewall_TimeGenerated, TI_ipEntity, ActionReason, SourceAddress, DestinationAddress, Firewall_Action, Protocol,
+      NetworkSourceIP, Type, TargetUrl
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -77,6 +78,6 @@ entityMappings:
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Url
-version: 1.3.6
+        columnName: TargetUrl
+version: 1.3.7
 kind: Scheduled

@@ -29,18 +29,16 @@ tags:
   - Scanner Detection
 query:  | 
   let Threshold = 3;
-  AzureDiagnostics
-  | where ResourceProvider == 'MICROSOFT.NETWORK' and Category == 'ApplicationGatewayFirewallLog'
-  | where action_s == "Matched"
+  AGWFirewallLogs
+  | where Action == "Matched"
   | where Message contains "Found User-Agent associated with security scanner"
-  | project transactionId_g, hostname_s, requestUri_s, TimeGenerated, clientIp_s, Message, details_message_s, details_data_s
+  | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
   | join kind = inner(
-  AzureDiagnostics
-  | where ResourceProvider == 'MICROSOFT.NETWORK' and Category == 'ApplicationGatewayFirewallLog'
-  | where action_s == "Blocked"
-  ) on transactionId_g
-  | extend Uri = strcat(hostname_s,requestUri_s)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(transactionId_g), Message = make_set(Message), Detail_Message = make_set(details_message_s), Detail_Data = make_set(details_data_s), Total_TransactionId = dcount(transactionId_g) by clientIp_s, Uri, action_s
+  AGWFirewallLogs
+  | where Action == "Blocked"
+  ) on TransactionId
+  | extend Uri = strcat(Hostname,RequestUri)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId), Message = make_set(Message), Detail_Message = make_set(DetailedMessage), Detail_Data = make_set(DetailedData), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
   | where Total_TransactionId >= Threshold
 # The Threshold value above can be changed as per your infrastructure's requirement
 entityMappings:
@@ -51,6 +49,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: clientIp_s 
-version: 1.0.2
+        columnName: ClientIp 
+version: 1.0.3
 kind: Scheduled

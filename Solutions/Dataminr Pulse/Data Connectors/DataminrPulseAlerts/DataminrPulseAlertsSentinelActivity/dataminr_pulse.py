@@ -1,13 +1,12 @@
 """This file contains implementation to ingest Dataminr RTAP alert data into sentinel."""
 import os
-import json
 import inspect
-from .sentinel import MicrosoftSentinel
+from .sentinel import send_data_to_sentinel
 from shared_code.consts import (
     LOGS_STARTS_WITH,
     RELATEDALERTS_TABLE_NAME,
     VULNERABILITY_PRODUCTS_TABLE_NAME,
-    VULNERABILITY_PRODUCTS_RELATEDALERTS_TABLE_NAME,
+    VULNERABILITY_PRODUCTS_RELATEDALERTS_TABLE_NAME
 )
 from shared_code.dataminrpulse_exception import DataminrPulseException
 from shared_code.logger import applogger
@@ -26,7 +25,6 @@ class DataminrPulse:
     def __init__(self) -> None:
         """Initialize instance variables for class."""
         self.logs_starts_with = LOGS_STARTS_WITH
-        self.microsoftsentinel = MicrosoftSentinel()
         self.error_logs = "{}(method={}) {}"
         self.check_environment_var_existance()
 
@@ -94,18 +92,16 @@ class DataminrPulse:
                         "vulnerabilities_id": vuln_id,
                         "vulnerabilities_products": products,
                     }
-                    body = json.dumps(data)
-                    status_code = self.microsoftsentinel.post_data(body, log_type)
-                    if status_code >= 200 and status_code <= 299:
-                        applogger.debug(
-                            "{}(method={}) products for vulnerability id={}, alert id={} posted successfully into {} table.".format(
-                                self.logs_starts_with,
-                                __method_name,
-                                vuln_id,
-                                alert_index,
-                                log_type,
-                            )
+                    send_data_to_sentinel(data, log_type)
+                    applogger.debug(
+                        "{}(method={}) products for vulnerability id={},alert id={} posted into {} table.".format(
+                            self.logs_starts_with,
+                            __method_name,
+                            vuln_id,
+                            alert_index,
+                            log_type,
                         )
+                    )
                     vulnerability.pop("products")
             return vulnerabilities
         except KeyError as err:
@@ -149,6 +145,8 @@ class DataminrPulse:
                             )
                         )
                         data.update({"vulnerabilities": updated_vulnerabilities})
+                    if "@type" in data:
+                        data["type"] = data.pop("@type")
                 cybermetadata.update({"data": data})
             return embeded_labels
         except KeyError as err:
@@ -238,12 +236,10 @@ class DataminrPulse:
                         )
                         alert.update({"_embedded": {"labels": updated_embeded_labels}})
                 related_alert_ids.append(alert.get("index"))
-                body = json.dumps(alert)
-                status_code = self.microsoftsentinel.post_data(
-                    body, related_alerts_table
+                send_data_to_sentinel(
+                    alert, related_alerts_table
                 )
-                if status_code >= 200 and status_code <= 299:
-                    count += 1
+                count += 1
             applogger.info(
                 "{}(method={}) Posted total {} alerts data related to id={} successfully.".format(
                     self.logs_starts_with,
@@ -311,16 +307,15 @@ class DataminrPulse:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            if type(data) == dict:
+            if isinstance(data, dict):
                 self.prepare_alerts(data)
-                body = json.dumps(data)
                 applogger.debug(
                     "{}(method={}) Posting the RTAP alerts from DataminrPulseAlertsSentinelConnector".format(
                         self.logs_starts_with, __method_name
                     )
                 )
-                self.microsoftsentinel.post_data(
-                    body,
+                send_data_to_sentinel(
+                    data,
                     alerts_table,
                 )
                 applogger.info(
@@ -338,14 +333,13 @@ class DataminrPulse:
                 for alert in data:
                     self.prepare_alerts(alert)
                     count += 1
-                body = json.dumps(data)
                 applogger.debug(
                     "{}(method={}) Posting the RTAP alert data from DataminrPulseAlertsSentinelConnector".format(
                         self.logs_starts_with, __method_name
                     )
                 )
-                self.microsoftsentinel.post_data(
-                    body,
+                send_data_to_sentinel(
+                    data,
                     alerts_table,
                 )
                 applogger.info(

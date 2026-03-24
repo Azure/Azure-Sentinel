@@ -19,7 +19,9 @@ from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
 
-
+# Set CSV field size limit once at module level (1 MB) to prevent
+# _csv.Error on oversized fields across all parse_csv_* methods.
+csv.field_size_limit(1024 * 1024)
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
@@ -301,6 +303,8 @@ class UmbrellaClient:
         try:
             file_obj = io.BytesIO(downloaded_obj)
             csv_file = gzip.GzipFile(fileobj=file_obj).read().decode()
+            # Strip null bytes that cause _csv.Error across all parsers.
+            csv_file = csv_file.replace('\x00', '')
             return csv_file
 
         except Exception as err:
@@ -382,9 +386,7 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
-        sanitized_csv_file = csv_file.replace('\x00', '')
-        
-        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             try:
                 if len(row) > 1:
@@ -535,6 +537,20 @@ class UmbrellaClient:
                         # Version 12 — The same as version 11, but adds the Egress IP field to Proxy logs.
                         try:
                             event['Egress IP'] = row[51]
+                        except IndexError:
+                            pass
+                        # Version 13 — The same as version 12, but adds the AI Model Name, AI Supply Chain Categories field to Proxy logs
+                        try:
+                            event['AI Model Name'] = row[52]
+                        except IndexError:
+                            pass
+                        try:
+                            event['AI Supply Chain Categories'] = row[53]
+                        except IndexError:
+                            pass
+                        # Version 14 — The same as version 13, but adds the Event correlation ID field to Proxy logs
+                        try:
+                            event['Event correlation ID'] = row[54]
                         except IndexError:
                             pass
                         int_fields = [
@@ -713,6 +729,10 @@ class UmbrellaClient:
                         event['Egress'] = row[35]
                     except IndexError:
                         pass
+                    try:
+                        event['Event Correlation ID'] = row[36]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'cloudfirewalllogs'
@@ -860,6 +880,114 @@ class UmbrellaClient:
                         'disk encryption': row[28],
                         'anti malware agents': row[29]
                     }
+                    try:
+                        event['transaction id'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['block reason'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['application port'] = row[32]
+                    except IndexError:
+                        pass
+                    try:
+                        event['application protocol'] = row[33]
+                    except IndexError:
+                        pass
+                    try:
+                        event['tunnel type'] = row[34]
+                    except IndexError:
+                        pass
+                    try:
+                        event['secure client version'] = row[35]
+                    except IndexError:
+                        pass
+                    try:
+                        event['possible match ruleset id'] = row[36]
+                    except IndexError:
+                        pass
+                    try:
+                        event['possible match rule id'] = row[37]
+                    except IndexError:
+                        pass
+                    try:
+                        event['possible match posture'] = row[38]
+                    except IndexError:
+                        pass
+                    try:
+                        event['source process id'] = row[39]
+                    except IndexError:
+                        pass
+                    try:
+                        event['source process name'] = row[40]
+                    except IndexError:
+                        pass
+                    try:
+                        event['source process hash'] = row[41]
+                    except IndexError:
+                        pass
+                    try:
+                        event['source process user name'] = row[42]
+                    except IndexError:
+                        pass
+                    try:
+                        event['organization id'] = row[43]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ad joined id'] = row[44]
+                    except IndexError:
+                        pass
+                    try:
+                        event['enforced by'] = row[45]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement id'] = row[46]
+                    except IndexError:
+                        pass
+                    try:
+                        event['ftd enforcement name'] = row[47]
+                    except IndexError:
+                        pass
+                    try:
+                        event['mdm source'] = row[48]
+                    except IndexError:
+                        pass
+                    try:
+                        event['mdm device id'] = row[49]
+                    except IndexError:
+                        pass
+                    try:
+                        event['mdm is managed'] = row[50]
+                    except IndexError:
+                        pass
+                    try:
+                        event['mdm is compliant'] = row[51]
+                    except IndexError:
+                        pass
+                    try:
+                        event['mdm last updated'] = row[52]
+                    except IndexError:
+                        pass
+                    try:
+                        event['trusted network'] = row[53]
+                    except IndexError:
+                        pass
+                    try:
+                        event['detected trusted networks'] = row[54]
+                    except IndexError:
+                        pass
+                    try:
+                        event['zta profile id'] = row[55]
+                    except IndexError:
+                        pass
+                    try:
+                        event['egress ip'] = row[56]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'ztnalogs'
@@ -1004,6 +1132,46 @@ class UmbrellaClient:
                         event['AWS region'] = row[22]
                     except IndexError:
                         pass
+                    try:
+                        event['Application ID'] = row[23]
+                    except IndexError:
+                        pass
+                    try:
+                        event['CASI Category IDs'] = row[24]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Data Center'] = row[25]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Organization ID'] = row[26]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress IP'] = row[27]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Egress'] = row[28]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Enforced By'] = row[29]
+                    except IndexError:
+                        pass
+                    try:
+                        event['FTD enforcement ID'] = row[30]
+                    except IndexError:
+                        pass
+                    try:
+                        event['FTD Enforcement Name'] = row[31]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Event Correlation ID'] = row[32]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'intrusionlogs'
@@ -1118,6 +1286,10 @@ class UmbrellaClient:
                         event['Egress'] = row[35]
                     except IndexError:
                         pass
+                    try:
+                        event['Event Correlation ID'] = row[36]
+                    except IndexError:
+                        pass
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'firewalllogs'
@@ -1158,11 +1330,14 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_fileevent
             if parser_func:
                 file_events = 0
-                for event in parser_func(csv_file):
-                    dest.send(event)
+                try:
+                    for event in parser_func(csv_file):
+                        dest.send(event)
 
-                    file_events += 1
-                    self.total_events += 1
+                        file_events += 1
+                        self.total_events += 1
+                except csv.Error as e:
+                    logging.error('CSV parsing error, remaining rows skipped | Events processed before error {} | Key {} | Error {}'.format(file_events, key, e))
 
                 logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} | Key {}'.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events, key))
 
