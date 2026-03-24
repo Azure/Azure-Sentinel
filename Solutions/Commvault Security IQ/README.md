@@ -7,6 +7,7 @@ This SOAR integration connects Commvault Cloud with Microsoft Sentinel to enable
 This solution provides:
 - **Data Ingestion**: Automated collection of Commvault security events and anomalies
 - **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault security events
+- **AI Powered Insights**: AI-driven coorelation of Commvault Threat Scan and Risk Analysis events with Sentinel Data Lake signals from tools like CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation.
 - **Incident Response**: Playbooks for automated remediation actions (disable users, disable data aging, etc.)
 
 ## Prerequisites
@@ -103,6 +104,16 @@ The following environment variables can be optionally configured to customize th
 *   After completing all the steps, ensure that the necessary additional permissions are configured.
 *   Follow the instructions in [Permissions.md](./Permissions.md) to grant the required permissions for the Logic Apps.
 *   Additionally, refer to **6. Post-Deployment Steps** in [DataConnector.md](./DataConnector.md) to ensure the Function App has the necessary permissions to access the Key Vault.
+
+## Using Commvault Security Investigation Agent
+
+1. Go to https://securitycopilot.microsoft.com/agents
+2. Search for “Commvault Security Investigation Agent”
+3. Click on “Set up” Agent
+4. Click on “Go to Agent”
+5. Click on “Run” => “One time”
+6. Provide “Hostname” and click “Submit”
+> Note: Hostname is the name of the server that we want to check for events of Commvault and partners like Netskope, CrowdStrike and Palo Alto.
 
 ## Automation Account and Runbooks Setup
 
