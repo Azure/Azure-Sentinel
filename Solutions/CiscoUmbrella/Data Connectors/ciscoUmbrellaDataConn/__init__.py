@@ -333,7 +333,6 @@ class UmbrellaClient:
     @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
-            date_string = date_string.replace('\x00', '').strip()
             if not date_string:
                 return ''
             date = datetime.datetime.strptime(date_string, input_format)
