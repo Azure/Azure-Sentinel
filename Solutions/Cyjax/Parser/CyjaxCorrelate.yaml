@@ -1,0 +1,147 @@
+id: cf5ec5ec-f5cf-479f-9604-134fa1140e12
+Function:
+  Title: Cyjax Correlate
+  Version: '1.0.0'
+  LastUpdated: '2026-03-13'
+Category: Microsoft Sentinel Custom Parser
+FunctionName: CyjaxCorrelate
+FunctionAlias: CyjaxCorrelate
+FunctionParams:
+  - Name: indicatorType
+    Type: dynamic
+    Default: dynamic([])
+  - Name: searchAlgo
+    Type: string
+    Default: ""
+  - Name: asimParsers
+    Type: dynamic
+    Default: dynamic([])
+FunctionQuery: |
+    let OtherSourceThreatData = (indicatorType: string = "*")
+    {
+        ThreatIntelIndicators
+        | where SourceSystem != "Cyjax-IOCs"
+        | where IsActive == true
+        | where indicatorType == "*"
+            or ("ipv4"     == tolower(indicatorType) and ObservableKey == "ipv4-addr:value")
+            or ("ipv6"     == tolower(indicatorType) and ObservableKey == "ipv6-addr:value")
+            or ("domain"   == tolower(indicatorType) and ObservableKey == "domain-name:value")
+            or ("url"      == tolower(indicatorType) and ObservableKey == "url:value")
+            or ("filehash" == tolower(indicatorType) and ObservableKey startswith "file:hashes")
+        | extend
+            ipIndicator     = iff(ObservableKey == "ipv4-addr:value" or ObservableKey == "ipv6-addr:value", pack_array(ObservableValue), dynamic([])),
+            domainIndicator = iff(ObservableKey == "domain-name:value", pack_array(ObservableValue), dynamic([])),
+            urlIndicator    = iff(ObservableKey == "url:value", pack_array(ObservableValue), dynamic([])),
+            hashIndicator   = iff(ObservableKey startswith "file:hashes", pack_array(ObservableValue), dynamic([]))
+    };
+    let AsimParsersData = (indicatorType: string = "*", asimParsers: dynamic = dynamic([]))
+    {
+        union isfuzzy=true
+            (ASimNetworkSession
+                | where "*" in (asimParsers) or "NetworkSession" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr) or isnotempty(DstIpAddr), pack_array(SrcIpAddr, DstIpAddr), dynamic([])),
+                        domain = iff(isnotempty(SrcDomain) or isnotempty(DstDomain),pack_array(SrcDomain, DstDomain), dynamic([])),
+                        url = dynamic([]),
+                        hash = dynamic([])),
+            (ASimWebSession
+                | where "*" in (asimParsers) or "WebSession" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr) or isnotempty(DstIpAddr), pack_array(SrcIpAddr, DstIpAddr), dynamic([])),
+                        url   = iff(isnotempty(Url), pack_array(Url), dynamic([])),
+                        hash  = iff(isnotempty(Hash), pack_array(Hash), dynamic([])),
+                        domain = dynamic([])),
+            (ASimDns
+                | where "*" in (asimParsers) or "DNS" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend domain = iff(isnotempty(DnsQuery) or isnotempty(SrcDomain) or isnotempty(DstDomain), pack_array(DnsQuery, SrcDomain, DstDomain), dynamic([])),
+                        ip    = iff(isnotempty(SrcIpAddr) or isnotempty(DstIpAddr), pack_array(SrcIpAddr, DstIpAddr), dynamic([])),
+                        url = dynamic([]),
+                        hash = dynamic([])),
+            (ASimDhcpEvent
+                | where "*" in (asimParsers) or "DhcpEvent" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr), pack_array(SrcIpAddr), dynamic([])),
+                        domain = iff(isnotempty(SrcDomain), pack_array(SrcDomain), dynamic([])),
+                        url = dynamic([]),
+                        hash = dynamic([])),
+            (ASimAuditEvent
+                | where "*" in (asimParsers) or "AuditEvent" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr) or isnotempty(TargetIpAddr), pack_array(SrcIpAddr, TargetIpAddr), dynamic([])),
+                        domain = iff(isnotempty(SrcDomain) or isnotempty(TargetDomain),pack_array(SrcDomain, TargetDomain), dynamic([])),
+                        url  = dynamic([]),
+                        hash = dynamic([])),
+            (ASimAuthentication
+                | where "*" in (asimParsers) or "Authentication" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr) or isnotempty(TargetIpAddr), pack_array(SrcIpAddr, TargetIpAddr), dynamic([])),
+                        domain = iff(isnotempty(SrcDomain) or isnotempty(TargetDomain),pack_array(SrcDomain, TargetDomain), dynamic([])),
+                        url  = dynamic([]),
+                        hash = dynamic([])),
+            (ASimFileEvent
+                | where "*" in (asimParsers) or "FileEvent" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(SrcIpAddr), pack_array(SrcIpAddr), dynamic([])),
+                        hash  = iff(isnotempty(Hash), pack_array(Hash), dynamic([])),
+                        url   = iff(isnotempty(Url), pack_array(Url), dynamic([])),
+                        domain = dynamic([])),
+            (ASimProcessEvent
+                | where "*" in (asimParsers) or "ProcessEvent" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = dynamic([]),
+                        hash  = iff(isnotempty(Hash), pack_array(Hash), dynamic([])),
+                        domain = dynamic([]),
+                        url = dynamic([])),
+            (ASimAlertEvent
+                | where "*" in (asimParsers) or "AlertEvent" in (asimParsers)
+                | where EventVendor !contains "Cyjax"
+                | extend ip    = iff(isnotempty(IpAddr), pack_array(IpAddr), dynamic([])),
+                        domain = dynamic([]),
+                        url = dynamic([]),
+                        hash = dynamic([]))
+        | extend
+            ipIndicator     = iff(indicatorType == "*" or tolower(indicatorType) in ("ipv4", "ipv6"),
+                                ip,    dynamic([])),
+            domainIndicator = iff(indicatorType == "*" or tolower(indicatorType) == "domain",
+                                domain, dynamic([])),
+            urlIndicator    = iff(indicatorType == "*" or tolower(indicatorType) == "url",
+                                url,   dynamic([])),
+            hashIndicator   = iff(indicatorType == "*" or tolower(indicatorType) == "filehash",
+                                hash,  dynamic([]))
+        | project-away ip, domain, url, hash
+    };
+    let NonCyjaxEventSources = (indicatorType: string = "*",  searchAlgo: string = "", asimParsers: dynamic = dynamic([]))
+    {
+        union isfuzzy=true
+            (OtherSourceThreatData(indicatorType=indicatorType)
+                | where tolower(searchAlgo) == "threatintelligenceindicator" ),
+            (AsimParsersData(indicatorType=indicatorType, asimParsers=asimParsers)
+                | where tolower(searchAlgo) == "asim parsers")
+    };
+    let CyjaxCorrelate = (indicatorType: string = "*", searchAlgo: string = "", asimParsers: dynamic = dynamic([]))
+    {
+        let lowerType = tolower(indicatorType);
+        NonCyjaxEventSources(indicatorType=indicatorType, searchAlgo=searchAlgo, asimParsers=asimParsers)
+        | mv-expand indicator = array_concat(
+            iff(lowerType == "*" or lowerType in ("ipv4", "ipv6"), ipIndicator, dynamic([])),
+            iff(lowerType == "*" or lowerType == "domain", domainIndicator, dynamic([])),
+            iff(lowerType == "*" or lowerType == "url", urlIndicator, dynamic([])),
+            iff(lowerType == "*" or lowerType == "filehash", hashIndicator, dynamic([]))
+        )
+        | where isnotempty(indicator)
+        | extend indicator = tostring(indicator)
+        | join kind=inner (
+            CyjaxThreatIndicator 
+            | where IsActive == true 
+            | where lowerType == "*"
+                or (lowerType in ("ipv4", "ipv6") and tolower(IndicatorType) in ("ipv4", "ipv6"))
+                or (lowerType == "domain" and tolower(IndicatorType) == "domain")
+                or (lowerType == "url" and tolower(IndicatorType) == "url")
+                or (lowerType == "filehash" and tolower(IndicatorType) in ("filehash-sha1", "filehash-sha256", "filehash-md5", "filehash-ssdeep"))
+        ) on $left.indicator == $right.IndicatorValue
+    };
+    CyjaxCorrelate(
+        indicatorType=indicatorType,
+        searchAlgo=searchAlgo,
+        asimParsers=asimParsers)
