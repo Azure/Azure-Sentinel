@@ -19,7 +19,9 @@ from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
 
-
+# Set CSV field size limit once at module level (1 MB) to prevent
+# _csv.Error on oversized fields across all parse_csv_* methods.
+csv.field_size_limit(1024 * 1024)
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
@@ -301,6 +303,8 @@ class UmbrellaClient:
         try:
             file_obj = io.BytesIO(downloaded_obj)
             csv_file = gzip.GzipFile(fileobj=file_obj).read().decode()
+            # Strip null bytes that cause _csv.Error across all parsers.
+            csv_file = csv_file.replace('\x00', '')
             return csv_file
 
         except Exception as err:
@@ -382,9 +386,7 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
-        sanitized_csv_file = csv_file.replace('\x00', '')
-        
-        csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             try:
                 if len(row) > 1:
@@ -1328,11 +1330,14 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_fileevent
             if parser_func:
                 file_events = 0
-                for event in parser_func(csv_file):
-                    dest.send(event)
+                try:
+                    for event in parser_func(csv_file):
+                        dest.send(event)
 
-                    file_events += 1
-                    self.total_events += 1
+                        file_events += 1
+                        self.total_events += 1
+                except csv.Error as e:
+                    logging.error('CSV parsing error, remaining rows skipped | Events processed before error {} | Key {} | Error {}'.format(file_events, key, e))
 
                 logging.info('File processed | TIME {} sec | SIZE {} MB | Events {} | Key {}'.format(round(time.time() - t0, 2), round(obj['Size'] / 10**6, 2), file_events, key))
 

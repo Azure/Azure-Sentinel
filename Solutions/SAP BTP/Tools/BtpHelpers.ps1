@@ -16,19 +16,6 @@ function Write-Log {
     Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $color
 }
 
-# Function to check if Cloud Foundry CLI is installed
-function Test-CfCli {
-    try {
-        $cfVersion = cf --version 2>&1
-        Write-Log "CF CLI is installed: $cfVersion"
-        return $true
-    }
-    catch {
-        Write-Log "CF CLI is not installed or not in PATH. Please install it first." -Level "ERROR"
-        return $false
-    }
-}
-
 # Function to check if BTP CLI is installed
 function Test-BtpCli {
     try {
@@ -75,6 +62,127 @@ function Get-AzureAccessToken {
     }
     catch {
         Write-Log "Error getting Azure access token: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to acquire CF UAA OAuth token 
+function Get-CfUaaToken {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Username,
+        
+        [Parameter(Mandatory=$true)]
+        [SecureString]$Password,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Region
+    )
+    
+    try {
+        Write-Log "Acquiring CF UAA OAuth token for region $Region..."
+        
+        $cfUaaEndpoint = "https://login.cf.$Region.hana.ondemand.com/oauth/token"
+        
+        # Convert SecureString to plain text for API call
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+        $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+        
+        $body = @{
+            username = $Username
+            password = $plainPassword
+            client_id = "cf"
+            grant_type = "password"
+            response_type = "token"
+        }
+        
+        # Clear password from memory
+        $plainPassword = $null
+        
+        # Basic Auth: cf: (empty password)
+        $basicAuth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("cf:"))
+        
+        $headers = @{
+            "Authorization" = "Basic $basicAuth"
+            "Content-Type" = "application/x-www-form-urlencoded"
+        }
+        
+        $response = Invoke-RestMethod -Uri $cfUaaEndpoint `
+            -Method Post `
+            -Headers $headers `
+            -Body $body `
+            -ErrorAction Stop
+        
+        Write-Log "CF UAA token acquired successfully (expires in $($response.expires_in)s)" -Level "SUCCESS"
+        
+        return @{
+            AccessToken = $response.access_token
+            TokenType = $response.token_type
+            ExpiresIn = $response.expires_in
+        }
+    }
+    catch {
+        Write-Log "Failed to acquire CF UAA token: $($_.Exception.Message)" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to make authenticated CF API calls
+function Invoke-CfApi {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CfApiEndpoint,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$AccessToken,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+        
+        [Parameter(Mandatory=$false)]
+        [ValidateSet("GET", "POST", "DELETE", "PATCH")]
+        [string]$Method = "GET",
+        
+        [Parameter(Mandatory=$false)]
+        [object]$Body = $null
+    )
+    
+    try {
+        $headers = @{
+            "Authorization" = "Bearer $AccessToken"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "$CfApiEndpoint$Path"
+        
+        $params = @{
+            Uri = $uri
+            Method = $Method
+            Headers = $headers
+            ErrorAction = "Stop"
+            StatusCodeVariable = "statusCode"
+        }
+        
+        if ($Body) {
+            $params.Body = ($Body | ConvertTo-Json -Depth 10)
+        }
+        
+        $response = Invoke-RestMethod @params
+        
+        # For successful operations that return no body (like 202 Accepted), return a success indicator
+        if (-not $response -and $statusCode -ge 200 -and $statusCode -lt 300) {
+            return @{ Success = $true; StatusCode = $statusCode }
+        }
+        
+        return $response
+    }
+    catch {
+        $errorMessage = $_.Exception.Message
+        if ($_.ErrorDetails.Message) {
+            $errorMessage = $_.ErrorDetails.Message
+        }
+        Write-Log "CF API call failed ($Method $Path): $errorMessage" -Level "ERROR"
         return $null
     }
 }
@@ -166,7 +274,7 @@ function Get-BtpCredentials {
         Read-Host "Press Enter to provide credentials interactively, or Ctrl+C to exit" | Out-Null
         
         if ([string]::IsNullOrWhiteSpace($Username)) {
-            $Username = Read-Host "Enter BTP Username (email)"
+            $Username = Read-Host "Enter BTP Username (email/S-User)"
         }
         
         if ($null -eq $Password -or $Password.Length -eq 0) {
@@ -190,64 +298,54 @@ function Get-BtpCredentials {
     }
 }
 
-# Function to perform CF login with credentials
+# Function to perform CF authentication using OAuth
 function Invoke-CfLogin {
     param(
         [string]$ApiEndpoint,
         [string]$Username,
         [SecureString]$Password,
         [string]$OrgName = "",
-        [string]$SpaceName = ""
+        [string]$SpaceName = "",
+        [string]$Region = ""
     )
     
     try {
         if ([string]::IsNullOrWhiteSpace($Username) -or $null -eq $Password) {
             Write-Log "CF credentials missing for login attempt." -Level "ERROR"
-            Write-Log "Username provided: $(-not [string]::IsNullOrWhiteSpace($Username))" -Level "ERROR"
-            Write-Log "Password provided: $($null -ne $Password)" -Level "ERROR"
             return $false
         }
         
-        Write-Log "Authenticating to Cloud Foundry API: $ApiEndpoint"
-        
-        # Convert SecureString to plain text for CF CLI (only in memory during login)
-        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
-        $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
-        
-        # Build cf login command with org and space if provided
-        $loginArgs = @("login", "-a", $ApiEndpoint, "-u", $Username, "-p", $plainPassword)
-        if (-not [string]::IsNullOrWhiteSpace($OrgName)) {
-            $loginArgs += @("-o", $OrgName)
-        }
-        if (-not [string]::IsNullOrWhiteSpace($SpaceName)) {
-            $loginArgs += @("-s", $SpaceName)
+        # Extract region from API endpoint if not provided
+        if ([string]::IsNullOrWhiteSpace($Region) -and $ApiEndpoint -match '\.cf\.([^.]+)\.') {
+            $Region = $matches[1]
+            Write-Log "Extracted region from API endpoint: $Region"
         }
         
-        # Execute cf login
-        $result = & cf $loginArgs 2>&1
-        
-        # Clear the password from memory immediately
-        $plainPassword = $null
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Successfully authenticated to Cloud Foundry" -Level "SUCCESS"
-            return $true
-        }
-        else {
-            Write-Log "Authentication failed: $result" -Level "ERROR"
+        if ([string]::IsNullOrWhiteSpace($Region)) {
+            Write-Log "Cannot determine CF region for OAuth authentication" -Level "ERROR"
             return $false
         }
+        
+        Write-Log "Authenticating to Cloud Foundry API: $ApiEndpoint using OAuth"
+        
+        $tokenInfo = Get-CfUaaToken -Username $Username -Password $Password -Region $Region
+        
+        if ($null -eq $tokenInfo) {
+            Write-Log "Failed to acquire CF OAuth token" -Level "ERROR"
+            return $false
+        }
+        
+        $script:CfAccessToken = $tokenInfo.AccessToken
+        $script:CfApiEndpoint = $ApiEndpoint
+        $script:CfOrgName = $OrgName
+        $script:CfSpaceName = $SpaceName
+        
+        Write-Log "Successfully authenticated to Cloud Foundry using OAuth" -Level "SUCCESS"
+        return $true
     }
     catch {
         Write-Log "Error during authentication: $_" -Level "ERROR"
         return $false
-    }
-    finally {
-        # Ensure password is cleared from memory
-        if ($plainPassword) {
-            $plainPassword = $null
-        }
     }
 }
 
@@ -304,7 +402,7 @@ function Invoke-BtpLogin {
     }
 }
 
-# Function to switch CF API endpoint and authenticate
+# Function to switch CF API endpoint and authenticate (OAuth-based)
 function Set-CfApiEndpoint {
     param(
         [string]$ApiEndpoint,
@@ -315,41 +413,32 @@ function Set-CfApiEndpoint {
     )
     
     try {
-        # Get current API endpoint
-        $currentApi = cf api 2>&1 | Select-String -Pattern "api endpoint:" | ForEach-Object { $_.ToString().Split(":")[1].Trim() }
-        
-        if ($currentApi -eq $ApiEndpoint) {
-            Write-Log "Already connected to API endpoint: $ApiEndpoint"
-            
-            # Verify authentication is still valid
-            $authCheck = cf apps 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                Write-Log "Session expired or not authenticated. Re-authenticating..." -Level "WARNING"
-                if (-not (Invoke-CfLogin -ApiEndpoint $ApiEndpoint -Username $Username -Password $Password -OrgName $OrgName -SpaceName $SpaceName)) {
-                    return $false
-                }
-            }
-            return $true
+        # Extract region from API endpoint
+        $region = $null
+        if ($ApiEndpoint -match '\.cf\.([^.]+)\.') {
+            $region = $matches[1]
         }
         
-        Write-Log "Switching to API endpoint: $ApiEndpoint"
-        $result = cf api $ApiEndpoint 2>&1
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Successfully switched to API endpoint: $ApiEndpoint" -Level "SUCCESS"
-            
-            # API switch logs you out, so re-authenticate
-            Write-Log "Re-authenticating after API endpoint switch..."
-            if (-not (Invoke-CfLogin -ApiEndpoint $ApiEndpoint -Username $Username -Password $Password -OrgName $OrgName -SpaceName $SpaceName)) {
-                Write-Log "Failed to re-authenticate after API switch" -Level "ERROR"
-                return $false
-            }
-            return $true
-        }
-        else {
-            Write-Log "Failed to switch API endpoint: $result" -Level "ERROR"
+        if ([string]::IsNullOrWhiteSpace($region)) {
+            Write-Log "Cannot extract region from API endpoint: $ApiEndpoint" -Level "ERROR"
             return $false
         }
+        
+        # Check if already authenticated to this endpoint
+        if ($script:CfApiEndpoint -eq $ApiEndpoint -and $script:CfAccessToken) {
+            Write-Log "Already authenticated to API endpoint: $ApiEndpoint"
+            return $true
+        }
+        
+        Write-Log "Authenticating to API endpoint: $ApiEndpoint"
+        
+        # Authenticate using OAuth
+        if (-not (Invoke-CfLogin -ApiEndpoint $ApiEndpoint -Username $Username -Password $Password -OrgName $OrgName -SpaceName $SpaceName -Region $region)) {
+            Write-Log "Failed to authenticate to API endpoint" -Level "ERROR"
+            return $false
+        }
+        
+        return $true
     }
     catch {
         Write-Log "Error switching API endpoint: $_" -Level "ERROR"
@@ -365,17 +454,14 @@ function Set-CfTarget {
     )
     
     try {
-        Write-Log "Targeting org: '$OrgName', space: '$SpaceName'"
-        $result = cf target -o $OrgName -s $SpaceName 2>&1
+        Write-Log "Setting target org: '$OrgName', space: '$SpaceName'"
         
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Successfully targeted org/space" -Level "SUCCESS"
-            return $true
-        }
-        else {
-            Write-Log "Failed to target org/space: $result" -Level "ERROR"
-            return $false
-        }
+        # Update script scope variables (used by CF API calls)
+        $script:CfOrgName = $OrgName
+        $script:CfSpaceName = $SpaceName
+        
+        Write-Log "Successfully set target org/space" -Level "SUCCESS"
+        return $true
     }
     catch {
         Write-Log "Error targeting org/space: $_" -Level "ERROR"
@@ -383,58 +469,264 @@ function Set-CfTarget {
     }
 }
 
+# Helper function to get CF Space ID from org name and space name
+function Get-CfSpaceId {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OrgName,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$SpaceName = ""
+    )
+    
+    try {
+        # First, get the org ID
+        $orgsResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/organizations?names=$OrgName"
+        
+        if (-not $orgsResponse -or $orgsResponse.pagination.total_results -eq 0) {
+            Write-Log "Org '$OrgName' not found" -Level "ERROR"
+            return $null
+        }
+        
+        $orgId = $orgsResponse.resources[0].guid
+        
+        # Get spaces in this org
+        $spacePath = "/v3/spaces?organization_guids=$orgId"
+        if (-not [string]::IsNullOrWhiteSpace($SpaceName)) {
+            $spacePath += "&names=$SpaceName"
+        }
+        
+        $spacesResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path $spacePath
+        
+        if (-not $spacesResponse -or $spacesResponse.pagination.total_results -eq 0) {
+            Write-Log "Space '$SpaceName' not found in org '$OrgName'" -Level "ERROR"
+            return $null
+        }
+        
+        # Return first space (or specified space)
+        return $spacesResponse.resources[0].guid
+    }
+    catch {
+        Write-Log "Error getting space ID: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to discover service instances by offering type
+function Get-CfServiceKeys {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InstanceName
+    )
+    
+    try {
+        Write-Log "Listing service keys for instance '$InstanceName'..."
+        
+        # Get space ID
+        if ([string]::IsNullOrWhiteSpace($script:CfOrgName) -or [string]::IsNullOrWhiteSpace($script:CfSpaceName)) {
+            Write-Log "CF org/space not set. Call Set-CfTarget first." -Level "ERROR"
+            return @()
+        }
+        
+        $spaceId = Get-CfSpaceId -OrgName $script:CfOrgName -SpaceName $script:CfSpaceName
+        if (-not $spaceId) {
+            return @()
+        }
+        
+        # Get service instance GUID by name
+        $instancesResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances?space_guids=$spaceId&names=$InstanceName"
+        
+        if (-not $instancesResponse -or $instancesResponse.pagination.total_results -eq 0) {
+            Write-Log "Service instance '$InstanceName' not found" -Level "ERROR"
+            return @()
+        }
+        
+        $instanceGuid = $instancesResponse.resources[0].guid
+        
+        # Get service credential bindings (keys) for this instance
+        $keysResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings?service_instance_guids=$instanceGuid&type=key"
+        
+        if (-not $keysResponse) {
+            Write-Log "Failed to list service keys" -Level "ERROR"
+            return @()
+        }
+        
+        # Extract key names
+        $keyNames = @($keysResponse.resources | ForEach-Object { $_.name })
+        
+        if ($keyNames.Count -gt 0) {
+            Write-Log "Found $($keyNames.Count) service key(s)" -Level "SUCCESS"
+        }
+        else {
+            Write-Log "No service keys found for instance '$InstanceName'" -Level "INFO"
+        }
+        
+        return $keyNames
+    }
+    catch {
+        Write-Log "Error listing service keys: $_" -Level "ERROR"
+        return @()
+    }
+}
+
+# Function to list service keys with full details
+function Get-CfServiceKeysWithDetails {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InstanceName
+    )
+    
+    try {
+        # Get space ID
+        if ([string]::IsNullOrWhiteSpace($script:CfOrgName) -or [string]::IsNullOrWhiteSpace($script:CfSpaceName)) {
+            Write-Log "CF org/space not set. Call Set-CfTarget first." -Level "ERROR"
+            return @()
+        }
+        
+        $spaceId = Get-CfSpaceId -OrgName $script:CfOrgName -SpaceName $script:CfSpaceName
+        if (-not $spaceId) {
+            return @()
+        }
+        
+        # Get service instance GUID by name
+        $instancesResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances?space_guids=$spaceId&names=$InstanceName"
+        
+        if (-not $instancesResponse -or $instancesResponse.pagination.total_results -eq 0) {
+            Write-Log "Service instance '$InstanceName' not found" -Level "ERROR"
+            return @()
+        }
+        
+        $instanceGuid = $instancesResponse.resources[0].guid
+        
+        # Get service credential bindings (keys) with full details
+        $keysResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings?service_instance_guids=$instanceGuid&type=key"
+        
+        if (-not $keysResponse) {
+            Write-Log "Failed to list service keys" -Level "ERROR"
+            return @()
+        }
+        
+        # Return full key objects (includes guid, name, created_at, updated_at)
+        return @($keysResponse.resources)
+    }
+    catch {
+        Write-Log "Error listing service keys with details: $_" -Level "ERROR"
+        return @()
+    }
+}
+
 # Function to get CF service key and parse JSON
 function Get-CfServiceKey {
     param(
         [string]$InstanceName,
-        [string]$KeyName
+        [string]$KeyName,
+        [int]$MaxRetries = 5,
+        [int]$InitialDelaySeconds = 5
     )
     
     try {
         Write-Log "Retrieving service key '$KeyName' for instance '$InstanceName'..."
         
-        # Get service key output (may contain informational text before JSON)
-        $rawOutput = cf service-key $InstanceName $KeyName 2>&1
-        
-        if ($LASTEXITCODE -ne 0) {
-            Write-Log "Failed to retrieve service key: $rawOutput" -Level "ERROR"
+        # Get space ID
+        if ([string]::IsNullOrWhiteSpace($script:CfOrgName) -or [string]::IsNullOrWhiteSpace($script:CfSpaceName)) {
+            Write-Log "CF org/space not set. Call Set-CfTarget first." -Level "ERROR"
             return $null
         }
         
-        # Extract JSON from the output (skip lines until we find the opening brace)
-        $jsonLines = @()
-        $jsonStarted = $false
+        $spaceId = Get-CfSpaceId -OrgName $script:CfOrgName -SpaceName $script:CfSpaceName
+        if (-not $spaceId) {
+            return $null
+        }
         
-        foreach ($line in $rawOutput) {
-            if ($line -match '^\s*\{') {
-                $jsonStarted = $true
+        # Get service instance GUID
+        $instancesResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances?space_guids=$spaceId&names=$InstanceName"
+        
+        if (-not $instancesResponse -or $instancesResponse.pagination.total_results -eq 0) {
+            Write-Log "Service instance '$InstanceName' not found" -Level "ERROR"
+            return $null
+        }
+        
+        $instanceGuid = $instancesResponse.resources[0].guid
+        
+        # Get service credential binding (key) by name
+        $keysResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings?service_instance_guids=$instanceGuid&type=key&names=$KeyName"
+        
+        if (-not $keysResponse -or $keysResponse.pagination.total_results -eq 0) {
+            Write-Log "Service key '$KeyName' not found" -Level "ERROR"
+            return $null
+        }
+        
+        $keyGuid = $keysResponse.resources[0].guid
+        
+        # Get key details (credentials) with retry logic for async provisioning
+        $attempt = 0
+        $delaySeconds = $InitialDelaySeconds
+        $keyDetailsResponse = $null
+        
+        while ($attempt -lt $MaxRetries) {
+            $attempt++
+            
+            $keyDetailsResponse = Invoke-CfApi `
+                -CfApiEndpoint $script:CfApiEndpoint `
+                -AccessToken $script:CfAccessToken `
+                -Path "/v3/service_credential_bindings/$keyGuid/details"
+            
+            # Check if we got a valid response
+            if ($keyDetailsResponse -and $keyDetailsResponse.credentials) {
+                break
             }
-            if ($jsonStarted) {
-                $jsonLines += $line
+            
+            # If this was the last attempt, fail
+            if ($attempt -ge $MaxRetries) {
+                Write-Log "Failed to retrieve key credentials after $MaxRetries attempts" -Level "ERROR"
+                return $null
             }
+            
+            # Key might still be provisioning - wait with exponential backoff
+            Write-Log "Key provisioning in progress (attempt $attempt/$MaxRetries). Waiting $delaySeconds seconds..." -Level "WARNING"
+            Start-Sleep -Seconds $delaySeconds
+            
+            # Exponential backoff: 2, 4, 8, 16 seconds
+            $delaySeconds = $delaySeconds * 2
         }
         
-        if ($jsonLines.Count -eq 0) {
-            Write-Log "No JSON found in service key output" -Level "ERROR"
+        if (-not $keyDetailsResponse) {
+            Write-Log "Failed to retrieve key credentials" -Level "ERROR"
             return $null
         }
         
-        # Parse the JSON
-        $jsonString = $jsonLines -join "`n"
-        $result = $jsonString | ConvertFrom-Json
+        Write-Log "Successfully retrieved service key (attempt $attempt/$MaxRetries)" -Level "SUCCESS"
         
-        if ($null -ne $result) {
-            Write-Log "Successfully retrieved service key" -Level "SUCCESS"
-            return $result
-        }
-        else {
-            Write-Log "Failed to parse service key JSON" -Level "ERROR"
-            return $null
-        }
+        # CF API v3 returns credentials directly in the response (no .credentials wrapper)
+        # Return the entire response as it contains the credentials
+        return $keyDetailsResponse
     }
     catch {
         Write-Log "Error retrieving service key: $_" -Level "ERROR"
-        Write-Log "Raw output: $rawOutput" -Level "ERROR"
         return $null
     }
 }
@@ -447,45 +739,74 @@ function Get-BtpServiceKeyCredentials {
     )
     
     try {
-        # Extract credentials from service key structure
-        $credentials = $ServiceKey.credentials
-        if ($null -eq $credentials) {
-            Write-Log "Service key missing 'credentials' property" -Level "ERROR"
-            return $null
+        # CF API v3 returns credentials directly (no wrapper), but structure may vary
+        # Try to detect if this is wrapped in .credentials or not
+        $credentials = $ServiceKey
+        
+        # If it has a .credentials property, use that (legacy format)
+        if ($null -ne $ServiceKey.credentials) {
+            $credentials = $ServiceKey.credentials
         }
         
-        # Validate required fields
-        if ([string]::IsNullOrWhiteSpace($credentials.uaa.clientid)) {
+        # Validate required fields - check both direct access and .uaa nested access
+        $clientId = $null
+        $clientSecret = $null
+        $uaaUrl = $null
+        $apiUrl = $null
+        
+        # Try direct access first (CF API v3 format)
+        if ($credentials.uaa) {
+            $clientId = $credentials.uaa.clientid
+            $clientSecret = $credentials.uaa.clientsecret
+            $uaaUrl = $credentials.uaa.url
+            $apiUrl = $credentials.url
+        }
+        # Fallback to old nested format if needed
+        elseif ($credentials.clientid) {
+            $clientId = $credentials.clientid
+            $clientSecret = $credentials.clientsecret
+            $uaaUrl = $credentials.url
+            $apiUrl = $credentials.url
+        }
+        
+        if ([string]::IsNullOrWhiteSpace($clientId)) {
             Write-Log "Service key missing UAA client ID" -Level "ERROR"
+            Write-Log "Service key structure: $($ServiceKey | ConvertTo-Json -Depth 3)" -Level "ERROR"
             return $null
         }
-        if ([string]::IsNullOrWhiteSpace($credentials.uaa.clientsecret)) {
+        if ([string]::IsNullOrWhiteSpace($clientSecret)) {
             Write-Log "Service key missing UAA client secret" -Level "ERROR"
             return $null
         }
-        if ([string]::IsNullOrWhiteSpace($credentials.uaa.url)) {
+        if ([string]::IsNullOrWhiteSpace($uaaUrl)) {
             Write-Log "Service key missing UAA URL" -Level "ERROR"
             return $null
         }
-        if ([string]::IsNullOrWhiteSpace($credentials.url)) {
+        if ([string]::IsNullOrWhiteSpace($apiUrl)) {
             Write-Log "Service key missing audit log API URL" -Level "ERROR"
             return $null
         }
         
         # Extract subdomain from UAA URL (e.g., https://subdomain.authentication.region.hana.ondemand.com)
         $subdomain = ""
-        if ($credentials.uaa.url -match "https?://([^.]+)\..*") {
+        if ($uaaUrl -match "https?://([^.]+)\..*") {
             $subdomain = $matches[1]
+        }
+        
+        # Extract subaccount ID
+        $subaccountId = $credentials.uaa.subaccountid
+        if ([string]::IsNullOrWhiteSpace($subaccountId)) {
+            $subaccountId = $credentials.subaccountid
         }
         
         # Return validated credentials object
         # Note: Full OAuth token endpoint path with grant_type parameter is required
         return @{
-            ClientId = $credentials.uaa.clientid
-            ClientSecret = $credentials.uaa.clientsecret
-            TokenEndpoint = "$($credentials.uaa.url)/oauth/token?grant_type=client_credentials"
-            ApiUrl = $credentials.url
-            SubaccountId = $credentials.uaa.subaccountid
+            ClientId = $clientId
+            ClientSecret = $clientSecret
+            TokenEndpoint = "$uaaUrl/oauth/token?grant_type=client_credentials"
+            ApiUrl = $apiUrl
+            SubaccountId = $subaccountId
             Subdomain = $subdomain
         }
     }
@@ -594,6 +915,7 @@ function New-BtpConnectionRequestBody {
 }
 
 # Function to create CF service instance
+# Returns: "created" if new instance was created, "exists" if already exists, $false on failure
 function New-CfServiceInstance {
     param(
         [string]$InstanceName,
@@ -604,22 +926,87 @@ function New-CfServiceInstance {
     try {
         Write-Log "Creating service instance '$InstanceName' with service '$Service' and plan '$Plan'..."
         
-        # Check if service instance already exists
-        $existingService = cf service $InstanceName 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Service instance '$InstanceName' already exists. Skipping creation." -Level "WARNING"
-            return $true
+        # Get space ID
+        if ([string]::IsNullOrWhiteSpace($script:CfOrgName) -or [string]::IsNullOrWhiteSpace($script:CfSpaceName)) {
+            Write-Log "CF org/space not set. Call Set-CfTarget first." -Level "ERROR"
+            return $false
         }
         
-        # Create service instance using CF CLI
-        $result = cf create-service $Service $Plan $InstanceName 2>&1
+        $spaceId = Get-CfSpaceId -OrgName $script:CfOrgName -SpaceName $script:CfSpaceName
+        if (-not $spaceId) {
+            return $false
+        }
         
-        if ($LASTEXITCODE -eq 0) {
-            Write-Log "Successfully created service instance '$InstanceName'" -Level "SUCCESS"
-            return $true
+        # Check if service instance already exists
+        $existingResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances?space_guids=$spaceId&names=$InstanceName"
+        
+        if ($existingResponse -and $existingResponse.pagination.total_results -gt 0) {
+            Write-Log "Service instance '$InstanceName' already exists. Skipping creation." -Level "WARNING"
+            return "exists"
+        }
+        
+        # Get service offering and plan GUIDs
+        # First, get service offerings
+        $offeringsResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_offerings?names=$Service"
+        
+        if (-not $offeringsResponse -or $offeringsResponse.pagination.total_results -eq 0) {
+            Write-Log "Service offering '$Service' not found" -Level "ERROR"
+            return $false
+        }
+        
+        $serviceOfferingGuid = $offeringsResponse.resources[0].guid
+        
+        # Get service plan
+        $plansResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_plans?service_offering_guids=$serviceOfferingGuid&names=$Plan"
+        
+        if (-not $plansResponse -or $plansResponse.pagination.total_results -eq 0) {
+            Write-Log "Service plan '$Plan' not found for service '$Service'" -Level "ERROR"
+            return $false
+        }
+        
+        $servicePlanGuid = $plansResponse.resources[0].guid
+        
+        # Create service instance
+        $createBody = @{
+            type = "managed"
+            name = $InstanceName
+            relationships = @{
+                space = @{
+                    data = @{
+                        guid = $spaceId
+                    }
+                }
+                service_plan = @{
+                    data = @{
+                        guid = $servicePlanGuid
+                    }
+                }
+            }
+        }
+        
+        $createResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances" `
+            -Method "POST" `
+            -Body $createBody
+        
+        if ($createResponse -and ($createResponse.Success -eq $true -or $createResponse.guid)) {
+            Write-Log "Successfully initiated creation of service instance '$InstanceName'" -Level "SUCCESS"
+            Write-Log "Note: Service instance creation is asynchronous. It may take a few minutes to complete." -Level "INFO"
+            return "created"
         }
         else {
-            Write-Log "Failed to create service instance '$InstanceName': $result" -Level "ERROR"
+            Write-Log "Failed to create service instance '$InstanceName' - check error details above" -Level "ERROR"
             return $false
         }
     }
@@ -629,7 +1016,7 @@ function New-CfServiceInstance {
     }
 }
 
-# Function to create CF service key
+# Function to create CF service key (CF API-based)
 function New-CfServiceKey {
     param(
         [string]$InstanceName,
@@ -639,27 +1026,106 @@ function New-CfServiceKey {
     try {
         Write-Log "Creating service key '$KeyName' for service instance '$InstanceName'..."
         
-        # Check if service key already exists
-        $existingKey = cf service-key $InstanceName $KeyName 2>&1
-        if ($LASTEXITCODE -eq 0) {
+        # Get space ID
+        if ([string]::IsNullOrWhiteSpace($script:CfOrgName) -or [string]::IsNullOrWhiteSpace($script:CfSpaceName)) {
+            Write-Log "CF org/space not set. Call Set-CfTarget first." -Level "ERROR"
+            return $false
+        }
+        
+        $spaceId = Get-CfSpaceId -OrgName $script:CfOrgName -SpaceName $script:CfSpaceName
+        if (-not $spaceId) {
+            return $false
+        }
+        
+        # Get service instance GUID
+        $instancesResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_instances?space_guids=$spaceId&names=$InstanceName"
+        
+        if (-not $instancesResponse -or $instancesResponse.pagination.total_results -eq 0) {
+            Write-Log "Service instance '$InstanceName' not found" -Level "ERROR"
+            return $false
+        }
+        
+        $instanceGuid = $instancesResponse.resources[0].guid
+        
+        # Check if key already exists
+        $existingKeysResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings?service_instance_guids=$instanceGuid&type=key&names=$KeyName"
+        
+        if ($existingKeysResponse -and $existingKeysResponse.pagination.total_results -gt 0) {
             Write-Log "Service key '$KeyName' already exists. Skipping creation." -Level "WARNING"
             return $true
         }
         
-        # Create service key
-        $result = cf create-service-key $InstanceName $KeyName 2>&1
+        # Create the service key
+        $createKeyBody = @{
+            type = "key"
+            name = $KeyName
+            relationships = @{
+                service_instance = @{
+                    data = @{
+                        guid = $instanceGuid
+                    }
+                }
+            }
+        }
         
-        if ($LASTEXITCODE -eq 0) {
+        $newKeyResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings" `
+            -Method "POST" `
+            -Body $createKeyBody
+        
+        if ($newKeyResponse -and ($newKeyResponse.Success -eq $true -or $newKeyResponse.guid)) {
             Write-Log "Successfully created service key '$KeyName'" -Level "SUCCESS"
             return $true
         }
         else {
-            Write-Log "Failed to create service key '$KeyName': $result" -Level "ERROR"
+            Write-Log "Failed to create service key '$KeyName' - check error details above" -Level "ERROR"
             return $false
         }
     }
     catch {
         Write-Log "Error creating service key: $_" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to delete CF service key (CF API-based)
+function Remove-CfServiceKey {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$KeyGuid,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$KeyName = "Unknown"
+    )
+    
+    try {
+        Write-Log "Deleting service key '$KeyName' (GUID: $KeyGuid)..."
+        
+        $deleteResponse = Invoke-CfApi `
+            -CfApiEndpoint $script:CfApiEndpoint `
+            -AccessToken $script:CfAccessToken `
+            -Path "/v3/service_credential_bindings/$KeyGuid" `
+            -Method "DELETE"
+        
+        if ($deleteResponse -and ($deleteResponse.Success -eq $true -or $deleteResponse.guid)) {
+            Write-Log "Successfully deleted service key '$KeyName'" -Level "SUCCESS"
+            return $true
+        }
+        else {
+            Write-Log "Failed to delete service key '$KeyName'" -Level "ERROR"
+            return $false
+        }
+    }
+    catch {
+        Write-Log "Error deleting service key: $_" -Level "ERROR"
         return $false
     }
 }
@@ -752,6 +1218,288 @@ function Export-BtpSubaccountsCsv {
     }
 }
 
+# Function to export service key credentials to CSV (for split permissions scenarios)
+# WARNING: This stores sensitive credentials in plaintext. Use only for testing or with secure file transfer.
+function Export-ServiceKeyToCsv {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CsvPath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Credentials
+    )
+    
+    try {
+        if (-not (Test-Path $CsvPath)) {
+            Write-Log "CSV file not found at path: $CsvPath" -Level "ERROR"
+            return $false
+        }
+        
+        Write-Log "Exporting service key credentials for subaccount '$SubaccountId' to CSV..."
+        
+        # Load existing CSV
+        $csvData = Import-Csv -Path $CsvPath -Delimiter ';'
+        
+        # Find the row matching this subaccount
+        $updated = $false
+        foreach ($row in $csvData) {
+            if ($row.SubaccountId -eq $SubaccountId) {
+                # Add credential columns to this row
+                $row | Add-Member -NotePropertyName 'ClientId' -NotePropertyValue $Credentials.ClientId -Force
+                $row | Add-Member -NotePropertyName 'ClientSecret' -NotePropertyValue $Credentials.ClientSecret -Force
+                $row | Add-Member -NotePropertyName 'TokenEndpoint' -NotePropertyValue $Credentials.TokenEndpoint -Force
+                $row | Add-Member -NotePropertyName 'ApiUrl' -NotePropertyValue $Credentials.ApiUrl -Force
+                $row | Add-Member -NotePropertyName 'Subdomain' -NotePropertyValue $Credentials.Subdomain -Force
+                $updated = $true
+                Write-Log "Updated credentials for subaccount '$SubaccountId'" -Level "SUCCESS"
+                break
+            }
+        }
+        
+        if (-not $updated) {
+            Write-Log "Subaccount '$SubaccountId' not found in CSV" -Level "ERROR"
+            return $false
+        }
+        
+        # Write back to CSV
+        $csvData | Export-Csv -Path $CsvPath -Delimiter ';' -NoTypeInformation
+        Write-Log "Successfully exported credentials to CSV" -Level "SUCCESS"
+        Write-Log "WARNING: CSV contains sensitive credentials in plaintext. Secure this file appropriately." -Level "WARNING"
+        
+        return $true
+    }
+    catch {
+        Write-Log "Error exporting service key to CSV: $_" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to import service key credentials from CSV (for split permissions scenarios)
+function Get-ServiceKeyFromCsv {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CsvPath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId
+    )
+    
+    try {
+        if (-not (Test-Path $CsvPath)) {
+            Write-Log "CSV file not found at path: $CsvPath" -Level "ERROR"
+            return $null
+        }
+        
+        Write-Log "Loading service key credentials for subaccount '$SubaccountId' from CSV..."
+        
+        # Load CSV
+        $csvData = Import-Csv -Path $CsvPath -Delimiter ';'
+        
+        # Find the row matching this subaccount
+        $row = $csvData | Where-Object { $_.SubaccountId -eq $SubaccountId } | Select-Object -First 1
+        
+        if ($null -eq $row) {
+            Write-Log "Subaccount '$SubaccountId' not found in CSV" -Level "ERROR"
+            return $null
+        }
+        
+        # Check if credential columns exist and are populated
+        $requiredFields = @('ClientId', 'ClientSecret', 'TokenEndpoint', 'ApiUrl', 'Subdomain')
+        $missingFields = @()
+        
+        foreach ($field in $requiredFields) {
+            if (-not $row.PSObject.Properties.Name.Contains($field) -or 
+                [string]::IsNullOrWhiteSpace($row.$field)) {
+                $missingFields += $field
+            }
+        }
+        
+        if ($missingFields.Count -gt 0) {
+            Write-Log "CSV row for subaccount '$SubaccountId' missing required credential fields: $($missingFields -join ', ')" -Level "ERROR"
+            return $null
+        }
+        
+        # Return credentials object matching the format from Get-BtpServiceKeyCredentials
+        $credentials = @{
+            ClientId = $row.ClientId
+            ClientSecret = $row.ClientSecret
+            TokenEndpoint = $row.TokenEndpoint
+            ApiUrl = $row.ApiUrl
+            SubaccountId = $SubaccountId
+            Subdomain = $row.Subdomain
+        }
+        
+        Write-Log "Successfully loaded credentials from CSV" -Level "SUCCESS"
+        return $credentials
+    }
+    catch {
+        Write-Log "Error reading service key from CSV: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to export service key credentials to Azure Key Vault (for split permissions scenarios)
+function Export-ServiceKeyToKeyVault {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$KeyVaultName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Credentials
+    )
+    
+    try {
+        Write-Log "Exporting service key credentials for subaccount '$SubaccountId' to Key Vault '$KeyVaultName'..."
+        
+        # Normalize subaccount ID for secret name (replace invalid characters)
+        $normalizedId = $SubaccountId -replace '[^a-zA-Z0-9-]', '-'
+        
+        # Secret name: btp-{subaccount-id}
+        $secretName = "btp-$normalizedId"
+        
+        # Create JSON object with all credentials
+        $credentialsJson = @{
+            ClientId = $Credentials.ClientId
+            ClientSecret = $Credentials.ClientSecret
+            TokenEndpoint = $Credentials.TokenEndpoint
+            ApiUrl = $Credentials.ApiUrl
+            Subdomain = $Credentials.Subdomain
+        } | ConvertTo-Json -Compress
+        
+        # Store as single secret - use PowerShell's call operator with proper escaping
+        Write-Log "Storing credentials as secret: $secretName"
+        
+        # Escape JSON for Azure CLI - need to escape double quotes
+        $escapedJson = $credentialsJson.Replace('"', '\"')
+        
+        # Use az CLI with properly escaped JSON
+        $result = az keyvault secret set --vault-name $KeyVaultName --name $secretName --value $escapedJson 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "Successfully stored credentials to Key Vault" -Level "SUCCESS"
+            return $true
+        } else {
+            # Check for common permission errors
+            $errorMessage = $result -join " "
+            
+            if ($errorMessage -match "Forbidden|ForbiddenByRbac|not authorized") {
+                Write-Log "Access denied to Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure your account has the 'Key Vault Secrets Officer' role assignment" -Level "ERROR"
+                Write-Log "Run: az role assignment create --role 'Key Vault Secrets Officer' --assignee <your-email> --scope /subscriptions/$SubscriptionId/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/$KeyVaultName" -Level "ERROR"
+            } elseif ($errorMessage -match "ObjectIsDeletedButRecoverable|deleted but recoverable") {
+                Write-Log "Secret '$secretName' is in deleted state (soft-delete enabled)" -Level "WARNING"
+                Write-Log "Purging and recreating..." -Level "INFO"
+                
+                # Purge the deleted secret
+                $purgeResult = & az keyvault secret purge --vault-name $KeyVaultName --name $secretName 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Successfully purged deleted secret" -Level "SUCCESS"
+                    Start-Sleep -Seconds 2
+                    
+                    # Retry creation
+                    $result = & az @azArgs 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Successfully stored credentials to Key Vault" -Level "SUCCESS"
+                        return $true
+                    } else {
+                        Write-Log "Failed to store secret after purge: $result" -Level "ERROR"
+                        return $false
+                    }
+                } else {
+                    Write-Log "Failed to purge secret: $purgeResult" -Level "ERROR"
+                    Write-Log "Run: az keyvault secret purge --vault-name $KeyVaultName --name $secretName" -Level "ERROR"
+                    return $false
+                }
+            } elseif ($errorMessage -match "not found|does not exist") {
+                Write-Log "Key Vault '$KeyVaultName' not found" -Level "ERROR"
+                Write-Log "Please verify the Key Vault name and ensure it exists" -Level "ERROR"
+            } else {
+                Write-Log "Failed to store secret: $result" -Level "ERROR"
+            }
+            
+            return $false
+        }
+    }
+    catch {
+        Write-Log "Error exporting service key to Key Vault: $_" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to import service key credentials from Azure Key Vault (for split permissions scenarios)
+function Get-ServiceKeyFromKeyVault {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$KeyVaultName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId
+    )
+    
+    try {
+        Write-Log "Loading service key credentials for subaccount '$SubaccountId' from Key Vault '$KeyVaultName'..."
+        
+        # Normalize subaccount ID for secret name (replace invalid characters)
+        $normalizedId = $SubaccountId -replace '[^a-zA-Z0-9-]', '-'
+        
+        # Secret name: btp-{subaccount-id}
+        $secretName = "btp-$normalizedId"
+        
+        # Retrieve the secret
+        Write-Log "Retrieving secret: $secretName"
+        $result = az keyvault secret show --vault-name $KeyVaultName --name $secretName --query "value" -o tsv 2>&1
+        
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($result)) {
+            # Check for common errors
+            $errorMessage = $result -join " "
+            
+            if ($errorMessage -match "Forbidden|ForbiddenByRbac|not authorized") {
+                Write-Log "Access denied to Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure your account has the 'Key Vault Secrets User' role assignment" -Level "ERROR"
+            } elseif ($errorMessage -match "SecretNotFound|not found") {
+                Write-Log "Secret '$secretName' not found in Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure credentials were exported using -ExportCredentialsToKeyVault" -Level "ERROR"
+            } elseif ($errorMessage -match "VaultNotFound|does not exist") {
+                Write-Log "Key Vault '$KeyVaultName' not found" -Level "ERROR"
+            } else {
+                Write-Log "Failed to retrieve secret '$secretName': $result" -Level "ERROR"
+            }
+            
+            return $null
+        }
+        
+        Write-Log "Successfully retrieved secret '$secretName'" -Level "SUCCESS"
+        
+        # Parse JSON
+        $credentialsObj = $result | ConvertFrom-Json
+        
+        # Return credentials object matching the format from Get-BtpServiceKeyCredentials
+        $credentials = @{
+            ClientId = $credentialsObj.ClientId
+            ClientSecret = $credentialsObj.ClientSecret
+            TokenEndpoint = $credentialsObj.TokenEndpoint
+            ApiUrl = $credentialsObj.ApiUrl
+            SubaccountId = $SubaccountId
+            Subdomain = $credentialsObj.Subdomain
+        }
+        
+        Write-Log "Successfully loaded credentials from Key Vault" -Level "SUCCESS"
+        return $credentials
+    }
+    catch {
+        Write-Log "Error reading service key from Key Vault: $_" -Level "ERROR"
+        return $null
+    }
+}
+
 # Function to create SAP BTP connection in Microsoft Sentinel
 function New-SentinelBtpConnection {
     param(
@@ -778,14 +1526,21 @@ function New-SentinelBtpConnection {
     )
     
     try {
-        # Sanitize connection name to be URL-compliant by removing unsupported characters
-        # Keep only alphanumeric, hyphens, underscores, and periods
-        $sanitizedConnectionName = $ConnectionName -replace '[^a-zA-Z0-9\-_\.]', ''
-        
-        Write-Log "Creating SAP BTP connection '$sanitizedConnectionName' for subaccount '$SubaccountId'..."
-        if ($sanitizedConnectionName -ne $ConnectionName) {
-            Write-Log "  Original name '$ConnectionName' was sanitized for URL compliance" -Level "WARNING"
+        # Validate SubaccountId is a valid GUID (connector ID must be the subaccount GUID)
+        try {
+            $guidTest = [System.Guid]::Parse($SubaccountId)
         }
+        catch {
+            Write-Log "SubaccountId '$SubaccountId' is not a valid GUID" -Level "ERROR"
+            return $false
+        }
+        
+        # Use SubaccountId (GUID) as the connector ID (already validated as proper GUID format)
+        $connectorId = $SubaccountId.ToLower()
+        
+        Write-Log "Creating SAP BTP connection for subaccount '$SubaccountId'..."
+        Write-Log "  Connector ID (ARM resource): $connectorId"
+        Write-Log "  Display Name: $ConnectionName"
         
         # Validate credentials
         $requiredFields = @('ClientId', 'ClientSecret', 'TokenEndpoint', 'ApiUrl')
@@ -817,17 +1572,16 @@ function New-SentinelBtpConnection {
         }
         
         # Build request body with DCR configuration
-        # Use sanitized connection name for SubaccountName to ensure consistency
-        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -DcrConfig $DcrConfig -SubaccountName $sanitizedConnectionName -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
+        # Use ConnectionName for display/friendly name in the connection properties
+        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -DcrConfig $DcrConfig -SubaccountName $ConnectionName -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
         if ($null -eq $bodyObject) {
             return $false
         }
         
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
-        # Construct ARM API URI
-        # Construct ARM API URI - backtick escapes ? to ensure it's treated as literal character
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$sanitizedConnectionName`?api-version=$ApiVersion"
+        # Construct ARM API URI using SubaccountId (GUID) as the connector resource ID
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$connectorId`?api-version=$ApiVersion"
         
         # Create headers
         $headers = @{
@@ -838,7 +1592,8 @@ function New-SentinelBtpConnection {
         # Make REST API call
         $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $body
         
-        Write-Log "Successfully created SAP BTP connection '$sanitizedConnectionName'" -Level "SUCCESS"
+        Write-Log "Successfully created SAP BTP connection with connector ID '$connectorId'" -Level "SUCCESS"
+        Write-Log "  Display Name: $ConnectionName"
         Write-Log "  Subaccount: $SubaccountId"
         Write-Log "  API Endpoint: $($BtpCredentials.ApiUrl)"
         return $true
@@ -864,38 +1619,32 @@ function New-SentinelBtpConnection {
 # Function to get list of BTP subaccounts
 function Get-BtpSubaccounts {
     try {
-        Write-Log "Retrieving list of BTP subaccounts..."
-        $subaccountsOutput = btp list accounts/subaccount 2>&1
+        Write-Log "Retrieving BTP subaccounts..."
+        
+        # Use --format json for reliable parsing
+        $subaccountsJson = btp --format json list accounts/subaccount 2>&1 | Out-String
         
         if ($LASTEXITCODE -ne 0) {
-            Write-Log "Failed to retrieve subaccounts: $subaccountsOutput" -Level "ERROR"
+            Write-Log "Failed to retrieve subaccounts: $subaccountsJson" -Level "ERROR"
             return $null
         }
         
-        # Parse table output
-        $subaccounts = @()
-        $headerPassed = $false
+        # Parse JSON output
+        $subaccountsData = $subaccountsJson | ConvertFrom-Json
         
-        foreach ($line in $subaccountsOutput) {
-            if ($line -match 'guid|subaccount id') {
-                $headerPassed = $true
-                continue
-            }
-            
-            if ($line -match '^[-\s]+$' -or [string]::IsNullOrWhiteSpace($line)) {
-                continue
-            }
-            
-            if ($headerPassed) {
-                $columns = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                
-                if ($columns.Count -ge 2) {
-                    $subaccounts += [PSCustomObject]@{
-                        guid = $columns[0].Trim()
-                        displayName = $columns[1].Trim()
-                        region = if ($columns.Count -ge 4) { $columns[3].Trim() } else { "" }
-                    }
-                }
+        if (-not $subaccountsData.value -or $subaccountsData.value.Count -eq 0) {
+            Write-Log "No subaccounts found" -Level "WARNING"
+            return @()
+        }
+        
+        # Return array of subaccounts (maintains compatibility with existing code)
+        $subaccounts = $subaccountsData.value | ForEach-Object {
+            [PSCustomObject]@{
+                guid = $_.guid
+                displayName = $_.displayName
+                subdomain = $_.subdomain
+                region = $_.region
+                state = $_.state
             }
         }
         
@@ -916,79 +1665,69 @@ function Get-BtpSubaccountCfDetails {
     )
     
     try {
-        # Get Cloud Foundry environment instances
-        $envInstancesOutput = btp list accounts/environment-instance --subaccount $SubaccountId 2>&1
+        # Get Cloud Foundry environment instances using --format json
+        $envInstancesJson = btp --format json list accounts/environment-instance --subaccount $SubaccountId 2>&1 | Out-String
         
         if ($LASTEXITCODE -ne 0) {
             Write-Log "Failed to list environment instances for subaccount $SubaccountId" -Level "WARNING"
             return $null
         }
         
-        # Join all output lines into a single string to handle line wrapping
-        $fullOutput = $envInstancesOutput -join " "
+        # Parse JSON output
+        $envInstancesData = $envInstancesJson | ConvertFrom-Json
         
-        # Find Cloud Foundry instance ID using regex pattern
-        # Pattern looks for: any text followed by GUID format followed by "cloudfoundry"
-        # GUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
-        $cfInstanceId = $null
-        
-        if ($fullOutput -match '([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\s+cloudfoundry') {
-            $cfInstanceId = $matches[1]
-            Write-Log "Found Cloud Foundry instance ID: $cfInstanceId"
-        }
-        else {
-            Write-Log "Could not find cloudfoundry environment instance in output" -Level "WARNING"
+        if (-not $envInstancesData.environmentInstances) {
+            Write-Log "No environment instances found for subaccount $SubaccountId" -Level "WARNING"
+            return $null
         }
         
-        if ([string]::IsNullOrWhiteSpace($cfInstanceId)) {
+        # Find Cloud Foundry instance
+        $cfInstance = $envInstancesData.environmentInstances | Where-Object { $_.environmentType -eq "cloudfoundry" }
+        
+        if (-not $cfInstance) {
             Write-Log "No Cloud Foundry instance found for subaccount $SubaccountId" -Level "WARNING"
             return $null
         }
         
-        # Get CF instance details
-        $cfDetailsOutput = btp get accounts/environment-instance $cfInstanceId --subaccount $SubaccountId 2>&1
+        Write-Log "Found Cloud Foundry instance: $($cfInstance.name) (ID: $($cfInstance.id))"
         
-        if ($LASTEXITCODE -ne 0) {
-            Write-Log "Failed to get CF instance details for subaccount $SubaccountId" -Level "WARNING"
-            return $null
+        # Parse labels (it's a JSON string in the response)
+        $labels = $cfInstance.labels | ConvertFrom-Json
+        
+        # Handle inconsistent label keys - some have trailing colons, some don't
+        # Try both formats: "API Endpoint" and "API Endpoint:"
+        $cfApiEndpoint = $labels.'API Endpoint'
+        if ([string]::IsNullOrWhiteSpace($cfApiEndpoint)) {
+            $cfApiEndpoint = $labels.'API Endpoint:'
         }
         
-        # Parse CF details - join output to handle line wrapping
-        $fullDetailsOutput = $cfDetailsOutput -join " "
-        
-        $cfApiEndpoint = $null
-        $cfOrgId = $null
-        $cfOrgName = $null
-        
-        # Extract labels JSON using regex - it appears between "labels:" and "service name:"
-        if ($fullDetailsOutput -match 'labels:\s+(\{.+?\})\s+service name:') {
-            $labelsJson = $matches[1].Trim()
-            try {
-                $labels = $labelsJson | ConvertFrom-Json
-                
-                # Handle both formats: with and without trailing colons in property names
-                $cfApiEndpoint = if ($labels.'API Endpoint:') { $labels.'API Endpoint:' } else { $labels.'API Endpoint' }
-                $cfOrgId = if ($labels.'Org ID:') { $labels.'Org ID:' } else { $labels.'Org ID' }
-                $cfOrgName = if ($labels.'Org Name:') { $labels.'Org Name:' } else { $labels.'Org Name' }
-            }
-            catch {
-                Write-Log "Failed to parse labels JSON for subaccount $SubaccountId : $_" -Level "WARNING"
-                Write-Log "Labels JSON: $labelsJson" -Level "WARNING"
-            }
+        $cfOrgId = $labels.'Org ID'
+        if ([string]::IsNullOrWhiteSpace($cfOrgId)) {
+            $cfOrgId = $labels.'Org ID:'
         }
-        else {
-            Write-Log "Could not find labels in output for subaccount $SubaccountId" -Level "WARNING"
+        
+        $cfOrgName = $labels.'Org Name'
+        if ([string]::IsNullOrWhiteSpace($cfOrgName)) {
+            $cfOrgName = $labels.'Org Name:'
         }
         
         if ([string]::IsNullOrWhiteSpace($cfApiEndpoint) -or [string]::IsNullOrWhiteSpace($cfOrgName)) {
-            Write-Log "Could not extract CF details for subaccount $SubaccountId" -Level "WARNING"
+            Write-Log "Could not extract CF details from environment instance for subaccount $SubaccountId" -Level "WARNING"
+            Write-Log "  Available labels: $($labels | ConvertTo-Json -Compress)" -Level "WARNING"
             return $null
+        }
+        
+        # Extract region from API endpoint (e.g., https://api.cf.eu10.hana.ondemand.com -> eu10)
+        $cfRegion = $null
+        if ($cfApiEndpoint -match '\.cf\.([^.]+)\.') {
+            $cfRegion = $matches[1]
         }
         
         return @{
             ApiEndpoint = $cfApiEndpoint
             OrgId = $cfOrgId
             OrgName = $cfOrgName
+            Region = $cfRegion
         }
     }
     catch {
@@ -1009,37 +1748,105 @@ function Get-SentinelWorkspaceDetails {
     )
     
     try {
-        Write-Log "Getting workspace details for '$WorkspaceName'..."
+        Write-Log "Getting workspace details via Azure Resource Graph for '$WorkspaceName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
             return $null
         }
         
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName`?api-version=2022-10-01"
-        
         $headers = @{
             "Authorization" = "Bearer $token"
             "Content-Type" = "application/json"
         }
+
+        $argQuery = @"
+Resources
+| where subscriptionId =~ '$SubscriptionId'
+| where resourceGroup =~ '$ResourceGroupName'
+| where type =~ 'Microsoft.OperationalInsights/workspaces' and name =~ '$WorkspaceName'
+| extend workspaceGuid = tostring(properties.customerId)
+| extend workspaceShortId = substring(workspaceGuid, 0, 12)
+| project workspaceId = id, workspaceLocation = location, workspaceName = name, workspaceGuid, workspaceShortId, 
+    dceName = strcat('ASI-', workspaceGuid), 
+    dcrNamePrefix = strcat('Microsoft-Sentinel-SAP-BTP-DCR-', workspaceShortId),
+    resourceName = '', resourceType = '', resourceId = '', resourceProperties = dynamic({})
+| union (
+    Resources
+    | where subscriptionId =~ '$SubscriptionId'
+    | where resourceGroup =~ '$ResourceGroupName'
+    | where type in~ ('Microsoft.Insights/dataCollectionEndpoints', 'Microsoft.Insights/dataCollectionRules')
+    | project workspaceId = '', workspaceLocation = '', workspaceName = '', workspaceGuid = '', workspaceShortId = '', 
+        dceName = '', dcrNamePrefix = '', 
+        resourceName = name, resourceType = type, resourceId = id, resourceProperties = properties
+)
+"@
         
-        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+        $argBody = @{
+            subscriptions = @($SubscriptionId)
+            query = $argQuery
+        } | ConvertTo-Json -Depth 10
         
-        # Extract a short ID from workspace ID for naming (first 12 chars of last GUID segment)
-        $workspaceId = $response.properties.customerId
-        $shortId = $workspaceId.Substring(0, [Math]::Min(12, $workspaceId.Length))
+        $uri = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+        $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $argBody
         
-        Write-Log "Workspace details retrieved successfully" -Level "SUCCESS"
-        Write-Log "  Location: $($response.location)"
-        Write-Log "  Workspace ID: $workspaceId"
-        Write-Log "  Short ID for naming: $shortId"
+        if ($null -eq $response.data -or $response.data.Count -eq 0) {
+            Write-Log "Workspace '$WorkspaceName' not found in resource group '$ResourceGroupName'" -Level "ERROR"
+            return $null
+        }
+        
+        $workspaceRow = $response.data | Where-Object { -not [string]::IsNullOrEmpty($_.workspaceName) } | Select-Object -First 1
+        
+        if ($null -eq $workspaceRow) {
+            Write-Log "Workspace '$WorkspaceName' not found in ARG response" -Level "ERROR"
+            return $null
+        }
+        
+        $dceName = $workspaceRow.dceName
+        $dcrNamePrefix = $workspaceRow.dcrNamePrefix
+        
+        $dceRow = $response.data | Where-Object { 
+            $_.resourceType -eq "microsoft.insights/datacollectionendpoints" -and $_.resourceName -eq $dceName 
+        } | Select-Object -First 1
+        
+        $dcrRow = $response.data | Where-Object { 
+            $_.resourceType -eq "microsoft.insights/datacollectionrules" -and $_.resourceName -like "$dcrNamePrefix*" 
+        } | Select-Object -First 1
+        
+        Write-Log "Workspace details retrieved successfully via ARG" -Level "SUCCESS"
+        Write-Log "  Location: $($workspaceRow.workspaceLocation)"
+        Write-Log "  Workspace GUID: $($workspaceRow.workspaceGuid)"
+        Write-Log "  Short ID for naming: $($workspaceRow.workspaceShortId)"
+        
+        $dceInfo = $null
+        if ($dceRow) {
+            Write-Log "  Found existing DCE: $($dceRow.resourceName)" -Level "SUCCESS"
+            $dceInfo = @{
+                Name = $dceRow.resourceName
+                ResourceId = $dceRow.resourceId
+                LogsIngestionEndpoint = $dceRow.resourceProperties.logsIngestion.endpoint
+            }
+        }
+        
+        $dcrInfo = $null
+        if ($dcrRow) {
+            Write-Log "  Found existing DCR: $($dcrRow.resourceName)" -Level "SUCCESS"
+            $dcrInfo = @{
+                Name = $dcrRow.resourceName
+                ResourceId = $dcrRow.resourceId
+                ImmutableId = $dcrRow.resourceProperties.immutableId
+                DataCollectionEndpointId = $dcrRow.resourceProperties.dataCollectionEndpointId
+            }
+        }
         
         return @{
-            ResourceId = $response.id
-            Location = $response.location
-            WorkspaceId = $workspaceId
-            ShortId = $shortId
+            ResourceId = $workspaceRow.workspaceId
+            Location = $workspaceRow.workspaceLocation
+            WorkspaceGuid = $workspaceRow.workspaceGuid
+            ShortId = $workspaceRow.workspaceShortId
             Name = $WorkspaceName
+            ExistingDCE = $dceInfo
+            ExistingDCR = $dcrInfo
         }
     }
     catch {
@@ -1048,24 +1855,24 @@ function Get-SentinelWorkspaceDetails {
     }
 }
 
-# Function to get or create Data Collection Endpoint for SAP BTP
-function Get-OrCreateDataCollectionEndpoint {
+# Function to create a new Data Collection Endpoint for SAP BTP
+# Only called when DCE doesn't exist (checked via ARG query upfront)
+function New-DataCollectionEndpoint {
     param(
         [Parameter(Mandatory=$true)]
         [string]$SubscriptionId,
         [Parameter(Mandatory=$true)]
         [string]$ResourceGroupName,
         [Parameter(Mandatory=$true)]
-        [string]$WorkspaceShortId,
+        [string]$WorkspaceGuid,
         [Parameter(Mandatory=$true)]
         [string]$Location
     )
     
     try {
-        # DCE naming convention matching portal: Microsoft-Sentinel-SAP-BTP-{workspace-short-id}
-        $dceName = "Microsoft-Sentinel-SAP-BTP-$WorkspaceShortId"
+        $dceName = "ASI-$WorkspaceGuid"
         
-        Write-Log "Checking for existing Data Collection Endpoint '$dceName'..."
+        Write-Log "Creating Data Collection Endpoint '$dceName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
@@ -1079,29 +1886,6 @@ function Get-OrCreateDataCollectionEndpoint {
         
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionEndpoints/$dceName`?api-version=2022-06-01"
         
-        # Try to get existing DCE
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
-            
-            Write-Log "Found existing DCE '$dceName'" -Level "SUCCESS"
-            Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
-            
-            return @{
-                Name = $dceName
-                ResourceId = $response.id
-                LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
-            }
-        }
-        catch {
-            if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-Log "DCE '$dceName' not found, creating new one..."
-            }
-            else {
-                throw $_
-            }
-        }
-        
-        # Create new DCE
         $dceBody = @{
             location = $Location
             properties = @{
@@ -1123,22 +1907,98 @@ function Get-OrCreateDataCollectionEndpoint {
         }
     }
     catch {
-        Write-Log "Error with Data Collection Endpoint: $_" -Level "ERROR"
+        Write-Log "Error creating Data Collection Endpoint: $_" -Level "ERROR"
         return $null
     }
 }
 
-# Function to get Data Collection Endpoint by resource ID
-# DCE naming pattern differs from DCR - DCE uses patterns like ASI-{guid}
-# DCE logsIngestion URL format: https://{dce-name-lowercase}-{random}.{region}.ingest.monitor.azure.com
-function Get-DataCollectionEndpointById {
+# Function to create or verify Log Analytics table exists
+# Creates the table with schema from template if it doesn't exist
+function Get-OrCreateLogAnalyticsTable {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$DataCollectionEndpointId
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName,
+        [Parameter(Mandatory=$true)]
+        [string]$TableName,
+        [Parameter(Mandatory=$true)]
+        [array]$Columns
     )
     
     try {
-        Write-Log "Getting Data Collection Endpoint details from: $DataCollectionEndpointId"
+        Write-Log "Checking if Log Analytics table '$TableName' exists..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $false
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/tables/$TableName`?api-version=2021-12-01-preview"
+        
+        try {
+            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+            Write-Log "Table '$TableName' already exists" -Level "SUCCESS"
+            return $true
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+                Write-Log "Table '$TableName' not found, creating..."
+            }
+            else {
+                throw $_
+            }
+        }
+        
+        $hasTimeGenerated = $Columns | Where-Object { $_.name -eq "TimeGenerated" }
+        if (-not $hasTimeGenerated) {
+            Write-Log "Adding TimeGenerated column to table schema"
+            $Columns = @(@{ name = "TimeGenerated"; type = "datetime" }) + $Columns
+        }
+        
+        $tableBody = @{
+            properties = @{
+                schema = @{
+                    name = $TableName
+                    columns = $Columns
+                }
+            }
+        } | ConvertTo-Json -Depth 10
+        
+        Write-Log "Creating table with $($Columns.Count) columns..."
+        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $tableBody
+        
+        Write-Log "Successfully created table '$TableName'" -Level "SUCCESS"
+        return $true
+    }
+    catch {
+        Write-Log "Error with Log Analytics table: $_" -Level "ERROR"
+        Write-Log "Table creation is required before DCR can ingest data" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to query SAP BTP Content Template API for DCR schema
+# Returns DCR configuration from the Content Hub template including columns, streams, and transforms
+function Get-SapBtpContentTemplate {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName
+    )
+    
+    try {
+        Write-Log "Querying Content Template API for SAP BTP DCR schema..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
@@ -1150,109 +2010,191 @@ function Get-DataCollectionEndpointById {
             "Content-Type" = "application/json"
         }
         
-        $uri = "https://management.azure.com$DataCollectionEndpointId`?api-version=2022-06-01"
+        $contentId = "SAPBTPAuditEvents"
+        $filterExpression = "properties/contentId eq '$contentId'"
+        $encodedFilter = [System.Web.HttpUtility]::UrlEncode($filterExpression)
         
-        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+        $listUri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/contentTemplates?api-version=2023-11-01&`$filter=$encodedFilter"
         
-        # Extract DCE name from resource ID
-        $dceName = $DataCollectionEndpointId.Split('/')[-1]
+        Write-Log "Listing content templates to find resource ID..."
+        $listResponse = Invoke-RestMethod -Uri $listUri -Method Get -Headers $headers
         
-        Write-Log "Found DCE '$dceName'" -Level "SUCCESS"
-        Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
+        if ($null -eq $listResponse.value -or $listResponse.value.Count -eq 0) {
+            Write-Log "SAP BTP content template not found. Is the solution installed from Content Hub?" -Level "WARNING"
+            return $null
+        }
+        
+        $template = $listResponse.value[0]
+        $templateResourceId = $template.id
+        Write-Log "Found template: $($template.name)"
+        
+        $getUri = "https://management.azure.com$templateResourceId`?api-version=2025-09-01"
+        
+        Write-Log "Retrieving template mainTemplate with api-version=2025-09-01..."
+        $getResponse = Invoke-RestMethod -Uri $getUri -Method Get -Headers $headers
+        
+        if ($null -eq $getResponse.properties.mainTemplate) {
+            Write-Log "Template does not contain mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        $dcrResource = $getResponse.properties.mainTemplate.resources | Where-Object { 
+            $_.type -eq "Microsoft.Insights/dataCollectionRules" 
+        } | Select-Object -First 1
+        
+        if ($null -eq $dcrResource) {
+            Write-Log "No DCR resource found in mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        Write-Log "Found DCR resource in template: $($dcrResource.name)" -Level "SUCCESS"
+        
+        $tableResource = $getResponse.properties.mainTemplate.resources | Where-Object { 
+            $_.type -eq "Microsoft.OperationalInsights/workspaces/tables" 
+        } | Select-Object -First 1
+        
+        if ($null -eq $tableResource) {
+            Write-Log "No table resource found in mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        Write-Log "Found table resource in template: $($tableResource.name)" -Level "SUCCESS"
+        
+        $streamDeclarations = $dcrResource.properties.streamDeclarations
+        if ($null -eq $streamDeclarations) {
+            Write-Log "No stream declarations found in DCR template" -Level "WARNING"
+            return $null
+        }
+        
+        $streamName = ($streamDeclarations.PSObject.Properties | Select-Object -First 1).Name
+        $streamConfig = $streamDeclarations.$streamName
+        
+        $dataFlows = $dcrResource.properties.dataFlows
+        $transformKql = $null
+        if ($dataFlows -and $dataFlows.Count -gt 0) {
+            $transformKql = $dataFlows[0].transformKql
+        }
+        
+        Write-Log "  DCR Name: $($dcrResource.name)" -Level "SUCCESS"
+        Write-Log "  Stream: $streamName" -Level "SUCCESS"
+        Write-Log "  Stream Input Columns: $($streamConfig.columns.Count)" -Level "SUCCESS"
+        Write-Log "  Table Name: $($tableResource.name)" -Level "SUCCESS"
+        Write-Log "  Table Schema Columns: $($tableResource.properties.schema.columns.Count)" -Level "SUCCESS"
+        Write-Log "  Transform KQL: $(if ($transformKql) { 'Present' } else { 'None' })" -Level "SUCCESS"
         
         return @{
-            Name = $dceName
-            ResourceId = $response.id
-            LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
+            DcrName = $dcrResource.name
+            StreamName = $streamName
+            StreamColumns = $streamConfig.columns
+            TableName = $tableResource.name
+            TableColumns = $tableResource.properties.schema.columns
+            TransformKql = $transformKql
+            DataFlows = $dataFlows
+            StreamDeclarations = $streamDeclarations
         }
     }
     catch {
-        Write-Log "Error getting Data Collection Endpoint: $_" -Level "ERROR"
+        Write-Log "Error querying Content Template API: $_" -Level "ERROR"
+        Write-Log "Cannot proceed without Content Template. Ensure SAP BTP solution is installed from Content Hub." -Level "ERROR"
         return $null
     }
 }
 
-# Function to load DCR template from SAPBTP_DCR.json file
-# This provides a single source of truth for the DCR schema definition
-# Note: Only returns the 'properties' section; 'location' is set by the caller at top-level
+# Function to build SAP BTP DCR schema from template configuration
+# This provides the DCR schema definition based on the Content Template
+# Returns the 'properties' section for the DCR; 'location' is set by the caller at top-level
 function Get-SapBtpDcrTemplate {
     param(
         [Parameter(Mandatory=$true)]
         [string]$WorkspaceResourceId,
         [Parameter(Mandatory=$true)]
-        [string]$DataCollectionEndpointId
+        [string]$DataCollectionEndpointId,
+        [Parameter(Mandatory=$true)]
+        [object]$TemplateConfig
     )
     
     try {
-        # Determine the path to SAPBTP_DCR.json relative to this script
-        $scriptDir = $PSScriptRoot
-        if ([string]::IsNullOrWhiteSpace($scriptDir)) {
-            # Fallback if $PSScriptRoot is not available (e.g., running in ISE)
-            $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        Write-Log "Building SAP BTP DCR schema from template..."
+        Write-Log "  Stream: $($TemplateConfig.StreamName)"
+        Write-Log "  Stream Input Columns: $($TemplateConfig.StreamColumns.Count)"
+        
+        $streamDeclarations = @{}
+        $streamDeclarations[$TemplateConfig.StreamName] = @{
+            columns = $TemplateConfig.StreamColumns
         }
         
-        # Path to DCR template: ../Data Connectors/SAPBTPPollerConnector/SAPBTP_DCR.json
-        $dcrTemplatePath = Join-Path -Path $scriptDir -ChildPath "..\Data Connectors\SAPBTPPollerConnector\SAPBTP_DCR.json"
-        $dcrTemplatePath = [System.IO.Path]::GetFullPath($dcrTemplatePath)
+        $dataFlows = @(
+            @{
+                streams = @($TemplateConfig.StreamName)
+                destinations = @("clv2ws1")
+                transformKql = $TemplateConfig.TransformKql
+                outputStream = $TemplateConfig.StreamName
+            }
+        )
         
-        if (-not (Test-Path $dcrTemplatePath)) {
-            Write-Log "DCR template file not found at: $dcrTemplatePath" -Level "ERROR"
-            return $null
+        $dcrProperties = @{
+            dataCollectionEndpointId = $DataCollectionEndpointId
+            streamDeclarations = $streamDeclarations
+            dataSources = @{}
+            destinations = @{
+                logAnalytics = @(
+                    @{
+                        workspaceResourceId = $WorkspaceResourceId
+                        name = "clv2ws1"
+                    }
+                )
+            }
+            dataFlows = $dataFlows
         }
         
-        Write-Log "Loading DCR template from: $dcrTemplatePath"
-        
-        # Read and parse the JSON template
-        $templateContent = Get-Content -Path $dcrTemplatePath -Raw
-        
-        # Replace placeholders with actual values (only properties-level placeholders)
-        # Note: {{location}} is at top-level of JSON, not in properties, so we don't replace it here
-        $templateContent = $templateContent -replace '\{\{workspaceResourceId\}\}', $WorkspaceResourceId
-        $templateContent = $templateContent -replace '\{\{dataCollectionEndpointId\}\}', $DataCollectionEndpointId
-        
-        # Parse JSON - the template is an array with one element
-        $templateArray = $templateContent | ConvertFrom-Json
-        $template = $templateArray[0]
-        
-        if ($null -eq $template -or $null -eq $template.properties) {
-            Write-Log "Invalid DCR template structure" -Level "ERROR"
-            return $null
-        }
-        
-        Write-Log "Successfully loaded DCR template" -Level "SUCCESS"
-        
-        # Return the properties section which contains the DCR configuration
-        return $template.properties
+        Write-Log "Successfully built DCR schema" -Level "SUCCESS"
+        return $dcrProperties
     }
     catch {
-        Write-Log "Error loading DCR template: $_" -Level "ERROR"
+        Write-Log "Error building DCR template: $_" -Level "ERROR"
         return $null
     }
 }
 
-# Function to get or create Data Collection Rule for SAP BTP
-# When DCR exists, also returns the associated DCE ID from its properties
-function Get-OrCreateDataCollectionRule {
+# Function to create a new Data Collection Rule for SAP BTP
+# Only called when DCR doesn't exist (checked via ARG query upfront)
+function New-DataCollectionRule {
     param(
         [Parameter(Mandatory=$true)]
         [string]$SubscriptionId,
         [Parameter(Mandatory=$true)]
         [string]$ResourceGroupName,
         [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName,
+        [Parameter(Mandatory=$true)]
         [string]$WorkspaceShortId,
         [Parameter(Mandatory=$true)]
         [string]$WorkspaceResourceId,
-        [Parameter(Mandatory=$false)]
-        [string]$DataCollectionEndpointId = "",
+        [Parameter(Mandatory=$true)]
+        [string]$DataCollectionEndpointId,
         [Parameter(Mandatory=$true)]
         [string]$Location
     )
     
     try {
-        # DCR naming convention matching portal: Microsoft-Sentinel-SAP-BTP-DCR-{workspace-short-id}
-        $dcrName = "Microsoft-Sentinel-SAP-BTP-DCR-$WorkspaceShortId"
+        $templateConfig = Get-SapBtpContentTemplate -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -WorkspaceName $WorkspaceName
         
-        Write-Log "Checking for existing Data Collection Rule '$dcrName'..."
+        if ($null -eq $templateConfig) {
+            Write-Log "Failed to retrieve Content Template. Cannot proceed with DCR creation." -Level "ERROR"
+            Write-Log "Ensure the SAP BTP solution is installed from Content Hub." -Level "ERROR"
+            return $null
+        }
+        
+        $dcrBaseName = $templateConfig.DcrName
+        if ($dcrBaseName.StartsWith("Microsoft-Sentinel-")) {
+            $dcrName = "$dcrBaseName-$WorkspaceShortId"
+        } else {
+            $dcrName = "Microsoft-Sentinel-$dcrBaseName-$WorkspaceShortId"
+        }
+        
+        Write-Log "DCR Base Name from template: $dcrBaseName"
+        Write-Log "Full DCR Name: $dcrName"
+        Write-Log "Creating new DCR '$dcrName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
@@ -1266,45 +2208,33 @@ function Get-OrCreateDataCollectionRule {
         
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionRules/$dcrName`?api-version=2022-06-01"
         
-        # Try to get existing DCR
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
-            
-            Write-Log "Found existing DCR '$dcrName'" -Level "SUCCESS"
-            Write-Log "  Immutable ID: $($response.properties.immutableId)"
-            Write-Log "  DCE Reference: $($response.properties.dataCollectionEndpointId)"
-            
-            return @{
-                Name = $dcrName
-                ResourceId = $response.id
-                ImmutableId = $response.properties.immutableId
-                DataCollectionEndpointId = $response.properties.dataCollectionEndpointId
-            }
-        }
-        catch {
-            if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-Log "DCR '$dcrName' not found, creating new one..."
-            }
-            else {
-                throw $_
-            }
+        $tableName = $templateConfig.TableName
+
+        if ($tableName -match '/([^/]+)$') {
+            $tableName = $matches[1]
         }
         
-        # For creating new DCR, DataCollectionEndpointId is required
-        if ([string]::IsNullOrWhiteSpace($DataCollectionEndpointId)) {
-            Write-Log "DataCollectionEndpointId is required to create a new DCR" -Level "ERROR"
+        Write-Log "Table name: $tableName"
+        
+        $tableCreated = Get-OrCreateLogAnalyticsTable `
+            -SubscriptionId $SubscriptionId `
+            -ResourceGroupName $ResourceGroupName `
+            -WorkspaceName $WorkspaceName `
+            -TableName $tableName `
+            -Columns $templateConfig.TableColumns
+        
+        if (-not $tableCreated) {
+            Write-Log "Failed to create or verify table. Cannot proceed with DCR creation." -Level "ERROR"
             return $null
         }
         
-        # Load DCR schema from SAPBTP_DCR.json to avoid duplication and ensure single source of truth
-        $dcrProperties = Get-SapBtpDcrTemplate -WorkspaceResourceId $WorkspaceResourceId -DataCollectionEndpointId $DataCollectionEndpointId
+        $dcrProperties = Get-SapBtpDcrTemplate -WorkspaceResourceId $WorkspaceResourceId -DataCollectionEndpointId $DataCollectionEndpointId -TemplateConfig $templateConfig
         
         if ($null -eq $dcrProperties) {
-            Write-Log "Failed to load DCR template from SAPBTP_DCR.json" -Level "ERROR"
+            Write-Log "Failed to build DCR schema from template" -Level "ERROR"
             return $null
         }
         
-        # Build the DCR body with location and loaded properties
         $dcrBody = @{
             location = $Location
             properties = $dcrProperties
