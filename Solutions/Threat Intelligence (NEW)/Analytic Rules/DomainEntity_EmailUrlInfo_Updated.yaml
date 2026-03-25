@@ -40,10 +40,9 @@ query: |
     | extend Url = ObservableValue
     | where isnotempty(Url) // Filter for non-empty URLs
     | extend Url = tolower(Url) // Convert URLs to lowercase
+    | summarize arg_max(TimeGenerated, *) by Id, Url // Get latest record per Id FIRST
+    | where IsActive == true and ValidUntil > now() // THEN filter for active indicators that haven't expired
     | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL
-    | where IsActive == true and ValidUntil > now() // Filter for active indicators that haven't expired
-    | where EmailUrlInfo_TimeGenerated < ValidUntil // Ensure email info was generated before the indicator expired
-    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by Id, Url // Get the latest email info for each indicator
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns
@@ -51,7 +50,8 @@ query: |
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
     | where isnotempty(ObservableValue) // Filter for non-empty domain names
     | where ObservableKey == "domain-name:value"
-    | extend Active = IsActive
+    | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record per Id FIRST
+    | where IsActive == true // THEN filter for active indicators
     | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
     | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
     | extend IndicatorId = tostring(split(Id, "--")[2]);
@@ -63,9 +63,7 @@ query: |
     | extend ThreatType =  Data.type
     | extend ConfidenceScore = Confidence
     | extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),"ActivityGroup:","")
-    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
-    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
-    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator
+    | where ExpirationDateTime > now() // Filter for indicators that haven't expired
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns
     union TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence data
     | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
@@ -85,5 +83,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.5
+version: 1.0.6
 kind: Scheduled
