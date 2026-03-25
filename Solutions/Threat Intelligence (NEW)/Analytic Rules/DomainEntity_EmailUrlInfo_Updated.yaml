@@ -35,13 +35,12 @@ query: |
     | where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period
     let TI_Urls = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record per Id FIRST
+    | where IsActive == true and ValidUntil > now() // THEN filter for active indicators that haven't expired
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
     | where isnotempty(IndicatorType) and IndicatorType == "url"
-    | extend Url = ObservableValue
+    | extend Url = tolower(ObservableValue)
     | where isnotempty(Url) // Filter for non-empty URLs
-    | extend Url = tolower(Url) // Convert URLs to lowercase
-    | summarize arg_max(TimeGenerated, *) by Id, Url // Get latest record per Id FIRST
-    | where IsActive == true and ValidUntil > now() // THEN filter for active indicators that haven't expired
     | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
@@ -49,14 +48,14 @@ query: |
     let TI_Domains = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
     | where isnotempty(ObservableValue) // Filter for non-empty domain names
+    | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
     | where ObservableKey == "domain-name:value"
     | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record per Id FIRST
     | where IsActive == true // THEN filter for active indicators
     | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
-    | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
     | extend IndicatorId = tostring(split(Id, "--")[2]);
     let TI_Domains_UrlInfo = TI_Domains
-    | project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type
+    | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
     | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name
     | extend ExpirationDateTime = ValidUntil
     | extend Description = Data.description
