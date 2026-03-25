@@ -1,0 +1,440 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Upwind - hello@upwind.io",
+    "comments": "Solution template for Upwind"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "hello@upwind.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "Upwind",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "upwindpublisherid.azure-sentinel-solution-upwind-logs-loader",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "UpwindLogsLoader",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "UpwindLogsLoader",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Upwind data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Upwind Logs Loader (Ingestion API)",
+                  "publisher": "Upwind",
+                  "descriptionMarkdown": "The **Upwind Logs Loader** data connector ingests compute platform assets from the [Upwind](https://upwind.io) cloud security platform into a Microsoft Sentinel custom table using an Azure Function and the [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) (DCE/DCR).\n\nUpwind provides runtime-powered cloud security, correlating cloud posture with live workload context. This connector surfaces your Upwind inventory — compute platform assets across AWS, GCP, and Azure — directly into Microsoft Sentinel for correlation, hunting, and incident enrichment.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Upwind logs ingested",
+                      "legend": "UpwindLogsAssets_CL",
+                      "baseQuery": "UpwindLogsAssets_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Upwind logs — most recent first",
+                      "query": "UpwindLogsAssets_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Assets by cloud provider",
+                      "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(24h)\n| summarize AssetCount = count() by cloud_provider\n| sort by AssetCount desc"
+                    },
+                    {
+                      "description": "Assets by region",
+                      "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(24h)\n| summarize AssetCount = count() by region\n| sort by AssetCount desc"
+                    },
+                    {
+                      "description": "Assets by account",
+                      "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(7d)\n| summarize AssetCount = count() by cloud_account_id, cloud_provider\n| sort by AssetCount desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "UpwindLogsAssets_CL",
+                      "lastDataReceivedQuery": "UpwindLogsAssets_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "UpwindLogsAssets_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft.Web/sites permissions",
+                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+                      },
+                      {
+                        "name": "Upwind API Credentials",
+                        "description": "An Upwind API client ID and client secret are required. Obtain these from your Upwind platform under **Settings → API Keys**. The client credentials are used to authenticate against `https://auth.upwind.io/oauth/token` to obtain a bearer token."
+                      },
+                      {
+                        "name": "Upwind Organization ID",
+                        "description": "Your Upwind Organization ID is required. Find it in the Upwind platform under **Settings → Organization**."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This connector uses Azure Functions and the Azure Monitor Ingestion API (DCE/DCR) to push Upwind logs into Microsoft Sentinel. The ARM template automatically creates the Data Collection Endpoint, custom log table (`UpwindLogsAssets_CL`), Data Collection Rule, and role assignment. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Monitor pricing page](https://azure.microsoft.com/pricing/details/monitor/) for details."
+                    },
+                    {
+                      "description": ">**(Optional)** During deployment, choose **Key Vault** as the authentication method to securely store your Upwind client secret. You can provide an existing Key Vault name or let the template create a new one. A user-assigned managed identity is automatically configured with the required Key Vault access policies."
+                    },
+                    {
+                      "description": "1. Log in to the **[Upwind platform](https://app.upwind.io)**.\n2. Navigate to **Settings → API Keys**.\n3. Create a new API key and note the **Client ID** and **Client Secret**.\n4. Navigate to **Settings → Organization** and note your **Organization ID**.",
+                      "title": "STEP 1 – Obtain Upwind API credentials"
+                    },
+                    {
+                      "description": "Click **Deploy to Azure** and fill in the parameters. The template automatically creates the DCE, `UpwindLogs_CL` table, DCR, role assignment, and Function App.\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Upwind-azuredeploy)\n\n**Parameters to fill in:**\n\n| Parameter | Description |\n|---|---|\n| `WorkspaceName` | Name of your Log Analytics / Microsoft Sentinel workspace |\n| `UpwindOrgId` | Upwind Organization ID from Step 1 |\n| `UpwindClientId` | Upwind API Client ID from Step 1 |\n| `UpwindClientSecret` | Upwind API Client Secret from Step 1 |\n| `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace (from **Log Analytics workspace → Properties**) |",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "STEP 2 – Deploy the Azure Function App"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Upwind",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Upwind",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Upwind",
+                  "email": "hello@upwind.io",
+                  "tier": "Partner",
+                  "link": "https://upwind.io"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Upwind Logs Loader (Ingestion API)",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Upwind",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Upwind",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Upwind",
+          "email": "hello@upwind.io",
+          "tier": "Partner",
+          "link": "https://upwind.io"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Upwind Logs Loader (Ingestion API)",
+          "publisher": "Upwind",
+          "descriptionMarkdown": "The **Upwind Logs Loader** data connector ingests compute platform assets from the [Upwind](https://upwind.io) cloud security platform into a Microsoft Sentinel custom table using an Azure Function and the [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) (DCE/DCR).\n\nUpwind provides runtime-powered cloud security, correlating cloud posture with live workload context. This connector surfaces your Upwind inventory — compute platform assets across AWS, GCP, and Azure — directly into Microsoft Sentinel for correlation, hunting, and incident enrichment.",
+          "graphQueries": [
+            {
+              "metricName": "Upwind logs ingested",
+              "legend": "UpwindLogsAssets_CL",
+              "baseQuery": "UpwindLogsAssets_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "UpwindLogsAssets_CL",
+              "lastDataReceivedQuery": "UpwindLogsAssets_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "UpwindLogsAssets_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Upwind logs — most recent first",
+              "query": "UpwindLogsAssets_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Assets by cloud provider",
+              "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(24h)\n| summarize AssetCount = count() by cloud_provider\n| sort by AssetCount desc"
+            },
+            {
+              "description": "Assets by region",
+              "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(24h)\n| summarize AssetCount = count() by region\n| sort by AssetCount desc"
+            },
+            {
+              "description": "Assets by account",
+              "query": "UpwindLogsAssets_CL\n| where TimeGenerated > ago(7d)\n| summarize AssetCount = count() by cloud_account_id, cloud_provider\n| sort by AssetCount desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+              },
+              {
+                "name": "Upwind API Credentials",
+                "description": "An Upwind API client ID and client secret are required. Obtain these from your Upwind platform under **Settings → API Keys**. The client credentials are used to authenticate against `https://auth.upwind.io/oauth/token` to obtain a bearer token."
+              },
+              {
+                "name": "Upwind Organization ID",
+                "description": "Your Upwind Organization ID is required. Find it in the Upwind platform under **Settings → Organization**."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This connector uses Azure Functions and the Azure Monitor Ingestion API (DCE/DCR) to push Upwind logs into Microsoft Sentinel. The ARM template automatically creates the Data Collection Endpoint, custom log table (`UpwindLogsAssets_CL`), Data Collection Rule, and role assignment. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Monitor pricing page](https://azure.microsoft.com/pricing/details/monitor/) for details."
+            },
+            {
+              "description": ">**(Optional)** During deployment, choose **Key Vault** as the authentication method to securely store your Upwind client secret. You can provide an existing Key Vault name or let the template create a new one. A user-assigned managed identity is automatically configured with the required Key Vault access policies."
+            },
+            {
+              "description": "1. Log in to the **[Upwind platform](https://app.upwind.io)**.\n2. Navigate to **Settings → API Keys**.\n3. Create a new API key and note the **Client ID** and **Client Secret**.\n4. Navigate to **Settings → Organization** and note your **Organization ID**.",
+              "title": "STEP 1 – Obtain Upwind API credentials"
+            },
+            {
+              "description": "Click **Deploy to Azure** and fill in the parameters. The template automatically creates the DCE, `UpwindLogs_CL` table, DCR, role assignment, and Function App.\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Upwind-azuredeploy)\n\n**Parameters to fill in:**\n\n| Parameter | Description |\n|---|---|\n| `WorkspaceName` | Name of your Log Analytics / Microsoft Sentinel workspace |\n| `UpwindOrgId` | Upwind Organization ID from Step 1 |\n| `UpwindClientId` | Upwind API Client ID from Step 1 |\n| `UpwindClientSecret` | Upwind API Client Secret from Step 1 |\n| `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace (from **Log Analytics workspace → Properties**) |",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "STEP 2 – Deploy the Azure Function App"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Upwind",
+        "publisherDisplayName": "Upwind",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Upwind/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <strong>Upwind Logs Loader</strong> solution ingests compute platform assets from the <a href=\"https://upwind.io\">Upwind</a> cloud security platform into a Microsoft Sentinel custom table using an Azure Function and the <a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Ingestion API</a> (DCE/DCR).</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Ingestion API (DCE/DCR)</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Upwind/Data%20Connectors/Logos/upwind.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Upwind",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Upwind",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Upwind",
+          "email": "hello@upwind.io",
+          "tier": "Partner",
+          "link": "https://upwind.io"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-03-10",
+        "providers": [
+          "Upwind"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
