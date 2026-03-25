@@ -1,4 +1,4 @@
-# Changelog for ASimWebSessionCiscoUmbrellaProxy.yaml
+# Changelog for ASimWebSessionCiscoUmbrella.yaml
 
 ## Version 0.1.0
 
