@@ -2,7 +2,7 @@
 
 ## Version 0.3.6
 
-- (2026-03-25) Add parser Cisco ISE administrator events from Syslog - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
+- (2026-03-25) Add parser Cisco ISE administrator events from Syslog - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
 
 ## Version 0.3.5
 
