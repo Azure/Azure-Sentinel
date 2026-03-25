@@ -1,0 +1,99 @@
+Parser:
+  Title: Authentication ASIM parser for Cisco ISE Administrator events
+  Version: '0.1.0'
+  LastUpdated: Mar 25, 2026
+Product:
+  Name: Cisco ISE Administrator
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cisco ISE Security Events 
+  Link: https://www.cisco.com/c/en/us/td/docs/security/ise/3-2/admin_guide/b_ise_admin_3_2/b_ISE_admin_32_maintain_monitor.html#ID58
+Description: |
+  This ASIM parser supports normalizing Cisco ISE administrator login events ingested into Microsoft Sentinel by the AMA agent to the ASIM Authentication schema.
+ParserName: ASimAuthenticationCiscoISEAdministrator
+EquivalentBuiltInParser: _ASim_Authentication_CiscoISEAdministrator
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+  Syslog
+  | where not(disabled) and ProcessName has "CISE_Administrative_and_Operational_Audit"
+  | where SyslogMessage has "Administrator-Login"
+  | extend
+      EventVendor = "Cisco",
+      EventProduct = "Cisco ISE",
+      EventSchema = "Authentication",
+      EventSchemaVersion = "0.1.4",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventType = "Logon",
+      Type = "Syslog"
+  | project-rename
+      SrcIpAddr = HostIP,
+      SrcDvcId = HostName
+  | extend
+      SrcDvcIdType = "Other"
+  | parse SyslogMessage with * "Administrator-Login:" * ", " KeyValuePairs
+  | parse-kv KeyValuePairs as (ConfigVersionId: string, AdminInterface: string, AdminIPAddress: string, OperationMessageText: string, Port: int, AcsInstance: string, AdminName: string) with (pair_delimiter=",", kv_delimiter="=")
+  | extend
+      EventResult = iff(isnotempty(AdminName), "Success", "Failure"), // AdminName exists in Syslog if authentication was successful
+      EventResultDetails = iff(isempty(AdminName), case(
+          OperationMessageText has "Failed password", "Incorrect Password",
+          OperationMessageText has "User unknown", "No such user",
+          "Other"
+      ), ""),
+      TargetUsername = coalesce(AdminName, ""),
+      TargetUsernameType = iff(isnotempty(AdminName), "Simple", "")
+  | project-rename
+      TargetIpAddr = AdminIPAddress,
+      EventOriginalResultDetails = OperationMessageText,
+      TargetPortNumber = Port
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "AdminInterface", AdminInterface,
+      "ConfigVersionId", ConfigVersionId,
+      "AcsInstance", AcsInstance,
+      "CollectorHostName", CollectorHostName
+  ), dynamic([]))
+  | extend
+      IpAddr = SrcIpAddr,
+      Dvc = SrcDvcId
+  | project
+      TimeGenerated,
+      Type,
+      EventVendor,
+      EventProduct,
+      EventCount,
+      EventSchema,
+      EventSchemaVersion,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventType,
+      SrcIpAddr,
+      SrcDvcId,
+      SrcDvcIdType,
+      EventResult,
+      EventResultDetails,
+      TargetUsername,
+      TargetUsernameType,
+      TargetIpAddr,
+      EventOriginalResultDetails,
+      TargetPortNumber,
+      AdditionalFields,
+      IpAddr,
+      Dvc
+  };
+  parser(disabled=disabled, pack=pack);

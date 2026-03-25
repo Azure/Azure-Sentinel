@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.9
+
+- (2026-03-25) Add parser Cisco ISE administrator events from Syslog - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
+
 ## Version 0.2.8
 
 - (2026-03-11) Add parser for Okta - Authentication logs from OktaSystemLogs - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
