@@ -1,5 +1,9 @@
 # Changelog for imWebSession.yaml
 
+## Version 0.6.3
+
+- (2026-03-24) Add parser for Cisco Umbrella proxy logs - [PR #13893](https://github.com/Azure/Azure-Sentinel/pull/13893)
+
 ## Version 0.6.2
 
 - (2024-05-21) ASimWebSessionBarracudaWAF.yaml-57 - [PR #10505](https://github.com/Azure/Azure-Sentinel/pull/10505)
