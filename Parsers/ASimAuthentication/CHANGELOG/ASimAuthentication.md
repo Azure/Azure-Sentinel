@@ -2,7 +2,7 @@
 
 ## Version 0.2.9
 
-- (2026-03-26) Add parser for VMware VCenter authentication - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
+- (2026-03-26) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
 
 ## Version 0.2.8
 
