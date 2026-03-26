@@ -1,0 +1,95 @@
+Parser:
+  Title: ASIM Authentication parser for VMware vCenter
+  Version: '0.1.0'
+  LastUpdated: Mar 26, 2026
+Product:
+  Name: VMware vCenter
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: VMware vCenter documentation
+  Link: 
+    https://www.vmware.com/products/cloud-infrastructure/vcenter/future-overview#overview
+Description: |
+  This ASIM parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationVMwareVCenter
+EquivalentBuiltInParser: _ASim_Authentication_VMwareVCenter
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [
+        "info", "Informational"
+    ];
+    let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [
+        "vim.event.UserLoginSessionEvent", "Logon",
+        "vim.event.UserLogoutSessionEvent", "LogOff"
+    ];
+    let LoginEvents = (T: (Message: string)) {
+        T
+        | where Message has "UserLoginSessionEvent"
+        | parse Message with * "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *;
+    };
+    let LogoutEvents = (T: (Message: string)) {
+        T
+        | where Message has "UserLogoutSessionEvent"
+        | parse Message with * "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *;
+    };
+    let vCenterLogs = vcenter_CLv2
+    | where not(disabled);
+    union
+        LoginEvents(vCenterLogs), LogoutEvents(vCenterLogs)
+        | extend
+            EventVendor = "VMware",
+            EventProduct = "vCenter",
+            EventSchema = "Authentication",
+            EventSchemaVersion = "0.1.4",
+            Type = "vcenter_CL",
+            EventStartTime = EventTime,
+            EventEndTime = EventTime,
+            EventCount = coalesce(toint(APIInvocationCount), int(1)),
+            ActorUsernameType = "Simple",
+            EventResult = "Success"
+        | lookup EventTypeLookup on EventOriginalType
+        | lookup EventSeverityLookup on EventOriginalSeverity
+        | project-rename
+            EventOriginalResultDetails = Message
+        | extend
+            AdditionalFields = iff(pack, bag_pack("LoginTime", LoginTime), dynamic([])),
+            IpAddr = SrcIpAddr,
+            Dvc = EventProduct
+        | project
+            TimeGenerated,
+            Type,
+            EventVendor,
+            EventProduct,
+            EventSchema,
+            EventSchemaVersion,
+            EventStartTime,
+            EventEndTime,
+            EventCount,
+            ActorUsernameType,
+            EventResult,
+            EventOriginalType,
+            EventType,
+            EventOriginalSeverity,
+            EventOriginalResultDetails,
+            EventOriginalUid,
+            ActorUsername,
+            SrcIpAddr,
+            HttpUserAgent,
+            AdditionalFields,
+            IpAddr,
+            Dvc;
+  };
+  parser(disabled=disabled, pack=pack)
