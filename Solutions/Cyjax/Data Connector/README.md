@@ -50,13 +50,13 @@ The Cyjax IOC Data Connector provides the capability to:
    - **AzureTenantID**: Azure Tenant ID
    - **CyjaxBaseURL**: Cyjax API v2 Base URL (default: https://api.cymon.co/v2)
    - **CyjaxAccessToken**: Cyjax API Bearer Token
-   - **LookbackDays**: Days to look back on first run (default: 2)
-   - **Schedule**: Quartz Cron-Expression (default: every 10 minutes)
-   - **LogLevel**: Log level (default: Info)
-   - **AppInsightsWorkspaceResourceID**: Application Insights Workspace Resource ID (optional)
+   - **LookbackDays**: Days to look back on first run (default: 1)
    - **EnableEnrichment**: Set to `true` to enrich IOCs with GeoIP, ASN, and sighting data. Set to `false` to skip enrichment and reduce API calls and execution time (default: `true`)
    - **IOCQuery**: Optional free-text search query to filter IOCs from the Cyjax API (e.g. a keyword, threat actor, or campaign name). Leave empty to fetch all available IOCs
    - **IndicatorType**: Filter IOCs by type. Enter comma-separated values (e.g., URL,Domain,IPv4). Supported types: URL, Domain, IPv4, IPv6, Hostname, Email, FileHash-SHA1, FileHash-SHA256, FileHash-MD5, FileHash-SSDEEP. Leave empty to fetch all types
+   - **Schedule**: Quartz Cron-Expression (default: every 10 minutes)
+   - **LogLevel**: Log level (default: Info)
+   - **AppInsightsWorkspaceResourceID**: Application Insights Workspace Resource ID (optional)
 
 ### Option 2: Manual Deployment via Visual Studio Code
 
@@ -69,13 +69,13 @@ The Cyjax IOC Data Connector provides the capability to:
    - `AzureTenantID`: Your Azure Tenant ID
    - `CyjaxBaseURL`: Cyjax API v2 Base URL
    - `CyjaxAccessToken`: Your Cyjax API Bearer Token
-   - `LookbackDays`: Number of days to look back (default: 2)
-   - `Schedule`: Quartz Cron-Expression
-   - `LogLevel`: Log level (Info/Debug/Error/Warning)
-   - `AppInsightsWorkspaceResourceID`: Application Insights Workspace Resource ID (optional)
+   - `LookbackDays`: Number of days to look back (default: 1)
    - `ENABLE_ENRICHMENT`: Set to `true` to enrich IOCs with GeoIP, ASN, and sighting data. Set to `false` to skip enrichment (default: `true`)
    - `IOC_QUERY`: Optional free-text search query to filter IOCs (e.g. keyword, threat actor, campaign name). Leave empty for no filter (optional)
    - `Indicator_Type`: Filter IOCs by type. Enter comma-separated values (e.g., URL,Domain,IPv4). Supported types: URL, Domain, IPv4, IPv6, Hostname, Email, FileHash-SHA1, FileHash-SHA256, FileHash-MD5, FileHash-SSDEEP. Leave empty to fetch all types (optional)
+   - `Schedule`: Quartz Cron-Expression
+   - `LogLevel`: Log level (Info/Debug/Error/Warning)
+   - `AppInsightsWorkspaceResourceID`: Application Insights Workspace Resource ID (optional)
    - `logAnalyticsUri`: Log Analytics API endpoint override (optional)
 
 ## Configuration Steps
