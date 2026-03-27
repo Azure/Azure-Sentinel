@@ -1,0 +1,52 @@
+id: 2a5b8c1d-4e7f-0a1b-2c3d-4e5f6a7b8c9d
+name: AI Agents - Dormant Author Authentication Connection
+description: |
+  This query identifies Copilot Studio AI agents that are published and contain actions configured with Author Authentication (maker`s personal credentials) but have not been used or invoked in the last 30 days. 
+  Dormant actions with elevated permissions pose a security risk because they retain access to resources even when inactive. 
+  If these credentials remain valid, an attacker compromising the agent or its environment could exploit them for privilege escalation or unauthorized access.
+  Recommended Action: Review these agents and remove or reconfigure actions that use maker credentials. Replace personal credentials with secure alternatives such as managed identities or service principals. 
+  If the agent is no longer needed, consider unpublishing or retiring it.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let UsedAgents = CloudAppEvents
+  | where Timestamp > ago(30d)
+  | where ActionType == "CopilotInteraction"
+  | where RawEventData.AppIdentity startswith "Copilot.studio"
+  | extend AppIdentity = iff(isnotempty(RawEventData.CopilotEventData.AppIdentity), RawEventData.CopilotEventData.AppIdentity, RawEventData.AppIdentity)
+  | extend AgentName = extract(@"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}-(.*)$", 1, tostring(AppIdentity))
+  | where isnotempty(AgentName)
+  | distinct tostring(AgentName);
+  let FirstFetch =
+      AIAgentsInfo
+      | summarize arg_max(Timestamp, *) by AIAgentId
+      | where AgentStatus != "Deleted"
+      | where AgentStatus == "Published"
+      | mv-expand tool = AgentToolsDetails
+      | where tool.action.connectionProperties.mode == "Maker"
+      | extend MatchType = "Tool", ConnectionReference = tostring(tool.action.connectionReference);
+  let SecondFetch =
+      AIAgentsInfo
+      | summarize arg_max(Timestamp, *) by AIAgentId
+      | where AgentStatus != "Deleted"
+      | where AgentStatus == "Published"
+      | mv-expand topic = AgentTopicsDetails
+      | mv-expand actionTopic = topic.beginDialog.actions
+      | where actionTopic.connectionProperties.mode == "Maker"
+      | extend MatchType = "Topic", ConnectionReference = tostring(actionTopic.connectionReference);
+  FirstFetch
+  | union SecondFetch
+  | extend schemaname = tostring(todynamic(RawAgentInfo)['Bot']['Attributes']['schemaname'])
+  | where schemaname !in (UsedAgents)
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, MatchType, ConnectionReference
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

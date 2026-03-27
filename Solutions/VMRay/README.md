@@ -1,6 +1,6 @@
 # VMRay Threat Intelligence Feed and Enrichment Integration - Microsoft Sentinel
 
-**Latest Version:** **1.0.0** - **Release Date:** **2025-07-23**
+**Latest Version:** **3.0.1** - **Release Date:** **2025-11-07**
 
 ## Overview
 
@@ -123,7 +123,7 @@
 | Azure Client ID   | Enter the Azure Client ID created in the App Registration Step |
 | Azure Client Secret | Enter the Azure Client Secret created in the App Registration Step |
 |Azure Tenant ID | Enter the Azure Tenant ID of the App Registration |
-| Azure Workspacse ID   | Enter the Azure Workspacse ID. Go to  `Log Analytics workspace -> Overview`, Copy `Workspace ID`, refer below image.|
+| Azure Workspace ID   | Enter the Azure Workspace ID. Go to  `Log Analytics workspace -> Overview`, Copy `Workspace ID`, refer below image.|
 | App Insights Workspace Resource ID | Go to `Log Analytics workspace` -> `Settings` -> `Properties`, Copy `Resource ID` and paste here |
 
 ![40](Images/40.png)

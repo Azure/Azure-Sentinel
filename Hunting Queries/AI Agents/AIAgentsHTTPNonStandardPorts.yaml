@@ -1,0 +1,44 @@
+id: 6f1a5b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c
+name: AI Agents - HTTP Requests to Non-standard Ports
+description: |
+  This query identifies Copilot Studio AI agents that send HTTP requests to endpoints using non-standard ports (other than 443). 
+  Communication over uncommon ports can indicate suspicious activity, unauthorized network communication, or attempts to bypass security controls. 
+  Such behavior may expose sensitive data or create opportunities for attackers to exploit less-monitored channels.
+  Recommended Action: Review these agents to confirm whether using non-standard ports is necessary for the business scenario. 
+  If not required, update configurations to use standard secure ports (443 for HTTPS). 
+  For legitimate use cases, document the justification and apply compensating controls such as network monitoring and firewall rules.
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1041
+query: |
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where AgentStatus != "Deleted" 
+  | mvexpand Topic = AgentTopicsDetails 
+  | where Topic has "HttpRequestAction" 
+  | extend TopicActions = Topic.beginDialog.actions 
+  | mvexpand action = TopicActions 
+  | where action['$kind'] == "HttpRequestAction" 
+  | extend Url = tostring(action.url.literalValue) 
+  | extend ParsedUrl = parse_url(Url) 
+  | extend Port = tostring(ParsedUrl["Port"]) 
+  | where isnotempty(Port) and Port != "443"
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, ParsedUrl, Url, Port, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, Topic
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0

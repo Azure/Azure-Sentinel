@@ -94,6 +94,8 @@ class DataminrPulseConfigureSettings:
                     self.logs_starts_with, __method_name, endpoint
                 )
             )
+            if(not self.base_url.endswith("/")):
+                self.base_url = "{}/".format(self.base_url)
             dataminr_api_url = "{}{}".format(self.base_url, endpoint)
             response = requests.request(
                 method=request_method,

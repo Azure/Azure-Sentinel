@@ -101,6 +101,10 @@ function New-ParametersForConnectorInstuctions($instructions) {
             if (![bool]($templateParameter.PSobject.Properties.name -match "AuthorizationCode")) {
                 $templateParameter | Add-Member -MemberType NoteProperty -Name "AuthorizationCode" -Value $newParameter
             }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match "redirectUri" -and [bool]$instruction.parameters.sendRedirectUri)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name "redirectUri" -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "ContextPane") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
@@ -410,7 +414,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
 
     if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue "1.0.0"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
 
     try {
@@ -499,11 +503,17 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 exit 1;
             }
 
-            function GetDataConnectorPollerResourceName ($dataConnectorName) {
+            function GetDataConnectorPollerResourceName ($dataConnectorName, $useRandomGuid = $true) {
                 $splitNamesBySlash = $dataConnectorName -split '/'
                 $concatenateParts = @()
                 $outputString = ''
                 $guidValue = "parameters('guidValue')"
+
+                #if the $dataConnectorName already starts with [[concat - assume it contains all needed data, and return it as is
+                if ($dataConnectorName.StartsWith('[[concat', [StringComparison]::OrdinalIgnoreCase)) {
+                    Write-Host "****************** Data connector name is already in concat format, skipping processing and returning as is: $dataConnectorName"
+                    return $dataConnectorName
+                }
 
                 foreach ($currentName in $splitNamesBySlash) {
                     if ($currentName.Contains('{{')) {
@@ -515,6 +525,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                                 $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             }
                             else {
+                                # Add '/' separator if there are already parts (handles pure placeholder after static segments)
+                                if ($concatenateParts.Count -gt 0) {
+                                    $concatenateParts += "'/'"
+                                }
                                 $concatenateParts += "parameters('$($placeHolderFieldName)')"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             }
@@ -546,15 +560,30 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
-                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
+                    }
+                    else {
+                        $outputString = "[[concat($($concatenateParts -join ', ')"
+                    }
                 }
                 elseif ($concatenateParts.Count -eq 1 -and $concatenateParts[0] -match 'parameters') {
                     # if we just have parameters('abcwork')
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
+                    }
+                    else {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0])"
+                    }
                 }
                 else {
                     # if we just have 'abcwork'
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
+                    }
+                    else {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])'"
+                    }
                 }
             
                 if ($global:commaSeparatedTextFieldName -eq "") {
@@ -569,6 +598,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                    # Check for UseRandomGuid property, default to true for backward compatibility
+                    $useRandomGuid = if ($null -ne $fileContent.UseRandomGuid) { $fileContent.UseRandomGuid } else { $true }
+                    Write-Host "UseRandomGuid setting: $useRandomGuid"
+
                     if ($global:commaSeparatedTextFieldName -ne "") {
                         # add variable for comma separated text field
                         $commaSeparatedVariable = @{
@@ -578,18 +611,28 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
                     }
 
-                    # add parameter of guidValue if not present
-                    $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
+                    # add parameter of guidValue if not present (only when UseRandomGuid is true)
+                    if ($useRandomGuid) {
+                        $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
+                    }
 
                     # add parameter of innerWorkspace if not present
                     $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'innerWorkspace' -isSecret $true
 
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
-                    $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name
+                    $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name -useRandomGuid $useRandomGuid
 
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
+
+                    if ($null -ne $fileContent.condition) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "condition" -Value $fileContent.condition                       
+                    }
+
+                    if ($null -ne $fileContent.copy) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $fileContent.copy
+                    }
 
                     if ($global:commaSeparatedTextFieldName -ne "") {
                         $copyObject = [ordered]@{
@@ -598,6 +641,17 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
 
                         $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $copyObject
+                    }
+    
+                    # redirectUri : this is optional field for users to add.
+                    $hasRedirectUri = [bool](($armResource.properties.auth).PSobject.Properties.name -match "redirectUri")
+                    if ($hasRedirectUri) {
+                        $redirectUriProperty = $armResource.properties.auth.redirectUri
+                        $placeHoldersMatched = $redirectUriProperty | Select-String $placeHolderPatternMatches -AllMatches
+    
+                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                            $armResource.properties.auth.redirectUri = "[[parameters('redirectUri')]"
+                        }
                     }
     
                     # dataCollectionEndpoint : this is optional field for users to add.
@@ -703,8 +757,22 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             }
 
             if ($fileContent -is [System.Object[]]) {
-                foreach ($content in $fileContent) {
-                    CCPDataConnectorsResource -fileContent $content;
+                if ($ccpItem.isDynamicStreamName) {
+                    # For dynamic streamName, only create ONE resource with conditional logic
+                    # Store all streamName->destinationTable mappings first
+                    $script:streamNameMappings = @{}
+                    foreach ($content in $fileContent) {
+                        if ($content.properties.dcrConfig.streamName -and $content.properties.destinationTable) {
+                            $script:streamNameMappings[$content.properties.dcrConfig.streamName] = $content.properties.destinationTable
+                        }
+                    }
+                    # Process only the first item, it will be parameterized
+                    CCPDataConnectorsResource -fileContent $fileContent[0];
+                }
+                else {
+                    foreach ($content in $fileContent) {
+                        CCPDataConnectorsResource -fileContent $content;
+                    }
                 }
             }
             else {
@@ -1132,12 +1200,30 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # AccessKeyId 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeyId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
-    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken')
-    {
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken') {
+        # Check for userName.value format OR UserToken format
+        $hasUserName = $armResource.properties.auth.userName -and $armResource.properties.auth.userName.value
+        $hasPassword = $armResource.properties.auth.password -and $armResource.properties.auth.password.value
+        $hasUserToken = $armResource.properties.auth.UserToken
 
-        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+        if ($hasUserName -and $hasPassword) {
+            Write-Host "Processing userName+password format for JwtToken auth."
+            # Process userName.value format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
 
+        }
+        elseif ($hasUserToken) {
+            Write-Host "Processing UserToken format for JwtToken auth."
+            # Process UserToken format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'UserToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+        }
+        else {
+            Write-Host "Error: For kind $kindType with JwtToken auth, either 'userName.value' + 'password.value' or 'UserToken' is required." -BackgroundColor Red
+            exit 1;
+        }
+
+        # TokenEndpoint is required for both formats
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
     else {
@@ -1177,11 +1263,29 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         else {
             Write-Host "Warning: 'stepInfo' object is missing 'nextSteps' array."
         }
+    }
 
-        if ($stepIds.Count -gt 0) {
-            $stepIdsString = $stepIds -join ', '
-            Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
+    # Also collect stepIds from nested stepCollectorConfigs
+    $hasStepCollectorConfigs = [bool]($armResource.properties.PSobject.Properties.name -match "stepCollectorConfigs")
+    if ($hasStepCollectorConfigs) {
+        foreach ($stepConfig in $armResource.properties.stepCollectorConfigs.PSObject.Properties) {
+            $stepConfigName = $stepConfig.Name
+            $stepConfigValue = $stepConfig.Value
+
+            # Check if this step has nested nextSteps
+            if ($stepConfigValue.stepInfo -and $stepConfigValue.stepInfo.nextSteps) {
+                foreach ($nestedStep in $stepConfigValue.stepInfo.nextSteps) {
+                    if ($stepIds -notcontains $nestedStep.stepId) {
+                        $stepIds += $nestedStep.stepId
+                    }
+                }
+            }
         }
+    }
+
+    if ($stepIds.Count -gt 0) {
+        $stepIdsString = $stepIds -join ', '
+        Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
     }
 
     # stepCollectorConfigs placeholder
@@ -1340,7 +1444,36 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
     if ($isDynamicStreamName) {
         # Handle properties destinationTable and streamName in dc poller file for this solutions as a special case
         $armResource.properties.dcrConfig.streamName = "[[parameters('streamName')[0]]"
-        $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
+        
+        # Build conditional logic for destinationTable based on streamNameMappings
+        if ($script:streamNameMappings -and $script:streamNameMappings.Count -gt 0) {
+            $sortedMappings = $script:streamNameMappings.GetEnumerator() | Sort-Object Name
+            $conditionalLogic = ""
+            $mappingArray = @($sortedMappings)
+            
+            # Build nested if() statements from right to left
+            for ($i = $mappingArray.Count - 1; $i -ge 0; $i--) {
+                $streamName = $mappingArray[$i].Key
+                $destTable = $mappingArray[$i].Value
+                
+                if ($i -eq $mappingArray.Count - 1) {
+                    # Last item (rightmost in the conditional)
+                    $conditionalLogic = "'$destTable'"
+                }
+                else {
+                    # Wrap with if(equals())
+                    $conditionalLogic = "if(equals(parameters('streamName')[0], '$streamName'), '$destTable', $conditionalLogic)"
+                }
+            }
+            
+            $armResource.properties.destinationTable = "[[$conditionalLogic]]"
+        }
+        else {
+            # Fallback to _CL suffix if no mappings found
+            Write-Host "Warning: No streamNameMappings found. Defaulting destinationTable to streamName with _CL suffix." -BackgroundColor Yellow
+            $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
+        }
+        
         $templateContentConnections.properties.mainTemplate.parameters | Add-Member -NotePropertyName "streamName" -NotePropertyValue ([PSCustomObject] @{ type = "array" })
     }
     else {
@@ -1363,7 +1496,9 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
                 $hasCsvDelimiterProperty = [bool]($armResource.properties.dataFormat.PSobject.Properties.name.tolower() -match "csvdelimiter")
                 if ($hasCsvDelimiterProperty) {
                     if ($armResource.properties.dataFormat.CsvDelimiter -eq " ") {
-                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        if (-not ($global:baseMainTemplate.variables.PSObject.Properties.Name -contains "TemplateEmptySpaceString")) {
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        }
                         $armResource.properties.dataFormat.CsvDelimiter = "[variables('TemplateEmptySpaceString')]"
                     }
                 }

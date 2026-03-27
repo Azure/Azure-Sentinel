@@ -19,7 +19,7 @@ RiskIQ's security SaaS platform taps into our global Internet Intelligence graph
 <a name="authentication">
 
 ## Authentication
-You need a valid community or enterprise in order to use the connector and playbook. To learn more about the service and request a trial key, [register for free](https://community.riskiq.com/) or see the [API documentation](https://api.passivetotal.org/index.html). Credentials can be found on your [account settings](https://community.riskiq.com/settings) page. For enterprise customers, it's preferred to use the "organization" credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).
+You need a valid community or enterprise in order to use the connector and playbook. To learn more about the service and request a trial key, [register for free](https://community.riskiq.com/) or see the [API documentation](https://api.passivetotal.org/index.html). Credentials can be found on your account settings page. For enterprise customers, it's preferred to use the "organization" credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).
 
 <a name="deployment">
 
