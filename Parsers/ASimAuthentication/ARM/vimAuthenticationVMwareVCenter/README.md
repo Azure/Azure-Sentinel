@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for VMware vCenter.
 
-This ASIM filtering parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema.
+This ASIM filtering parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema. Logs can come from on-premises instances with AMA agent, or Azure VMware instances.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
