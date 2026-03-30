@@ -1,0 +1,197 @@
+Parser:
+  Title: Web Session ASIM filtering parser for Cisco Umbrella Proxy Logs
+  Version: '0.1.0'
+  LastUpdated: Mar 24, 2026
+Product:
+  Name: Cisco Umbrella
+Normalization:
+  Schema: WebSession
+  Version: '0.2.7'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cisco Umbrella Documentation
+  Link: https://securitydocs.cisco.com/docs/umbrella-dns/olh/147416.dita
+Description: |
+  This ASIM filtering parser supports normalizing Cisco Umbrella proxy logs to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionCiscoUmbrella
+EquivalentBuiltInParser: _Im_WebSession_CiscoUmbrella
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+  let dest_or_any = set_union(ipaddr_has_any_prefix, dynamic([]));
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false,
+      pack: bool=false) {
+      Cisco_Umbrella_proxy_CL
+      | where not(disabled)
+          and (isnull(starttime) or Timestamp_t >= starttime)
+          and (isnull(endtime) or Timestamp_t <= endtime)
+          and (array_length(httpuseragent_has_any) == 0 or userAgent_s has_any (httpuseragent_has_any))
+          and (array_length(eventresultdetails_in) == 0 or statusCode_s has_any (eventresultdetails_in))
+      | extend
+        temp_SrcMatch = has_any_ipv4_prefix(Internal_IP_s, src_or_any),
+        temp_DstMatch = has_any_ipv4_prefix(Destination_IP_s, dest_or_any)
+      | extend ASimMatchingIpAddr = case(
+          array_length(src_or_any) == 0, "-",
+          temp_SrcMatch and temp_DstMatch, "Both",
+          temp_SrcMatch, "SrcIpAddr",
+          temp_DstMatch, "DstIpAddr",
+          "No match"
+      )
+      | where ASimMatchingIpAddr != "No match"
+      | extend
+          EventStartTime = Timestamp_t,
+          EventEndTime = Timestamp_t,
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.7",
+          EventType = "HTTPsession",
+          EventProduct = "Cisco Umbrella",
+          EventVendor = "Cisco",
+          EventCount = int(1),
+          EventSeverity = "Informational",
+          Type = "Cisco_Umbrella_proxy_CL"
+      | parse PolicyIdentity_s with * "(" Email ")" *
+      | extend
+          SrcUsername = coalesce(Email, Policy_Identity_Type_s),
+          SrcUsernameType = iff(isnotempty(Email), "UPN", "Simple")
+      | project-rename
+          SrcIpAddr = Internal_IP_s,
+          DvcIpAddr = External_IP_s,
+          DstIpAddr = Destination_IP_s,
+          HttpContentType = Content_Type_s,
+          HttpReferrer = Referer_s,
+          HttpUserAgent = userAgent_s,
+          EventResultDetails = statusCode_s,
+          FileSHA256 = ['SHA-SHA256_s'],
+          ThreatOriginalRiskLevel = AMP_Disposition_s
+      | extend
+          Url = column_ifexists("URL_s", "") 
+      | where array_length(url_has_any) == 0 or Url has_any (url_has_any)
+      | extend
+          Verdict = column_ifexists("Verdict_s", ""),
+          HttpRequestMethod = column_ifexists("Request_Method_s", ""),
+          RuleName = column_ifexists("Rule_ID_s", ""),
+          RuleNumber = toint(column_ifexists("Ruleset_ID_s", "")),
+          FileName = column_ifexists("File_Name_s", ""),
+          ThreatCategory = tostring(Blocked_Categories_s)
+      | extend
+          EventResult = case(
+              Verdict =~ "Allowed", "Success",
+              Verdict =~ "Blocked", "Failure",
+              "NA"
+          ),
+          ThreatRiskLevel = toint(AMP_Score_s),
+          HttpRequestBodyBytes = tolong(requestSize_d),
+          HttpResponseBodyBytes = tolong(responseBodySize_d),
+          DstBytes = tolong(responseSize_d)
+      | where (eventresult == '*' or EventResult =~ eventresult)
+      | extend
+          AdditionalFields = iff(pack, bag_pack(
+              "Categories", Categories_s,
+              "AVDetections", AVDetections_s,
+              "Identities", Identities_s,
+              "PolicyIdentityType", Policy_Identity_Type_s), dynamic([]))
+      | extend
+          HttpStatusCode = EventResultDetails,
+          Dst = DstIpAddr,
+          Src = SrcIpAddr,
+          Dvc = DvcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = SrcUsername,
+          Rule = RuleName
+      | project
+          TimeGenerated,
+          EventStartTime,
+          EventEndTime,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventProduct,
+          EventVendor,
+          EventCount,
+          EventSeverity,
+          Type,
+          SrcUsername,
+          SrcUsernameType,
+          SrcIpAddr,
+          DvcIpAddr,
+          DstIpAddr,
+          HttpContentType,
+          HttpReferrer,
+          HttpUserAgent,
+          EventResultDetails,
+          FileSHA256,
+          ThreatOriginalRiskLevel,
+          Url,
+          HttpRequestMethod,
+          RuleName,
+          RuleNumber,
+          FileName,
+          ThreatCategory,
+          EventResult,
+          ThreatRiskLevel,
+          HttpRequestBodyBytes,
+          HttpResponseBodyBytes,
+          DstBytes,
+          AdditionalFields,
+          HttpStatusCode,
+          Dst,
+          Src,
+          Dvc,
+          IpAddr,
+          User,
+          Rule,
+          ASimMatchingIpAddr
+  };
+  parser(
+    starttime=starttime, 
+    endtime=endtime,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,  
+    ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+    url_has_any=url_has_any,
+    httpuseragent_has_any=httpuseragent_has_any,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled,
+    pack=pack)
