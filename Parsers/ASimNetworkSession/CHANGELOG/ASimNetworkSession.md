@@ -2,7 +2,7 @@
 
 ## Version 0.7.3
 
-- (2026-03-30) Add Check Point - Smart Defense parser to NetworkSession schema - [PR #10994](https://github.com/Azure/Azure-Sentinel/pull/10994)
+- (2026-03-30) Add Check Point - Smart Defense parser to NetworkSession schema - [PR #13950](https://github.com/Azure/Azure-Sentinel/pull/13950)
 
 ## Version 0.7.1
 
