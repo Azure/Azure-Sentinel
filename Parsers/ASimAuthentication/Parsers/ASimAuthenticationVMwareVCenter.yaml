@@ -16,7 +16,7 @@ References:
   Link: 
     https://www.vmware.com/products/cloud-infrastructure/vcenter/future-overview#overview
 Description: |
-  This ASIM parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema.
+  This ASIM parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema. Logs can come from on-premises instances with AMA agent, or Azure VMware instances.
 ParserName: ASimAuthenticationVMwareVCenter
 EquivalentBuiltInParser: _ASim_Authentication_VMwareVCenter
 ParserParams:
@@ -35,26 +35,32 @@ ParserQuery: |
         "vim.event.UserLoginSessionEvent", "Logon",
         "vim.event.UserLogoutSessionEvent", "LogOff"
     ];
-    let LoginEvents = (T: (Message: string)) {
+    let LoginEvents = (T: (Message: string), TableType: string) {
         T
         | where Message has "UserLoginSessionEvent"
+        | extend Type = TableType
         | parse Message with * "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *;
     };
-    let LogoutEvents = (T: (Message: string)) {
+    let LogoutEvents = (T: (Message: string), TableType: string) {
         T
         | where Message has "UserLogoutSessionEvent"
+        | extend Type = TableType
         | parse Message with * "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *;
     };
     let vCenterLogs = vcenter_CL
     | where not(disabled);
+    let AzureVCenterLogs = AVSVcSyslog
+    | where not(disabled);
     union
-        LoginEvents(vCenterLogs), LogoutEvents(vCenterLogs)
+        LoginEvents(vCenterLogs, "vcenter_CL"),
+        LogoutEvents(vCenterLogs, "vcenter_CL"),
+        LoginEvents(AzureVCenterLogs, "AVSVcSyslog"),
+        LogoutEvents(AzureVCenterLogs, "AVSVcSyslog")
         | extend
             EventVendor = "VMware",
             EventProduct = "vCenter",
             EventSchema = "Authentication",
             EventSchemaVersion = "0.1.4",
-            Type = "vcenter_CL",
             EventStartTime = EventTime,
             EventEndTime = EventTime,
             EventCount = coalesce(toint(APIInvocationCount), int(1)),
