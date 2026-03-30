@@ -131,8 +131,8 @@ The schema includes dedicated typed columns for 30 specialty workloads:
 The solution creates a complete dual-connector data ingestion pipeline with **shared infrastructure**:
 
 ### Deployed Resources:
-- **Data Collection Endpoint (DCE)**: `dce-{workspacename}-m365auditgeneral` - Shared network endpoint for secure data ingestion
-- **Data Collection Rule (DCR)**: `dcr-{workspacename}-m365auditgeneral` - Shared data stream definition with transformation logic and filtering
+- **Data Collection Endpoint (DCE)**: Shared network endpoint for secure data ingestion (auto-created at Connect time)
+- **Data Collection Rule (DCR)**: Shared data stream definition with transformation logic and filtering (auto-created at Connect time)
 - **Custom Table**: `M365AuditGeneral_CL` - Shared Log Analytics table with 304 structured columns covering 30 workload schemas
 - **Audit.General Data Connector**: RestApiPoller for Audit.General content type
 - **Audit.DLP Data Connector**: RestApiPoller for DLP.All content type
