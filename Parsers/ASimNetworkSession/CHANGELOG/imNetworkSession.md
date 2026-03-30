@@ -1,5 +1,9 @@
 # Changelog for imNetworkSession.yaml
 
+## Version 0.6.3
+
+- (2026-03-30) Add Check Point - Smart Defense parser to NetworkSession schema - [PR #10994](https://github.com/Azure/Azure-Sentinel/pull/10994)
+
 ## Version 0.6.2
 
 - (2024-06-04) ASimNetworkSessionMicrosoftWindowsEventFirewall.yaml-43 - [PR #10581](https://github.com/Azure/Azure-Sentinel/pull/10581)
