@@ -143,7 +143,7 @@ Hunting Queries are YAML files that define proactive search queries in Microsoft
   - Must return results that can be easily analyzed by security professionals
   - Should be optimized for performance and clarity
   - Include comments explaining complex logic when needed
-  - Each line must have at least one space at the beginning (two spaces recommended for readability)
+  - Use consistent indentation within the KQL query (for example, indent piped operators or nested expressions by two spaces) to improve readability; note that YAML literal blocks will handle and normalize the surrounding indentation.
   - Must return all available entity fields for mapping purposes
   - Sanitize results to provide only necessary investigation properties
 - **KQL Best Practices for Hunting Queries**:
