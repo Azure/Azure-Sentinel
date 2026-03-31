@@ -6,5 +6,5 @@
 
 ## Version 0.1
 
-- (2022-12-27) asim/fix-audit-unions 2 - [PR #6977](https://github.com/Azure/Azure-Sentinel/pull/6977)
+- (2022-12-19) Asim/audit parsers - [PR #6928](https://github.com/Azure/Azure-Sentinel/pull/6928)
 

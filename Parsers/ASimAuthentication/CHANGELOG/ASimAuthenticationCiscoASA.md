@@ -6,5 +6,5 @@
 
 ## Version 0.1.0
 
-- (2023-07-06) Add-Authentication-Cisco-ASA - [PR #8467](https://github.com/Azure/Azure-Sentinel/pull/8467)
+- (2023-07-21) Add-Authentication-Cisco-ASA - [PR #8467](https://github.com/Azure/Azure-Sentinel/pull/8467)
 

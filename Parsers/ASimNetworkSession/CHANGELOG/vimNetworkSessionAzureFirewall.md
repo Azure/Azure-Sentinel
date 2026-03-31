@@ -2,23 +2,23 @@
 
 ## Version 0.2.0
 
-- (2025-12-03) AZFW network session updates - [PR #13181](https://github.com/Azure/Azure-Sentinel/pull/13181)
+- (2025-12-04) AZFW ASIM Parsers - [PR #13181](https://github.com/Azure/Azure-Sentinel/pull/13181)
 
 ## Version 0.1.4
 
-- (2024-07-18) updating date - [PR #10834](https://github.com/Azure/Azure-Sentinel/pull/10834)
+- (2024-07-18) Azure Firewall ASIM Network Parser ICMP code - [PR #10834](https://github.com/Azure/Azure-Sentinel/pull/10834)
 
 ## Version 0.1.3
 
-- (2024-03-04) Updating version and date - [PR #10085](https://github.com/Azure/Azure-Sentinel/pull/10085)
+- (2024-03-04) Fixing-NetworkSession-Filter-Bug - [PR #10085](https://github.com/Azure/Azure-Sentinel/pull/10085)
 
 ## Version 0.1.2
 
-- (2023-01-05) Update version numbers - [PR #7041](https://github.com/Azure/Azure-Sentinel/pull/7041)
+- (2023-01-05) Asim/fix azure firewall icmp - [PR #7041](https://github.com/Azure/Azure-Sentinel/pull/7041)
 
 ## Version 0.1.1
 
-- (2022-12-11) Update Azure Firewall - [PR #6870](https://github.com/Azure/Azure-Sentinel/pull/6870)
+- (2022-12-11) Asim/remove fields other - [PR #6870](https://github.com/Azure/Azure-Sentinel/pull/6870)
 
 ## Version 0.1
 

@@ -2,5 +2,5 @@
 
 ## Version 0.1.0
 
-- (2023-09-20) Added ASIM Registry Event schema for SentinelOne and ASIM Registry event unifying parser. - [PR #8678](https://github.com/Azure/Azure-Sentinel/pull/8678)
+- (2023-09-18) ASIM Registry schema parser with its sample and test data for SentinelOne - [PR #8678](https://github.com/Azure/Azure-Sentinel/pull/8678)
 

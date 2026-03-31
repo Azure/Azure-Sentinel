@@ -6,13 +6,9 @@
 
 ## Version 0.1.1
 
-- (2024-03-06) Update CiscoISE - [PR #10099](https://github.com/Azure/Azure-Sentinel/pull/10099)
+- (2024-03-06) Updating UserManagement Parsers - [PR #10099](https://github.com/Azure/Azure-Sentinel/pull/10099)
 
 ## Version 0.1
 
-- (2023-07-13) fixed recommendations - [PR #8406](https://github.com/Azure/Azure-Sentinel/pull/8406)
-
-## Version 1.0
-
-- (2023-06-29) asim cisco ise user mgmt parser initial commit - [PR #8406](https://github.com/Azure/Azure-Sentinel/pull/8406)
+- (2023-07-27) ASIM Cisco ISE User Management Schema Parser - [PR #8406](https://github.com/Azure/Azure-Sentinel/pull/8406)
 

@@ -6,9 +6,21 @@
 
 ## Version 0.5
 
-- (2022-12-11) Zscaler DNS - [PR #6868](https://github.com/Azure/Azure-Sentinel/pull/6868)
+- (2022-12-11) Asim/remove fields cef - [PR #6868](https://github.com/Azure/Azure-Sentinel/pull/6868)
 
 ## Version 0.4
 
-- (2022-03-19) ASIM Dns - Rearrangement (#4402) - [PR #4402](https://github.com/Azure/Azure-Sentinel/pull/4402)
+- (2022-02-03) Dns aliases - [PR #3898](https://github.com/Azure/Azure-Sentinel/pull/3898)
+
+## Version 0.3
+
+- (2021-11-24) Dev/normalization/z scaler dns update to latest cef - [PR #3533](https://github.com/Azure/Azure-Sentinel/pull/3533)
+
+## Version 0.2
+
+- (2021-11-11) DNS parser updated for schema 1.3 - [PR #3438](https://github.com/Azure/Azure-Sentinel/pull/3438)
+
+## Version 0.1
+
+- (2021-10-21) zScaler DNS parsers - [PR #3260](https://github.com/Azure/Azure-Sentinel/pull/3260)
 

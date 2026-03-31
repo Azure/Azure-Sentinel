@@ -2,12 +2,10 @@
 
 ## Version 0.1.4
 
-- (2024-06-19) Reapply "Merge branch 'master' into april-entity-mapping-diana-p3" - [PR #10342](https://github.com/Azure/Azure-Sentinel/pull/10342)
-- (2024-04-10) postgreSQL - [PR #10243](https://github.com/Azure/Azure-Sentinel/pull/10243)
+- (2024-04-17) Authentication parser filter update - [PR #10243](https://github.com/Azure/Azure-Sentinel/pull/10243)
 
 ## Version 0.1.3
 
-- (2024-06-19) Revert "Merge branch 'master' into april-entity-mapping-diana-p3" - [PR #10342](https://github.com/Azure/Azure-Sentinel/pull/10342)
 - (2023-09-18) Multiple ASIM Parser Changes - [PR #9032](https://github.com/Azure/Azure-Sentinel/pull/9032)
 
 ## Version 0.1.2
@@ -16,5 +14,5 @@
 
 ## Version 0.1.1
 
-- (2022-06-13) Rebuild folder structure and update texts - [PR #5296](https://github.com/Azure/Azure-Sentinel/pull/5296)
+- (2022-05-11) PostgreSQL data connector PR - [PR #4751](https://github.com/Azure/Azure-Sentinel/pull/4751)
 

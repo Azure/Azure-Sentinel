@@ -2,5 +2,5 @@
 
 ## Version 0.4.1
 
-- (2024-08-02) PROCESS TERMINATE AND MINORCHANGES FOR FILTER - [PR #10919](https://github.com/Azure/Azure-Sentinel/pull/10919)
+- (2024-08-02) PROCESS TERMINATE  - [PR #10919](https://github.com/Azure/Azure-Sentinel/pull/10919)
 

@@ -2,10 +2,9 @@
 
 ## Version 0.1.1
 
-- (2023-11-20) SentinelOne Update - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
-- (2023-07-30) ASIM File schema parser with its sample and test data for SentinelOne. - [PR #8667](https://github.com/Azure/Azure-Sentinel/pull/8667)
+- (2023-11-20) Apply Filters for File Parsers - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
 
 ## Version 0.1.0
 
-- (2023-08-23) Fixed the suggested review1 changes and added RAW log files for sentinel one. - [PR #8667](https://github.com/Azure/Azure-Sentinel/pull/8667)
+- (2023-09-25) ASIM File Event schema parser with its sample and test data for SentinelOne - [PR #8667](https://github.com/Azure/Azure-Sentinel/pull/8667)
 

@@ -2,5 +2,5 @@
 
 ## Version 0.1.1
 
-- (2023-11-03) Azure Queue Parser - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
+- (2023-11-06) Apply Filters for File Parsers - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
 

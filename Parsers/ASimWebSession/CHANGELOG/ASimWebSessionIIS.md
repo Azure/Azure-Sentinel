@@ -6,5 +6,5 @@
 
 ## Version 0.1
 
-- (2023-04-04) Fix capitalization in name of ASimWebSessionIIS.yaml - [PR #7744](https://github.com/Azure/Azure-Sentinel/pull/7744)
+- (2023-01-17) Create ASIMWebSessionIIS.yaml - [PR #7067](https://github.com/Azure/Azure-Sentinel/pull/7067)
 

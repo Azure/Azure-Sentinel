@@ -2,7 +2,7 @@
 
 ## Version 0.3
 
-- (2023-01-25) Versions updated - [PR #7149](https://github.com/Azure/Azure-Sentinel/pull/7149)
+- (2023-01-25) Update the value of Dvc Alias in Network Session Schema - [PR #7149](https://github.com/Azure/Azure-Sentinel/pull/7149)
 
 ## Version 0.2
 
@@ -10,5 +10,5 @@
 
 ## Version 0.1
 
-- (2022-09-14) ASimNetworkSessionNative + fixes - [PR #6155](https://github.com/Azure/Azure-Sentinel/pull/6155)
+- (2022-09-14) Asim/add networksession stub - [PR #6155](https://github.com/Azure/Azure-Sentinel/pull/6155)
 
