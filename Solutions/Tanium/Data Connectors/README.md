@@ -11,7 +11,7 @@ The Tanium Data Connector deploys the required resources to your Azure instance 
 Once you have deployed the Data Connector you'll be provided with the configuration values needed for your connections in Tanium. You'll need to create connections using the Tanium Connect Module in your Tanium Server.
 
 > [!IMPORTANT]  
-> Once of the values that will be displayed after you deploy the connector will be the App Registration secret. Be sure to capture this value before refreshing or navigating away from the page, as you will not be able to access this again since it's a sensitive/secret value.
+> One of the values that will be displayed after you deploy the connector will be the App Registration secret. Be sure to capture this value before refreshing or navigating away from the page, as you will not be able to access this again since it's a sensitive/secret value.
 
 Use the [JSON file found here](./connect-module-connections.json) along with the [instructions on the Tanium Help site](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Create_Connections.htm) to setup the necessary connections.
 
