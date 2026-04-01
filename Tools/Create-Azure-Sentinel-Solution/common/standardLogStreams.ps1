@@ -215,6 +215,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSALBACCESSLOGS'; Value = 'Microso
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSNLBACCESSLOGS'; Value = 'Microsoft-AWSNLBAccessLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSNLBFLOWLOGSSTREAM'; Value = 'Microsoft-AWSNLBFlowLogsStream' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGLBFLOWLOGSSTREAM'; Value = 'Microsoft-AWSGLBFlowLogsStream' }
+$standardStreamMapping += @{ Key = 'SENTINEL_IMPERVA_WAF_CLOUD_V2_LOGS'; Value = 'Microsoft-SentinelImpervaWAFCloudV2Logs' }
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
