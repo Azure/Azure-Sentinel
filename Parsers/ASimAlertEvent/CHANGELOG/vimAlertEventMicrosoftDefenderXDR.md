@@ -2,7 +2,7 @@
 
 ## Version 0.2.1
 
-- (2026-04-01) Fix bug in parser where extension AlertOriginalStatus was missing - 
+- (2026-04-01) Fix bug in parser where extension AlertOriginalStatus was missing - [PR #13970](https://github.com/Azure/Azure-Sentinel/pull/13970)
 
 ## Version 0.2.0
 
