@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                    |
 |-------------|--------------------------------|-------------------------------------------------------|
-| 3.0.0       | 29-10-2025                     | Initial Creation of CCF and Azure Functions Connector |
+| 3.0.0       | 05-03-2026                     | Initial Creation of **CCF Data Connector**. </br> Updated polling frequency to reduce duplicates, modified ASIM schema for the `CyeraAssets_MS_CL` table, and simplified deployment with API keys added via the **Data Connector**.|
