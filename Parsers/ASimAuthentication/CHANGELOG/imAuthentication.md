@@ -2,7 +2,7 @@
 
 ## Version 0.3.6
 
-- (2026-04-01) Add parser for Cisco IOS from table Syslog - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
+- (2026-04-01) Add parser for Cisco IOS from table Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
 
 ## Version 0.3.5
 
