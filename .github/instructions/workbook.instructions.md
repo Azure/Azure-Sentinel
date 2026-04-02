@@ -58,18 +58,18 @@ Every workbook JSON file must include these essential fields:
 
 #### fromTemplateId
 - **Required**: Yes (all workbooks)
-- **Format**: `sentinel-<workbook-name>` where workbook name is a meaningful identifier for the template
-- **Naming Convention**: `sentinel-` prefix followed by a descriptive name (can be based on filename, vendor name, or workbook purpose)
+- **Format**: `sentinel-<identifier>` where identifier is any meaningful name for the template
+- **Naming Convention**: `sentinel-` prefix followed by a descriptive identifier (flexible format)
 - **Examples**:
-  - Filename-based: `sentinel-CitrixAnalytics`
+  - Filename-based (if filename is descriptive): `sentinel-CitrixAnalytics`, `sentinel-security-operations-efficiency`
   - Vendor-based: `sentinel-BarracudaCloudFirewall`, `sentinel-CriblWorkbook`
-  - Purpose-based: `sentinel-security-operations-efficiency`, `sentinel-threat-analysis`
+  - Purpose-based: `sentinel-threat-analysis`, `sentinel-asset-inventory`
 - **Rules**:
   - Must start with `sentinel-`
-  - After `sentinel-`, use a meaningful identifier (not just the filename)
-  - Can use kebab-case (all lowercase with hyphens) or PascalCase (for vendor names)
-  - Should match workbook display name appropriately
-  - Keep it concise and descriptive
+  - After `sentinel-`, use any meaningful identifier (can be PascalCase, kebab-case, or camelCase)
+  - If filename-based, the filename itself must be descriptive (not generic like `workbook.json`)
+  - Should relate to workbook purpose or vendor name
+  - Keep it concise and clear
 
 #### $schema
 - **Required**: Yes (all workbooks)
@@ -353,7 +353,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Invalid workbook JSON | Missing required top-level fields | Include version, items, fromTemplateId, $schema; ensure fallbackResourceIds is empty array |
-| fromTemplateId incorrect | Wrong format or naming | Use format: `sentinel-workbookname` (kebab-case) |
+| fromTemplateId incorrect | Wrong format or naming | Use format: `sentinel-<identifier>` (any meaningful identifier: filename if descriptive, vendor name, or purpose) |
 | Version mismatch | Confusion about metadata version vs. workbook JSON version | Metadata `version` uses SemVer (1.0.0); workbook JSON `version` is fixed as `"Notebook/1.0"`. These are independent fields. |
 | Metadata version not incremented | Changes made to workbook but version unchanged | Increment version in metadata (PATCH, MINOR, or MAJOR depending on change) |
 | lastPublishDate not updated | Workbook updated but date not refreshed | Update `lastPublishDate` to current date (ISO 8601: YYYY-MM-DD) |
@@ -404,7 +404,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 | `version` | Yes | String | `"Notebook/1.0"` | Must be exactly this value |
 | `items` | Yes | Array | Any valid items | Minimum 1 item required |
 | `fallbackResourceIds` | No (Optional) | Array | `[]` (empty only) | Must always be empty array, no workspace information |
-| `fromTemplateId` | Yes | String | `sentinel-*` (kebab-case or vendor-style) | Must start with `sentinel-`, followed by either all lowercase kebab-case or vendor name with workbook descriptor |
+| `fromTemplateId` | Yes | String | `sentinel-*` | Must start with `sentinel-`, followed by any meaningful identifier (PascalCase, kebab-case, or camelCase) |
 | `$schema` | Yes | String | GitHub schema URL | Exact URL required |
 
 ## PR Description Template
@@ -436,7 +436,7 @@ Brief description of the workbook purpose and value.
 - [ ] version: "Notebook/1.0" present
 - [ ] items: Array with valid items
 - [ ] fallbackResourceIds: Empty array `[]` (no workspace information included)
-- [ ] fromTemplateId: sentinel-workbookname format
+- [ ] fromTemplateId: sentinel-<identifier> format (descriptive identifier)
 - [ ] $schema: GitHub schema URL included
 
 ### Metadata Validation
