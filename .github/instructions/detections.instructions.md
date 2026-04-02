@@ -115,6 +115,85 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 - **Pattern**: `/^\d+\.\d+\.\d+$/`
 - **Example**: `1.2.3` ✅
 
+#### **metadata** (Metadata Information - Required for Standalone Files)
+- **Required**: Yes (for standalone detections in `Detections/` folder); No (for rules in `Solutions/**/Analytic Rules/`)
+- **Purpose**: Provides source, author, support tier, and category information for standalone detection rules
+- **Type**: Object with nested properties
+- **Structure**:
+  ```yaml
+  metadata:
+    source:
+      kind: Community        # or "Microsoft" for official rules
+    author:
+      name: Author Name
+    support:
+      tier: Community        # or "Microsoft" for official support
+    categories:
+      domains: [ "Category Name" ]
+  ```
+- **Rules**:
+  - **Required for standalone files** in root `Detections/` folder (matches pattern `Detections/**/*.yaml`)
+  - **Not required** for rules in Solutions folder (`Solutions/**/Analytic Rules/*.yaml`)
+  - `source.kind`: Typically `Community` or `Microsoft`
+  - `author.name`: Name of the rule author or organization
+  - `support.tier`: Support level - `Community` or `Microsoft`
+  - `categories.domains`: Array of domain/category classifications from the valid domains list
+
+#### **Valid Domain Categories** (for `categories.domains`)
+- Application
+- Cloud Provider
+- Cloud Security
+- Compliance
+- DevOps
+- Identity
+- Internet of Things (IoT)
+- IT Operations
+- Migration
+- Networking
+- Platform
+- Security
+- Security - 0-day Vulnerability
+- Security - Automation (SOAR)
+- Security - Cloud Security
+- Security - Information Protection
+- Security - Insider Threat
+- Security - Network
+- Security - Others
+- Security - Threat Intelligence
+- Security - Threat Protection
+- Security - Vulnerability Management
+- Storage
+- Training and Tutorials
+- User Behavior (UEBA)
+
+
+- **Valid Examples**: 
+  ```yaml
+  metadata:
+    source:
+      kind: Community
+    author:
+      name: Alex
+    support:
+      tier: Community
+    categories:
+      domains: [ "Security - Others" ]
+  ```
+  ```yaml
+  metadata:
+    source:
+      kind: Microsoft
+    author:
+      name: Microsoft Sentinel Team
+    support:
+      tier: Microsoft
+    categories:
+      domains: [ "Security - Threat Intelligence", "Security - Threat Protection" ]
+  ```
+- **Invalid Examples** (for standalone files):
+  - Missing `metadata` section ❌
+  - Incomplete metadata (missing `author` or `support`) ❌
+
 #### **tactics** (MITRE ATT&CK Tactics)
 - **Required**: Yes (all rule types)
 - **Framework Version**: ATT&CK Framework v16 Supported
@@ -754,6 +833,20 @@ kind: Scheduled
 query: |
   SecurityEvent | where EventID == 4625
 # Missing: queryFrequency, queryPeriod, triggerOperator, triggerThreshold
+```
+
+```yaml
+# Standalone detection file missing metadata (should not appear in Detections/ folder without metadata)
+id: 12345678-1234-1234-1234-123456789012
+name: Multiple Failed Login Attempts
+description: Detects multiple failed login attempts from a single IP
+severity: High
+status: Available
+kind: Scheduled
+# ❌ Missing: metadata section (required for standalone Detections/ files)
+# Should include: source.kind, author.name, support.tier, categories.domains
+query: |
+  SecurityEvent | where EventID == 4625
 ```
 
 ## Best Practices for Analytic Rules
