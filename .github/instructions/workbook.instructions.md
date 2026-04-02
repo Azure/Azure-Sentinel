@@ -125,7 +125,7 @@ Every workbook JSON file must include these essential fields:
 
 ### Naming Conventions
 - **Item Names**: Clear, descriptive (e.g., "Security Incidents Overview")
-- **Parameter IDs**: camelCase (e.g., `DefaultWorkspace`, `TimeRange`, `SeverityFilter`)
+- **Parameter IDs**: PascalCase (e.g., `DefaultWorkspace`, `TimeRange`, `SeverityFilter`)
 - **Custom Width**: `"100"` (full), `"67"` (two-thirds), `"50"` (half), `"33"` (third)
 
 ## Parameters and Queries
@@ -217,8 +217,8 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 - Breaking changes → MAJOR (1.0.0 → 2.0.0)
 
 **Images:**
-- Logo: SVG in `Workbook/Images/Logo/` (required for ISV)
-- Previews: PNG in `Workbook/Images/Preview/` (white and black backgrounds)
+- Logo: SVG in `Workbooks/Images/Logo/` (required for ISV)
+- Previews: PNG in `Workbooks/Images/Preview/` (white and black backgrounds)
 - Filenames must match metadata exactly
 
 **Folder Structure:**
@@ -237,7 +237,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 | Workbook not in gallery | Metadata not included in PR | Include WorkbooksMetadata.json file |
 | Query execution errors | Syntax errors in KQL | Validate all queries; check parameter references |
 | Logo not displaying | Wrong file format or path | Use SVG format; verify logoFileName path |
-| Preview images missing | Files not in correct location | Place PNG files in Workbook/Images/Preview/ |
+| Preview images missing | Files not in correct location | Place PNG files in Workbooks/Images/Preview/ |
 | Parameters not filtering | Missing parameter references in queries | Add `{ParameterName}` to query where clauses |
 | Charts not rendering | Visualization configuration issue | Verify query returns expected data structure |
 | Metadata validation fails | Field format or required field missing | Check all required fields; validate JSON format |
@@ -281,7 +281,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 | `version` | Yes | String | `"Notebook/1.0"` | Must be exactly this value |
 | `items` | Yes | Array | Any valid items | Minimum 1 item required |
 | `fallbackResourceIds` | No (Optional) | Array | `[]` (empty only) | Must always be empty array, no workspace information |
-| `fromTemplateId` | Yes | String | `sentinel-*` | Must start with sentinel- |
+| `fromTemplateId` | Yes | String | `sentinel-*` (kebab-case or vendor-style) | Must start with `sentinel-`, followed by either all lowercase kebab-case or vendor name with workbook descriptor |
 | `$schema` | Yes | String | GitHub schema URL | Exact URL required |
 
 ## PR Description Template
@@ -306,8 +306,8 @@ Brief description of the workbook purpose and value.
 ### Files Included
 - [ ] WorkbookName.json
 - [ ] WorkbooksMetadata.json
-- [ ] Logo file (Workbook/Images/Logo/)
-- [ ] Preview images (Workbook/Images/Preview/)
+- [ ] Logo file (Workbooks/Images/Logo/)
+- [ ] Preview images (Workbooks/Images/Preview/)
 
 ### JSON Validation
 - [ ] version: "Notebook/1.0" present
