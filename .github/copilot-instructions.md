@@ -33,6 +33,12 @@ When reviewing pull requests, follow these rules strictly.
 4. Validate GUID format, rule names, descriptions, severity levels, and other field-based validation rules
 5. Do NOT use general instructions for these files - only use the detections custom instructions
 
+### For Hunting Queries Files (`Hunting Queries/**/*.yaml`, `Solutions/**/Hunting Queries/*.yaml`)
+1. **LOAD and USE:** `.github/instructions/huntingqueries.instructions.md`
+2. Apply ALL guidelines from that file
+3. Verify all required fields are present and properly formatted
+4. Do NOT use general instructions for these files - only use the huntingqueries custom instructions
+
 ---
 
 ## Files and folders to ignore
