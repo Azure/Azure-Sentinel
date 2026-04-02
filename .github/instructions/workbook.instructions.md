@@ -58,20 +58,18 @@ Every workbook JSON file must include these essential fields:
 
 #### fromTemplateId
 - **Required**: Yes (all workbooks)
-- **Format**: `sentinel-<workbook-name>` where workbook name can be:
-  - Pure kebab-case: `sentinel-security-operations-efficiency`
-  - Vendor name + workbook type: `sentinel-CriblWorkbook`, `sentinel-BarracudaCloudFirewall`
-- **Naming Convention**: `sentinel-` prefix followed by workbook name
+- **Format**: `sentinel-<workbook-name>` where workbook name is a meaningful identifier for the template
+- **Naming Convention**: `sentinel-` prefix followed by a descriptive name (can be based on filename, vendor name, or workbook purpose)
 - **Examples**:
-  - `sentinel-security-operations-efficiency` (all lowercase kebab-case)
-  - `sentinel-CriblWorkbook` (vendor + workbook type)
-  - `sentinel-BarracudaCloudFirewall` (vendor + workbook type)
-  - `sentinel-auth0-activity-analysis` (all lowercase kebab-case)
+  - Filename-based: `sentinel-CitrixAnalytics`
+  - Vendor-based: `sentinel-BarracudaCloudFirewall`, `sentinel-CriblWorkbook`
+  - Purpose-based: `sentinel-security-operations-efficiency`, `sentinel-threat-analysis`
 - **Rules**:
   - Must start with `sentinel-`
-  - After `sentinel-`, use either: all lowercase with hyphens (kebab-case) OR vendor name with workbook descriptor
-  - Match workbook display name appropriately
-  - Should correspond to workbook filename (without .json)
+  - After `sentinel-`, use a meaningful identifier (not just the filename)
+  - Can use kebab-case (all lowercase with hyphens) or PascalCase (for vendor names)
+  - Should match workbook display name appropriately
+  - Keep it concise and descriptive
 
 #### $schema
 - **Required**: Yes (all workbooks)
@@ -127,6 +125,116 @@ Every workbook JSON file must include these essential fields:
 - **Item Names**: Clear, descriptive (e.g., "Security Incidents Overview")
 - **Parameter IDs**: PascalCase (e.g., `DefaultWorkspace`, `TimeRange`, `SeverityFilter`)
 - **Custom Width**: `"100"` (full), `"67"` (two-thirds), `"50"` (half), `"33"` (third)
+
+### Query Quality Standards
+
+**Query Richness:**
+- Include at least 3 queries with varying complexity (e.g., `summarize`, `union`, `join`, `make-series`)
+- Use advanced KQL operators: `arg_max()`, `arg_min()`, `dcount()`, `percentile`, `mvexpand`, `parse`
+- Add `let` statements for complex logic or reusable expressions
+- Use `materialize()` for performance optimization on expensive computations
+- **No Hardcoded GUIDs**: Avoid hardcoded workspace IDs, subscription IDs, or tenant IDs
+- **Parser Functions**: Prefer ASIM parsers and KQL functions over raw table queries
+- **Inline Comments**: Add KQL comments (`//` or `/* */`) to explain complex query logic
+
+**Parameter References in Queries:**
+- All queries must reference parameters (`{TimeRange}`, `{Severity}`, etc.) instead of hardcoding values
+- Support "Select All" pattern: `where Status in ({Status}) or "*" in ({Status})`
+
+### Documentation Quality
+
+**Introductory Content:**
+- Add introductory markdown (type 1) explaining workbook purpose, key metrics, and how to use it
+- Include prerequisites and required data connectors
+- Provide context about what data sources feed the workbook
+
+**Per-Section Guidance:**
+- Add descriptive text before each major section explaining what insights it provides
+- Include titles for all queries (query `name` field should be clear and descriptive)
+- Title clarity: Avoid generic names like "query1" or "metrics"; use descriptive titles
+
+**Help Section with Toggle:**
+- Create a Help parameter (Type 10 Toggle) for conditional visibility
+- Add detailed guidance on using filters, interpreting results, and troubleshooting
+
+**No-Data Messaging:**
+- Add `noDataMessage` field to queries with helpful text when results are empty
+- Use `noDataMessageStyle` for consistent styling of empty state messages
+- Example: "No incidents found in selected time range. Try adjusting filters or expanding the time period."
+
+### Visualization Best Practices
+
+**Chart Type Diversity:**
+- Use at least 3 different visualization types (not just tables)
+- Include KPI cards/tiles for key metrics
+- Add time-series visualizations (`linechart`, `timechart`, `areachart`) for trends if required
+- Use distribution visualizations (`piechart`, `barchart`) for categorization if required
+- Consider scatter charts or maps for geographic/distribution analysis
+
+**Visualization Appropriateness:**
+- Ensure chart type matches data structure and analysis goal
+- Time-series data → line/area chart
+- Categorical comparisons → bar/column chart
+- Part-to-whole → pie chart
+- Detailed data → table with formatting
+
+**Table Formatting:**
+- Apply conditional formatting with thresholds (Red/Orange/Green for status)
+- Set column widths for readability
+- Add column labels and descriptions
+- Include icons for status indicators (✓, ✗, ⚠)
+- Enable `showExportToExcel` on key tables for user export capability
+
+**Color & Styling:**
+- Use standard Azure Sentinel color palettes (Red/Orange/Green-Blue)
+- Apply conditional formatting based on severity/status values
+- Ensure consistent styling across all visualizations
+
+### Interactivity & Parameters
+
+**Required Parameters:**
+- **TimeRange (Type 4)**: Must have `isRequired: true` with global scope
+- **Workspace (Type 5)** or **Subscription (Type 6)**: For multi-workspace queries
+- All critical filters should be `isRequired: true`
+
+**Parameter Best Practices:**
+- Use multi-select (`multiSelect: true`) for filtering multiple values
+- Provide sensible defaults (e.g., last 30 days for TimeRange)
+- Set `isGlobal: true` on TimeRange to apply across all queries
+- Use `timeContextFromParameter` to link time-based queries to TimeRange parameter
+
+**Conditional Visibility:**
+- Hide detailed sections until user selects specific filters
+- Create "drill-down" capability: Summary → Details → Deep Dive
+- Use Help toggle to show/hide optional guidance
+
+### Structure & Navigation
+
+**Organization with Groups (Type 12):**
+- Use groups/notebooks to organize related content
+- Create 3+ groups for complex workbooks (Overview, Analysis, Details)
+- Use nested groups for drill-down navigation
+
+**Tabs & Links (Type 11):**
+- Create 5+ meaningful tabs for large workbooks
+- Use tabs to organize by business area or analysis type
+- Add links to related workbooks or documentation
+
+**Custom Layout:**
+- Use `customWidth` to create multi-column layouts
+- Apply `conditionalVisibility` for show/hide logic
+- Maintain consistent grid and spacing
+
+### Best Practices & Polish
+
+**Avoid Common Issues:**
+- ❌ No typos in labels, headers, or descriptions
+- ❌ No empty markdown items with `"json": ""`
+- ✅ Clean, polished UI with consistent formatting
+
+**Performance Features:**
+- Enable `showRefreshButton` on key queries for manual refresh
+- Use `showAnalytics` for deep-link capability to analytics
 
 ## Parameters and Queries
 
