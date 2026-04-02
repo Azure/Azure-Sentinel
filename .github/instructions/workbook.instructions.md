@@ -291,17 +291,32 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
   "version": "1.0.0",
   "provider": "Microsoft",
   "templateRelativePath": "WorkbookName.json",
-  "logoFileName": "Workbooks/Images/Logo/VendorLogo.svg",
+  "subtitle": "",
+  "logoFileName": "logo-file.svg",
   "previewImagesFileNames": [
-    "Workbooks/Images/Preview/VendorNameWhite.png",
-    "Workbooks/Images/Preview/VendorNameBlack.png"
+    "workbook-black.png",
+    "workbook-white.png"
   ],
-  "dataTypeDependencies": ["CommonSecurityLog"],
-  "dataConnectorsDependencies": ["DataConnectorId"],
-  "firstPublishDate": "2024-01-01",
-  "lastPublishDate": "2024-01-01",
-  "source": {"kind": "Community"},
-  "TemplateSpec": true
+  "dataTypesDependencies": [
+    "TableName_CL"
+  ],
+  "dataConnectorsDependencies": [
+    "DataConnectorId"
+  ],
+  "source": {
+    "kind": "Community"
+  },
+  "author": {
+    "name": "Author Name"
+  },
+  "support": {
+    "tier": "Community"
+  },
+  "categories": {
+    "domains": [
+      "Security - Category"
+    ]
+  }
 }
 ```
 
