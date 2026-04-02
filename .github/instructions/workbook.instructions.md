@@ -201,7 +201,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 - **workbookKey**: Unique, camelCase (e.g., `barracudaCloudFirewall`)
 - **title**: Clear name (50-100 chars), no parentheses
 - **description**: Explains purpose, data, and insights (50+ chars)
-- **version**: Matches workbook JSON exactly (X.Y.Z semantic versioning)
+- **version**: Semantic versioning (X.Y.Z format, e.g., `1.0.0`). This is the metadata/template version and is independent from the workbook JSON top-level `version` field (which is fixed as `"Notebook/1.0"`). Increment this version when you make changes to the workbook content.
 - **templateRelativePath**: Just the workbook filename (e.g., `AWSSecurityHubComplianceWorkbook.json`), NOT the full path. The metadata system resolves paths based on metadata location automatically:
   - If metadata is in `WorkbooksMetadata.json` (root): resolver looks in `Workbooks/`
   - If metadata is in `Solutions/SolutionName/metadata-template.json`: resolver looks in `Solutions/SolutionName/Workbooks/`
@@ -231,7 +231,7 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 |-------|-------|----------|
 | Invalid workbook JSON | Missing required top-level fields | Include version, items, fromTemplateId, $schema; ensure fallbackResourceIds is empty array |
 | fromTemplateId incorrect | Wrong format or naming | Use format: `sentinel-workbookname` (kebab-case) |
-| Version mismatch | Workbook and metadata versions don't match | Update metadata version to match workbook version exactly |
+| Version mismatch | Confusion about metadata version vs. workbook JSON version | Metadata `version` uses SemVer (1.0.0); workbook JSON `version` is fixed as `"Notebook/1.0"`. These are independent fields. |
 | Metadata version not incremented | Changes made to workbook but version unchanged | Increment version in metadata (PATCH, MINOR, or MAJOR depending on change) |
 | lastPublishDate not updated | Workbook updated but date not refreshed | Update `lastPublishDate` to current date (ISO 8601: YYYY-MM-DD) |
 | Workbook not in gallery | Metadata not included in PR | Include WorkbooksMetadata.json file |
