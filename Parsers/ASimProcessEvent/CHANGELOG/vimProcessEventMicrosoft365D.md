@@ -1,6 +1,6 @@
 # Changelog for vimProcessEventMicrosoft365D.yaml
 
-## Version 0.3.0
+## Version 0.4.0
 
 - (2026-03-10) [ASIM] Update Process Event Defender Parsers With Additional Fields - [PR #13785](https://github.com/Azure/Azure-Sentinel/pull/13785)
 
