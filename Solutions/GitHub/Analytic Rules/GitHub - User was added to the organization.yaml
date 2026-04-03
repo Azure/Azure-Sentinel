@@ -1,35 +1,46 @@
 id: 0b85a077-8ba5-4cb5-90f7-1e882afe10c4
-name: GitHub - User was added to the organization
-description: |
-  'Detect activities when a user was added to the organization. This query runs every day and its severity is Medium.'
+name: (Preview) GitHub - User was added to the organization
+description: 'Detects GitHub audit events where a user was added to the organization (Action = ''org.add_member''). The rule
+  runs every day and searches the last 7 days of data (queryFrequency=1d, queryPeriod=7d). Keep the GitHub Audit connector enabled
+  to ensure data streams into GitHubAuditData.'
 severity: Medium
 status: Available
 requiredDataConnectors:
-- connectorId: GitHubAuditDefinitionV2
-  dataTypes:
-  - GitHubAuditData
+- GitHub
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
+- InitialAccess
 relevantTechniques:
-  - T1078
-query: |
-    GitHubAuditData
-    | where Action == "org.add_member"
-    | project Actor, Action
-    | extend Name = iif(Actor contains "@", split(Actor, "@")[0], Actor)
-    | extend UPNSuffix = iif(Actor contains "@", split(Actor, "@")[1], "")
+- T1078
+- T1078.004
+query: |-
+  GitHubAuditData
+  | where Action == 'org.add_member'
+  | project TimeGenerated, Actor, Action
+  | extend Name = iif(Actor contains '@', split(Actor, '@')[0], Actor)
+  | extend UPNSuffix = iif(Actor contains '@', split(Actor, '@')[1], '')
+  | project TimeGenerated, Actor, Action, Name, UPNSuffix
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: Actor
-      - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+  - identifier: Name
+    columnName: Name
+  - identifier: UPNSuffix
+    columnName: UPNSuffix
+alertDetailsOverride:
+  alertDisplayNameFormat: 'GitHub user added: {{Actor}}'
+  alertDescriptionFormat: 'Action {{Action}} on {{TimeGenerated}} for account {{Actor}} (UPN suffix: {{UPNSuffix}})'
+customDetails:
+  Action: Action
+  Name: Name
+  UPNSuffix: UPNSuffix
+  EventTime: TimeGenerated
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.1
 kind: Scheduled
-version: 1.0.2

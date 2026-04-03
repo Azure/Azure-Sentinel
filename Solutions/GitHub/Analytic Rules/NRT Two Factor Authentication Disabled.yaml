@@ -1,30 +1,50 @@
 id: 594c653d-719a-4c23-b028-36e3413e632e
 name: NRT GitHub Two Factor Auth Disable
-description: |
-  'Two-factor authentication is a process where a user is prompted during the sign-in process for an additional form of identification, such as to enter a code on their cellphone or to provide a fingerprint scan. Two factor authentication reduces the risk of account takeover. Attacker will want to disable such security tools in order to go undetected. '
+description: 'Two-factor authentication (2FA) helps prevent account takeover by requiring a second factor during sign-in.
+  This analytic identifies GitHub audit events where the organization-level two-factor requirement was disabled (Action =
+  org.disable_two_factor_requirement). Default scheduling: queryFrequency=5m, queryPeriod=1h. The rule produces per-result alerts. Ensure your tenant is ingesting
+  the GitHubAuditData table and that the Actor, IPaddress and Repository fields are present.'
 severity: Medium
-requiredDataConnectors:
-- connectorId: GitHubAuditDefinitionV2
-  dataTypes:
-  - GitHubAuditData
+status: Enabled
+requiredDataConnectors: []
+queryFrequency: 5m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
 tactics:
-  - DefenseEvasion
+- DefenseEvasion
 relevantTechniques:
-  - T1562
-query: |
+- T1562
+query: |-
   GitHubAuditData
   | where Action == "org.disable_two_factor_requirement"
-  | project TimeGenerated, Action, Actor, Country, Repository
   | extend Name = iif(Actor contains "@", split(Actor, "@")[0], Actor)
   | extend UPNSuffix = iif(Actor contains "@", split(Actor, "@")[1], "")
+  | project TimeGenerated, Action, Actor, Name, UPNSuffix, Country, IPaddress, Repository
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: Actor
-      - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
-version: 1.0.4
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+  - identifier: Name
+    columnName: Name
+  - identifier: UPNSuffix
+    columnName: UPNSuffix
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPaddress
+alertDetailsOverride:
+  alertDisplayNameFormat: GitHub Two-Factor Disabled by {{Actor}} on {{Repository}} at {{TimeGenerated}}
+  alertDescriptionFormat: Action={{Action}} IP={{IPaddress}} Country={{Country}}
+customDetails:
+  Repository: Repository
+  Country: Country
+  TimeGenerated: TimeGenerated
+  Action: Action
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+version: 1.0.3
 kind: NRT

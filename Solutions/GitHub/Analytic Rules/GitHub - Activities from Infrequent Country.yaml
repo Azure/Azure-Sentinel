@@ -1,48 +1,59 @@
 id: f041e01d-840d-43da-95c8-4188f6cef546
 name: GitHub Activites from a New Country
-description: |
-  'Detect activities from a location that was not recently or was never visited by the user or by any user in your organization.'
+description: Detect activities from a location that was not recently or was never visited by the user or by any user in your
+  organization. This rule uses a 7-day learning window and a 1-hour run window. 
 severity: Medium
 status: Available
 requiredDataConnectors:
-- connectorId: GitHubAuditDefinitionV2
+- connectorId: GitHub
   dataTypes:
-  - GitHubAuditData
+  - AuditLogs
 queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
+- InitialAccess
 relevantTechniques:
-  - T1078
-query: |
+- T1078
+- T1078.004
+query: |-
   let LearningPeriod = 7d;
   let RunTime = 1h;
   let StartTime = 1h;
   let EndRunTime = StartTime - RunTime;
   let EndLearningTime = StartTime + LearningPeriod;
-  let GitHubCountryCodeLogs = (GitHubAuditData
-  | where Country != "");
-    GitHubCountryCodeLogs
+  let GitHubCountryCodeLogs = materialize((GitHubAuditData
+  | where Country != ""));
+  GitHubCountryCodeLogs
   | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
-  | summarize makeset(Country) by Actor
+  | summarize set_Country = makeset(Country) by Actor
   | join kind=innerunique (
     GitHubCountryCodeLogs
     | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
     | distinct Country, Actor, TimeGenerated
-  ) on Actor 
+  ) on Actor
   | where set_Country !contains Country
   | extend timestamp = TimeGenerated
   | extend AccountName = tostring(split(Actor, "@")[0]), AccountUPNSuffix = tostring(split(Actor, "@")[1])
+  | project Actor, AccountName, AccountUPNSuffix, Country, PreviousCountries = set_Country, TimeGenerated, timestamp
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: Actor
-      - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+  - identifier: Name
+    columnName: AccountName
+  - identifier: UPNSuffix
+    columnName: AccountUPNSuffix
+alertDetailsOverride:
+  alertDisplayNameFormat: GitHub activity from new country - {{AccountName}} from {{Country}}
+  alertDescriptionFormat: Account {{AccountName}} had GitHub activity from a new country {{Country}} at {{timestamp}}
+customDetails:
+  PreviousCountries: PreviousCountries
+  EventTime: timestamp
+  TimeGenerated: TimeGenerated
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
 version: 1.0.2
 kind: Scheduled
