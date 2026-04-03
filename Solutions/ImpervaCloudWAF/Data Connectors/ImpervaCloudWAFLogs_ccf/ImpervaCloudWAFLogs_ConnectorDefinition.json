@@ -1,43 +1,57 @@
 {
     "name": "ImpervaCloudWAFCCFDefinition",
-    "apiVersion": "2025-03-01",
+    "apiVersion": "2025-07-01-preview",
     "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
     "location": "{{location}}",
     "kind": "Customizable",
     "properties": {
         "connectorUiConfig": {
             "id": "ImpervaCloudWAFLogsCCFDefinition",
-            "title": "Imperva Cloud WAF",
+            "title": "Imperva Cloud WAF (via Codeless Connector Framework)",
             "publisher": "Microsoft",
-            "descriptionMarkdown": "The Imperva WAF Cloud data connector provides the capability to ingest logs into Microsoft Sentinel using the Imperva Log Integration through AWS S3 Bucket. Refer to [Imperva WAF Cloud Log Integration](https://docs.imperva.com/bundle/cloud-application-security/page/settings/log-integration.htm) for more information.",
-            "graphQueriesTableName": "ImpervaWAFCloudV2_CL",
+            "descriptionMarkdown": "The Imperva WAF Cloud data connector provides the capability to ingest logs into Microsoft Sentinel using the Imperva Log Integration via AWS S3 with SQS notifications. The connector parses CEF-formatted WAF events including access logs and security alerts for threat detection and investigation.Refer to [Imperva WAF Cloud Log Integration](https://docs.imperva.com/bundle/cloud-application-security/page/settings/log-integration.htm) for more information.",
+            "graphQueriesTableName": "ImpervaWAFCloud",
             "graphQueries": [
                 {
                     "metricName": "Total events received",
-                    "legend": "ImpervaCloudWAF Logs",
+                    "legend": "Imperva WAF Events",
                     "baseQuery": "{{graphQueriesTableName}}"
                 }
             ],
             "sampleQueries": [
                 {
-                    "description": "Get Sample of Imperva Cloud WAF logs",
-                    "query": "{{graphQueriesTableName}}\n | take 10"
+                    "description": "Get sample of Imperva WAF events",
+                    "query": "{{graphQueriesTableName}}\n| take 20"
+                },
+                {
+                    "description": "Imperva WAF events by attack type",
+                    "query": "{{graphQueriesTableName}}\n| where AttackSeverity != \"0\"\n| summarize count() by AttackName\n| render piechart"
+                },
+                {
+                    "description": "Imperva WAF events by action",
+                    "query": "{{graphQueriesTableName}}\n| summarize count() by Act\n| render piechart"
                 }
             ],
             "dataTypes": [
                 {
-                    "name": "{{graphQueriesTableName}}",
-                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    "name": "SentinelImpervaWAFCloudV2Logs",
+                    "lastDataReceivedQuery": "SentinelImpervaWAFCloudV2Logs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                 }
             ],
             "connectivityCriteria": [
                 {
                     "type": "HasDataConnectors"
+                },
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "SentinelImpervaWAFCloudV2Logs | where TimeGenerated > ago(1h) | take 1"
+                    ]
                 }
             ],
             "availability": {
-                "status": 1,
-                "isPreview": false
+                "isPreview": true,
+                "status": 1
             },
             "permissions": {
                 "resourceProvider": [
@@ -55,6 +69,12 @@
                     }
                 ]
             },
+            "customs": [
+                {
+                    "name": "AWS IAM Role",
+                    "description": "An AWS IAM Role with cross-account trust policy is required."
+                }
+            ],
             "instructionSteps": [
                 {
                     "title": "Connect Imperva WAF Cloud to Microsoft Sentinel\n\n",
