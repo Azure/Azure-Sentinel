@@ -1,8 +1,8 @@
 id: 13f9b742-0060-4920-92fa-37942f2b157f
 Function:
   Title: Corelight Connection Aggregated Events
-  Version: '1.1.0'
-  LastUpdated: '2025-11-26'
+  Version: '1.1.1'
+  LastUpdated: '2026-03-19'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_conn_agg
 FunctionAlias: corelight_conn_agg
@@ -26,12 +26,12 @@ FunctionQuery: |
         "SHR","Responder sent a SYN ACK followed by a FIN, we never saw a SYN from the originator.","teardown",
         "OTH","No SYN seen, just midstream traffic (a 'partial connection' that was not later closed).","allowed"
     ];
-    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let dummy_table = datatable(TimeGenerated: datetime, uids_s: string) [];
     let corelight_conn_agg = view () {
         union isfuzzy=true
             Corelight_v2_conn_agg_CL,
             dummy_table
-        | summarize arg_max(TimeGenerated, *) by uid_s
+        | summarize arg_max(TimeGenerated, *) by uids_s
         | extend
             path=column_ifexists("_path_s", ""),
             system_name=column_ifexists("_system_name_s", ""),
@@ -46,9 +46,9 @@ FunctionQuery: |
             id_orig_h_n=column_ifexists("id_orig_h_n_s", ""),
             id_resp_h_n=column_ifexists("id_resp_h_n_s", ""),
             write_ts=column_ifexists("_write_ts_t", datetime(null)),
-            uid=column_ifexists("uid_s", ""),
-            community_id=column_ifexists("community_id_s",""),
-            spcap_url=column_ifexists("spcap_url_s", ""),
+            uid=column_ifexists("uids_s", ""),
+            community_id=column_ifexists("community_ids_s", ""),
+            spcap_url=column_ifexists("spcap_urls_s", ""),
             service=column_ifexists("service_s", ""),
             apps=column_ifexists("app_s", ""),
             corelight_shunted=column_ifexists("corelight_shunted_b", ""),
@@ -67,8 +67,8 @@ FunctionQuery: |
             conn_state=column_ifexists("conn_state_s", ""),
             history=column_ifexists("history_s", ""),
             tunnel_parents=column_ifexists("tunnel_parents_s", ""),
-            netskope_site_id=column_ifexists("netskope_site_id_s", ""),
-            netskope_user_id=column_ifexists("netskope_user_id_s", ""),
+            netskope_site_id=column_ifexists("netskope_site_ids_s", ""),
+            netskope_user_id=column_ifexists("netskope_user_ids_s", ""),
             id_vlan=column_ifexists("id_vlan_d", real(null)),
             vlan=column_ifexists("vlan_d", real(null)),
             inner_vlan=column_ifexists("inner_vlan_d", real(null)),
@@ -122,8 +122,9 @@ FunctionQuery: |
             bytes=resp_ip_bytes + orig_ip_bytes,
             sensor_name = coalesce(system_name, "unknown"),
             transport=iff(proto=='icmp' and id_orig_h matches regex ".*:.*", "icmp6", proto),
-            app=split(service, ",")
+            app=todynamic(service)
         | extend
+            is_broadcast = iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"), "true", "false"),
             is_dest_internal_ip = iff(local_resp == true, "true", "false"),
             is_src_internal_ip = iff(local_orig == true, "true", "false"),
             direction = case(
@@ -213,6 +214,7 @@ FunctionQuery: |
             EventProduct,
             EventType,
             ts,
+            is_broadcast,
             is_dest_internal_ip,
             is_src_internal_ip,
             direction,
