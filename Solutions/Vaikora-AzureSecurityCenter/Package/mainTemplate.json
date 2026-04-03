@@ -78,6 +78,13 @@
     "vaikoraAgentId": {
       "type": "string",
       "defaultValue": ""
+    },
+    "workspaceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Log Analytics Workspace ID"
+      }
     }
   },
   "variables": {
@@ -311,7 +318,7 @@
                     "Filter_High_Risk_Actions": {
                       "type": "Query",
                       "inputs": {
-                        "from": "@body('Parse_Response')?['data']",
+                        "from": "@body('Parse_Response')?['actions']",
                         "where": "@or(or(equals(item()?['severity'], 'high'), equals(item()?['severity'], 'critical')), or(equals(item()?['is_anomaly'], true), equals(item()?['threat_detected'], true)))"
                       },
                       "runAfter": {
@@ -324,19 +331,28 @@
                       "type": "Foreach",
                       "foreach": "@body('Filter_High_Risk_Actions')",
                       "actions": {
-                        "Send_to_Log_Analytics": {
-                          "type": "ApiConnection",
+                        "Send_to_Sentinel": {
+                          "type": "Http",
                           "inputs": {
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                              }
-                            },
-                            "method": "post",
-                            "path": "/api/logs",
-                            "body": "@{json(concat('{\"TimeGenerated\":\"', items('For_Each_Security_Alert')?['created_at'], '\",\"AlertId\":\"', items('For_Each_Security_Alert')?['id'], '\",\"AgentId\":\"', items('For_Each_Security_Alert')?['agent_id'], '\",\"ActionType\":\"', items('For_Each_Security_Alert')?['action_type'], '\",\"Severity\":\"', items('For_Each_Security_Alert')?['severity'], '\",\"Title\":\"', replace(items('For_Each_Security_Alert')?['title'], '\"', '\\\"'), '\",\"Description\":\"', replace(items('For_Each_Security_Alert')?['description'], '\"', '\\\"'), '\",\"SourceIP\":\"', items('For_Each_Security_Alert')?['source_ip'], '\",\"DestinationIP\":\"', items('For_Each_Security_Alert')?['destination_ip'], '\",\"SourceHost\":\"', items('For_Each_Security_Alert')?['source_host'], '\",\"DestinationHost\":\"', items('For_Each_Security_Alert')?['destination_host'], '\",\"ProcessName\":\"', items('For_Each_Security_Alert')?['process_name'], '\",\"UserName\":\"', items('For_Each_Security_Alert')?['user_name'], '\",\"FilePath\":\"', items('For_Each_Security_Alert')?['file_path'], '\",\"ThreatDetected\":', string(items('For_Each_Security_Alert')?['threat_detected']), ',\"IsAnomaly\":', string(items('For_Each_Security_Alert')?['is_anomaly']), ',\"ConfidenceScore\":', string(items('For_Each_Security_Alert')?['confidence_score']), ',\"UpdatedAt\":\"', items('For_Each_Security_Alert')?['updated_at'], '\"}'))}",
+                            "method": "POST",
+                            "uri": "@{concat('https://', parameters('workspaceId'), '.ods.opinsights.azure.com/api/logs?api-version=2016-04-01')}",
                             "headers": {
-                              "Log-Type": "Vaikora_SecurityAlerts"
+                              "Content-Type": "application/json",
+                              "Log-Type": "Vaikora_AgentSignals",
+                              "x-ms-date": "@{utcNow('R')}"
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity"
+                            },
+                            "body": {
+                              "TimeGenerated": "@{items('For_Each_Security_Alert')?['timestamp']}",
+                              "action_id": "@{items('For_Each_Security_Alert')?['id']}",
+                              "agent_id": "@{items('For_Each_Security_Alert')?['agent_id']}",
+                              "action_type": "@{items('For_Each_Security_Alert')?['action_type']}",
+                              "severity": "@{items('For_Each_Security_Alert')?['severity']}",
+                              "is_anomaly": "@{items('For_Each_Security_Alert')?['is_anomaly']}",
+                              "anomaly_score": "@{items('For_Each_Security_Alert')?['anomaly_score']}",
+                              "status": "@{items('For_Each_Security_Alert')?['status']}"
                             }
                           }
                         }
