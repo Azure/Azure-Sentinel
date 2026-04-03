@@ -1,0 +1,224 @@
+Parser:
+  Title: Authentication ASIM parser for VMware ESXi
+  Version: '0.1.0'
+  LastUpdated: Apr 03, 2026
+Product:
+  Name: VMware ESXi
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing VMware ESXi Syslog to the ASIM Authentication schema.
+ParserName: vimAuthenticationVMwareESXi
+EquivalentBuiltInParser: _Im_Authentication_VMwareESXi
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      username_has_any: dynamic=dynamic([]),
+      targetusername_has_any: dynamic=dynamic([]),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      srchostname_has_any: dynamic=dynamic([]),
+      eventtype_in: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic=dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false,
+      pack: bool=false
+  )
+  {
+      let DCUIEvents = (
+          Syslog
+          | where not(disabled)
+          | where (array_length(srcipaddr_has_any_prefix) == 0) // DCUI has no source IP; exclude if IP filter is set
+          | where (array_length(srchostname_has_any) == 0) // DCUI has no source hostname; exclude if hostname filter is set
+          | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where ProcessName == "DCUI"
+          // Pre-filtering username & targetusername
+          | where (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))
+          | where (array_length(targetusername_has_any) == 0 or SyslogMessage has_any (targetusername_has_any))
+          | where SyslogMessage has_any ("logged in", "logged out") or SyslogMessage has_all ("Authentication of user", "failed")
+          | extend
+              TargetUsername = extract(@"[Uu]ser (\S+)", 1, SyslogMessage),
+              EventType = case(SyslogMessage has "logged out", "Logoff", "Logon"),
+              EventResult = case(
+                  SyslogMessage has_any ("logged in", "logged out", "succeeded"), "Success",
+                  SyslogMessage has "failed", "Failure",
+                  ""
+              ),
+              EventResultDetails = iff(SyslogMessage has "time out", "Session timeout", ""),
+              EventSubType = "Interactive",
+              LogonMethod = "Username & Password"
+          | where isnotempty(TargetUsername)
+          | where (array_length(username_has_any) == 0 or TargetUsername has_any (username_has_any))
+          | where (array_length(targetusername_has_any) == 0 or TargetUsername has_any (targetusername_has_any))
+          | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+          | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
+          | where (eventresult == "*" or EventResult =~ eventresult)
+      );
+      let HostdEvents = (
+          Syslog
+          | where not(disabled)
+          | where (array_length(srchostname_has_any) == 0) // Hostd has no source hostname field
+          | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where ProcessName == "Hostd"
+          | where SyslogMessage has_any ("Accepted password", "Rejected password", "Cannot login")
+          | where (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))
+          | where (array_length(targetusername_has_any) == 0 or SyslogMessage has_any (targetusername_has_any))
+          | where (array_length(srcipaddr_has_any_prefix) == 0 or SyslogMessage has_any (srcipaddr_has_any_prefix))
+          | extend
+              TargetUsername = coalesce(
+                  extract(@"for user (\S+) from", 1, SyslogMessage),
+                  extract(@"Cannot login user (\S+)@", 1, SyslogMessage),
+                  extract(@"Cannot login (\S+)@", 1, SyslogMessage)
+              ),
+              SrcIpAddr = coalesce(
+                  extract(@"for user \S+ from ([\d.]+)", 1, SyslogMessage),
+                  extract(@"Cannot login user \S+@([\d.]+)", 1, SyslogMessage),
+                  extract(@"Cannot login \S+@([\d.]+)", 1, SyslogMessage)
+              ),
+              EventResult = case(
+                  SyslogMessage has "Accepted password", "Success",
+                  SyslogMessage has_any ("Rejected password", "Cannot login"), "Failure",
+                  ""
+              ),
+              EventType = "Logon",
+              EventSubType = "Remote",
+              EventResultDetails = extract(@"@[\d.]+: (.+)$", 1, SyslogMessage),
+              TargetSessionId = extract(@"session=(\S+)", 1, SyslogMessage),
+              OperationId = extract(@"opID=([^\s\]]+)", 1, SyslogMessage),
+              SessionIdShort = extract(@"sid=([a-f0-9]+)", 1, SyslogMessage)
+          | where isnotempty(TargetUsername)
+          | where (array_length(username_has_any) == 0 or TargetUsername has_any (username_has_any))
+          | where (array_length(targetusername_has_any) == 0 or TargetUsername has_any (targetusername_has_any))
+          | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+          | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+          | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
+          | where (eventresult == "*" or EventResult =~ eventresult)
+          // Hostd double-logs each auth failure: once as "Rejected password" (PAM) and once as "Cannot login" (Event Manager), typically within 35-300ms of each other.
+          // A 1-second deduplication window collapses these into a single event. The window is intentionally conservative relative to observed duplicate gaps (<100ms).
+          | summarize arg_min(TimeGenerated, *) by TargetUsername, SrcIpAddr, EventResult, Computer, bin(TimeGenerated, 1s)
+          | project-away TimeGenerated1
+      );
+      union DCUIEvents, HostdEvents
+      | invoke _ASIM_ResolveDvcFQDN("Computer")
+      | extend
+          EventCount = int(1),
+          EventStartTime = coalesce(EventTime, TimeGenerated),
+          EventEndTime = coalesce(EventTime, TimeGenerated),
+          EventVendor = "VMware",
+          EventProduct = "ESXi",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.4",
+          TargetUsernameType = "Simple",
+          DvcIpAddr = iif(HostIP != "Unknown IP", tostring(HostIP), dynamic(null)),
+          DvcOs = "VMkernel",
+          TargetHostname = DvcHostname
+      | extend
+          AdditionalFields = iif(
+              pack,
+              bag_pack(
+                  'OperationId', OperationId,
+                  'SessionIdShort', SessionIdShort
+              ),
+              dynamic(null)
+          )
+      | extend
+          User = TargetUsername,
+          Dvc = DvcHostname,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr
+      | project
+          TimeGenerated,
+          _ResourceId,
+          Type,
+          EventCount,
+          EventStartTime,
+          EventEndTime,
+          EventType,
+          EventSubType,
+          EventResult,
+          EventResultDetails,
+          //EventSeverity,
+          EventVendor,
+          EventProduct,
+          //EventProductVersion,
+          EventSchema,
+          EventSchemaVersion,
+          DvcHostname,
+          DvcIpAddr,
+          DvcOs,
+          DvcDomain,
+          DvcDomainType,
+          DvcFQDN,
+          //DvcId,
+          //DvcIdType,
+          SrcIpAddr,
+          //SrcHostname,
+          TargetUsername,
+          TargetUsernameType,
+          //TargetUserType,
+          //TargetUserDomain,
+          TargetHostname,
+          TargetSessionId,
+          LogonMethod,
+          //LogonProtocol,
+          AdditionalFields,
+          User,
+          Dvc,
+          IpAddr,
+          Src
+  };
+  parser(
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled,
+    pack=pack
+  )
