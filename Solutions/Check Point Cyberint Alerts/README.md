@@ -1,6 +1,6 @@
 # Check Point Exposure Management Alerts - Microsoft Sentinel Solution
 
-<img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/checkpoint-cyberint.svg" width="75px" height="75px">
+<img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/checkpoint.svg" width="75px" height="75px">
 
 ## Overview
 
