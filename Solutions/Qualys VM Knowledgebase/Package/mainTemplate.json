@@ -27,13 +27,27 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Qualys VM Knowledgebase",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "4.0.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-qualysvmknowledgebase",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "QualysKB",
@@ -45,11 +59,19 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "4.0.0",
+    "_dataConnectorContentIdConnectorDefinition2": "QualysKbConnector",
+    "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
+    "_dataConnectorContentIdConnections2": "QualysKbConnectorConnections",
+    "dataConnectorTemplateNameConnections2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections2')))]",
+    "dataCollectionEndpointId2": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
     "parserObject1": {
       "_parserName1": "[concat(parameters('workspace'),'/','QualysKB')]",
       "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'QualysKB')]",
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('QualysKB-Parser')))]",
-      "parserVersion1": "1.0.0",
+      "parserVersion1": "1.1.0",
       "parserContentId1": "QualysKB-Parser"
     },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
@@ -64,7 +86,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Qualys VM Knowledgebase data connector with template version 3.0.1",
+        "description": "Qualys VM Knowledgebase data connector with template version 4.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -461,13 +483,780 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "displayName": "Qualys Knowledge Base (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "QualysKbConnector",
+                  "title": "Qualys Knowledge Base (via Codeless Connector Framework)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Ingest Qualys Knowledge Base Vulnerability Data into Microsoft Sentinel using version 2.0 of the Qualys API.",
+                  "graphQueriesTableName": "QualysKnowledgeBase",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total KB entries received",
+                      "legend": "Qualys KB Entries",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Show all vulnerabilities discovered in the last 7 days",
+                      "query": "QualysKnowledgeBase\n| where TimeGenerated > ago(7d)\n| extend SoftwareVendorList = tostring(SoftwareVendor)\n| summarize\n    VulnerabilityCount = count(),\n    PatchableCount = countif(Patchable == '1'),\n    UnpatchableCount = countif(Patchable == '0'),\n    CveCount = dcount(tostring(CveId)),\n    Cves = make_list(CveId),\n    Qids = make_list(Qid),\n    AffectedVendors = make_set(SoftwareVendorList)\n    by SeverityLevel, Category, VulnType\n| extend VendorList = strcat_array(AffectedVendors, ', ')\n| project\n    SeverityLevel,\n    Category,\n    VendorList,\n    VulnType,\n    VulnerabilityCount,\n    PatchableCount,\n    UnpatchableCount,\n    CveCount,\n    Qids,\n    Cves\n| order by SeverityLevel desc, VulnerabilityCount desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "QualysKnowledgeBase",
+                      "lastDataReceivedQuery": "QualysKnowledgeBase\n| where TimeGenerated > ago(24h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Qualys API access",
+                        "description": "Requires a Qualys User Account with read access to the Knowledge Base endpoints."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "## Step 1: Set Credentials\nProvide your Qualys API credentials to enable data ingestion from the Qualys Knowledge Base."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "To gather data from Qualys VM, you need to provide the following resources:"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **API Credentials**: username and password for an account with read access to the Knowledge Base API. You can find the exact permissions needed in the [Qualys API documentation](https://docs.qualys.com/en/vm/api/scans/kbase/knowledgebase.htm)."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **API Server URL**: the Qualys API server URL specific to your region. You can find the exact API server URL for your region [here](https://www.qualys.com/platform-identification/#api-urls)"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Server URL",
+                            "placeholder": "Enter API Server URL",
+                            "type": "url",
+                            "name": "apiServerUrl",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Username",
+                            "placeholder": "Enter Qualys username",
+                            "type": "text",
+                            "name": "username",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Password",
+                            "placeholder": "Enter your Qualys password or token",
+                            "type": "password",
+                            "name": "password",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "## Step 2: Set Any Optional Filters"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Configure optional filters to customize which vulnerabilities are ingested. Learn more about available filters in the [Qualys API documentation](https://docs.qualys.com/en/vm/api/scans/kbase/knowledgebase.htm)."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "### 2a. Filter by Patch Status \nChoose to only show vulnerabilities that are patchable or not patchable."
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Include vulnerabilities that are:",
+                            "name": "isPatchable",
+                            "options": [
+                              {
+                                "key": "2",
+                                "text": "Both patchable and unpatchable (default)"
+                              },
+                              {
+                                "key": "1",
+                                "text": "Patchable only"
+                              },
+                              {
+                                "key": "0",
+                                "text": "Unpatchable only"
+                              }
+                            ],
+                            "placeholder": "Select patchability filter",
+                            "isMultiSelect": false,
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "### 2b. Filter by Discovery Method and Authentication Types \nChoose to only receive vulnerabilities assigned a certain discovery method or having specific authentication types."
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Discovery Method",
+                            "name": "discoveryMethod",
+                            "options": [
+                              {
+                                "key": "All",
+                                "text": "All methods (default)"
+                              },
+                              {
+                                "key": "Remote",
+                                "text": "Remote"
+                              },
+                              {
+                                "key": "Authenticated",
+                                "text": "Authenticated"
+                              },
+                              {
+                                "key": "RemoteOnly",
+                                "text": "Remote Only"
+                              },
+                              {
+                                "key": "AuthenticatedOnly",
+                                "text": "Authenticated Only"
+                              },
+                              {
+                                "key": "RemoteAndAuthenticated",
+                                "text": "Remote and Authenticated"
+                              }
+                            ],
+                            "placeholder": "Select discovery method",
+                            "isMultiSelect": false,
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Discovery Authentication Types",
+                            "placeholder": "e.g., Windows, Oracle, Unix, SNMP (comma-separated)",
+                            "type": "text",
+                            "name": "discoveryAuthTypes"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "## Step 3: Review and Enable\nReview your configuration settings and enable the connector to start ingesting Qualys Knowledge Base data into Microsoft Sentinel."
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect Qualys KB",
+                            "disconnectLabel": "Disconnect Qualys KB",
+                            "name": "mainToggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "QualysKnowledgeBaseDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId2')]",
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-SentinelQualysKnowledgeBase"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "QualysKbConnector",
+          "title": "Qualys Knowledge Base (via Codeless Connector Framework)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Ingest Qualys Knowledge Base Vulnerability Data into Microsoft Sentinel using version 2.0 of the Qualys API.",
+          "graphQueriesTableName": "QualysKnowledgeBase",
+          "graphQueries": [
+            {
+              "metricName": "Total KB entries received",
+              "legend": "Qualys KB Entries",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Show all vulnerabilities discovered in the last 7 days",
+              "query": "QualysKnowledgeBase\n| where TimeGenerated > ago(7d)\n| extend SoftwareVendorList = tostring(SoftwareVendor)\n| summarize\n    VulnerabilityCount = count(),\n    PatchableCount = countif(Patchable == '1'),\n    UnpatchableCount = countif(Patchable == '0'),\n    CveCount = dcount(tostring(CveId)),\n    Cves = make_list(CveId),\n    Qids = make_list(Qid),\n    AffectedVendors = make_set(SoftwareVendorList)\n    by SeverityLevel, Category, VulnType\n| extend VendorList = strcat_array(AffectedVendors, ', ')\n| project\n    SeverityLevel,\n    Category,\n    VendorList,\n    VulnType,\n    VulnerabilityCount,\n    PatchableCount,\n    UnpatchableCount,\n    CveCount,\n    Qids,\n    Cves\n| order by SeverityLevel desc, VulnerabilityCount desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "QualysKnowledgeBase",
+              "lastDataReceivedQuery": "QualysKnowledgeBase\n| where TimeGenerated > ago(24h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Qualys API access",
+                "description": "Requires a Qualys User Account with read access to the Knowledge Base endpoints."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "## Step 1: Set Credentials\nProvide your Qualys API credentials to enable data ingestion from the Qualys Knowledge Base."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "To gather data from Qualys VM, you need to provide the following resources:"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **API Credentials**: username and password for an account with read access to the Knowledge Base API. You can find the exact permissions needed in the [Qualys API documentation](https://docs.qualys.com/en/vm/api/scans/kbase/knowledgebase.htm)."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **API Server URL**: the Qualys API server URL specific to your region. You can find the exact API server URL for your region [here](https://www.qualys.com/platform-identification/#api-urls)"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Server URL",
+                    "placeholder": "Enter API Server URL",
+                    "type": "url",
+                    "name": "apiServerUrl",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Username",
+                    "placeholder": "Enter Qualys username",
+                    "type": "text",
+                    "name": "username",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Password",
+                    "placeholder": "Enter your Qualys password or token",
+                    "type": "password",
+                    "name": "password",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "## Step 2: Set Any Optional Filters"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Configure optional filters to customize which vulnerabilities are ingested. Learn more about available filters in the [Qualys API documentation](https://docs.qualys.com/en/vm/api/scans/kbase/knowledgebase.htm)."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "### 2a. Filter by Patch Status \nChoose to only show vulnerabilities that are patchable or not patchable."
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Include vulnerabilities that are:",
+                    "name": "isPatchable",
+                    "options": [
+                      {
+                        "key": "2",
+                        "text": "Both patchable and unpatchable (default)"
+                      },
+                      {
+                        "key": "1",
+                        "text": "Patchable only"
+                      },
+                      {
+                        "key": "0",
+                        "text": "Unpatchable only"
+                      }
+                    ],
+                    "placeholder": "Select patchability filter",
+                    "isMultiSelect": false,
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "### 2b. Filter by Discovery Method and Authentication Types \nChoose to only receive vulnerabilities assigned a certain discovery method or having specific authentication types."
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Discovery Method",
+                    "name": "discoveryMethod",
+                    "options": [
+                      {
+                        "key": "All",
+                        "text": "All methods (default)"
+                      },
+                      {
+                        "key": "Remote",
+                        "text": "Remote"
+                      },
+                      {
+                        "key": "Authenticated",
+                        "text": "Authenticated"
+                      },
+                      {
+                        "key": "RemoteOnly",
+                        "text": "Remote Only"
+                      },
+                      {
+                        "key": "AuthenticatedOnly",
+                        "text": "Authenticated Only"
+                      },
+                      {
+                        "key": "RemoteAndAuthenticated",
+                        "text": "Remote and Authenticated"
+                      }
+                    ],
+                    "placeholder": "Select discovery method",
+                    "isMultiSelect": false,
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Discovery Authentication Types",
+                    "placeholder": "e.g., Windows, Oracle, Unix, SNMP (comma-separated)",
+                    "type": "text",
+                    "name": "discoveryAuthTypes"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "## Step 3: Review and Enable\nReview your configuration settings and enable the connector to start ingesting Qualys Knowledge Base data into Microsoft Sentinel."
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect Qualys KB",
+                    "disconnectLabel": "Disconnect Qualys KB",
+                    "name": "mainToggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+        "displayName": "Qualys Knowledge Base (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Qualys Knowledge Base (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiServerUrl": {
+              "defaultValue": "apiServerUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "username": {
+              "defaultValue": "username",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "password": {
+              "defaultValue": "password",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "isPatchable": {
+              "defaultValue": "isPatchable",
+              "type": "array"
+            },
+            "discoveryMethod": {
+              "defaultValue": "discoveryMethod",
+              "type": "array"
+            },
+            "discoveryAuthTypes": {
+              "defaultValue": "discoveryAuthTypes",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections2": "[variables('_dataConnectorContentIdConnections2')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'QualysKBLogsCCP', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "Basic",
+                  "UserName": "[[parameters('username')]",
+                  "Password": "[[parameters('password')]"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiServerUrl'),'/api/2.0/fo/knowledge_base/vuln/')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 10,
+                  "queryWindowDelayInMin": 600,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "action": "list",
+                    "published_after": "{_QueryWindowStartTime}",
+                    "published_before": "{_QueryWindowEndTime}",
+                    "details": "All",
+                    "show_disabled_flag": "0",
+                    "show_qid_change_log": "[[concat('0',if(and(not(equals(trim(parameters('isPatchable')[0]), '2')), not(equals(trim(parameters('isPatchable')[0]), ''))), concat('&is_patchable=',parameters('isPatchable')[0]), ''),if(and(not(equals(trim(parameters('discoveryMethod')[0]), 'All')), not(equals(trim(parameters('discoveryMethod')[0]), ''))), concat('&discovery_method=',parameters('discoveryMethod')[0]), ''),if(and(not(equals(trim(parameters('discoveryAuthTypes')), 'discoveryAuthTypes')), not(equals(trim(parameters('discoveryAuthTypes')), ''))), concat('&discovery_auth_types=',parameters('discoveryAuthTypes')), ''))]"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN"
+                  ],
+                  "format": "xml"
+                },
+                "connectorDefinitionName": "QualysKbConnector",
+                "dataType": "QualysKnowledgeBase",
+                "dcrConfig": {
+                  "streamName": "SENTINEL_QUALYSKNOWLEDGEBASE",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "extra": {
+                  "transformName": "/ASI/Qualys/QualysKbTransformer"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('parserObject1').parserTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "QualysKB Data Parser with template version 3.0.1",
+        "description": "QualysKB Data Parser with template version 4.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -476,7 +1265,7 @@
           "resources": [
             {
               "name": "[variables('parserObject1')._parserName1]",
-              "apiVersion": "2022-10-01",
+              "apiVersion": "2025-07-01",
               "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -484,7 +1273,7 @@
                 "displayName": "QualysKB",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "QualysKB",
-                "query": "QualysKB_CL\n| project SourceSystem, TimeGenerated, Type, TenantId, MG, ManagementGroupName, Computer, RawData, _ResourceId,\n    Qid = column_ifexists(\"QID_s\", \"\"),\n    Title = column_ifexists(\"Title_s\", \"\"),\n    Category = column_ifexists(\"Category\", \"\"),\n    Consquence = column_ifexists(\"Consequence_s\", \"\"),\n    Diagnosis = column_ifexists(\"Diagnosis_s\", \"\"),\n    LastServiceModificationDateTime = column_ifexists(\"Last_Service_Modification_DateTime_t \", \"\"),\n    Patchable = column_ifexists(\"Patchable_s\", \"\"),\n    CveId = column_ifexists(\"CVE_ID_s\", \"\"),\n    CveUrl = column_ifexists(\"CVE_URL_s\", \"\"),\n    VendorReferenceId = column_ifexists(\"Vendor_Reference_ID_s\", \"\"),\n    VendorReferenceUrl = column_ifexists(\"Vendor_Reference_URL_s\", \"\"),\n    PciFlag = column_ifexists(\"PCI_Flag_s\", \"\"),\n    PublishedDateTime = column_ifexists(\"Published_DateTime_t \", \"\"),\n    Severity = column_ifexists(\"Severity_Level_s\", \"\"),\n    SoftwareProduct = column_ifexists(\"Software_Product_s\", \"\"),\n    SoftwareVendor = column_ifexists(\"Software_Vendor_s\", \"\"),\n    Solution = column_ifexists(\"Solution_s\", \"\"),\n    VulnType = column_ifexists(\"Vuln_Type_s\", \"\"),\n    DiscoveryAdditionalInfo = column_ifexists(\"Discovery_Additional_Info_s\", \"\"),\n    DiscoveryRemote = column_ifexists(\"Discovery_Remote_s\", \"\"),\n    DiscoverAuthType = column_ifexists(\"Discovery_Auth_Type_s\", \"\")\n",
+                "query": "union isfuzzy=true\n    (QualysKB_CL\n    | project\n        TimeGenerated,\n        Qid = column_ifexists(\"QID_s\", \"\"),\n        VulnTitle = column_ifexists(\"Title_s\", \"\"),\n        Category = column_ifexists(\"Category_s\", \"\"),\n        Consequence = column_ifexists(\"Consequence_s\", \"\"),\n        Diagnosis = column_ifexists(\"Diagnosis_s\", \"\"),\n        LastServiceModificationDateTime = column_ifexists(\"Last_Service_Modification_DateTime_t\", \"\"),\n        Patchable = column_ifexists(\"Patchable_s\", \"\"),\n        CveId = column_ifexists(\"CVE_ID_s\", \"\"),\n        CveUrl = column_ifexists(\"CVE_URL_s\", \"\"),\n        VendorReferenceId = column_ifexists(\"Vendor_Reference_ID_s\", \"\"),\n        VendorReferenceUrl = column_ifexists(\"Vendor_Reference_URL_s\", \"\"),\n        PciFlag = column_ifexists(\"PCI_Flag_s\", \"\"),\n        PublishedDatetime = column_ifexists(\"Published_DateTime_t\", \"\"),\n        SeverityLevel = column_ifexists(\"Severity_Level_s\", \"\"),\n        SoftwareProduct = column_ifexists(\"Software_Product_s\", \"\"),\n        SoftwareVendor = column_ifexists(\"Software_Vendor_s\", \"\"),\n        Solution = column_ifexists(\"Solution_s\", \"\"),\n        VulnType = column_ifexists(\"Vuln_Type_s\", \"\"),\n        DiscoveryAdditionalInfo = column_ifexists(\"Discovery_Additional_Info_s\", \"\"),\n        DiscoveryRemote = column_ifexists(\"Discovery_Remote_s\", \"\"),\n        DiscoveryAuthType = column_ifexists(\"Discovery_Auth_Type_s\", \"\")),\n    QualysKnowledgeBase\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -534,14 +1323,14 @@
         "contentId": "[variables('parserObject1').parserContentId1]",
         "contentKind": "Parser",
         "displayName": "QualysKB",
-        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
-        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
         "version": "[variables('parserObject1').parserVersion1]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2025-07-01",
       "name": "[variables('parserObject1')._parserName1]",
       "location": "[parameters('workspace-location')]",
       "properties": {
@@ -549,7 +1338,7 @@
         "displayName": "QualysKB",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "QualysKB",
-        "query": "QualysKB_CL\n| project SourceSystem, TimeGenerated, Type, TenantId, MG, ManagementGroupName, Computer, RawData, _ResourceId,\n    Qid = column_ifexists(\"QID_s\", \"\"),\n    Title = column_ifexists(\"Title_s\", \"\"),\n    Category = column_ifexists(\"Category\", \"\"),\n    Consquence = column_ifexists(\"Consequence_s\", \"\"),\n    Diagnosis = column_ifexists(\"Diagnosis_s\", \"\"),\n    LastServiceModificationDateTime = column_ifexists(\"Last_Service_Modification_DateTime_t \", \"\"),\n    Patchable = column_ifexists(\"Patchable_s\", \"\"),\n    CveId = column_ifexists(\"CVE_ID_s\", \"\"),\n    CveUrl = column_ifexists(\"CVE_URL_s\", \"\"),\n    VendorReferenceId = column_ifexists(\"Vendor_Reference_ID_s\", \"\"),\n    VendorReferenceUrl = column_ifexists(\"Vendor_Reference_URL_s\", \"\"),\n    PciFlag = column_ifexists(\"PCI_Flag_s\", \"\"),\n    PublishedDateTime = column_ifexists(\"Published_DateTime_t \", \"\"),\n    Severity = column_ifexists(\"Severity_Level_s\", \"\"),\n    SoftwareProduct = column_ifexists(\"Software_Product_s\", \"\"),\n    SoftwareVendor = column_ifexists(\"Software_Vendor_s\", \"\"),\n    Solution = column_ifexists(\"Solution_s\", \"\"),\n    VulnType = column_ifexists(\"Vuln_Type_s\", \"\"),\n    DiscoveryAdditionalInfo = column_ifexists(\"Discovery_Additional_Info_s\", \"\"),\n    DiscoveryRemote = column_ifexists(\"Discovery_Remote_s\", \"\"),\n    DiscoverAuthType = column_ifexists(\"Discovery_Auth_Type_s\", \"\")\n",
+        "query": "union isfuzzy=true\n    (QualysKB_CL\n    | project\n        TimeGenerated,\n        Qid = column_ifexists(\"QID_s\", \"\"),\n        VulnTitle = column_ifexists(\"Title_s\", \"\"),\n        Category = column_ifexists(\"Category_s\", \"\"),\n        Consequence = column_ifexists(\"Consequence_s\", \"\"),\n        Diagnosis = column_ifexists(\"Diagnosis_s\", \"\"),\n        LastServiceModificationDateTime = column_ifexists(\"Last_Service_Modification_DateTime_t\", \"\"),\n        Patchable = column_ifexists(\"Patchable_s\", \"\"),\n        CveId = column_ifexists(\"CVE_ID_s\", \"\"),\n        CveUrl = column_ifexists(\"CVE_URL_s\", \"\"),\n        VendorReferenceId = column_ifexists(\"Vendor_Reference_ID_s\", \"\"),\n        VendorReferenceUrl = column_ifexists(\"Vendor_Reference_URL_s\", \"\"),\n        PciFlag = column_ifexists(\"PCI_Flag_s\", \"\"),\n        PublishedDatetime = column_ifexists(\"Published_DateTime_t\", \"\"),\n        SeverityLevel = column_ifexists(\"Severity_Level_s\", \"\"),\n        SoftwareProduct = column_ifexists(\"Software_Product_s\", \"\"),\n        SoftwareVendor = column_ifexists(\"Software_Vendor_s\", \"\"),\n        Solution = column_ifexists(\"Solution_s\", \"\"),\n        VulnType = column_ifexists(\"Vuln_Type_s\", \"\"),\n        DiscoveryAdditionalInfo = column_ifexists(\"Discovery_Additional_Info_s\", \"\"),\n        DiscoveryRemote = column_ifexists(\"Discovery_Remote_s\", \"\"),\n        DiscoveryAuthType = column_ifexists(\"Discovery_Auth_Type_s\", \"\")),\n    QualysKnowledgeBase\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -595,12 +1384,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.1",
+        "version": "4.0.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Qualys VM Knowledgebase",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Qualys%20VM%20Knowledgebase/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.qualys.com/apps/vulnerability-management/\">Qualys Vulnerability Management</a> KB solution for Microsoft Sentinel enables you to ingest Qualys VM KB logs into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Qualys%20VM%20Knowledgebase/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.qualys.com/apps/vulnerability-management/\">Qualys Vulnerability Management</a> KB solution for Microsoft Sentinel enables you to ingest Qualys VM KB logs into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 2, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -629,6 +1418,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             },
             {
               "kind": "Parser",
