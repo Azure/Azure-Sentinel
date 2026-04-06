@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.10
+
+- (2026-04-06) Add parser for Cisco IOS from table Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
+
 ## Version 0.2.9
 
 - (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13979](https://github.com/Azure/Azure-Sentinel/pull/13979)

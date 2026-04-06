@@ -1,0 +1,150 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Cisco IOS Syslog Message
+  Version: '0.1.0'
+  LastUpdated: Apr 01, 2026
+Product:
+  Name: Cisco IOS
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: About Cisco IOS System Log Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/routers/access/wireless/software/guide/SysMsgLogging.html
+Description: |
+  This ASIM filtering parser supports normalizing authentication events, collected from Cisco IOS devices using the AMA agent to the ASIM Authentication schema.
+ParserName: vimAuthenticationCiscoIOS
+EquivalentBuiltInParser: _Im_Authentication_CiscoIOS
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    username_has_any: dynamic = dynamic([]),
+    targetappname_has_any: dynamic = dynamic([]),
+    srcipaddr_has_any_prefix: dynamic = dynamic([]),
+    srchostname_has_any: dynamic = dynamic([]),
+    eventtype_in: dynamic = dynamic([]),
+    eventresultdetails_in: dynamic = dynamic([]),
+    eventresult: string = '*',
+    disabled: bool = false) {
+    let EventResultDetailsLookup = datatable(EventOriginalResultDetails: string, EventResultDetails: string)
+    [
+        "Login Authentication Failed - BadUser", "No such user or password",
+        "Login Authentication Failed", "Incorrect password"
+    ];
+    let LoginSuccessIOS = (T: (SyslogMessage: string)) {
+        T
+        | where SyslogMessage has "%SEC_LOGIN-5-LOGIN_SUCCESS"
+        | parse SyslogMessage with * "%SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user:" TargetUsername: string "] [Source:" SrcIpAddr: string "] [localport: " SrcPortNumber: string "]" *
+        | extend EventType = "Logon", EventResult = "Success"
+    };
+    let LoginFailureIOS = (T: (SyslogMessage: string)) {
+        T
+        | where SyslogMessage has "%SEC_LOGIN-4-LOGIN_FAILED"
+        | parse SyslogMessage with * "%SEC_LOGIN-4-LOGIN_FAILED: Login failed [user:" TargetUsername: string "] [Source:" SrcIpAddr: string "] [localport: " SrcPortNumber: string "] [Reason: " EventOriginalResultDetails: string "]" *
+        | extend EventType = "Logon", EventResult = "Failure"
+    };
+    let LogoutIOS = (T: (SyslogMessage: string)) {
+        T
+        | where SyslogMessage has "%SYS-6-LOGOUT"
+        | parse SyslogMessage with * "%SYS-6-LOGOUT: User " TargetUsername: string " " * "(" SrcIpAddr: string ")"
+        | extend EventType = "Logoff", EventResult = "Success"
+    };
+    let SyslogLogs = Syslog
+    | where not(disabled);
+    union
+        LoginSuccessIOS(SyslogLogs),
+        LoginFailureIOS(SyslogLogs),
+        LogoutIOS(SyslogLogs)
+    | extend
+        EventSchema = "Authentication",
+        EventSchemaVersion = "0.1.4",
+        EventVendor = "Cisco",
+        EventProduct = "IOS",
+        EventCount = int(1),
+        EventStartTime = EventTime,
+        EventEndTime = EventTime,
+        Type = "Syslog"
+    | project-rename
+        DvcIpAddr = HostIP,
+        TargetHostname = HostName,
+        EventOriginalSeverity = SeverityLevel,
+        EventMessage = SyslogMessage
+    | lookup EventResultDetailsLookup on EventOriginalResultDetails
+    | extend
+        EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),
+        SrcPortNumber = toint(SrcPortNumber),
+        TargetUsernameType = iff(isnotempty(TargetUsername), "Simple", "")
+    | extend
+        Dvc = DvcIpAddr,
+        Src = SrcIpAddr,
+        IpAddr = SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventType,
+        EventResult,
+        EventSchema,
+        EventSchemaVersion,
+        EventVendor,
+        EventProduct,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        DvcIpAddr,
+        TargetHostname,
+        EventOriginalSeverity,
+        EventSeverity,
+        EventOriginalResultDetails,
+        EventResultDetails,
+        TargetUsername,
+        TargetUsernameType,
+        SrcIpAddr,
+        SrcPortNumber,
+        Dvc,
+        Src,
+        IpAddr
+  };
+  parser(starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled)
