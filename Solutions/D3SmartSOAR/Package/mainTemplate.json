@@ -1,0 +1,816 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "D3 Security - support@d3security.com",
+    "comments": "Solution template for D3SmartSOAR"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@d3security.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "D3SmartSOAR",
+    "_solutionVersion": "3.1.0",
+    "solutionId": "d3securitymanagementsystemsinc1599258630765.azure-sentinel-solution-d3soar",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.1.0",
+    "_dataConnectorContentIdConnectorDefinition1": "D3SOARConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "D3SOARConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "D3 Smart SOAR Incidents",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "D3SOARConnectorDefinition",
+                  "title": "D3 Smart SOAR Incidents",
+                  "publisher": "D3 Security",
+                  "descriptionMarkdown": "The D3 Smart SOAR data connector pulls incidents from D3 Smart SOAR into Microsoft Sentinel using the D3 codeless REST API command endpoint.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total incidents received",
+                      "legend": "D3 Smart SOAR Incidents",
+                      "baseQuery": "D3SOARIncidents_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample D3 Smart SOAR incidents",
+                      "query": "D3SOARIncidents_CL | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "D3SOARIncidents_CL",
+                      "lastDataReceivedQuery": "D3SOARIncidents_CL | where TimeGenerated > ago(12h) | summarize Time=max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect D3 Smart SOAR to Microsoft Sentinel",
+                      "description": "**Prerequisite:** In D3 Smart SOAR, navigate to **Organization Management → Sites**, select the site you are connecting, and set its **Time Zone** to **(UTC+00:00) Coordinated Universal Time**. This ensures incident timestamps are correctly aligned with Microsoft Sentinel.\n\nEnter your D3 Smart SOAR connection details below. Incidents will be polled every 5 minutes and written to the **D3SOARIncidents_CL** table.\n\n**Server URL** — The base URL of your D3 Smart SOAR deployment, up to and including the site path. Do not include the API path.\n\n**Username** — Your D3 Smart SOAR account username (same as your portal login).\n\n**Site** — The D3 Smart SOAR site name your account belongs to (e.g. `Security Operations`).\n\n**D3 JWT** — A JSON Web Token issued by D3 Smart SOAR for API authentication.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Server URL",
+                            "placeholder": "https://poc.bemimo.com/ce_site/VSOC",
+                            "type": "text",
+                            "name": "BaseUrl"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Username",
+                            "placeholder": "admin",
+                            "type": "text",
+                            "name": "Username"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Site",
+                            "placeholder": "Security Operations",
+                            "type": "text",
+                            "name": "Site"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "D3 JWT",
+                            "placeholder": "ey...",
+                            "type": "password",
+                            "name": "D3Jwt"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "connect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "D3 Security",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "D3 Security",
+                  "email": "d3support@d3security.com",
+                  "link": "https://d3security.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "D3SOARIncidentsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-D3SOARIncidents": {
+                    "columns": [
+                      {
+                        "name": "IR Number",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IR Type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Stage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Priority",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Disposition",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Tags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Owner",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Creator",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Timezone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Date Created",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Date Modified",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Playbook",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Conclusion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Investigation Team",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Linked Incidents",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "IncidentRawData",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "EventRawData",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-D3SOARIncidents"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = iif(isnotempty(['Date Modified']), todatetime(['Date Modified']), iif(isnotempty(['Date Created']), todatetime(['Date Created']), now())) | extend DateCreated = todatetime(['Date Created']), DateModified = todatetime(['Date Modified']), IncidentNumber = tostring(['IR Number']), IncidentType = tostring(['IR Type']), IncidentTitle = tostring(['Title']), IncidentStatus = tostring(['Status']), IncidentSeverity = tostring(['Severity']), IncidentStage = tostring(['Stage']), IncidentPriority = tostring(['Priority']), IncidentDisposition = tostring(['Disposition']), IncidentTags = tostring(['Tags']), IncidentOwner = tostring(['Owner']), IncidentCreator = tostring(['Creator']), IncidentTimezone = tostring(['Timezone']), IncidentPlaybook = tostring(['Playbook']), IncidentDescription = tostring(['Description']), IncidentConclusion = tostring(['Conclusion']), InvestigationTeam = tostring(['Investigation Team']), LinkedIncidents = todynamic(['Linked Incidents']), IncidentRawData = todynamic(IncidentRawData), EventRawData = todynamic(EventRawData) | project TimeGenerated, DateCreated, DateModified, IncidentNumber, IncidentType, IncidentTitle, IncidentStatus, IncidentSeverity, IncidentStage, IncidentPriority, IncidentDisposition, IncidentTags, IncidentOwner, IncidentCreator, IncidentTimezone, IncidentPlaybook, IncidentDescription, IncidentConclusion, InvestigationTeam, LinkedIncidents, IncidentRawData, EventRawData",
+                    "outputStream": "Custom-D3SOARIncidents_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
+              }
+            },
+            {
+              "name": "D3SOARIncidents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "D3SOARIncidents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "DateCreated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "DateModified",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "IncidentNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentTitle",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentSeverity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentStage",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentPriority",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentDisposition",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentTags",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentOwner",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentCreator",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentTimezone",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentPlaybook",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IncidentConclusion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InvestigationTeam",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LinkedIncidents",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "IncidentRawData",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "EventRawData",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "RawRecord",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "D3SOARConnectorDefinition",
+          "title": "D3 Smart SOAR Incidents",
+          "publisher": "D3 Security",
+          "descriptionMarkdown": "The D3 Smart SOAR data connector pulls incidents from D3 Smart SOAR into Microsoft Sentinel using the D3 codeless REST API command endpoint.",
+          "graphQueries": [
+            {
+              "metricName": "Total incidents received",
+              "legend": "D3 Smart SOAR Incidents",
+              "baseQuery": "D3SOARIncidents_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample D3 Smart SOAR incidents",
+              "query": "D3SOARIncidents_CL | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "D3SOARIncidents_CL",
+              "lastDataReceivedQuery": "D3SOARIncidents_CL | where TimeGenerated > ago(12h) | summarize Time=max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect D3 Smart SOAR to Microsoft Sentinel",
+              "description": "**Prerequisite:** In D3 Smart SOAR, navigate to **Organization Management → Sites**, select the site you are connecting, and set its **Time Zone** to **(UTC+00:00) Coordinated Universal Time**. This ensures incident timestamps are correctly aligned with Microsoft Sentinel.\n\nEnter your D3 Smart SOAR connection details below. Incidents will be polled every 5 minutes and written to the **D3SOARIncidents_CL** table.\n\n**Server URL** — The base URL of your D3 Smart SOAR deployment, up to and including the site path. Do not include the API path.\n\n**Username** — Your D3 Smart SOAR account username (same as your portal login).\n\n**Site** — The D3 Smart SOAR site name your account belongs to (e.g. `Security Operations`).\n\n**D3 JWT** — A JSON Web Token issued by D3 Smart SOAR for API authentication.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Server URL",
+                    "placeholder": "https://poc.bemimo.com/ce_site/VSOC",
+                    "type": "text",
+                    "name": "BaseUrl"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Username",
+                    "placeholder": "admin",
+                    "type": "text",
+                    "name": "Username"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Site",
+                    "placeholder": "Security Operations",
+                    "type": "text",
+                    "name": "Site"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "D3 JWT",
+                    "placeholder": "ey...",
+                    "type": "password",
+                    "name": "D3Jwt"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "D3 Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "D3 Security",
+          "email": "d3support@d3security.com",
+          "link": "https://d3security.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "D3 Smart SOAR Incidents",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "D3 Smart SOAR Incidents",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "BaseUrl": {
+              "defaultValue": "BaseUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "Username": {
+              "defaultValue": "Username",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "Site": {
+              "defaultValue": "Site",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "D3Jwt": {
+              "defaultValue": "D3Jwt",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "D3 Security",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "D3 Security",
+                  "email": "d3support@d3security.com",
+                  "link": "https://d3security.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'D3SOARIncidentsPolling', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "D3SOARConnectorDefinition",
+                "dataType": "D3SOARIncidents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-D3SOARIncidents",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('D3Jwt')]",
+                  "ApiKeyName": "d3jwt"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'),'/api/command/GetIncidentsWithNewParameters')]",
+                  "httpMethod": "POST",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-dd HH:mm:ss",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "[[concat('{ \"Username\": \"',parameters('Username'),'\", \"Site\": \"',parameters('Site'),'\", \"CommandParams\": { \"Static Fields\": [ \"IR Number\", \"IR Type\", \"Title\", \"Status\", \"Severity\", \"Stage\", \"Priority\", \"Disposition\", \"Tags\", \"Owner\", \"Creator\", \"Timezone\", \"Date Created\", \"Date Modified\", \"Playbook\", \"Description\", \"Conclusion\", \"Investigation Team\", \"Linked Incidents\", \"Incident Raw Data\", \"Event Raw Data\" ], \"Start Time\": \"{_QueryWindowStartTime}\", \"End Time\": \"{_QueryWindowEndTime}\", \"Output Format\": 2, \"PageIndex\": 0, \"PageSize\": 100, \"PollFromSentinel\": true } }')]"
+                },
+                "paging": {
+                  "pagingType": "CountBasedPaging",
+                  "pageNumberParaName": "$.CommandParams.PageIndex",
+                  "zeroBasedIndexing": true,
+                  "pageCountJsonPath": "$.outputData.TotalPages"
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.rawData.incidents[*]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.1.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "D3SmartSOAR",
+        "publisherDisplayName": "D3 Security",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/D3SmartSOAR/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The D3 Smart SOAR solution for Microsoft Sentinel enables ingestion of D3 Smart SOAR alerts and events into Microsoft Sentinel via a codeless connector.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/D3SOAR.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "D3SmartSOAR",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "D3 Security",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "D3 Security",
+          "email": "d3support@d3security.com",
+          "tier": "Partner",
+          "link": "https://d3security.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-02-18",
+        "lastPublishDate": "2026-02-19",
+        "providers": [
+          "D3 Security"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
