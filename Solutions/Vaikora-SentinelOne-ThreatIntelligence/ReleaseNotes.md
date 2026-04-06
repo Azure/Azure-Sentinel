@@ -1,6 +1,6 @@
 # Vaikora-SentinelOne Threat Intelligence - Release Notes
 
-## Version 1.0.0 (2026-04-02)
+## Version 3.0.0 (2026-04-02)
 
 ### Initial Release
 
