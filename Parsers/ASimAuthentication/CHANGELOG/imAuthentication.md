@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.6
+
+- (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13979](https://github.com/Azure/Azure-Sentinel/pull/13979)
+
 ## Version 0.3.5
 
 - (2026-03-11) Add parser for Okta - Authentication logs from OktaSystemLogs - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13801)
