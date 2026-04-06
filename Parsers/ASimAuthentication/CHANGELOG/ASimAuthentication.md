@@ -2,7 +2,7 @@
 
 ## Version 0.2.9
 
-- (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13801](https://github.com/Azure/Azure-Sentinel/pull/13979)
+- (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13979](https://github.com/Azure/Azure-Sentinel/pull/13979)
 
 ## Version 0.2.8
 
