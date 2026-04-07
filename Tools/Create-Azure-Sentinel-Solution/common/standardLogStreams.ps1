@@ -208,6 +208,7 @@ $standardStreamMapping += @{ Key = 'ILUMIO_INSIGHTS'; Value = 'Microsoft-IlumioI
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-FlowLog'; Value = 'Microsoft-AWSNetworkFirewallFlow' }
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-TlsLog'; Value = 'Microsoft-AWSNetworkFirewallTls' }
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-AlertLog'; Value = 'Microsoft-AWSNetworkFirewallAlert' }
+$standardStreamMapping += @{ Key = 'SENTINEL_QUALYSKNOWLEDGEBASE'; Value = 'Microsoft-SentinelQualysKnowledgeBase' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDVPCFLOWLOGS'; Value = 'Microsoft-SentinelAlibabaCloudVPCFlowLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDWAFLOGS'; Value = 'Microsoft-SentinelAlibabaCloudWAFLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDAPIGATEWAYLOGS'; Value = 'Microsoft-SentinelAlibabaCloudAPIGatewayLogs' }
