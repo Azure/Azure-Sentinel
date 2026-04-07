@@ -1,9 +1,11 @@
 id: 8f0a7b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c
 name: AI Agents - Published Generative Orchestration without Instructions
 description: |
-  'Identifies published AI agents with generative orchestration that lack configured instructions. This may present
-  a risk to the agent and heighten the likelihood of the agent being influenced to deviate from the intended course
-  of action through prompt injection attacks. Organizations should ensure proper instructions are configured.'
+  This query identifies Copilot Studio AI agents that are published with generative orchestration enabled but lack configured instructions. 
+  Missing instructions increase the risk of prompt injection attacks, where malicious input can influence the agent to deviate from its intended behavior. 
+  Without clear guidance, the agent may respond unpredictably or expose sensitive data.
+  Recommended Action: Ensure all generative orchestration components have well-defined instructions that specify the agent`s purpose, boundaries, and allowed actions. 
+  Regularly review and update instructions to maintain security and prevent misuse.
 requiredDataConnectors: []
 tactics:
   - Impact
@@ -12,12 +14,10 @@ relevantTechniques:
   - T1499
   - T1562
 query: |
- AIAgentsInfo 
+  AIAgentsInfo 
   | summarize arg_max(Timestamp, *) by AIAgentId 
   | where AgentStatus != "Deleted" 
-  | extend Config = tostring(todynamic(RawAgentInfo).Bot.Attributes.configuration)
-  | parse Config with * "\"GenerativeActionsEnabled\":" GenerativeActionsEnabled:boolean * 
-  | where GenerativeActionsEnabled 
+  | where IsGenerativeOrchestrationEnabled 
   | extend  BotComponents = todynamic(RawAgentInfo).BotComponents 
   | mv-expand BotComponent = BotComponents 
   | where BotComponent has "GptComponentMetadata" 
@@ -35,11 +35,9 @@ query: |
       iif(CapabilitiesPos != -1, CapabilitiesPos, strlen(InstructionsRaw))) 
   ) 
   | extend Instructions = substring(InstructionsRaw, InstructionsStart, InstructionsEnd - InstructionsStart) 
-  | where CapabilitiesPos == 43 and CapabilitiesPos == InstructionsEnd
+  | where isempty(Instructions) 
   | project-away DisplayNamePos, CapabilitiesPos, InstructionsStart, InstructionsEnd 
   | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns
-  | extend AccountCustomEntity = CreatorAccountUpn
-  | extend HostCustomEntity = AIAgentName
 entityMappings:
   - entityType: Account
     fieldMappings:

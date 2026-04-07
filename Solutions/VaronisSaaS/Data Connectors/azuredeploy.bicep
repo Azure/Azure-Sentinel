@@ -31,7 +31,7 @@ param threatDetectionPolicies string = ''
 param alertStatus string = 'New, Under Investigation'
 
 @description('Specify the alert severity.')
-param alertSeverity string = 'Low, Medium, High'
+param alertSeverity string = 'Low, Medium, High, Informational'
 
 var functionAppName = 'VaronisSaaS-${uniqueString(resourceGroup().id)}'
 var functionWorkerRuntime = 'dotnet'

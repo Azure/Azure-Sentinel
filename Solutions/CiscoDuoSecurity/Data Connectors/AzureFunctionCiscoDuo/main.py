@@ -90,6 +90,9 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'offline_enrollment' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
         process_offline_enrollment_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
 
     logging.info('Script finished. Sent events: {}'.format(sentinel.successfull_sent_events_number))
 
@@ -507,7 +510,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
             'api_version': 2,
             'mintime': mintime,
             'maxtime': maxtime,
-            'limit': str(limit),
+            'limit': limit,
             'sort': 'ts:asc'
         }
         if next_offset:

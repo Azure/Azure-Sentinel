@@ -32,32 +32,35 @@ try {
         exit 1
     }
     
-    # Get and validate BTP credentials
-    $credentials = Get-BtpCredentials -Username $BtpUsername -Password $BtpPassword -Subdomain $BtpSubdomain
-    if ($null -eq $credentials) {
-        Write-Log "Failed to obtain BTP credentials" -Level "ERROR"
-        exit 1
-    }
-    
-    $BtpUsername = $credentials.Username
-    $BtpPassword = $credentials.Password
-    $BtpSubdomain = $credentials.Subdomain
-    
-    # Check if user is logged in to BTP CLI
+    # Check if user is already logged in to BTP CLI BEFORE requesting credentials
     Write-Log "Checking BTP CLI login status..."
-    $loginCheck = btp list accounts/global-account 2>&1
+    $loginCheck = btp get accounts/global-account 2>&1
     
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "Not logged in to BTP CLI. Attempting to login..." -Level "WARNING"
+    if ($LASTEXITCODE -eq 0) {
+        # Already logged in - no need to request credentials
+        Write-Log "Already logged in to BTP CLI" -Level "SUCCESS"
+    }
+    else {
+        # Not logged in - need to get credentials and login
+        Write-Log "Not logged in to BTP CLI. Credentials required." -Level "WARNING"
+        
+        # Get and validate BTP credentials
+        $credentials = Get-BtpCredentials -Username $BtpUsername -Password $BtpPassword -Subdomain $BtpSubdomain
+        if ($null -eq $credentials) {
+            Write-Log "Failed to obtain BTP credentials" -Level "ERROR"
+            exit 1
+        }
+        
+        $BtpUsername = $credentials.Username
+        $BtpPassword = $credentials.Password
+        $BtpSubdomain = $credentials.Subdomain
         
         # Attempt to login with provided credentials
+        Write-Log "Attempting to login to BTP CLI..." -Level "INFO"
         if (-not (Invoke-BtpLogin -Username $BtpUsername -Password $BtpPassword -Subdomain $BtpSubdomain)) {
             Write-Log "Failed to login to BTP CLI" -Level "ERROR"
             exit 1
         }
-    }
-    else {
-        Write-Log "Already logged in to BTP CLI" -Level "SUCCESS"
     }
     
     # Get list of all subaccounts
@@ -102,6 +105,7 @@ try {
         
         # Create subaccount entry with default space placeholder
         $subaccountEntry = [PSCustomObject]@{
+            SubaccountName = $subaccountName
             SubaccountId = $subaccountId
             "cf-api-endpoint" = $cfDetails.ApiEndpoint
             "cf-org-name" = $cfDetails.OrgName

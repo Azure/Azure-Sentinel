@@ -9,7 +9,7 @@ from ..Models.Enum.mimecast_endpoints import MimecastEndpoints
 from ..Models.Enum.mimecast_response_codes import MimecastResponseCodes
 from ..Models.Error.errors import MimecastRequestError
 import base64
-from hashlib import sha1 as EncryptionAlgo
+from hashlib import sha1 as EncryptionAlgo       # CodeQL [SM02167] CCF based data connector is in development. This will be deprecated once CCF based connector is available.
 import hmac
 import uuid
 import datetime

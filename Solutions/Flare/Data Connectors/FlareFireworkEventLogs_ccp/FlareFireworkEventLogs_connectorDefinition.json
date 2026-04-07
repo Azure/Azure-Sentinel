@@ -1,0 +1,170 @@
+{
+    "name": "FireworkPush",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "kind": "Customizable",
+    "location": "{{workspaceLocation}}",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "FireworkPush",
+            "title": "Flare Push Connector",
+            "publisher": "Flare Systems",
+            "descriptionMarkdown": "The [Flare](https://flare.io) connector provides the capability to ingest threat intelligence and exposure data from Flare into Microsoft Sentinel. Flare identifies your company's digital assets made publicly available due to human error or malicious attacks, including leaked credentials, exposed cloud buckets, darkweb mentions, and more.",
+            "graphQueries": [
+                {
+                    "metricName": "Total Flare Events",
+                    "legend": "FireworkV2_CL",
+                    "baseQuery": "FireworkV2_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "Flare - All Events",
+                    "query": "FireworkV2_CL \n | sort by TimeGenerated desc"
+                },
+                {
+                    "description": "Flare - High Risk Events (Score >= 4)",
+                    "query": "FireworkV2_CL \n | where RiskScore >= 4\n | project TimeGenerated, EventSeverity, EventType, ['title'], source_name, RiskScore, Url\n | sort by TimeGenerated desc"
+                },
+                {
+                    "description": "Flare - Credential Leaks",
+                    "query": "FireworkV2_CL \n | where EventType == \"CredentialLeak\"\n | project TimeGenerated, EventSeverity, ['title'], source_name, keyword, RiskScore\n | sort by TimeGenerated desc"
+                },
+                {
+                    "description": "Flare - Events by Severity",
+                    "query": "FireworkV2_CL \n | summarize Count = count() by EventSeverity\n | order by Count desc"
+                },
+                {
+                    "description": "Flare - Events by Type",
+                    "query": "FireworkV2_CL \n | summarize Count = count() by EventType\n | order by Count desc"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "FireworkV2_CL",
+                    "lastDataReceivedQuery": "FireworkV2_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "FireworkV2_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                    ]
+                }
+            ],
+            "availability": {
+                "status": 1
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID."
+                    },
+                    {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR)."
+                    },
+                    {
+                        "name": "Flare",
+                        "description": "Permission to configure Microsoft Sentinel integration in Flare."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "1. Create ARM Resources and Provide the Required Permissions",
+                    "description": "This connector enables Flare to send threat exposure data to Microsoft Sentinel. When data forwarding is enabled in Flare, raw event data is sent securely to the Microsoft Sentinel Ingestion API.",
+                    "instructions": [
+                        {
+                            "type": "Markdown",
+                            "parameters": {
+                                "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application \nClicking on \"Deploy\" will create Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                            }
+                        },
+                        {
+                            "parameters": {
+                                "label": "Deploy Flare connector resources",
+                                "applicationDisplayName": "Flare Connector Application"
+                            },
+                            "type": "DeployPushConnectorButton"
+                        }
+                    ]
+                },
+                {
+                    "title": "2. Configure Flare to Send Logs to Microsoft Sentinel",
+                    "description": "Use the following parameters to configure Flare to send logs to your workspace.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "label": "Entra Application (Client) ID",
+                                "fillWith": [
+                                    "ApplicationId"
+                                ],
+                                "placeholder": "Deploy push connector to get the App Registration Application ID"
+                            },
+                            "type": "CopyableLabel"
+                        },
+                        {
+                            "parameters": {
+                                "label": "Entra Directory (Tenant) ID",
+                                "fillWith": [
+                                    "TenantId"
+                                ]
+                            },
+                            "type": "CopyableLabel"
+                        },
+                        {
+                            "parameters": {
+                                "label": "Entra App Registration Secret",
+                                "fillWith": [
+                                    "ApplicationSecret"
+                                ],
+                                "placeholder": "Deploy push connector to get the App Registration Secret"
+                            },
+                            "type": "CopyableLabel"
+                        },
+                        {
+                            "parameters": {
+                                "label": "Log Ingestion URL",
+                                "fillWith": [
+                                    "DataCollectionEndpoint",
+                                    "DataCollectionRuleId"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Endpoint URI",
+                                "value": "{0}/dataCollectionRules/{1}/streams/Custom-FireworkEventsStream?api-version=2023-01-01"
+                            },
+                            "type": "CopyableLabel"
+                        }
+                    ]
+                },
+                {
+                    "title": "3. Configure Alert Channel in Flare",
+                    "description": "As an organization administrator, you can configure an Alert Channel in Flare to send data to Sentinel.",
+                    "instructions": [
+                        {
+                            "type": "Markdown",
+                            "parameters": {
+                                "content": "1. Authenticate on [Flare](https://app.flare.io)\n2. Access the [alerts page](https://app.flare.io/#/alerts?activeTab=alert-channels) to create a new alert channel.\n3. Select 'Microsoft Sentinel' and copy the above fields in the form.\n\nFor more details, refer to the [Flare documentation](https://docs.flare.io)."
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
