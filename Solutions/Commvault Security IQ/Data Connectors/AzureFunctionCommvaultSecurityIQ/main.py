@@ -194,6 +194,8 @@ def gen_chunks(data: list[dict[str, Any]], logs_client: LogsIngestionClient):
         "7:349",
         "17:193",
         "17:195",
+        "69:65",
+        "69:66",
     }
 
     if showAllEvents == "true":
@@ -293,8 +295,8 @@ def extract_hidden_info_from_description(description: str) -> dict[str, str | No
 
     # Extract clientId and clientName from within the hidden span
     patterns = {
-        "clientId": r"clientId:\[([^\]]+)\]",
-        "hostName": r"clientName:\[([^\]]+)\]",
+        "clientId": r"ClientId:\[([^\]]+)\]",
+        "hostName": r"ClientName:\[([^\]]+)\]",
     }
     for key, pattern in patterns.items():
         match = re.search(pattern, span_content)

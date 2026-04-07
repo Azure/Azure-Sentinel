@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.7       | 24-03-2026                    | Sophos Endpoint Protection (via Codeless Connector Platform)           |
 | 3.0.6       | 23-10-2025                     | Updated the solution to be compatible with tool changes for the connection name.            |
 | 3.0.5       | 21-08-2024                     | **Data Connector** [Sophos Endpoint Protection (using REST API)] Globally Available|
 | 3.0.4       | 01-07-2024                     | Update files for CCP Connector to fix the connectivity|
