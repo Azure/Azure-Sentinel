@@ -124,7 +124,6 @@ Every workbook JSON file must include these essential fields:
 ### Naming Conventions
 - **Item Names**: Clear, descriptive (e.g., "Security Incidents Overview")
 - **Parameter IDs**: PascalCase (e.g., `DefaultWorkspace`, `TimeRange`, `SeverityFilter`)
-- **Custom Width**: `"100"` (full), `"67"` (two-thirds), `"50"` (half), `"33"` (third)
 
 ### Query Quality Standards
 
@@ -143,15 +142,11 @@ Every workbook JSON file must include these essential fields:
 
 ### Documentation Quality
 
-**Introductory Content:**
-- Add introductory markdown (type 1) explaining workbook purpose, key metrics, and how to use it
-- Include prerequisites and required data connectors
-- Provide context about what data sources feed the workbook
-
-**Per-Section Guidance:**
-- Add descriptive text before each major section explaining what insights it provides
-- Include titles for all queries (query `name` field should be clear and descriptive)
-- Title clarity: Avoid generic names like "query1" or "metrics"; use descriptive titles
+**Content Documentation:**
+- **Workbook Overview** (top of workbook): Add introductory markdown (type 1) explaining workbook purpose, key metrics, how to use it, prerequisites, required data connectors, and relevant data sources
+- **Section Descriptions**: Add descriptive text before each major section explaining what insights it provides and what data it displays
+- **Query Titles**: Include clear, descriptive titles for all queries (query `name` field). Avoid generic names like "query1" or "metrics"
+- Ensure documentation at both workbook and section levels provides full context for users
 
 **Help Section with Toggle:**
 - Create a Help parameter (Type 10 Toggle) for conditional visibility
