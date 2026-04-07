@@ -1,3 +1,6 @@
+## 1.2.1
+- Adds configurable `retransmission_delay` parameter to control the delay in seconds between retry attempts (default: 2 seconds). This helps reduce request rate during throttling (HTTP 429) scenarios.
+
 ## 1.2.0
 - Adds managed identity authentication support for Azure VMs/VMSS (system-assigned and user-assigned via IMDS).
 - Adds AKS workload identity support via OIDC token exchange.
