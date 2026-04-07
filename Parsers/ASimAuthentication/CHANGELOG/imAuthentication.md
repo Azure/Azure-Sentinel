@@ -1,8 +1,20 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.7
+
+- (2026-04-07) Add parser Cisco ISE administrator events from Syslog - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
+
+## Version 0.3.8
+
+- (2026-04-07) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
+
+## Version 0.3.7
+
+- (2026-04-06) Add parser for Cisco IOS from table Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
+
 ## Version 0.3.6
 
-- (2026-03-25) Add parser Cisco ISE administrator events from Syslog - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
+- (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13979](https://github.com/Azure/Azure-Sentinel/pull/13979)
 
 ## Version 0.3.5
 
