@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.4       | 07-04-2026                     | Fixed join condition in **EmailEntity_PaloAlto** analytic rule to use `DestinationUserName` instead of `DestinationUserID` for correct email address matching |
 | 3.1.3       | 20-01-2026                     | Updated **Analytical Rule** to include the missing column. |
 | 3.1.2       | 26-06-2025                     | Updated TI Map IP Entity to CommonSecurityLog **Analytical Rules** to exclude private ips |
 | 3.1.1       | 22-01-2025                     | Fixed feature flag configs for PMDTI, MDTI, and UploadAPI based on the new FeatureStates. Fix api-version and documentation link for UploadAPI. |

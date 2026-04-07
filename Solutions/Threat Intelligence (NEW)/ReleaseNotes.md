@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.17      | 07-04-2026                     | Fixed join condition in **EmailEntity_PaloAlto** analytic rule to use `DestinationUserName` instead of `DestinationUserID` for correct email address matching |
 | 3.0.16      | 25-03-2026                     | Optimized **TI map Domain entity to EmailUrlInfo** analytic rule with deduplication and filters |
 | 3.0.15      | 09-03-2026                     | Update **IPEntity_DuoSecurity Analytic Rule**                |
 | 3.0.14      | 16-02-2026                     | Added **Analytic Rule** for URL IOC                  |

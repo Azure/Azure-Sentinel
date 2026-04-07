@@ -36,25 +36,25 @@ query: |
   | where Active == true and ExpirationDateTime > now()
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
-      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)
+      CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserName)
       // Filtering PAN Logs for specific event type to match relevant email entities
       | where DeviceVendor == "Palo Alto Networks" and  DeviceEventClassID == "wildfire" and ApplicationProtocol in ("smtp","pop3")
-      | extend DestinationUserID = tolower(DestinationUserID)
-      | where DestinationUserID matches regex emailregex
+      | extend DestinationUserName = tolower(DestinationUserName)
+      | where DestinationUserName matches regex emailregex
       | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   )
-  on $left.EmailSenderAddress == $right.DestinationUserID
+  on $left.EmailSenderAddress == $right.DestinationUserName
   | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserID
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserName
   | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient,
-  EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,
+  EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserName, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,
   DestinationIP, DestinationPort, Protocol, ApplicationProtocol
   | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: DestinationUserID
+        columnName: DestinationUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -63,5 +63,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.6
+version: 1.2.7
 kind: Scheduled
