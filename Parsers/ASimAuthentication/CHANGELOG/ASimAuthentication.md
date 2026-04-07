@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.11
+
+- (2026-04-07) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
+
 ## Version 0.2.10
 
 - (2026-04-06) Add parser for Cisco IOS from table Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
