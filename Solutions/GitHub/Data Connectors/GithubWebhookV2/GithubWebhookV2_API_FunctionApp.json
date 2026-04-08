@@ -1,0 +1,174 @@
+{
+  "id": "GitHubWebhookV2",
+  "title": "GitHub (using Webhooks) V2",
+  "publisher": "Microsoft",
+  "descriptionMarkdown": "The [GitHub](https://www.github.com) webhook data connector (V2) provides the capability to ingest GitHub subscribed events into Microsoft Sentinel using [GitHub webhook events](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads). This connector uses the Azure Monitor **Logs Ingestion API (CLv2)** with **Managed Identity** authentication and is the designated successor to the original GitHub (using Webhooks) connector, which uses the CLv1 HTTP Data Collector API (ODS endpoint) that Microsoft is replacing with CLv2.\n\nEvents are written to the `GitHubWebhookEvents_CL` table. The `githubscanaudit` parser function provides a unified view across both the legacy `githubscanaudit_CL` table and the new `GitHubWebhookEvents_CL` table, so all existing workbooks, analytic rules, and hunting queries continue to work without modification.\n\n> **Note:** If you are currently using the original GitHub (using Webhooks) connector, both connectors can run side-by-side. To avoid duplicate data ingestion, stop the original V1 Function App once you have confirmed V2 is working correctly. See the migration instructions at the bottom of this connector page.\n\n> **Note:** If you intend to ingest GitHub Audit logs, refer to the GitHub Enterprise Audit Log Connector from the \"**Data Connectors**\" gallery.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "GitHubWebhookEvents_CL",
+      "baseQuery": "GitHubWebhookEvents_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "GitHub Events - All Activities (V2 table).",
+      "query": "GitHubWebhookEvents_CL\n | sort by TimeGenerated desc"
+    },
+    {
+      "description": "GitHub Events - All Activities (unified view, includes legacy data).",
+      "query": "githubscanaudit()\n | sort by TimeGenerated desc"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "GitHubWebhookEvents_CL",
+      "lastDataReceivedQuery": "GitHubWebhookEvents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "GitHubWebhookEvents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(3d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Microsoft.Web/sites permissions",
+        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+      },
+      {
+        "name": "Microsoft.Authorization/roleAssignments permissions",
+        "description": "Permissions to create role assignments are required at the resource group scope. This is needed to grant the Function App's Managed Identity the **Monitoring Metrics Publisher** role on the Data Collection Rule."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">**NOTE:** This connector is built on an HTTP trigger based Azure Function using the **Logs Ingestion API (CLv2)** with **Managed Identity** authentication. There is no need to configure a Workspace Key — authentication is handled automatically by the Function App's system-assigned managed identity. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+    },
+    {
+      "title": "",
+      "description": ">**(Optional Step)** Securely store the GitHub Webhook Secret in Azure Key Vault. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+    },
+    {
+      "title": "",
+      "description": "**Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the Github Webhook V2 connector, have the **Log Analytics Workspace Name** ready. The connector resources (Function App, DCE, DCR, table) must be deployed to the **same resource group** as the Log Analytics workspace.",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceName"
+            ],
+            "label": "Workspace Name"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "instructions": [
+        {
+          "parameters": {
+            "instructionSteps": [
+              {
+                "title": "Option 1 - Azure Resource Manager (ARM) Template",
+                "description": "Use this method for automated deployment of the GitHub V2 data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%2520Connectors%2FGithubWebhookV2%2Fazuredeploy_GithubWebhookV2_API_FunctionApp.json)\n2. Select the **Subscription** and **Resource Group** — deploy to the **same resource group** as your Log Analytics workspace.\n> **NOTE:** You can't mix Windows and Linux apps in the same region and resource group.\n3. Enter the **WorkspaceName** — the name of your Log Analytics workspace (not the full resource ID).\n4. Optionally enter a **GithubWebhookSecret** to enable payload signature validation.\n5. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n6. Click **Purchase** to deploy."
+              },
+              {
+                "title": "Option 2 - Manual Deployment of Azure Functions",
+                "description": "Use the following step-by-step instructions to deploy the GitHub V2 webhook data connector manually with Azure Functions.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "instructionSteps": [
+                        {
+                          "title": "Step 1 - Deploy a Function App",
+                          "description": "1. Download the [Azure Function App](https://aka.ms/sentinel-GitHubWebhookAPIV2-functionapp) file. Extract archive to your local development computer.\n2. Follow the [function app manual deployment instructions](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AzureFunctionsManualDeployment.md#function-app-manual-deployment-instructions) to deploy the Azure Functions app using VSCode.\n3. After successful deployment of the function app, follow next steps for configuring it."
+                        },
+                        {
+                          "title": "Step 2 - Configure the Function App",
+                          "description": "1. Go to Azure Portal for the Function App configuration.\n2. In the Function App, select the Function App Name and select **Configuration**.\n3. In the **Application settings** tab, select **New application setting**.\n4. Add each of the following application settings individually, with their respective string values (case-sensitive):\n\t\tDCE_ENDPOINT - The logs ingestion endpoint of your Data Collection Endpoint\n\t\tDCR_RULE_ID - The immutableId of your Data Collection Rule\n\t\tDCR_STREAM_NAME - Custom-GitHubWebhookEvents_CL\n\t\tGithubWebhookSecret (optional) - Your GitHub webhook secret for payload validation\n5. Once all application settings have been entered, click **Save**.\n6. Ensure the Function App has a **System Assigned Managed Identity** enabled.\n7. Grant the Managed Identity the **Monitoring Metrics Publisher** role on your Data Collection Rule."
+                        }
+                      ]
+                    },
+                    "type": "InstructionStepsGroup"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "InstructionStepsGroup"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "description": "**Post Deployment steps**\n\n"
+    },
+    {
+      "instructions": [
+        {
+          "parameters": {
+            "instructionSteps": [
+              {
+                "title": "STEP 1 - To get the Azure Function url",
+                "description": " 1. Go to Azure function Overview page and Click on \"Functions\" in the left blade.\n 2. Click on the function called \"GithubWebhookConnectorV2\".\n 3. Go to \"GetFunctionurl\" and copy the function url."
+              },
+              {
+                "title": "STEP 2 - Configure Webhook to Github Organization",
+                "description": "1. Go to [GitHub](https://www.github.com) and open your account and click on \"Your Organizations.\"\n 2. Click on Settings.\n 3. Click on \"Webhooks\" and enter the function app url which was copied from above STEP 1 under payload URL textbox.\n 4. Choose content type as \"application/json\".\n 5. Subscribe for events and Click on \"Add Webhook\""
+              }
+            ]
+          },
+          "type": "InstructionStepsGroup"
+        }
+      ]
+    },
+    {
+      "title": "",
+      "description": "*Now we are done with the GitHub Webhook V2 configuration. Once GitHub events are triggered, after the delay of 5 to 10 mins, you should be able to see all the transactional events from GitHub in the LogAnalytics workspace table called `GitHubWebhookEvents_CL`. Use the `githubscanaudit()` parser function for a unified view that includes data from both the legacy `githubscanaudit_CL` and new `GitHubWebhookEvents_CL` tables.*"
+    },
+    {
+      "title": "⚠️ IMPORTANT: Migrating from GitHub Webhook V1 to V2",
+      "description": "If you are currently using the original **GitHub (using Webhooks)** connector (`githubscanaudit_CL` table), follow these steps to migrate to V2 without disrupting existing data or breaking workbooks and analytic rules.\n\n**Before you begin:** Both connectors can run side-by-side. V1 data lands in `githubscanaudit_CL` and V2 data lands in `GitHubWebhookEvents_CL`. The `githubscanaudit()` parser function unions both tables so all workbooks, analytic rules, and hunting queries continue to work unchanged during and after migration.\n\n**Migration Steps:**\n\n1. **Deploy V2 alongside V1.** Complete all steps above to deploy the GitHub Webhook V2 Function App. Do not remove V1 yet.\n\n2. **Verify V2 is receiving events.** Update the GitHub webhook payload URL in your GitHub Organization settings (**Settings → Webhooks**) to point to the new V2 Function App URL. Trigger some GitHub events and confirm data appears in `GitHubWebhookEvents_CL` within 5–10 minutes.\n\n3. **Validate the unified parser.** Run `githubscanaudit() | sort by TimeGenerated desc | take 50` in Log Analytics to confirm both V1 and V2 data appears under the same schema.\n\n4. **Disable the V1 Function App.** Once V2 is confirmed working, stop the original V1 Function App to prevent duplicate event ingestion:\n   - In the Azure Portal, navigate to your original GitHub Webhook V1 Function App.\n   - Under **Overview**, click **Stop** to halt execution.\n   - Optionally, update the GitHub webhook payload URL to point exclusively to the V2 endpoint.\n\n5. **Retain V1 data.** The `githubscanaudit_CL` table data is subject to your Log Analytics workspace retention policy. No action is required — historical V1 data continues to be queryable via `githubscanaudit()` until it ages out per your retention settings.\n\n> **⚠️ Warning:** Do **not** delete the V1 Function App resources until you have verified V2 is fully operational and you no longer need to roll back. Running both simultaneously does **not** cause duplicate ingestion as long as only one webhook URL is active in GitHub at a time."
+    }
+  ],
+  "metadata": {
+    "id": "a3f2c1d4-5e6b-7890-abcd-ef1234567890",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "community"
+    },
+    "author": {
+      "name": "Microsoft"
+    },
+    "support": {
+      "tier": "community",
+      "name": "Microsoft",
+      "link": "https://github.com/Azure/Azure-Sentinel/issues"
+    }
+  }
+}
