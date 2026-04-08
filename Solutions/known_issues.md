@@ -66,7 +66,7 @@ If the rule is not giving appropriate results, it might be due to the complexity
 ## Known Issue #10 - Data truncation due to 64 KB field size limit in Log Analytics Ingestion API
 The Azure Monitor [Logs Ingestion API enforces a maximum field size of 64 KB](https://learn.microsoft.com/en-us/azure/azure-monitor/service-limits#logs-ingestion-api). Any individual field value that exceeds this limit is **silently truncated** during ingestion — no error or warning is surfaced to the user in the portal, connector health, or DCR logs.
 
-This affects **all data connectors** (including Codeless Connector Framework / CCF-based connectors) that ingest data into custom Log Analytics tables via Data Collection Rules (DCRs). Fields carrying large payloads — such as `ScriptContentBytes`, `CommandLine`, `RequestBody`, or any free-text / encoded-content column — are most likely to be impacted.
+This affects data connectors (including Codeless Connector Framework / CCF-based connectors) that ingest data into custom Log Analytics tables via Data Collection Rules (DCRs). Fields carrying large payloads — such as `ScriptContentBytes`, `CommandLine`, `RequestBody`, or any free-text / encoded-content column — are most likely to be impacted.
 
 **Impact:** Truncated fields may result in incomplete data for investigation, missed detections, or broken parsing logic that depends on the full field value.
 
