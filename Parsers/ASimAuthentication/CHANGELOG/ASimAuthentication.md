@@ -1,8 +1,20 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.12
+
+- (2026-04-08) Add initial parser for Palo Alto PAN-OS GlobalProtect authentication logs from CommonSecurityLog - [PR #14012](https://github.com/Azure/Azure-Sentinel/pull/14012)
+
+## Version 0.2.11
+
+- (2026-04-07) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
+
+## Version 0.2.10
+
+- (2026-04-06) Add parser for Cisco IOS from table Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
+
 ## Version 0.2.9
 
-- (2026-04-06) Add initial parser for Palo Alto PAN-OS GlobalProtect authentication logs from CommonSecurityLog
+- (2026-04-02) Add parser for Polo Alto PAN-OS logs from CommonSecurityLog - [PR #13979](https://github.com/Azure/Azure-Sentinel/pull/13979)
 
 ## Version 0.2.8
 
