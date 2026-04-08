@@ -8,10 +8,12 @@ The QRadar Migration Data Collector extracts custom detection rules and building
 
 ## Prerequisites
 
-- **Python 2.7.5+** or **Python 3.6+**
+- **Python 3** (latest stable release recommended; minimum 3.6)
 - **QRadar API Token** with Admin privileges. [See QRadar documentation](https://www.ibm.com/docs/en/qradar-common?topic=configuration-creating-authorized-service-token) for more information.
 - **curl** (only required when using `--use-curl` on Python 2.7.5–2.7.8)
 - **Download the script**: [https://aka.ms/SentinelMigrationScript](https://aka.ms/SentinelMigrationScript)
+
+> **Python 2.7 note:** Python 2.7 is end-of-life and no longer receives security patches. The script supports Python 2.7.5+ only for running directly on older QRadar consoles where Python 3 is not available. If possible, run the script from a separate host with Python 3 instead.
 
 ## Getting Started
 
@@ -27,9 +29,7 @@ python3 qradar_collector.py --host 10.1.0.10
 
 The script will prompt for your API token securely (input is hidden).
 
-This will create two CSV files:
-- `qradar_rules_YYYYMMDDHHMMSS.csv` - Rules with calculated columns
-- `qradar_log_sources_YYYYMMDDHHMMSS.csv` - Active log sources (with `--log-sources`)
+This will create a CSV file named `qradar_rules_YYYYMMDDHHMMSS.csv` containing rules with calculated migration columns.
 
 ## Command-Line Options
 

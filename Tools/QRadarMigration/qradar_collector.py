@@ -39,7 +39,7 @@ if PY2:
 else:
     import ssl
     import urllib.request  # noqa: F401
-    from urllib.error import HTTPError, URLError  # noqa: F401
+    from urllib.error import HTTPError  # noqa: F401
     string_types = (str,)
     text_type = str
 
@@ -416,7 +416,9 @@ def retry_with_backoff(func, max_retries=3, base_delay=2):
             )
             time.sleep(delay)
 
-    raise last_exc  # pragma: no cover
+    if last_exc is None:
+        raise RuntimeError('retry_with_backoff: no attempts executed')
+    raise last_exc
 
 
 def save_json(data, filepath):
@@ -4914,7 +4916,7 @@ class UCMCSVExtensionHandler(BaseHandler):
                 try:
                     result.add(int(v))
                 except (ValueError, TypeError):
-                    pass
+                    pass  # skip non-numeric XML values
 
         elif dep_type == 'event_categories':
             category_lookup = lookup_tables.get('category_lookup', {})
@@ -5021,7 +5023,6 @@ class UCMCSVExtensionHandler(BaseHandler):
 
         visited.add(uuid)
         rule = uuid_to_expanded[uuid]
-        active_type_ids = lookup_tables.get('active_type_ids', set())
 
         constraints = []
 
@@ -5218,7 +5219,7 @@ class UCMCSVExtensionHandler(BaseHandler):
                 try:
                     matched_types.add(int(dt_id))
                 except (ValueError, TypeError):
-                    pass
+                    pass  # skip non-numeric XML values
 
             # Pathway 4: expanded_custom_properties → property LST IDs
             if property_name_to_lst_ids:
@@ -5242,7 +5243,7 @@ class UCMCSVExtensionHandler(BaseHandler):
                             try:
                                 matched_types.add(int(ls_type_id))
                             except (ValueError, TypeError):
-                                pass
+                                pass  # skip non-numeric XML values
 
             # Intersect with active types
             active_matched = matched_types & active_type_ids
