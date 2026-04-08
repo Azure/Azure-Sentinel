@@ -1,13 +1,21 @@
 import aiohttp
 import asyncio
 from collections import deque
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
 import logging
 
+
 class AzureSentinelConnectorAsync:
-    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=4000):
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        dce_endpoint,
+        dcr_id,
+        stream_name,
+        queue_size=4000,
+    ):
         self.dce_endpoint = dce_endpoint
         self.dcr_id = dcr_id
         self.stream_name = stream_name
@@ -17,13 +25,10 @@ class AzureSentinelConnectorAsync:
         self.failed_sent_events_number = 0
         self.lock = asyncio.Lock()
         self.session = session
-        self.credential = DefaultAzureCredential()          # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
-        self.AZURE_CLIENT_ID = azure_client_id
-        self.AZURE_CLIENT_SECRET = azure_client_secret
-        self.AZURE_TENANT_ID = azure_tenant
-        self.access_token_uri = "https://login.microsoftonline.com/{}/oauth2/token".format(self.AZURE_TENANT_ID)
-        self.DCR_DATA_INGESTION_URL = "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview"
-    
+        self.credential = ManagedIdentityCredential()
+        self.DCR_DATA_INGESTION_URL = (
+            "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview"
+        )
 
     # This method collects data coming in based on size of the queue
     # event : dictionary
@@ -45,7 +50,9 @@ class AzureSentinelConnectorAsync:
     # list : List of dictionary
     async def _flush(self, data: list):
         if data:
-            await self._post_data(self.dce_endpoint, self.dcr_id, self.stream_name, self.credential, data)
+            await self._post_data(
+                self.dce_endpoint, self.dcr_id, self.stream_name, self.credential, data
+            )
             self._queue.clear()
 
     # This method is a helper function which posts data to ingestion endpoint
@@ -56,12 +63,16 @@ class AzureSentinelConnectorAsync:
     # credential : string
     # data : List of dictionary
     async def _post_data(self, dce_endpoint, dcr_id, stream_name, credential, data):
-        client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential, logging_enable=True)
+        client = LogsIngestionClient(
+            endpoint=dce_endpoint, credential=credential, logging_enable=True
+        )
         async with client:
             try:
-                await client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)                
+                await client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)
             except HttpResponseError as e:
-                logging.error(f"Upload failed: {e.message}, status code is {e.status_code}")  
+                logging.error(
+                    f"Upload failed: {e.message}, status code is {e.status_code}"
+                )
             except Exception as e:
                 # Handle any other exceptions
-                print(f"An unexpected error occurred: {str(e)}")                  
+                print(f"An unexpected error occurred: {str(e)}")

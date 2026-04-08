@@ -69,12 +69,12 @@ To ingest AWS Elastic Load Balancing logs into Microsoft Sentinel, you need to c
 
 | Log Type | S3 Folder | Sentinel Table |
 |---|---|---|
-| ALB access logs | `ALBLogs/` | `AWSALBAccessLogs` |
-| NLB access logs | `NLBAccessLogs/` | `AWSNLBAccessLogs` |
-| NLB flow logs | `NLBFlowLogs/` | `AWSELBFlowLogs` |
-| GLB flow logs | `GLBFlowLogs/` | `AWSELBFlowLogs` |
+| ALB access logs | `ALBLogs/` | `AWSALBAccessLogsData` |
+| NLB access logs | `NLBAccessLogs/` | `AWSNLBAccessLogsData` |
+| NLB flow logs | `NLBFlowLogs/` | `AWSELBFlowLogsData` |
+| GLB flow logs | `GLBFlowLogs/` | `AWSELBFlowLogsData` |
 
-> **Note:** In the `AWSELBFlowLogs` table, a column named `LogType` indicates whether a row is from NLB flow logs or GLB flow logs.
+> **Note:** In the `AWSELBFlowLogsData` table, a column named `LogType` indicates whether a row is from NLB flow logs or GLB flow logs.
 
 ## Additional Information
 
