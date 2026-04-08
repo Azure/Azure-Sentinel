@@ -71,12 +71,8 @@ This affects data connectors (including Codeless Connector Framework / CCF-based
 **Impact:** Truncated fields may result in incomplete data for investigation, missed detections, or broken parsing logic that depends on the full field value.
 
 **What you can do:**
-1. Query the `DCRLogErrors` table in your workspace to check for ingestion errors related to your connector's DCR.
-2. Use a KQL query to identify potentially affected records, for example:
-   ```kql
-   YourCustomTable_CL
-   | where strlen(YourLargeField) >= 65000
-   | project TimeGenerated, strlen(YourLargeField)
-   ```
+1. Query the `DCRLogErrors` table in your workspace to rule out other ingestion failures related to your connector's DCR, but note that **silent field truncation will not appear there**.
+2. Use a KQL query to identify potentially affected records using an approximate character-count heuristic, for example:
+   
 3. If the source system allows it, consider splitting or summarising large fields before they are sent to the connector.
 4. Be aware that this is a **platform-level limitation** and cannot be resolved from the connector side. For the latest limits, refer to [Azure Monitor service limits](https://learn.microsoft.com/en-us/azure/azure-monitor/service-limits#logs-ingestion-api).
