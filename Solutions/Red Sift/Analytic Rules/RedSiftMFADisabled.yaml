@@ -1,0 +1,79 @@
+id: 16f26d2c-6296-490b-af4f-b30bcf1c4461
+name: Red Sift - MFA Disabled on Account
+description: |
+  'Detects authentication events where MFA has been disabled on an account, which may indicate account takeover activity, weakened account protections, or unauthorized administrative changes.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: RedSiftPush
+    dataTypes:
+      - RedSiftAuth_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1556
+query: |
+  RedSiftAuth_CL
+  | extend
+      ActivityName = tostring(column_ifexists("ActivityName", "")),
+      UserEmail = tostring(column_ifexists("UserEmail", "")),
+      ActorUserEmail = tostring(column_ifexists("ActorUserEmail", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", "")),
+      HttpUserAgent = tostring(column_ifexists("HttpUserAgent", "")),
+      ServiceName = tostring(column_ifexists("ServiceName", "")),
+      Severity = tostring(column_ifexists("Severity", "")),
+      UserUid = tostring(column_ifexists("UserUid", "")),
+      ActorUserUid = tostring(column_ifexists("ActorUserUid", ""))
+  | where ActivityName =~ "MFA Disabled"
+  | where isnotempty(UserEmail) or isnotempty(ActorUserEmail)
+  | extend TargetAccount = iff(isnotempty(UserEmail), UserEmail, ActorUserEmail)
+  | project
+      TimeGenerated,
+      TargetAccount,
+      UserEmail,
+      ActorUserEmail,
+      SrcIp,
+      HttpUserAgent,
+      ServiceName,
+      ActivityName,
+      Severity,
+      UserUid,
+      ActorUserUid
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  ActorUserEmail: ActorUserEmail
+  UserAgent: HttpUserAgent
+  ServiceName: ServiceName
+  ActivityName: ActivityName
+alertDetailsOverride:
+  alertDisplayNameFormat: "RedSift - MFA Disabled for {{TargetAccount}}"
+  alertDescriptionFormat: "MFA was disabled for {{TargetAccount}}. Actor: {{ActorUserEmail}}. Source IP: {{SrcIp}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionEnabled: false
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled
