@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.9
+
+- (2026-04-08) Add initial filtering parser for Palo Alto PAN-OS GlobalProtect authentication logs from CommonSecurityLog - [PR #14012](https://github.com/Azure/Azure-Sentinel/pull/14012)
+
 ## Version 0.3.8
 
 - (2026-04-07) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
