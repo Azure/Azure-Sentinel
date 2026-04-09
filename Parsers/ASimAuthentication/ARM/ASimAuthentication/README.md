@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Source agnostic.
 
-This ASIM parser supports normalizing Authentication logs from all supported sources to the ASIM Authentication normalized schema.ParserName: ASimAuthentication
+This ASIM parser supports normalizing Authentication logs from all supported sources to the ASIM Authentication normalized schema. ParserName: ASimAuthentication
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
