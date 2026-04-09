@@ -42,6 +42,58 @@ function install_package() {
 	fi
 }
 
+function verify_image_integrity() {
+	# Verifies that the locally pulled Docker image digest matches the remote registry digest.
+	# $1 - full image reference (e.g., mcr.microsoft.com/azure-sentinel/solutions/sapcon:latest)
+	# $2 - captured output from 'docker pull' (used as fallback)
+	local image_ref="$1"
+	local pull_output="$2"
+
+	log 'Verifying image integrity...'
+
+	# Extract local digest from docker inspect (RepoDigests)
+	local local_repodigest
+	local_repodigest=$(sudo docker inspect --format='{{index .RepoDigests 0}}' "$image_ref" 2>/dev/null)
+	local local_digest
+	local_digest=$(echo "$local_repodigest" | awk -F@ '{print $2}')
+
+	if [ -z "$local_digest" ]; then
+		log 'Error: Could not extract local image digest. Image integrity cannot be verified.'
+		exit 1
+	fi
+
+	# Primary method: query remote registry independently via docker manifest inspect
+	local remote_digest=""
+	local manifest_output
+	manifest_output=$(DOCKER_CLI_EXPERIMENTAL=enabled sudo docker manifest inspect "$image_ref" 2>/dev/null) && {
+		remote_digest=$(DOCKER_CLI_EXPERIMENTAL=enabled sudo docker manifest inspect -v "$image_ref" 2>/dev/null | \
+			jq -r 'if type=="array" then .[0].Descriptor.digest else .Descriptor.digest end' 2>/dev/null)
+	}
+
+	# Fallback method: extract digest from docker pull output
+	if [ -z "$remote_digest" ]; then
+		remote_digest=$(echo "$pull_output" | grep -i '^Digest:' | awk '{print $2}')
+		if [ -n "$remote_digest" ]; then
+			log 'Note: Used pull output digest for verification (docker manifest inspect unavailable).'
+		fi
+	fi
+
+	if [ -z "$remote_digest" ]; then
+		log 'Error: Could not obtain remote image digest. Image integrity cannot be verified.'
+		exit 1
+	fi
+
+	if [ "$local_digest" != "$remote_digest" ]; then
+		log 'Error: IMAGE INTEGRITY CHECK FAILED - digest mismatch!'
+		log "  Local digest:  $local_digest"
+		log "  Remote digest: $remote_digest"
+		log 'The pulled image does not match the remote registry. Aborting for security.'
+		exit 1
+	fi
+
+	log "Image integrity verified. Digest: $local_digest"
+}
+
 # MODE is one of
 # kvmi - Key Vault - Managed Identity
 # kvsi - Key Vault - Supplied Identity
@@ -405,12 +457,14 @@ log 'Deploying Microsoft Sentinel SAP data connector.'
 
 log 'Starting Docker image pull'
 
-sudo docker pull $dockerimage$tagver
-if [ $? -eq 1 ]; then
+pull_output=$(sudo docker pull $dockerimage$tagver 2>&1 | tee /dev/stderr)
+if [ $? -ne 0 ]; then
 	log 'Error downloading the Microsoft Sentinel SAP data connector.'
 	exit 1
 fi
 log 'Latest Microsoft Sentinel data connector downloaded successfully.'
+
+verify_image_integrity "$dockerimage$tagver" "$pull_output"
 imagereleaseid=$(docker inspect "$dockerimage$tag" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
 log "Downloaded data connector version $imagereleaseid" 
 
