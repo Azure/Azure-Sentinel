@@ -328,9 +328,8 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 - **version**: Semantic versioning (X.Y.Z format, e.g., `1.0.0`). This is the metadata/template version and is independent from the workbook JSON top-level `version` field (which is fixed as `"Notebook/1.0"`). Increment this version when you make changes to the workbook content.
 - **templateRelativePath**: Just the workbook filename (e.g., `AWSSecurityHubComplianceWorkbook.json`), NOT the full path. The metadata system resolves paths based on metadata location automatically:
   - If metadata is in `WorkbooksMetadata.json` (root): resolver looks in `Workbooks/`
-  - If metadata is in `Solutions/SolutionName/metadata-template.json`: resolver looks in `Solutions/SolutionName/Workbooks/`
 - **lastPublishDate**: Update to current date (ISO 8601: YYYY-MM-DD) when making changes
-- **dataTypeDependencies**: `["CommonSecurityLog"]`, `["Syslog"]`, `["SecurityIncident"]`, or exact `["CustomLog_CL"]` names
+- **dataTypesDependencies**: `["CommonSecurityLog"]`, `["Syslog"]`, `["SecurityIncident"]`, or exact `["CustomLog_CL"]` names
 - **dataConnectorsDependencies**: Matches data connector ID exactly
 - **Standalone workbooks**: Include `"source": {"kind": "Community"}`
 
