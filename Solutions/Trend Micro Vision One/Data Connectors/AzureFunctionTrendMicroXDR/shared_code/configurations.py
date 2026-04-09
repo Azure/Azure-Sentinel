@@ -5,7 +5,7 @@ import os
 
 from shared_code.models.oat import RiskLevel
 
-VERSION = '1.2.7'
+VERSION = '1.2.8'
 SIEM_NAME = 'SentinelAddon'
 XDR_HOSTS = {
     'us': 'https://api.xdr.trendmicro.com',
@@ -17,6 +17,7 @@ XDR_HOSTS = {
     'mea': 'https://api.mea.xdr.trendmicro.com',
     'uk': 'https://api.uk.xdr.trendmicro.com',
     'ca': 'https://api.ca.xdr.trendmicro.com',
+    'za': 'https://api.za.xdr.trendmicro.com',    
 }
 
 
