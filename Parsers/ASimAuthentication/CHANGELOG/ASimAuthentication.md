@@ -1,8 +1,13 @@
 # Changelog for ASimAuthentication.yaml
 
-## Version 0.2.12
+## Version 0.2.13
 
 - (2026-04-09) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
+
+## Version 0.2.12
+
+- (2026-04-08) Add initial parser for Palo Alto PAN-OS GlobalProtect authentication logs from CommonSecurityLog - [PR #14012](https://github.com/Azure/Azure-Sentinel/pull/14012)
+
 ## Version 0.2.11
 
 - (2026-04-07) Add parser for VMware VCenter authentication - [PR #13929](https://github.com/Azure/Azure-Sentinel/pull/13929)
