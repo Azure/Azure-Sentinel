@@ -1,0 +1,87 @@
+name: PR Label Notification
+
+on:
+  pull_request:
+    types: [labeled, opened, reopened]
+
+jobs:
+  # ════════════════════════════════════════════════════════════════════════
+  # JOB 1: Triggered when PR is labeled/opened — creates ADO work item
+  # ════════════════════════════════════════════════════════════════════════
+  notify-on-label:
+    name: Create ADO Work Item on Label
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ASIM')
+
+    steps:
+      # ── Step 1: Collect PR metadata ──────────────────────────────────────
+      - name: Set PR Info
+        id: pr_info
+        run: |
+          echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          echo "pr_url=${{ github.event.pull_request.html_url }}" >> $GITHUB_OUTPUT
+          echo "pr_author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+          echo "label=${{ github.event.label.name }}" >> $GITHUB_OUTPUT
+
+      # ── Step 2: Create ADO Work Item ─────────────────────────────────────
+      - name: Create ADO Work Item
+        id: ado_task
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            -u ":${{ secrets.ASIM_ADO_PAT }}" \
+            -H "Content-Type: application/json-patch+json" \
+            -d '[
+              {
+                "op": "add",
+                "path": "/fields/System.Title",
+                "value": "PR #${{ steps.pr_info.outputs.pr_number }}: ${{ steps.pr_info.outputs.pr_title }}"
+              },
+              {
+                "op": "add",
+                "path": "/fields/System.Description",
+                "value": "<b>GitHub PR:</b> \"${{<br/><b>Author:</b> ${{ steps.pr_info.outputs.pr_author }}<br/><b>Label:</b> ${{ steps.pr_info.outputs.label }}<br/><b>Repo:</b> ${{ steps.pr_info.outputs.repo }}"
+              },
+              {
+                "op": "add",
+                "path": "/fields/System.AssignedTo",
+                "value": "${{ secrets.ASIM_ADO_ASSIGNED_TO }}"
+              },
+              {
+                "op": "add",
+                "path": "/fields/System.AreaPath",
+                "value": "${{ secrets.ASIM_ADO_AREA_PATH }}"
+              },
+              {
+                "op": "add",
+                "path": "/fields/System.Tags",
+                "value": "github-pr; ASIM"
+              },
+              {
+                "op": "add",
+                "path": "/fields/Microsoft.VSTS.Common.Priority",
+                "value": 2
+              },
+              {
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                  "rel": "Hyperlink",
+                  "url": "${{ steps.pr_info.outputs.pr_url }}",
+                  "attributes": { "comment": "Linked GitHub PR" }
+                }
+              },
+              {
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                  "rel": "System.LinkTypes.Hierarchy-Reverse",
+                  "url": "${{ secrets.ASIM_ADO_URL }}/${{ secrets.ASIM_ADO_PROJECT }}/_apis/wit/workitems/5177225",
+                  "attributes": { "comment": "Child of PBI #5177225" }
+                }
+              }
+            ]' \
+            "${{ secrets.ASIM_ADO_URL }}/${{ secrets.ASIM_ADO_PROJECT }}/_apis/wit/workitems/\$Task?api-version=7.1")
+
+          ADO_ITEM_ID=$(echo $RESPONSE | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
