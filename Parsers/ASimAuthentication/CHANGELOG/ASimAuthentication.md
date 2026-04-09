@@ -2,7 +2,7 @@
 
 ## Version 0.2.9
 
-- (2026-04-13) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
+- (2026-04-09) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
 
 ## Version 0.2.8
 

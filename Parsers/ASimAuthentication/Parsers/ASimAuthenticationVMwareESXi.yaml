@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for VMware ESXi
   Version: '0.1.0'
-  LastUpdated: Apr 03, 2026
+  LastUpdated: Apr 09, 2026
 Product:
   Name: VMware ESXi
 Normalization:
@@ -45,9 +45,23 @@ ParserQuery: |
             | where isnotempty(TargetUsername)
         );
         let HostdEvents = (
-            Syslog
-            | where not(disabled)
-            | where ProcessName == "Hostd"
+            union kind=inner (
+                Syslog
+                | where not(disabled)
+                | where (array_length(srchostname_has_any) == 0) // Hostd has no source hostname field
+                | where (isnull(starttime) or TimeGenerated >= starttime)
+                    and (isnull(endtime) or TimeGenerated <= endtime)
+                | where ProcessName == "Hostd"
+                | project TimeGenerated, EventTime, Facility, HostName, SeverityLevel, SyslogMessage, ProcessID, ProcessName, Type
+            ), (
+                union kind=inner AVSSyslog, AVSEsxiSyslog
+                | where not(disabled)
+                | where (array_length(srchostname_has_any) == 0) // Hostd has no source hostname field
+                | where (isnull(starttime) or TimeGenerated >= starttime)
+                    and (isnull(endtime) or TimeGenerated <= endtime)
+                | where AppName == "Hostd"
+                | project-rename EventTime=LogCreationTime, SyslogMessage=Message, SeverityLevel=Severity, ProcessName=AppName, ProcessID=ProcId
+            )
             | where SyslogMessage has_any ("Accepted password", "Rejected password", "Cannot login")
             | extend
                 TargetUsername = coalesce(
@@ -74,11 +88,12 @@ ParserQuery: |
             | where isnotempty(TargetUsername)
             // Hostd double-logs each auth failure: once as "Rejected password" (PAM) and once as "Cannot login" (Event Manager), typically within 35-300ms of each other.
             // A 1-second deduplication window collapses these into a single event. The window is intentionally conservative relative to observed duplicate gaps (<100ms).
-            | summarize arg_min(TimeGenerated, *) by TargetUsername, SrcIpAddr, EventResult, Computer, bin(TimeGenerated, 1s)
+            | summarize arg_min(TimeGenerated, *) by TargetUsername, SrcIpAddr, EventResult, HostName, bin(TimeGenerated, 1s)
             | project-away TimeGenerated1
         );
         union DCUIEvents, HostdEvents
-        | invoke _ASIM_ResolveDvcFQDN("Computer")
+        | invoke _ASIM_ResolveDvcFQDN("HostName")
+        | project-rename EventOriginalSeverity = SeverityLevel
         | extend
             EventCount = int(1),
             EventStartTime = coalesce(EventTime, TimeGenerated),
@@ -88,6 +103,7 @@ ParserQuery: |
             EventSchema = "Authentication",
             EventSchemaVersion = "0.1.4",
             TargetUsernameType = "Simple",
+            EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),
             DvcIpAddr = iif(HostIP != "Unknown IP", tostring(HostIP), dynamic(null)),
             DvcOs = "VMkernel",
             TargetHostname = DvcHostname
@@ -116,7 +132,8 @@ ParserQuery: |
             EventSubType,
             EventResult,
             EventResultDetails,
-            //EventSeverity,
+            EventSeverity,
+            EventOriginalSeverity,
             EventVendor,
             EventProduct,
             //EventProductVersion,
