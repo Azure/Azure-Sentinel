@@ -38,11 +38,17 @@ Every workbook JSON file must include these essential fields:
   - Minimum 1 item required (typically at least a header and visualization)
   - Each item represents a section, visualization, parameter, or content block
   - Order matters - items render in array sequence
-- **Valid Item Types**:
+- **Common Item Types** (not exhaustive; other types are available):
   - Type 1: Text/Markdown content
+  - Type 2: Multi-select dropdown parameter
   - Type 3: KQL queries and visualizations
-  - Type 9: Parameter controls
+  - Type 4: Time range picker parameter
+  - Type 5: Workspace selector parameter
+  - Type 6: Subscription selector parameter
+  - Type 9: Parameter controls (advanced)
+  - Type 10: Toggle/Boolean parameter
   - Type 12: Notebook groups (containers)
+  - Refer to Azure Workbooks documentation for complete list of available item types
 
 #### fallbackResourceIds
 - **Required**: No (optional field)
@@ -116,10 +122,10 @@ Every workbook JSON file must include these essential fields:
 ### Workbook Organization
 1. **Header Section**: Main headline identifying workbook
 2. **Parameters Section**: All parameter controls grouped early
-3. **Summary/KPI Section**: Key metrics and high-level overview
-4. **Content Sections**: Visualizations organized by business area
-5. **Details Section**: Detailed tables and drill-down data
-6. **Help Section**: Documentation and usage guidance (conditionally visible)
+3. **Help Section**: Documentation and usage guidance (conditionally visible)
+4. **Summary/KPI Section**: Key metrics and high-level overview
+5. **Content Sections**: Visualizations organized by business area
+6. **Details Section**: Detailed tables and drill-down data
 
 ### Naming Conventions
 - **Item Names**: Clear, descriptive (e.g., "Security Incidents Overview")
