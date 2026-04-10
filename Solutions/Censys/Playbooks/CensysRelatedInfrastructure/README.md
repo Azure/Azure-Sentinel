@@ -1,4 +1,4 @@
-# Censys Ad-Hoc IOC Lookup
+# Censys Related Infrastructure
 
 ## Summary
 
