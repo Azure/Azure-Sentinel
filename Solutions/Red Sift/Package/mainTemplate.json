@@ -48,7 +48,7 @@
     "_email": "[variables('email')]",
     "_solutionName": "Red Sift",
     "_solutionVersion": "3.0.0",
-    "solutionId": "redsift.redsift-auth-events",
+    "solutionId": "redsift.redsift-sentinel-events",
     "_solutionId": "[variables('solutionId')]",
     "analyticRuleObject1": {
       "analyticRuleVersion1": "1.0.1",
@@ -119,7 +119,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Detects a successful login from an IP address that has not been seen in the previous 14 days for that user, which may indicate compromised credentials or unauthorized access.",
-                "displayName": "Red Sift - Login from Previously Unseen IP Address",
+                "displayName": "Red Sift - Login from previously unseen IP address",
                 "enabled": false,
                 "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalLogins = RedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| summarize by UserEmail, SrcIp;\nRedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    HttpUserAgent = tostring(column_ifexists(\"HttpUserAgent\", \"\")),\n    ServiceName = tostring(column_ifexists(\"ServiceName\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\"))\n| where TimeGenerated >= ago(recentWindow)\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| join kind=leftanti (historicalLogins) on UserEmail, SrcIp\n| project\n    TimeGenerated,\n    UserEmail,\n    SrcIp,\n    HttpUserAgent,\n    ServiceName,\n    ActivityName,\n    Severity\n",
                 "queryFrequency": "PT1H",
@@ -132,10 +132,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "RedSiftPush",
                     "dataTypes": [
                       "RedSiftAuth_CL"
-                    ],
-                    "connectorId": "RedSiftPush"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -176,18 +176,18 @@
                   "alertDisplayNameFormat": "RedSift - New IP Login for {{UserEmail}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByCustomDetails": [],
-                    "groupByAlertDetails": [],
+                    "lookbackDuration": "P1D",
                     "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "enabled": true,
                     "groupByEntities": [
                       "Account"
                     ],
-                    "lookbackDuration": "P1D"
-                  },
-                  "createIncident": true
+                    "groupByAlertDetails": [],
+                    "enabled": true,
+                    "groupByCustomDetails": []
+                  }
                 }
               }
             },
@@ -227,7 +227,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
         "contentKind": "AnalyticsRule",
-        "displayName": "Red Sift - Login from Previously Unseen IP Address",
+        "displayName": "Red Sift - Login from previously unseen IP address",
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
@@ -257,7 +257,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Detects email forensics events that contain one or more URLs where the sender is using a source IP address not seen in the previous 14 days, which may indicate suspicious infrastructure changes or phishing activity.",
-                "displayName": "Red Sift - New Email with URL from Previously Unseen Source",
+                "displayName": "Red Sift - New email with URL from previously unseen source",
                 "enabled": false,
                 "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSources = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| summarize by EmailFrom, SrcIp;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", dynamic([])))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSources) on EmailFrom, SrcIp\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
                 "queryFrequency": "PT1H",
@@ -270,10 +270,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "RedSiftPush",
                     "dataTypes": [
                       "RedSiftEmailForensics_CL"
-                    ],
-                    "connectorId": "RedSiftPush"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -315,32 +315,32 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "ReturnPath": "EmailReturnPath",
-                  "EmailSubject": "EmailSubject",
                   "CorrelationUid": "CorrelationUid",
+                  "ReturnPath": "EmailReturnPath",
                   "UrlList": "UrlList",
-                  "UrlCount": "UrlCount"
+                  "UrlCount": "UrlCount",
+                  "EmailSubject": "EmailSubject"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Email from {{EmailFrom}} contains {{UrlCount}} URL(s) and originated from previously unseen source IP {{SrcIp}}.",
                   "alertDisplayNameFormat": "RedSift - New URL-bearing email source for {{EmailFrom}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByCustomDetails": [
-                      "EmailSubject"
-                    ],
-                    "groupByAlertDetails": [],
+                    "lookbackDuration": "P1D",
                     "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "enabled": true,
                     "groupByEntities": [
                       "Account",
                       "IP"
                     ],
-                    "lookbackDuration": "P1D"
-                  },
-                  "createIncident": true
+                    "groupByAlertDetails": [],
+                    "enabled": true,
+                    "groupByCustomDetails": [
+                      "EmailSubject"
+                    ]
+                  }
                 }
               }
             },
@@ -380,7 +380,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
         "contentKind": "AnalyticsRule",
-        "displayName": "Red Sift - New Email with URL from Previously Unseen Source",
+        "displayName": "Red Sift - New email with URL from previously unseen source",
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
@@ -410,7 +410,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Detects email forensics events that contain one or more URLs where the sender in the from field has not been seen in the previous 14 days, which may indicate phishing activity or a newly observed sender.",
-                "displayName": "Red Sift - New Email with URL from Previously Unseen Sender",
+                "displayName": "Red Sift - New email with URL from previously unseen sender",
                 "enabled": false,
                 "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSenders = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom)\n| summarize by EmailFrom;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", dynamic([])))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSenders) on EmailFrom\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
                 "queryFrequency": "PT1H",
@@ -423,10 +423,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "RedSiftPush",
                     "dataTypes": [
                       "RedSiftEmailForensics_CL"
-                    ],
-                    "connectorId": "RedSiftPush"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -468,31 +468,31 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "ReturnPath": "EmailReturnPath",
-                  "EmailSubject": "EmailSubject",
                   "CorrelationUid": "CorrelationUid",
+                  "ReturnPath": "EmailReturnPath",
                   "UrlList": "UrlList",
-                  "UrlCount": "UrlCount"
+                  "UrlCount": "UrlCount",
+                  "EmailSubject": "EmailSubject"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Email from previously unseen sender {{EmailFrom}} contains {{UrlCount}} URL(s).",
                   "alertDisplayNameFormat": "RedSift - New URL-bearing sender {{EmailFrom}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByCustomDetails": [
-                      "EmailSubject"
-                    ],
-                    "groupByAlertDetails": [],
+                    "lookbackDuration": "P1D",
                     "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "enabled": true,
                     "groupByEntities": [
                       "Account"
                     ],
-                    "lookbackDuration": "P1D"
-                  },
-                  "createIncident": true
+                    "groupByAlertDetails": [],
+                    "enabled": true,
+                    "groupByCustomDetails": [
+                      "EmailSubject"
+                    ]
+                  }
                 }
               }
             },
@@ -532,7 +532,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
         "contentKind": "AnalyticsRule",
-        "displayName": "Red Sift - New Email with URL from Previously Unseen Sender",
+        "displayName": "Red Sift - New email with URL from previously unseen sender",
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
@@ -561,8 +561,8 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Detects authentication events where MFA has been disabled on an account, which may indicate account takeover activity, weakened account protections, or unauthorized administrative changes.",
-                "displayName": "Red Sift - MFA Disabled on Account",
+                "description": "This query searches for authentication events where MFA has been disabled on an account, which may indicate account takeover activity, weakened account protections, or unauthorized administrative changes.",
+                "displayName": "Red Sift - MFA disabled on account",
                 "enabled": false,
                 "query": "RedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    ActorUserEmail = tostring(column_ifexists(\"ActorUserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    HttpUserAgent = tostring(column_ifexists(\"HttpUserAgent\", \"\")),\n    ServiceName = tostring(column_ifexists(\"ServiceName\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    UserUid = tostring(column_ifexists(\"UserUid\", \"\")),\n    ActorUserUid = tostring(column_ifexists(\"ActorUserUid\", \"\"))\n| where ActivityName =~ \"MFA Disabled\"\n| where isnotempty(UserEmail) or isnotempty(ActorUserEmail)\n| extend TargetAccount = iff(isnotempty(UserEmail), UserEmail, ActorUserEmail)\n| project\n    TimeGenerated,\n    TargetAccount,\n    UserEmail,\n    ActorUserEmail,\n    SrcIp,\n    HttpUserAgent,\n    ServiceName,\n    ActivityName,\n    Severity,\n    UserUid,\n    ActorUserUid\n",
                 "queryFrequency": "PT1H",
@@ -575,10 +575,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "RedSiftPush",
                     "dataTypes": [
                       "RedSiftAuth_CL"
-                    ],
-                    "connectorId": "RedSiftPush"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -611,28 +611,28 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "UserAgent": "HttpUserAgent",
                   "ActivityName": "ActivityName",
-                  "ActorUserEmail": "ActorUserEmail",
-                  "ServiceName": "ServiceName"
+                  "UserAgent": "HttpUserAgent",
+                  "ServiceName": "ServiceName",
+                  "ActorUserEmail": "ActorUserEmail"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "MFA was disabled for {{TargetAccount}}. Actor: {{ActorUserEmail}}. Source IP: {{SrcIp}}.",
                   "alertDisplayNameFormat": "RedSift - MFA Disabled for {{TargetAccount}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByCustomDetails": [],
-                    "groupByAlertDetails": [],
+                    "lookbackDuration": "P1D",
                     "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "enabled": true,
                     "groupByEntities": [
                       "Account"
                     ],
-                    "lookbackDuration": "P1D"
-                  },
-                  "createIncident": true
+                    "groupByAlertDetails": [],
+                    "enabled": true,
+                    "groupByCustomDetails": []
+                  }
                 }
               }
             },
@@ -672,7 +672,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
         "contentKind": "AnalyticsRule",
-        "displayName": "Red Sift - MFA Disabled on Account",
+        "displayName": "Red Sift - MFA disabled on account",
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
@@ -702,7 +702,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Detects email forensics events containing one or more URLs whose domain has not been seen in the previous 14 days, which may indicate newly observed phishing infrastructure or suspicious delivery patterns.",
-                "displayName": "Red Sift - Email with URL to Previously Unseen Domain",
+                "displayName": "Red Sift - Email with URL to previously unseen domain",
                 "enabled": false,
                 "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalDomains = RedSiftEmailForensics_CL\n| extend EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| summarize by UrlDomain;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| join kind=leftanti (historicalDomains) on UrlDomain\n| summarize\n    NewUrlDomains = make_set(UrlDomain, 50),\n    NewUrls = make_set(UrlString, 50),\n    NewDomainCount = dcount(UrlDomain),\n    UrlCount = dcount(UrlString),\n    RepresentativeUrlDomain = take_any(UrlDomain)\n    by TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    Severity,\n    Message,\n    CorrelationUid\n| extend\n    NewUrlDomainList = strcat_array(NewUrlDomains, \", \"),\n    NewUrlList = strcat_array(NewUrls, \", \")\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    RepresentativeUrlDomain,\n    NewDomainCount,\n    UrlCount,\n    NewUrlDomainList,\n    NewUrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
                 "queryFrequency": "PT1H",
@@ -715,10 +715,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "RedSiftPush",
                     "dataTypes": [
                       "RedSiftEmailForensics_CL"
-                    ],
-                    "connectorId": "RedSiftPush"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -760,33 +760,33 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "NewUrlList": "NewUrlList",
-                  "NewDomainCount": "NewDomainCount",
                   "ReturnPath": "EmailReturnPath",
+                  "NewUrlList": "NewUrlList",
                   "CorrelationUid": "CorrelationUid",
-                  "NewUrlDomainList": "NewUrlDomainList",
-                  "EmailSubject": "EmailSubject"
+                  "NewDomainCount": "NewDomainCount",
+                  "EmailSubject": "EmailSubject",
+                  "NewUrlDomainList": "NewUrlDomainList"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Email from {{EmailFrom}} contains {{NewDomainCount}} previously unseen URL domain(s): {{NewUrlDomainList}}.",
                   "alertDisplayNameFormat": "RedSift - URL to new domain in email from {{EmailFrom}}"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByCustomDetails": [
-                      "EmailSubject"
-                    ],
-                    "groupByAlertDetails": [],
+                    "lookbackDuration": "P1D",
                     "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
-                    "enabled": true,
                     "groupByEntities": [
                       "Account",
                       "DNS"
                     ],
-                    "lookbackDuration": "P1D"
-                  },
-                  "createIncident": true
+                    "groupByAlertDetails": [],
+                    "enabled": true,
+                    "groupByCustomDetails": [
+                      "EmailSubject"
+                    ]
+                  }
                 }
               }
             },
@@ -826,7 +826,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
         "contentKind": "AnalyticsRule",
-        "displayName": "Red Sift - Email with URL to Previously Unseen Domain",
+        "displayName": "Red Sift - Email with URL to previously unseen domain",
         "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
@@ -1712,7 +1712,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Red Sift",
         "publisherDisplayName": "Red Sift",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Red%20Sift/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Red Sift solution provides real-time event ingestion from your Red Sift applications into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. It supports authentication events from Red Sift Pulse and email forensics events from OnDMARC, pushing activity, severity, user information, email details, and network data directly to Azure Monitor for analysis, alerting, and visualization.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Red%20Sift/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://redsift.com/\">Red Sift</a> solution for Microsoft Sentinel provides the capability to ingest authentication events from Red Sift Pulse and email forensics events from OnDMARC into your Microsoft Sentinel workspace using the Codeless Connector Framework (CCF) Push pattern.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/overview\">Microsoft Sentinel</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/overview\">Azure Monitor</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
