@@ -30,6 +30,25 @@ Exactly three columns in this order:
 | **No Duplicates** | Each version must appear only once | 3.0.1 appears twice | Each version appears once |
 | **All 3 Columns Present** | Table must have exactly 3 columns, no more, no less | 2 columns or 4 columns | Exactly 3 columns |
 
+## When to Update Release Notes
+
+Release notes **MUST be updated** for any of the following changes:
+
+- **Content changes**: Modifications to Analytical Rules, Hunting Queries, Workbooks, Data Connectors, or any other solution content
+- **Package folder changes**: ANY changes to files in `Solutions/{SolutionName}/Package/` folder (metadata, configurations, solution settings)
+- **Parser/Function updates**: Changes to KQL parsers or custom functions
+- **Documentation updates**: Updates to README or other documentation files
+- **Bug fixes**: Any bug fixes to existing content
+- **Performance improvements**: Optimizations to queries or logic
+- **New content**: Addition of new Analytical Rules, Workbooks, Hunting Queries, etc.
+- **Deprecated content**: Marking components as deprecated or removing content
+
+Release notes are **NOT required** for:
+- Changes only to non-solution files (e.g., standalone scripts outside Solutions folder)
+- Documentation-only PRs that don't affect solution content
+
+**Important:** If your PR includes changes to `Solutions/{SolutionName}/Package/` folder, updating ReleaseNotes.md is mandatory. Failure to update release notes when package folder changes will result in PR review failure.
+
 ## Best Practices
 
 - **Clear descriptions:** Specify which component changed (e.g., "Updated query in **Analytical Rule**", "Fixed bug in **Data Connector**")
