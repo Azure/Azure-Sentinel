@@ -161,10 +161,16 @@ CommonSecurityLog
 
 ### Steps — Use the Custom Tool in VS Code
 
-1. Open VS Code → Command Palette → **MCP: Add Server** → **HTTP**
-2. Enter the custom collection URL — find it under **Advanced hunting** → **Tools** tab → your collection
-3. Open **Copilot Chat** in Agent mode and confirm the custom tool appears
-4. Test with a prompt:
+1. In the **Advanced hunting** page, switch to the **Tools** tab. You'll see your custom collection listed in the left pane.
+2. Click the **three dots (⋯)** next to your collection → select **Copy link to MCP server**.
+
+![Copy MCP server link from collection context menu](../Images/OnboardingImage36.png)
+
+3. Open VS Code → Command Palette (`Ctrl + Shift + P`) → **MCP: Add Server** → **HTTP (HTTP or Server-Sent Events)**.
+4. **Paste** the copied URL as the server endpoint.
+5. Give it a friendly Server ID (e.g. `Custom Firewall Tools`).
+6. Open **Copilot Chat** (`Ctrl + Alt + I`) in **Agent mode** and confirm the custom tool appears under the tools icon.
+7. Test with a prompt:
 
 > *"Using my custom firewall tools, show me all source IPs that were denied more than 50 connections in the last 24 hours. Which IPs look like they're performing port scans?"*
 
