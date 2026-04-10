@@ -4,6 +4,7 @@ Microsoft Sentinel Solution for SAP ERP and S/4HANA. Used with SAP Integration S
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Comments** |
 | --- | --- | --- |
+| 1.1.10 | 10-04-2026 | Security and usability improvements |
 | 1.1.9	| 23-02-2026 | Add safeguards for change docs and user master data |
 | 1.1.8	| 26-01-2026 | Fixed parameters on pre-requisites checker iflow |
 | 1.1.8 | 01-09-2025 | Update Heartbeat to Log Analytics V2 and added support for audit log user exclusions |
