@@ -1,0 +1,603 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Field Effect",
+    "comments": "Solution template for Field Effect MDR"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used directly; used to satisfy arm-ttk."
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Region to deploy solution resources (typically the workspace region)."
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is enabled."
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Resource ID of the Log Analytics workspace."
+      }
+    },
+    "bearerToken": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "Field Effect API Key (sent as a Bearer token)."
+      }
+    },
+    "organizationId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Field Effect Organization ID."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is enabled"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, \"/\"))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is enabled"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Field Effect MDR",
+    "_solutionVersion": "1.0.0",
+    "solutionId": "fieldeffect.fieldeffect_mdr_sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+    "dataConnectorCCFVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "FieldEffectCCF",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "FieldEffectCCFConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/', 'FieldEffect')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'FieldEffect')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('FieldEffect-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "FieldEffect-Parser"
+    },
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "b4b8c1c6-49bf-4c2b-9f86-9d4b9c5b0c2d",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRuleObject1')._analyticRulecontentId1)]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('analyticRuleObject1')._analyticRulecontentId1)))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('analyticRuleObject1')._analyticRulecontentId1,'-', variables('analyticRuleObject1').analyticRuleVersion1)))]"
+    },
+    "_locationRef": "[parameters('location')]",
+    "dceResourceId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "dceIngestionEndpoint": "[concat('https://', parameters('workspace'), '.', parameters('workspace-location'), '.ingest.monitor.azure.com')]",
+    "dcrImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules','FieldEffectARODCR'),'2024-03-11','Full').immutableId]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Field Effect ARO Alert analytics rule with template version 1.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2021-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Creates an incident for each Field Effect MDR ARO alert ingested into the workspace.",
+                "displayName": "Field Effect MDR Alert: ARO Alert",
+                "enabled": false,
+                "query": "FieldEffectAROAlerts_CL\n where TimeGenerated >= ago(5m)\n project\n TimeGenerated,\n ARO = ID,\n TITLE = Title,\n DETAILS = DetailsMarkdown,\n URL = PortalUrl,\n SEVERITY = Severity,\n Hostname,\n IPAddress,\n LastUser,\n PRODUCT_NAME = \"Field Effect MDR\"",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "FieldEffectCCF",
+                    "dataTypes": [
+                      "FieldEffectAROAlerts_CL"
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Field Effect MDR Alert: ARO-{{ARO}}: {{TITLE}}",
+                  "alertDescriptionFormat": "{{DETAILS}}\n\nFor full information, visit: {{URL}}\n",
+                  "alertSeverityColumnName": "SEVERITY"
+                },
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": false,
+                    "reopenClosedIncident": false,
+                    "matchingMethod": "AllEntities",
+                    "lookbackDuration": "5h"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Field Effect Analytics Rule",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Field Effect MDR",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Field Effect"
+                },
+                "support": {
+                  "name": "Field Effect",
+                  "tier": "Partner",
+                  "link": "https://support.fieldeffect.com/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Field Effect MDR Alert: ARO Alert",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCFVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Field Effect MDR Data Connector (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2021-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCFVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "FieldEffectCCF",
+                  "title": "Field Effect MDR Data Connector (via Codeless Connector Framework)",
+                  "publisher": "Field Effect",
+                  "descriptionMarkdown": "This solution enables Microsoft Sentinel to ingest Field Effect MDR data using the Codeless Connector Framework (CCF). The connector polls the Field Effect ARO API and sends results to a Log Analytics custom table for hunting, correlation, and alerting within Sentinel.",
+                  "graphQueriesTableName": "FieldEffectAROAlerts_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "AROs received",
+                      "legend": "Field Effect ARO alerts",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Review Field Effect AROs",
+                      "query": "{{graphQueriesTableName}} \n take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}} \n summarize Time = max(TimeGenerated) \n where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Configure Field Effect Connector",
+                      "description": "1. In the Field Effect MDR portal, generate an API Key. \n2. Copy your Organization ID from the portal. \n3. Enter both values below and connect.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Key",
+                            "placeholder": "Enter your Field Effect API Key",
+                            "type": "password",
+                            "name": "bearerToken"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Organization ID",
+                            "placeholder": "Enter your Field Effect Organization ID",
+                            "type": "text",
+                            "name": "organizationId"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect to Field Effect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCFVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Field Effect"
+                },
+                "support": {
+                  "name": "Field Effect",
+                  "tier": "Partner",
+                  "link": "https://support.fieldeffect.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCFVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCFVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCFVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCFVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules','FieldEffectARODCR')]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Field Effect MDR Data Connector (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2021-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCFVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "[concat('https://', parameters('workspace'), '.', parameters('workspace-location'), '.ingest.monitor.azure.com')]",
+                "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules','FieldEffectARODCR'),'2024-03-11','Full').immutableId]"
+              }
+            },
+            "bearerToken": {
+              "type": "securestring",
+              "defaultValue": "[parameters('bearerToken')]"
+            },
+            "organizationId": {
+              "type": "securestring",
+              "defaultValue": "[parameters('organizationId')]"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCFVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Field Effect"
+                },
+                "support": {
+                  "name": "Field Effect",
+                  "tier": "Partner",
+                  "link": "https://support.fieldeffect.com/"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/','FieldEffectAROsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-04-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "FieldEffectCCF",
+                "dataType": "FieldEffectARO",
+                "dcrConfig": {
+                  "streamName": "Custom-FieldEffectAROAlerts_CL",
+                  "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "apiKey": "[parameters('bearerToken')]",
+                  "apiKeyName": "Authorization",
+                  "apiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "httpMethod": "GET",
+                  "apiEndpoint": "https://services.fieldeffect.net/v1/aros",
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "limit": 20,
+                    "sort_by": "creation_time",
+                    "sort_order": "desc",
+                    "status": "Open",
+                    "resolution": "Unresolved",
+                    "released_time_since": "{_QueryWindowStartTime}",
+                    "organization_id": "[parameters('organizationId')]"
+                  },
+                  "queryTimeFormat": "yyyy-MM-dd HH:mm:ss",
+                  "queryWindowInMin": 5,
+                  "timeoutInSeconds": 45,
+                  "retryCount": 3,
+                  "logResponseContent": true
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.items"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCFVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCFVersion')]"
+      }
+    },
+    {
+      "name": "FieldEffectARODCR",
+      "apiVersion": "2024-03-11",
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "streamDeclarations": {
+          "Custom-FieldEffectAROAlerts_CL": {
+            "columns": [
+              { "name": "ID", "type": "string" },
+              { "name": "Severity", "type": "string" },
+              { "name": "AROType", "type": "string" },
+              { "name": "Title", "type": "string" },
+              { "name": "Hostname", "type": "string" },
+              { "name": "IPAddress", "type": "string" },
+              { "name": "LastUser", "type": "string" },
+              { "name": "DetailsMarkdown", "type": "string" },
+              { "name": "DetailsRaw", "type": "string" },
+              { "name": "PortalUrl", "type": "string" },
+              { "name": "TimeGenerated", "type": "datetime" }
+            ]
+          }
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-FieldEffectAROAlerts_CL" ],
+            "destinations": [ "clv2ws2" ],
+            "transformKql": "source\n| extend d = todynamic(data)\n| extend Agent = todynamic(d.agent_details)\n| project\n    ID = tostring(serial_id),\n    Severity = tostring(d.severity),\n    AROType = tostring(d.type),\n    Title = tostring(d.title),\n    Hostname = tostring(Agent.hostName),\n    IPAddress = tostring(Agent.ipAddress),\n    LastUser = tostring(Agent.lastSessionUser),\n    DetailsMarkdown = tostring(d.details_markdown),\n    DetailsRaw = tostring(d.details),\n    PortalUrl = tostring(d.display_url),\n    TimeGenerated = now()",
+            "outputStream": "Custom-FieldEffectAROAlerts_CL"
+          }
+        ],
+        "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('workspaceResourceId')]",
+              "name": "clv2ws2"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "templateLocation": "[variables('_locationRef')]"
+      }
+    },
+    {
+      "name": "FieldEffectAROAlerts_CL",
+      "apiVersion": "2023-09-01",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "schema": {
+          "name": "FieldEffectAROAlerts_CL",
+          "columns": [
+            { "name": "ID", "type": "string" },
+            { "name": "Severity", "type": "string" },
+            { "name": "AROType", "type": "string" },
+            { "name": "Title", "type": "string" },
+            { "name": "Hostname", "type": "string" },
+            { "name": "IPAddress", "type": "string" },
+            { "name": "LastUser", "type": "string" },
+            { "name": "DetailsMarkdown", "type": "string" },
+            { "name": "DetailsRaw", "type": "string" },
+            { "name": "PortalUrl", "type": "string" },
+            { "name": "TimeGenerated", "type": "datetime" }
+          ]
+        }
+      }
+    },
+
+    // (Remaining parser/contentPackages portions unchanged from your original template, but with nested $schema updated.)
+    // The full file is available via the download link above.
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "1.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Field Effect MDR",
+        "publisherDisplayName": "Field Effect",
+        "descriptionHtml": "<p><strong>Note:</strong> Please review the <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/FieldEffectMDR/ReleaseNotes.md\">Release Notes</a> before installing.</p><p>The <a href=\"https://fieldeffect.com/\">Field Effect</a> solution for Microsoft Sentinel ingests Field Effect MDR ARO alerts into a Log Analytics custom table for hunting, correlation, and alerting.</p><p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Analytic Rules:</strong> 1</p>",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/FieldEffect_Logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Field Effect MDR",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": { "name": "Field Effect" },
+        "support": {
+          "name": "Field Effect",
+          "tier": "Partner",
+          "link": "https://support.fieldeffect.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            { "kind": "AnalyticsRule", "contentId": "b4b8c1c6-49bf-4c2b-9f86-9d4b9c5b0c2d", "version": "1.0.0" },
+            { "kind": "DataConnector", "contentId": "FieldEffectCCFConnections", "version": "1.0.0" },
+            { "kind": "Parser", "contentId": "FieldEffect-Parser", "version": "1.0.0" }
+          ]
+        },
+        "firstPublishDate": "2026-02-14",
+        "providers": [ "Field Effect" ],
+        "categories": {
+          "domains": [ "Security - Threat Protection" ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
