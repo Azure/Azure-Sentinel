@@ -9,7 +9,7 @@ requiredDataConnectors:
     dataTypes:
       - SigninLogs
 queryFrequency: 1h
-queryPeriod: 1d
+queryPeriod: 7d // Increased queryperiod to 7 days to mitigate timing-based bypasses
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -21,21 +21,25 @@ tags:
   - AADSecOpsGuide
 query: |
   let queryfrequency = 1h;
-  let queryperiod = 1d;
+  let queryperiod = 7d; // Increased queryperiod to 7 days to mitigate timing-based bypasses
   AuditLogs
   | where TimeGenerated > ago(queryfrequency)
   | where OperationName =~ "Delete user"
   | mv-apply TargetResource = TargetResources on 
     (
         where TargetResource.type == "User"
-        | extend TargetUserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResource.userPrincipalName))
+        // Normalize TargetUserPrincipalName by removing optional 32-char hex prefixes and underscores
+        // Making extraction case-insensitive, and converting the result to lowercase for consistency
+        | extend TargetUserPrincipalName = tolower(extract(@"(?i)([a-f0-9]{32})?_?(.*)", 2, tostring(TargetResource.userPrincipalName)))
+        // Standardize UserId to ensure consistent, immutable identification
+        | extend UserId = tostring(TargetResource.id)
     )
   | extend DeletedByApp = tostring(InitiatedBy.app.displayName),
   DeletedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
   DeletedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
   DeletedByAadUserId = tostring(InitiatedBy.user.id),
   DeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-  | project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
+  | project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, UserId, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
   Deletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources
   | join kind=inner (
       AuditLogs
@@ -44,10 +48,14 @@ query: |
       | mv-apply TargetResource = TargetResources on 
         (
             where TargetResource.type == "User"
-            | extend TargetUserPrincipalName = trim(@'"',tostring(TargetResource.userPrincipalName))
+            // Normalize TargetUserPrincipalName by removing optional 32-char hex prefixes and underscores
+            // Making extraction case-insensitive, and converting the result to lowercase for consistency
+            | extend TargetUserPrincipalName = tolower(extract(@"(?i)([a-f0-9]{32})?_?(.*)", 2, tostring(TargetResource.userPrincipalName)))
+            // Standardize UserId to ensure consistent, immutable identification
+            | extend UserId = tostring(TargetResource.id)
         )
       | project-rename Creation_TimeGenerated = TimeGenerated
-  ) on TargetUserPrincipalName
+  ) on UserId
   | extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated
   | where  TimeDelta between (time(0s) .. queryperiod)
   | extend CreatedByApp = tostring(InitiatedBy.app.displayName),
@@ -55,7 +63,7 @@ query: |
   CreatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
   CreatedByAadUserId = tostring(InitiatedBy.user.id),
   CreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-  | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
+  | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, UserId, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
   CreatedByApp, CreatedByAppServicePrincipalId, CreatedByUserPrincipalName, CreatedByAadUserId, CreatedByIPAddress, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources
   | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
   | extend CreatedByName = tostring(split(CreatedByUserPrincipalName,'@',0)[0]), CreatedByUPNSuffix = tostring(split(CreatedByUserPrincipalName,'@',1)[0])
