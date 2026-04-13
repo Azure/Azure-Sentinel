@@ -6,8 +6,6 @@
 
 The QRadar Migration Data Collector extracts custom detection rules and building blocks from IBM QRadar SIEM and converts them into a migration-ready format for Microsoft Sentinel.
 
-[![Download](../../logos/download.svg)](https://github.com/kingwil/Azure-Sentinel/raw/kingwil-qradar-script/Tools/Scripts/qradar_collector.py)
-
 ## Prerequisites
 
 - **Python 3** (latest stable release recommended; minimum 3.6)
