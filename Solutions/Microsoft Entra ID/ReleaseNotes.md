@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.11       | 13-04-2026                    | Add Add watchlist ConditionalAccessBenignStatusCodes and Update the Conditional Access bypass analytic rule |
 | 3.3.10       | 12-04-2026                    | Updated **AccountCreatedandDeletedinShortTimeframe** analytic rule to extend query period to 7 days, normalize UPN parsing, and use immutable UserId for improved detection accuracy and evasion resistance |
 | 3.3.9       | 23-02-2026                     | Updated **Block-AADUser Incident** trigger to fix the permissions for disable user block |
 | 3.3.8       | 06-02-2026                     | Fixed Broken Links in **Analytical Rule**. |
