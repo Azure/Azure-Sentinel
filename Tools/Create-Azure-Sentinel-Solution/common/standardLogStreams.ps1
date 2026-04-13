@@ -208,6 +208,7 @@ $standardStreamMapping += @{ Key = 'ILUMIO_INSIGHTS'; Value = 'Microsoft-IlumioI
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-FlowLog'; Value = 'Microsoft-AWSNetworkFirewallFlow' }
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-TlsLog'; Value = 'Microsoft-AWSNetworkFirewallTls' }
 $standardStreamMapping += @{ Key = 'Custom-AWSNetworkFirewall-AlertLog'; Value = 'Microsoft-AWSNetworkFirewallAlert' }
+$standardStreamMapping += @{ Key = 'SENTINEL_QUALYSKNOWLEDGEBASE'; Value = 'Microsoft-SentinelQualysKnowledgeBase' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDVPCFLOWLOGS'; Value = 'Microsoft-SentinelAlibabaCloudVPCFlowLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDWAFLOGS'; Value = 'Microsoft-SentinelAlibabaCloudWAFLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_ALIBABACLOUDAPIGATEWAYLOGS'; Value = 'Microsoft-SentinelAlibabaCloudAPIGatewayLogs' }
@@ -215,6 +216,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_AWSALBACCESSLOGS'; Value = 'Microso
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSNLBACCESSLOGS'; Value = 'Microsoft-AWSNLBAccessLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSNLBFLOWLOGSSTREAM'; Value = 'Microsoft-AWSNLBFlowLogsStream' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSGLBFLOWLOGSSTREAM'; Value = 'Microsoft-AWSGLBFlowLogsStream' }
+$standardStreamMapping += @{ Key = 'SENTINEL_IMPERVA_WAF_CLOUD_V2_LOGS'; Value = 'Microsoft-SentinelImpervaWAFCloudV2Logs' }
 
 # Function to check if a key exists in the array of hashtables
 function GetKeyValue {
