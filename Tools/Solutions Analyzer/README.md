@@ -1,13 +1,14 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains five complementary tools for analyzing Microsoft Sentinel Solutions:
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
-| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv` |
+| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv`, `la_table_schemas.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv`, `solution_dependencies.csv`, `table_schemas.csv` |
 | [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` and `parsers/` subdirectories) |
 | [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
+| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
 
 ## Prerequisites
 
@@ -36,6 +37,11 @@ git pull origin master
 pip install requests json5 pyyaml
 ```
 
+**Additional packages for Kusto upload:**
+```bash
+pip install azure-kusto-data azure-kusto-ingest azure-identity
+```
+
 ## Quick Start
 
 **Pre-generated CSV files are already available in this directory:**
@@ -49,6 +55,8 @@ pip install requests json5 pyyaml
   - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor and Sentinel documentation
 - Relationships:
   - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+  - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and optional ASIM-based)
+  - [`table_schemas.csv`](table_schemas.csv) - Table column schemas from DCR definition files, Azure Monitor documentation, and KQL validation tables
   - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - The rest:
   - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
@@ -141,6 +149,96 @@ See the script documentation for details:
 ---
 
 ## Version History
+
+### v9.0 - Discovery Source Prioritization and Table Schema Discovery
+
+**Tables Index - Single Discovery Source:**
+- "Discovered Via" column now shows a single primary discovery source per table instead of all sources
+- Priority order: Connector > Content > Docs > Schema
+- "Docs" combines all documentation-based sources (Azure Monitor, Defender XDR, Sentinel Tables Doc, Feature Support Doc, Ingestion API Doc)
+- Tables index includes an explanation of the discovery sources and their priority hierarchy
+- Tables from standalone content items (e.g., GitHub-only playbooks without a solution) now correctly discovered as "Content"
+- Tables discovered only via `table_schemas.csv` now included in the index with "Schema" as discovery source
+- 📖 icon on tables index for tables with schema information
+
+**Table Pages - Documentation References:**
+- Table pages now show all applicable documentation references with specific names and links:
+  - Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+- Replaces the previous generic "Azure Monitor Docs" / "Defender XDR Docs" labels
+- Tables discovered via docs-only sources (e.g., Feature Support) now show the relevant doc link
+
+**Statistics Page - Detailed Discovery Breakdowns:**
+- Tables section restructured into three subsections:
+  - **Primary Discovery Source**: table counts by prioritized single source (matching the tables index)
+  - **Doc Sources**: breakdown of tables found in each documentation reference (Azure Monitor, Defender XDR, Sentinel Tables Doc, Feature Support Doc, Ingestion API Doc) — a table may appear in multiple
+  - **Schema Sources**: breakdown of tables with schema information by origin (Azure Monitor docs, DCR, KQL validation)
+
+### v8.0 - Solution Dependencies, CCF Legacy, Capabilities Statistics, and Table Schemas
+
+**Table Schemas from DCR Definitions and Azure Monitor Documentation:**
+- New `table_schemas.csv` output file combining column schemas from three sources:
+  - **DCR files** (`*_DCR.json`): stream declarations for CCP/CCF connectors with column name, type, stream name, transform KQL, connector ID, solution name
+  - **Azure Monitor docs**: column schemas from rendered learn.microsoft.com table reference pages with column name, type, description
+  - **KQL validation tables** (`.script/tests/KqlvalidationsTests/CustomTables/`): table schemas used for CI query validation, only for tables not already covered by the other sources
+- New `la_table_schemas.csv` intermediate file generated by `collect_table_info.py` containing documentation-sourced column schemas
+- New `source` and `description` columns in `table_schemas.csv` to distinguish data origin
+- New `source_url` column in `table_schemas.csv` with link to the source file (GitHub for DCR/KQL validation, learn.microsoft.com for docs)
+- Doc generator: new **Schema** section on table pages showing column definitions (name, type, description, source) from `table_schemas.csv`
+- Doc generator: schema source attribution with clickable links shown at top of Schema section
+- Doc generator: table names in tables index no longer wrapped in backticks for cleaner display
+- Doc generator: tables that exist only in `table_schemas.csv` now get their own documentation pages with schema information
+
+**Solution Dependencies:**
+- New `solution_dependencies.csv` mapping file tracking both explicit and ASIM-based dependencies between solutions
+- Explicit dependencies extracted from `dependentDomainSolutionIds` in solution definitions
+- ASIM-based dependencies (optional): solutions using ASIM parsers list all solutions whose connectors can feed those parsers as potential dependencies
+- Doc generator: new **Dependencies** section on solution pages listing dependency solutions with type and details
+- Doc generator: dependency connectors appended to the connectors list with "(dependency on solution X)" suffix
+- Doc generator: dependency tables included in the tables section with "(dependency)" suffix on connector names
+- Uploader: new CSV included in `--solution-analyzer` mode
+
+**CCF (Legacy) Collection Method:**
+- New `CCF (Legacy)` collection method for connectors with embedded `pollingConfig` in their primary ARM template and no separate CCF config file
+- Capabilities (auth type, paging, POST) extracted from embedded `pollingConfig` for legacy CCF connectors
+- Improved `find_ccf_config_file()` detection: now finds `connectors.json` (Bitwarden-style) and searches sibling `*_ccp/` subdirectories (GCP-style)
+
+**CCF Capabilities Statistics:**
+- New **CCF Capabilities** subsection on the statistics page with breakdown of connector kind, authentication methods, and request features across all CCF/CCF Push/CCF Legacy connectors
+- New `Nested` capability: detects `stepType: Nested` in CCF config files
+- Improved `MvExpand` detection: now uses `nestedTransformName` containing `MvExpandTransformer` instead of text-based search
+
+**Custom Log Table Rules (collect_table_info.py):**
+- All `_CL` tables now correctly marked as supporting Ingestion API
+- `_CL` tables with lake-only support now also marked as supporting transformations
+
+**Bug Fixes:**
+- Fixed empty Product column in ASIM union parser pages (e.g., `imDns`): sub-parsers listed with `_Im_` prefix now correctly resolve product names and page links from `_ASim_` source parser data
+- Excluded empty parsers (e.g., `_Im_Dns_Empty`, `_Im_AlertEvent_Empty`) from the Products table on union parser pages
+- Fixed broken links to sub-parser pages on union parser pages: `_Im_` prefixed sub-parsers now correctly link to their `_ASim_` parser page files
+
+### v7.9.1 - CCF Push and CCF Capabilities
+
+**CCF Push Collection Method:**
+- New collection method `CCF Push` for connectors using CCF in push mode (partner pushes data via DCR/DCE)
+- `DeployPushConnectorButton` + `HasDataConnectors` pattern now classified as "CCF Push" instead of "CCF"
+- Separate documentation page and metadata for CCF Push in generated docs
+
+**CCF Configuration and Capabilities:**
+- New `ccf_config_file` column in `connectors.csv`: GitHub URL to the CCF configuration file (polling/poller/push config)
+- New `ccf_capabilities` column in `connectors.csv`: semicolon-separated capabilities extracted from the config JSON
+- Capabilities include: connector kind (GCP, Push, etc.), auth type (APIKey, OAuth2, Basic, JwtToken), Paging, POST, MvExpand
+- Connector detail pages in generated docs now display **CCF Configuration** link and **CCF Capabilities** for CCF/CCF Push connectors
+
+### v7.9 - Kusto Uploader
+
+**New Tool: `upload_to_kusto.py`**
+- Upload CSV files to Azure Data Explorer (Kusto) clusters
+- **Solution Analyzer mode** (`--solution-analyzer`): uploads all 10 Solution Analyzer CSVs with predefined table names
+- **Custom CSV mode**: upload any CSV files with automatic schema detection
+- **Local source directory** (`--source-dir`): read Solution Analyzer CSVs from a local folder instead of downloading from GitHub
+- **Dry run mode** (`--dry-run`): preview operations before executing
+- Uses Azure CLI authentication and Kusto queued ingestion
+- All columns created as `string` type with automatic CSV mapping
 
 ### v7.8 - Lake-Only Ingestion, Collection Methods Index, and Enhanced Documentation
 

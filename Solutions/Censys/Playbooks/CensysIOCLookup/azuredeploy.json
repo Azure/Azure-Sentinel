@@ -1,0 +1,1813 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Censys Ad-Hoc IOC Lookup",
+        "description": "This playbook will be triggered from the workbook. This will fetch associated IPs, Host(Domains) and SHAs from user input provided in the Ad-Hoc IOC Lookup Dashboard and make API calls to retrieve Censys data and display data in the dashboard.",
+        "prerequisites": [
+            "1. Obtain a Censys API token and store it in Azure Key Vault as a secret named 'Censys-Access-Token'.",
+            "2. Obtain the Censys Organization ID from your Censys platform account.",
+            "3. Create or identify an Azure Key Vault and note its name and Tenant ID.",
+            "4. Ensure you have a Log Analytics Workspace configured for Microsoft Sentinel.",
+            "5. Deploy the Censys Ad Hoc IOC Lookup workbook to use this playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select Key Vault connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for Log Analytics Data Collector connection",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity to read secrets from Key Vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select Get and List permissions for Secrets. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create."
+        ],
+        "entities": [
+            "IP",
+            "DNS",
+            "FileHash"
+        ],
+        "tags": [
+            "Enrichment",
+            "Censys"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Censys"
+        },
+        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CensysIOCLookup",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook. Do not change this value."
+            }
+        },
+        "OrganizationID": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Censys Organization ID from the Censys platform account settings"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Azure Key Vault where the Censys API token is stored as a secret named 'Censys-Access-Token'"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal → Azure AD → Overview"
+            }
+        }
+    },
+    "variables": {
+        "Keyvault-ConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]",
+        "Azureloganalyticsdatacollector-ConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "indicator_type": {
+                                            "type": "string"
+                                        },
+                                        "indicator_value": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Error_Variables": {
+                            "runAfter": {
+                                "Initialize_API_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fetch_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "error_message",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "ingestion_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "ingestion_error_message",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "break_loop",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_API_Variables": {
+                            "runAfter": {
+                                "Condition_for_Indicator_Value_not_Available": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "https://api.platform.censys.io"
+                                    },
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3"
+                                    },
+                                    {
+                                        "name": "org_id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('OrganizationID'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Data_Variables": {
+                            "runAfter": {
+                                "Initialize_Error_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_data",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "web_property_data",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "certificate_data",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "web_property_vuln_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "web_property_threat_data",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Table_Names": {
+                            "runAfter": {
+                                "Initialize_Data_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_ioc_table",
+                                        "type": "string",
+                                        "value": "Censys_Host_IOC_CL"
+                                    },
+                                    {
+                                        "name": "host_ioc_services_table",
+                                        "type": "string",
+                                        "value": "Censys_Host_Services_CL"
+                                    },
+                                    {
+                                        "name": "web_property_ioc_table",
+                                        "type": "string",
+                                        "value": "Censys_Web_Property_IOC_CL"
+                                    },
+                                    {
+                                        "name": "web_property_ioc_vuln_table",
+                                        "type": "string",
+                                        "value": "Censys_Web_Property_Vuln_CL"
+                                    },
+                                    {
+                                        "name": "web_property_ioc_endpoint_table",
+                                        "type": "string",
+                                        "value": "Censys_Web_Property_Endpoint_CL"
+                                    },
+                                    {
+                                        "name": "web_property_ioc_threat_table",
+                                        "type": "string",
+                                        "value": "Censys_Web_Property_Threat_CL"
+                                    },
+                                    {
+                                        "name": "certificate_ioc_table",
+                                        "type": "string",
+                                        "value": "Censys_Certificate_IOC_CL"
+                                    }
+                                ]
+                            }
+                        },
+                        "Get_Censys_API_Token": {
+                            "runAfter": {
+                                "Initialize_Table_Names": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault-1']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Censys-Access-Token')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data": {
+                            "actions": {
+                                "Terminate_Due_to_Error_While_Fetching_Data": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "message": "@string(variables('error_message'))"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Retry_Count_is_Zero_or_Flag_is_False": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('fetch_error')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_for_Indicator_Value_not_Available": {
+                            "actions": {
+                                "Terminate_Due_To_Indicator_Not_Found": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "message": "Indicator Value Not Found in Request"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(triggerBody()?['indicator_value'])",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Until_Retry_Count_is_Zero_or_Flag_is_False": {
+                            "actions": {
+                                "Case_For_Indicator_Type": {
+                                    "cases": {
+                                        "Case_For_Host": {
+                                            "case": "Host",
+                                            "actions": {
+                                                "HTTP_Request_To_Fetch_Host_Details": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/host/@{triggerBody()?['indicator_value']}",
+                                                        "method": "GET",
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
+                                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                                        },
+                                                        "queries": {
+                                                            "organization_id": "@{variables('org_id')}"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_For_200_Status_Code_For_Host": {
+                                                    "actions": {
+                                                        "Parse_JSON_for_Host_Response": {
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('HTTP_Request_To_Fetch_Host_Details')",
+                                                                "schema": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "result": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "extensions": {
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "resource": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "autonomous_system": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "dns": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ],
+                                                                                            "properties": {
+                                                                                                "forward_dns": {
+                                                                                                    "type": [
+                                                                                                        "object",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "names": {
+                                                                                                    "type": [
+                                                                                                        "array",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "reverse_dns": {
+                                                                                                    "type": [
+                                                                                                        "object",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "hardware": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "ip": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "labels": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "location": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "operating_system": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "service_count": {
+                                                                                            "type": [
+                                                                                                "integer",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "services": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "whois": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Condition_If_Response_Is_Empty_or_Not": {
+                                                            "actions": {},
+                                                            "runAfter": {
+                                                                "Set_Break_Loop_True_When_Status_is_200_For_Host": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Send_Host_Data_To_Log_Analytics": {
+                                                                        "runAfter": {
+                                                                            "Set_Host_Data_Variable_To_Ingest": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "body": "@{variables('host_data')}",
+                                                                            "headers": {
+                                                                                "Log-Type": "@variables('host_ioc_table')"
+                                                                            },
+                                                                            "path": "/api/logs"
+                                                                        }
+                                                                    },
+                                                                    "Condition_For_Host_Data_Ingestion_is_Success_or_Not": {
+                                                                        "actions": {},
+                                                                        "runAfter": {
+                                                                            "Send_Host_Data_To_Log_Analytics": [
+                                                                                "Succeeded",
+                                                                                "Failed",
+                                                                                "TimedOut"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Set_Ingestion_Error_Host": {
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error",
+                                                                                        "value": true
+                                                                                    }
+                                                                                },
+                                                                                "Set_Ingestion_Error_Message_Host": {
+                                                                                    "runAfter": {
+                                                                                        "Set_Ingestion_Error_Host": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error_message",
+                                                                                        "value": "@{body('Send_Host_Data_To_Log_Analytics')}"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@outputs('Send_Host_Data_To_Log_Analytics')?['statusCode']",
+                                                                                        200
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_if_Field_List_is_Empty_or_Not_-_Services": {
+                                                                        "actions": {},
+                                                                        "runAfter": {
+                                                                            "Compose_Host_Field_-_Services": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Send_Host_Field_Data_-_Services": {
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": "@{outputs('Compose_Host_Field_-_Services')}",
+                                                                                        "headers": {
+                                                                                            "Log-Type": "@variables('host_ioc_services_table')"
+                                                                                        },
+                                                                                        "path": "/api/logs"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@empty(body('Parse_JSON_for_Host_Response')?['result']?['resource']?['services'])",
+                                                                                        true
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Compose_Host_Field_-_Services": {
+                                                                        "type": "Compose",
+                                                                        "inputs": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['services']"
+                                                                    },
+                                                                    "Set_Host_Data_Variable_To_Ingest": {
+                                                                        "runAfter": {
+                                                                            "Condition_if_Field_List_is_Empty_or_Not_-_Services": [
+                                                                                "Succeeded",
+                                                                                "Failed"
+                                                                            ]
+                                                                        },
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "host_data",
+                                                                            "value": {
+                                                                                "autonomous_system": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['autonomous_system']",
+                                                                                "dns": {
+                                                                                    "forward_dns": "@array(body('Parse_JSON_for_Host_Response')?['result']?['resource']?['dns']?['forward_dns'])",
+                                                                                    "names": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['dns']?['names']",
+                                                                                    "reverse_dns": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['dns']?['reverse_dns']"
+                                                                                },
+                                                                                "hardware": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['hardware']",
+                                                                                "ip": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['ip']",
+                                                                                "labels": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['labels']",
+                                                                                "location": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['location']",
+                                                                                "operating_system": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['operating_system']",
+                                                                                "service_count": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['service_count']",
+                                                                                "services": [],
+                                                                                "whois": "@body('Parse_JSON_for_Host_Response')?['result']?['resource']?['whois']"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@empty(body('Parse_JSON_for_Host_Response')?['result']?['resource'])",
+                                                                            true
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_Break_Loop_True_When_Status_is_200_For_Host": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_for_Host_Response": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "HTTP_Request_To_Fetch_Host_Details": [
+                                                            "Succeeded",
+                                                            "Failed",
+                                                            "TimedOut"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Host_Fetch_Error_True": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "fetch_error",
+                                                                    "value": true
+                                                                }
+                                                            },
+                                                            "Set_Host_Fetch_Error_Message": {
+                                                                "runAfter": {
+                                                                    "Set_Host_Fetch_Error_True": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "error_message",
+                                                                    "value": "@body('HTTP_Request_To_Fetch_Host_Details')"
+                                                                }
+                                                            },
+                                                            "Condition_To_Check_Other_Status_Codes_For_Host": {
+                                                                "actions": {
+                                                                    "Set_Break_Loop_True_For_Other_Status_Code_For_Host": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "break_loop",
+                                                                            "value": true
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Set_Host_Fetch_Error_Message": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {}
+                                                                },
+                                                                "expression": {
+                                                                    "or": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Host_Details')?['statusCode']",
+                                                                                401
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Host_Details')?['statusCode']",
+                                                                                403
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Host_Details')?['statusCode']",
+                                                                                404
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Host_Details')?['statusCode']",
+                                                                                422
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP_Request_To_Fetch_Host_Details')?['statusCode']",
+                                                                    200
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_Web_Property": {
+                                            "case": "Web Property",
+                                            "actions": {
+                                                "HTTP_Request_To_Fetch_Web_Property_Details": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/webproperty/@{triggerBody()?['indicator_value']}",
+                                                        "method": "GET",
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
+                                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                                        },
+                                                        "queries": {
+                                                            "organization_id": "@{variables('org_id')}"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_For_200_Status_Code_For_Web_Property": {
+                                                    "actions": {
+                                                        "Parse_JSON_for_Web_Property_Response": {
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('HTTP_Request_To_Fetch_Web_Property_Details')",
+                                                                "schema": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "result": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "extensions": {
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "resource": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "cert": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "endpoints": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "exposures": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "hardware": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "hostname": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "jarm": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "labels": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "misconfigs": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "operating_systems": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "port": {
+                                                                                            "type": [
+                                                                                                "integer",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "scan_time": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "software": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "threats": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "tls": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "vulns": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Condition_If_Response_Is_Empty_or_Not_For_Web_Property": {
+                                                            "actions": {},
+                                                            "runAfter": {
+                                                                "Set_Break_Loop_True_When_Status_is_200_For_Web_Property": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Send_Web_Property_Data_To_Log_Analytics": {
+                                                                        "runAfter": {
+                                                                            "Set_Web_Property_Data_Variable_To_Ingest": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "body": "@{variables('web_property_data')}",
+                                                                            "headers": {
+                                                                                "Log-Type": "@variables('web_property_ioc_table')"
+                                                                            },
+                                                                            "path": "/api/logs"
+                                                                        }
+                                                                    },
+                                                                    "Condition_For_Web_Property_Data_Ingestion_is_Success_or_Not": {
+                                                                        "actions": {},
+                                                                        "runAfter": {
+                                                                            "Send_Web_Property_Data_To_Log_Analytics": [
+                                                                                "Succeeded",
+                                                                                "TimedOut",
+                                                                                "Failed"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Set_Ingestion_Error_Web_Property": {
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error",
+                                                                                        "value": true
+                                                                                    }
+                                                                                },
+                                                                                "Set_Ingestion_Error_Message_Web_Property": {
+                                                                                    "runAfter": {
+                                                                                        "Set_Ingestion_Error_Web_Property": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error_message",
+                                                                                        "value": "@{body('Send_Web_Property_Data_To_Log_Analytics')}"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@outputs('Send_Web_Property_Data_To_Log_Analytics')?['statusCode']",
+                                                                                        200
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Set_Web_Property_Data_Variable_To_Ingest": {
+                                                                        "runAfter": {
+                                                                            "Condition_if_Field_List_is_Empty_or_Not_-_Endpoints": [
+                                                                                "Succeeded",
+                                                                                "Failed"
+                                                                            ],
+                                                                            "Condition_if_Field_List_is_Empty_or_Not_-_Vulns": [
+                                                                                "Succeeded",
+                                                                                "Failed"
+                                                                            ],
+                                                                            "Condition_if_Field_List_is_Empty_or_Not_-_Threat": [
+                                                                                "Succeeded",
+                                                                                "Failed"
+                                                                            ]
+                                                                        },
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "web_property_data",
+                                                                            "value": {
+                                                                                "cert": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['cert']",
+                                                                                "endpoints": [],
+                                                                                "hostname": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['hostname']",
+                                                                                "labels": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['labels']",
+                                                                                "port": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['port']",
+                                                                                "scan_time": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['scan_time']",
+                                                                                "software": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['software']",
+                                                                                "threats": [],
+                                                                                "vulns": []
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "Condition_if_Field_List_is_Empty_or_Not_-_Endpoints": {
+                                                                        "actions": {},
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Send_Web_Property_Field_Data_-_Endpoint": {
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['endpoints']",
+                                                                                        "headers": {
+                                                                                            "Log-Type": "@variables('web_property_ioc_endpoint_table')"
+                                                                                        },
+                                                                                        "path": "/api/logs"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@empty(body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['endpoints'])",
+                                                                                        true
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_if_Field_List_is_Empty_or_Not_-_Vulns": {
+                                                                        "actions": {},
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Send_Web_Property_Field_Data_-_Vulns": {
+                                                                                    "runAfter": {
+                                                                                        "For_Each_Vulns": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": "@{variables('web_property_vuln_data')}",
+                                                                                        "headers": {
+                                                                                            "Log-Type": "@variables('web_property_ioc_vuln_table')"
+                                                                                        },
+                                                                                        "path": "/api/logs"
+                                                                                    }
+                                                                                },
+                                                                                "For_Each_Vulns": {
+                                                                                    "foreach": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['vulns']",
+                                                                                    "actions": {
+                                                                                        "Add_Hostname_In_Vuln_Data": {
+                                                                                            "type": "AppendToArrayVariable",
+                                                                                            "inputs": {
+                                                                                                "name": "web_property_vuln_data",
+                                                                                                "value": "@setProperty(setProperty(items('For_Each_Vulns'), 'port', body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['port']), 'hostname', body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['hostname'])"
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "Foreach",
+                                                                                    "runtimeConfiguration": {
+                                                                                        "concurrency": {
+                                                                                            "repetitions": 50
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@empty(body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['vulns'])",
+                                                                                        true
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Condition_if_Field_List_is_Empty_or_Not_-_Threat": {
+                                                                        "actions": {},
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Send_Web_Property_Field_Data_-_Threat": {
+                                                                                    "runAfter": {
+                                                                                        "For_Each_Threats": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": "@{variables('web_property_threat_data')}",
+                                                                                        "headers": {
+                                                                                            "Log-Type": "@variables('web_property_ioc_threat_table')"
+                                                                                        },
+                                                                                        "path": "/api/logs"
+                                                                                    }
+                                                                                },
+                                                                                "For_Each_Threats": {
+                                                                                    "foreach": "@body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['threats']",
+                                                                                    "actions": {
+                                                                                        "Add_Hostname_In_Threat_Data": {
+                                                                                            "type": "AppendToArrayVariable",
+                                                                                            "inputs": {
+                                                                                                "name": "web_property_threat_data",
+                                                                                                "value": "@setProperty(setProperty(items('For_Each_Threats'), 'port', body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['port']), 'hostname', body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['hostname'])"
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "Foreach"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@empty(body('Parse_JSON_for_Web_Property_Response')?['result']?['resource']?['threats'])",
+                                                                                        true
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@empty(body('Parse_JSON_for_Web_Property_Response')?['result'])",
+                                                                            true
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_Break_Loop_True_When_Status_is_200_For_Web_Property": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_for_Web_Property_Response": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "HTTP_Request_To_Fetch_Web_Property_Details": [
+                                                            "Succeeded",
+                                                            "Failed",
+                                                            "TimedOut"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Web_Property_Fetch_Error_True": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "fetch_error",
+                                                                    "value": true
+                                                                }
+                                                            },
+                                                            "Set_Web_Property_Fetch_Error_Message": {
+                                                                "runAfter": {
+                                                                    "Set_Web_Property_Fetch_Error_True": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "error_message",
+                                                                    "value": "@body('HTTP_Request_To_Fetch_Web_Property_Details')"
+                                                                }
+                                                            },
+                                                            "Condition_To_Check_Other_Status_Codes_For_Web_Property": {
+                                                                "actions": {
+                                                                    "Set_Break_Loop_True_For_Other_Status_Code_For_Web_Property": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "break_loop",
+                                                                            "value": true
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Set_Web_Property_Fetch_Error_Message": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {}
+                                                                },
+                                                                "expression": {
+                                                                    "or": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Web_Property_Details')?['statusCode']",
+                                                                                401
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Web_Property_Details')?['statusCode']",
+                                                                                403
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Web_Property_Details')?['statusCode']",
+                                                                                404
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Web_Property_Details')?['statusCode']",
+                                                                                422
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP_Request_To_Fetch_Web_Property_Details')?['statusCode']",
+                                                                    200
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_Certificates": {
+                                            "case": "Certificate",
+                                            "actions": {
+                                                "HTTP_Request_To_Fetch_Certificate_Details": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/certificate/@{triggerBody()?['indicator_value']}",
+                                                        "method": "GET",
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
+                                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                                        },
+                                                        "queries": {
+                                                            "organization_id": "@{variables('org_id')}"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Condition_For_200_Status_Code_For_Certificate": {
+                                                    "actions": {
+                                                        "Parse_JSON_for_Certificate_Response": {
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('HTTP_Request_To_Fetch_Certificate_Details')",
+                                                                "schema": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "result": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "extensions": {
+                                                                                    "type": [
+                                                                                        "object",
+                                                                                        "null"
+                                                                                    ]
+                                                                                },
+                                                                                "resource": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "added_at": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "ct": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "ever_seen_in_scan": {
+                                                                                            "type": [
+                                                                                                "boolean",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "fingerprint_md5": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "fingerprint_sha1": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "modified_at": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "names": {
+                                                                                            "type": [
+                                                                                                "array",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "parent_spki_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "parent_spki_subject_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "parse_status": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "parsed": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "precert": {
+                                                                                            "type": [
+                                                                                                "boolean",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "revocation": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "revoked": {
+                                                                                            "type": [
+                                                                                                "boolean",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "spki_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "spki_subject_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "tbs_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "tbs_no_ct_fingerprint_sha256": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "validated_at": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "validation": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "validation_level": {
+                                                                                            "type": [
+                                                                                                "string",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        },
+                                                                                        "zlint": {
+                                                                                            "type": [
+                                                                                                "object",
+                                                                                                "null"
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Condition_If_Response_Is_Empty_or_Not_For_Certificate": {
+                                                            "actions": {},
+                                                            "runAfter": {
+                                                                "Set_Break_Loop_True_When_Status_is_200_For_Certificate": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Send_Certificate_Data_To_Log_Analytics": {
+                                                                        "runAfter": {
+                                                                            "Set_Certificate_Data_Variable_To_Ingest": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['Azureloganalyticsdatacollector']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "body": "@{variables('certificate_data')}",
+                                                                            "headers": {
+                                                                                "Log-Type": "@variables('certificate_ioc_table')"
+                                                                            },
+                                                                            "path": "/api/logs"
+                                                                        }
+                                                                    },
+                                                                    "Condition_For_Certificate_Data_Ingestion_is_Success_or_Not": {
+                                                                        "actions": {},
+                                                                        "runAfter": {
+                                                                            "Send_Certificate_Data_To_Log_Analytics": [
+                                                                                "Succeeded",
+                                                                                "TimedOut",
+                                                                                "Failed"
+                                                                            ]
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Set_Ingestion_Error_Certificate": {
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error",
+                                                                                        "value": true
+                                                                                    }
+                                                                                },
+                                                                                "Set_Ingestion_Error_Message_Certificate": {
+                                                                                    "runAfter": {
+                                                                                        "Set_Ingestion_Error_Certificate": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ingestion_error_message",
+                                                                                        "value": "@{body('Send_Certificate_Data_To_Log_Analytics')}"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "equals": [
+                                                                                        "@outputs('Send_Certificate_Data_To_Log_Analytics')?['statusCode']",
+                                                                                        200
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    },
+                                                                    "Set_Certificate_Data_Variable_To_Ingest": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "certificate_data",
+                                                                            "value": {
+                                                                                "fingerprint_md5": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['fingerprint_md5']",
+                                                                                "fingerprint_sha1": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['fingerprint_sha1']",
+                                                                                "fingerprint_sha256": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['fingerprint_sha256']",
+                                                                                "tbs_fingerprint_sha256": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['tbs_fingerprint_sha256']",
+                                                                                "tbs_no_ct_fingerprint_sha256": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['tbs_no_ct_fingerprint_sha256']",
+                                                                                "parsed": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['parsed']",
+                                                                                "validated_at": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['validated_at']",
+                                                                                "validation": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['validation']",
+                                                                                "validation_level": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['validation_level']",
+                                                                                "revocation": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['revocation']",
+                                                                                "added_at": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['added_at']",
+                                                                                "modified_at": "@body('Parse_JSON_for_Certificate_Response')?['result']?['resource']?['modified_at']"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@empty(body('Parse_JSON_for_Certificate_Response')?['result'])",
+                                                                            true
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_Break_Loop_True_When_Status_is_200_For_Certificate": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_for_Certificate_Response": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "HTTP_Request_To_Fetch_Certificate_Details": [
+                                                            "Succeeded",
+                                                            "Failed",
+                                                            "TimedOut"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Certificate_Fetch_Error_True": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "fetch_error",
+                                                                    "value": true
+                                                                }
+                                                            },
+                                                            "Set_Certificate_Fetch_Error_Message": {
+                                                                "runAfter": {
+                                                                    "Set_Certificate_Fetch_Error_True": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "error_message",
+                                                                    "value": "@body('HTTP_Request_To_Fetch_Certificate_Details')"
+                                                                }
+                                                            },
+                                                            "Condition_To_Check_Other_Status_Codes_For_Certificate": {
+                                                                "actions": {
+                                                                    "Set_Break_Loop_True_For_Other_Status_Code_For_Certificate": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "break_loop",
+                                                                            "value": true
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Set_Certificate_Fetch_Error_Message": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {}
+                                                                },
+                                                                "expression": {
+                                                                    "or": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Certificate_Details')?['statusCode']",
+                                                                                401
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Certificate_Details')?['statusCode']",
+                                                                                403
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Certificate_Details')?['statusCode']",
+                                                                                404
+                                                                            ]
+                                                                        },
+                                                                        {
+                                                                            "equals": [
+                                                                                "@outputs('HTTP_Request_To_Fetch_Certificate_Details')?['statusCode']",
+                                                                                422
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('HTTP_Request_To_Fetch_Certificate_Details')?['statusCode']",
+                                                                    200
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                            "Set_Fetch_Error_Flag": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "fetch_error",
+                                                    "value": true
+                                                }
+                                            },
+                                            "Set_Fetch_Error_Message": {
+                                                "runAfter": {
+                                                    "Set_Fetch_Error_Flag": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "error_message",
+                                                    "value": {
+                                                        "message": "Unsupported Indicator Type"
+                                                    }
+                                                }
+                                            },
+                                            "Set_Break_Loop_When_Type_is_Not_Supported": {
+                                                "runAfter": {
+                                                    "Set_Fetch_Error_Message": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "break_loop",
+                                                    "value": true
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": "@triggerBody()?['indicator_type']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Censys_API_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('break_loop'), true)",
+                            "limit": {
+                                "count": 3,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Condition_To_Terminate_if_Any_Error_Occured_While_Ingesting_Data": {
+                            "actions": {
+                                "Terminate_Due_to_Error_While_Ingesting_Data": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "message": "@variables('ingestion_error_message')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('ingestion_error')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault-1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Keyvault-ConnectionName'))]",
+                                "connectionName": "[variables('Keyvault-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {}
+                            },
+                            "Azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Azureloganalyticsdatacollector-ConnectionName'))]",
+                                "connectionName": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]",
+                                "connectionProperties": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "CensysIOCLookup",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Keyvault-ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Azureloganalyticsdatacollector-ConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Keyvault-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Keyvault-ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Azureloganalyticsdatacollector-ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}

@@ -1,4 +1,3 @@
-from .message_factory import MessageFactory
 import re
 
 
@@ -43,9 +42,6 @@ class Formatter:
     }
     DEEP_GUARD_RARITY_REPUTATION_REGEX = "Rarity: (\\d+), Reputation: (\\d+)"
 
-    def __init__(self):
-        self._message_factory = MessageFactory()
-
     def format(self, event):
         engine = event.engine
         result = {
@@ -53,7 +49,7 @@ class Formatter:
             "DeviceEventClassID": f"{engine}.{event.action}",
             "Activity": Formatter.ENGINE_TO_ACTIVITY.get(engine, engine),
             "LogSeverity": Formatter.SEVERITY_TO_INDEX.get(event.severity),
-            "Message": self._message_factory.get_message(event),
+            "Message": event.message,
             "DeviceAction": event.action,
             "SimplifiedDeviceAction": event.action,
             "PersistenceTimestamp": event.persistenceTimestamp,
