@@ -1,5 +1,5 @@
 ---
-applyTo: "Playbooks/**/*.json,Playbooks/**/*.yaml,Playbooks/**/*.yml"
+applyTo: "Playbooks/**/*.json,Playbooks/**/README.md,Solutions/**/Playbooks/**/*.json,Solutions/**/Playbooks/**/README.md"
 ---
 
 # Playbooks Instructions
