@@ -1,10 +1,8 @@
 # Exercise 12 — Data Lake vs Real-Time Detection
 
-**Rule:** `[E7] [Palo Alto] Data Lake Port Diversity Anomaly` _(the `[E7]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1046 (Network Service Discovery)
-**Difficulty:** Intermediate
-**Prerequisites:** Complete [Exercise 11 — Data Lake KQL Jobs](./E11_datalake_kql_jobs.md) first (creates the `PaloAlto_ThreatSummary_KQL_CL` table used by this exercise)
+**Rule:** `Lab Stage E7 - Data Lake Port Diversity Anomaly (Palo Alto)`  
+**Difficulty:** Intermediate  
+**Prerequisites:** Complete [Exercise 11 — Data Lake KQL Jobs](./E11_datalake_kql_jobs.md) first
 
 ---
 
@@ -151,3 +149,9 @@ The second filter adds a bytes constraint — low bytes + many ports = scanning,
 - [Advanced hunting best practices](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-best-practices)
 - [Custom detection rule frequency](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#create-a-custom-detection-rule)
 - [MITRE T1046 — Network Service Discovery](https://attack.mitre.org/techniques/T1046/)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 14 — Sentinel MCP Server Demo Prompts](./E14_MCP.md)**

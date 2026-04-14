@@ -1,13 +1,14 @@
 # Exercise 1 — Exploration: Hunting Across Your Data
 
-**Topic:** Initial data exploration with Advanced Hunting and creating your first Custom Detection Rule
-**Difficulty:** Beginner
+**Topic:** Initial data exploration with Advanced Hunting and creating your first custom detection rule  
+**Difficulty:** Beginner  
+**Prerequisites:** None
 
 ---
 
-### Objective
+## Objective
 
-Get familiar with the data ingested into your Microsoft Sentinel workspace by running **Advanced Hunting** queries across multiple data sources. Then create your own **Custom Detection Rule** based on a pattern you discover.
+Get familiar with the data ingested into your Microsoft Sentinel workspace by running **Advanced Hunting** queries across multiple data sources. Then create your own **custom detection rule** based on a pattern you discover.
 
 ### Background
 
@@ -16,7 +17,7 @@ After deploying the Training Lab solution, your workspace contains telemetry fro
 This exercise teaches two foundational skills:
 
 1. **Data exploration** — navigating tables, understanding schemas, and writing initial KQL queries in Advanced Hunting
-2. **Rule creation** — turning a hunting query into a scheduled Custom Detection Rule
+2. **Rule creation** — turning a hunting query into a scheduled custom detection rule
 
 ---
 
@@ -35,7 +36,7 @@ search *
 ```
 
 <p align="center">
-<img src="../Images/OnboardingImage21.png?raw=true">
+<img src="../Images/OnboardingImage21.png?raw=true" alt="Advanced Hunting query editor in the Defender portal" width="800">
 </p>
 
 This gives you an overview of all tables with data. You should see tables like `CommonSecurityLog`, `AWSCloudTrail`, `CrowdStrikeDetections`, `CrowdStrikeAlerts`, `OktaV2_CL`, `SecurityEvent`, and more.
@@ -210,14 +211,14 @@ Run this query in Advanced Hunting to verify it returns results.
 1. After running the query, select **Create detection rule**
 
 <p align="center">
-<img src="../Images/OnboardingImage22.png?raw=true">
+<img src="../Images/OnboardingImage22.png?raw=true" alt="Custom detection rule creation wizard" width="800">
 </p>
 
 2. Fill in the rule details:
 
 | Field | Value |
 |---|---|
-| **Name** | `[E1] Multi-Tactic Compromise on Single Device` |
+| **Name** | `Lab Stage E1 - Multi-Tactic Compromise on Single Device` |
 | **Description** | `Detects when a single endpoint has CrowdStrike alerts spanning 3 or more MITRE ATT&CK tactics, indicating a multi-stage compromise.` |
 | **Severity** | High |
 | **MITRE ATT&CK** | Leave default (auto-detected) |
@@ -234,13 +235,13 @@ Run this query in Advanced Hunting to verify it returns results.
 6. Select **Create** to save the rule
 
 <p align="center">
-<img src="../Images/OnboardingImage32.png?raw=true">
+<img src="../Images/OnboardingImage32.png?raw=true" alt="Custom detection rules list showing the new rule" width="800">
 </p>
 
 #### Step 9 — Verify the Rule
 
 1. Navigate to **Hunting** → **Custom detection rules**
-2. Find your new rule `[E1] Multi-Tactic Compromise on Single Device`
+2. Find your new rule `Lab Stage E1 - Multi-Tactic Compromise on Single Device`
 3. Click **Run** to execute it immediately
 4. Check **Triggered alerts** to verify the rule fires
 
@@ -261,3 +262,9 @@ Run this query in Advanced Hunting to verify it returns results.
 - [Learn the query language (KQL)](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-query-language)
 - [Custom detection rules](https://learn.microsoft.com/en-us/defender-xdr/custom-detections-overview)
 - [Create a custom detection rule](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 2 — Threat Intelligence: Microsoft Defender Threat Intelligence](./E02_threat_intelligence_mdti.md)**

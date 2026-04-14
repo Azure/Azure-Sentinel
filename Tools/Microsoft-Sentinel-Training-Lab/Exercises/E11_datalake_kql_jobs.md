@@ -27,14 +27,16 @@ The key concept is **data promotion**: KQL jobs take data from the low-cost data
 
 ### How It Fits Into This Lab
 
-The Lab already uses this pattern. The detection rule `[S8] [Palo Alto] Data Lake Promoted Threat` queries the `PaloAlto_ThreatSummary_KQL_CL` table — a table created by a KQL job that aggregates firewall data. In this exercise, you will create that KQL job yourself.
+The Lab already uses this pattern. The detection rule `Lab Stage S8 - Data Lake Promoted Threat (Palo Alto)` queries the `PaloAlto_ThreatSummary_KQL_CL` table — a table created by a KQL job that aggregates firewall data. In this exercise, you will create that KQL job yourself.
+
+> **Naming convention:** Rules prefixed with **Stage #** (e.g., Stage 2, Stage 8) are part of the pre-built attack scenario. Rules prefixed with **Stage S#** are supplementary scenario rules. Rules prefixed with **Stage E#** are exercise rules that students enable or modify during the lab.
 
 | Component | Role |
 |---|---|
 | **Source data** | `CommonSecurityLog` (Palo Alto firewall logs in the data lake) |
 | **KQL job** | Aggregates traffic into source-destination pair summaries |
 | **Output table** | `PaloAlto_ThreatSummary_KQL_CL` (analytics tier) |
-| **Detection rule** | `[S8]` queries the output table for threats |
+| **Detection rule** | `Lab Stage S8 - Data Lake Promoted Threat (Palo Alto)` queries the output table for threats |
 
 ### Data Lake Ingestion Latency
 
@@ -66,7 +68,7 @@ There are two ways to access KQL jobs:
 4. You will see the jobs management page listing any existing KQL jobs
 
 <p align="center">
-<img src="../Images/OnboardingImage10.png?raw=true">
+<img src="../Images/OnboardingImage10.png?raw=true" alt="KQL Jobs page in the Defender portal" width="800">
 </p>
 
 **Option B — From the KQL query editor:**
@@ -77,7 +79,7 @@ There are two ways to access KQL jobs:
 4. Select the **Create job** button in the upper right corner of the query editor
 
 <p align="center">
-<img src="../Images/OnboardingImage11.png?raw=true">
+<img src="../Images/OnboardingImage11.png?raw=true" alt="Create a new KQL job wizard" width="800">
 </p>
 
 ---
@@ -98,7 +100,7 @@ There are two ways to access KQL jobs:
 3. Select **Next**
 
 <p align="center">
-<img src="../Images/OnboardingImage9.png?raw=true">
+<img src="../Images/OnboardingImage9.png?raw=true" alt="KQL job query editor with aggregation query" width="800">
 </p>
 
 
@@ -164,7 +166,7 @@ CommonSecurityLog
 5. Select **Next**
 
 <p align="center">
-<img src="../Images/OnboardingImage12.png?raw=true">
+<img src="../Images/OnboardingImage12.png?raw=true" alt="KQL job schedule configuration" width="800">
 </p>
 
 
@@ -189,7 +191,7 @@ On the **Schedule the query job** page:
 3. Select **Next**
 
 <p align="center">
-<img src="../Images/OnboardingImage13.png?raw=true">
+<img src="../Images/OnboardingImage13.png?raw=true" alt="KQL job output table results" width="800">
 </p>
 
 
@@ -210,7 +212,7 @@ On the **Schedule the query job** page:
 3. The job is scheduled. You can view its status by selecting the link on the confirmation page, or by navigating back to **Microsoft Sentinel** → **Data lake exploration** → **Jobs**
 
 <p align="center">
-<img src="../Images/OnboardingImage14.png?raw=true">
+<img src="../Images/OnboardingImage14.png?raw=true" alt="Querying the promoted PaloAlto_ThreatSummary_KQL_CL table" width="800">
 </p>
 
 ---
@@ -245,7 +247,7 @@ PaloAlto_ThreatSummary_KQL_CL
 
 ### Step 7 — Connect to Detection Rule S8
 
-Now that your KQL job is populating the `PaloAlto_ThreatSummary_KQL_CL` table, the existing detection rule `[S8] [Palo Alto] Data Lake Promoted Threat` will start generating alerts when it finds suspicious aggregated traffic.
+Now that your KQL job is populating the `PaloAlto_ThreatSummary_KQL_CL` table, the existing detection rule `Lab Stage S8 - Data Lake Promoted Threat (Palo Alto)` will start generating alerts when it finds suspicious aggregated traffic.
 
 Review the S8 detection rule query to understand how it consumes the promoted data:
 
@@ -329,3 +331,9 @@ Instead of writing queries from scratch, you can use **built-in job templates** 
 - [KQL queries in the Microsoft Sentinel data lake](https://learn.microsoft.com/en-us/azure/sentinel/datalake/kql-queries)
 - [Microsoft Sentinel data lake overview](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-lake-overview)
 - [Handle ingestion delay in scheduled analytics rules](https://learn.microsoft.com/en-us/azure/sentinel/ingestion-delay)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 12 — Data Lake vs Real-Time Detection](./E12_datalake_port_diversity.md)**

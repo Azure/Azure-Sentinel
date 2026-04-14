@@ -1,11 +1,12 @@
 # Exercise 9 — Cost Management & Ingestion Analysis
 
-**Topic:** Monitor Sentinel costs using Usage tables and the ingestion dashboard
-**Difficulty:** Intermediate
+**Topic:** Monitor Sentinel costs using Usage tables and the ingestion dashboard  
+**Difficulty:** Intermediate  
+**Prerequisites:** None
 
 ---
 
-### Objective
+## Objective
 
 Understand how Microsoft Sentinel billing works, query the **Usage** and **LAIngestionStatus** tables to analyse ingestion volume per table, and learn strategies to control costs.
 
@@ -72,10 +73,10 @@ Usage
     DailyAvgGB = round(sum(Quantity) / 1024 / 30, 3)
     by DataType
 | top 5 by TotalGB
-| extend EstMonthlyCostUSD = round(TotalGB * 4.30, 2) // Approximate pay-as-you-go rate
+| extend EstMonthlyCostUSD = round(TotalGB * 4.30, 2) // Approximate pay-as-you-go rate — check link below for current pricing
 ```
 
-> **Note:** The cost estimate uses an approximate pay-as-you-go rate of $4.30/GB. Your actual rate depends on your pricing tier and region. Check the [Azure pricing calculator](https://azure.microsoft.com/pricing/details/microsoft-sentinel/) for current rates.
+> **Note:** The cost estimate above uses an approximate rate. Your actual rate depends on your pricing tier, commitment tier, and region. Check the [Microsoft Sentinel pricing page](https://azure.microsoft.com/pricing/details/microsoft-sentinel/) for current rates.
 
 In a lab environment, your ingestion is likely small. In production, `CommonSecurityLog` (firewall) and `SecurityEvent` (Windows) are typically the largest tables.
 
@@ -101,26 +102,49 @@ High ingestion latency can delay alert firing. If you see delays above 15 minute
 
 ##### Option A — Cost Management page (Defender portal)
 
-The Defender portal includes a dedicated **Cost management** page with built-in usage reports:
+The Defender portal includes a dedicated **Cost management** page for monitoring data lake tier usage and configuring spending controls:
 
 1. In the Microsoft Defender portal, navigate to **Settings** → **Microsoft Sentinel** → **Cost management**
-2. Review the **Usage reports** section — it shows **Data lake ingestion volume** and **Compute hours consumed** over the current month
-3. Click **Data lake ingestion** to open the full **Usage reports** dashboard
 
-<img src="../Images/OnboardingImage33.png" alt="Cost management overview in the Defender portal showing ingestion volume and compute hours" width="800">
+> **Note:** You need both **Billing Administrator** and **Security Administrator** roles to access this page.
 
-The **Usage reports → Ingestion** tab provides:
+<img src="../Images/OnboardingImage33.png" alt="Cost management page in the Defender portal showing usage summary and threshold policies" width="800">
 
-- **Total GBs ingested** with trend comparison to the previous month
-- **Top 10 tables by volume** — a line chart showing ingestion trends per source table over time
-- A detailed table listing each table name and its total GB ingested
-- Filters by **table name**, **region**, and **time range**
+**Usage summary**
 
-<img src="../Images/OnboardingImage32.png" alt="Usage reports Ingestion tab showing top 10 tables by volume with trend chart" width="800">
+The **Usage** section lets you visualise usage by capability over time:
 
-> **Tip:** Use the **Lake storage** and **Advanced analytics** tabs to review data lake storage costs and compute usage separately.
+- Select a meter from the **Meters** dropdown (e.g., Data lake ingestion, Data lake query, Advanced data insights)
+- Daily usage is displayed for the chosen time range (default: one month)
+- The summary card shows the total usage for the selected period
+- For **Data lake query** and **Advanced data insights**, usage is split between interactive analysis and scheduled analysis
+- A resource table below the chart shows which resources contribute to the selected meter's usage
 
-> **Reference:** [Monitor costs — Usage page](https://learn.microsoft.com/en-us/azure/sentinel/billing-monitor-costs#usage)
+**Threshold Policies (Notifications & Enforcement)**
+
+The **Configure Policies** feature lets you set threshold-based alerts and optionally enforce spending limits on data lake capabilities:
+
+1. Click **Configure Policies** in the top right corner of the Cost management page
+
+<img src="../Images/OnboardingImage37.png" alt="Configure Policies page showing threshold policies for data lake capabilities" width="800">
+
+2. Select the policy you want to edit (e.g., Data Lake Query, Advanced Data Insights)
+3. In the **Edit policy** panel:
+   - Set a **Total threshold** — the usage limit for the capability
+   - Set an **Alert percentage** — when email notifications are sent relative to the threshold (e.g., at 80%)
+   - Optionally enable **Enforcement** — blocks usage after the threshold is exceeded
+
+<img src="../Images/OnboardingImage38.png" alt="Edit policy panel showing threshold, alert percentage, and enforcement toggle" width="800">
+
+| Setting | What it does |
+|---|---|
+| **Total threshold** | The usage cap for the capability |
+| **Alert percentage** | Triggers an email notification to the billing administrator when usage reaches this % of the threshold |
+| **Enforcement** | When enabled, future queries, jobs, or sessions **fail** after the limit is exceeded (users see a "Limit exceeded" error) |
+
+> **Note:** Enforcement is supported for **Data Lake Query** (interactive KQL queries and jobs) and **Advanced Data Insights** (notebook runs and jobs). After a limit is reached, it can take up to 4 hours for enforcement to take effect.
+
+> **Reference:** [Microsoft Sentinel cost management in the Defender portal](https://learn.microsoft.com/en-us/azure/sentinel/billing-monitor-costs#microsoft-sentinel-cost-management-in-the-microsoft-defender-portal)
 
 ##### Option B — Workspace Usage Report workbook
 
@@ -224,3 +248,9 @@ To create this as a Sentinel analytics rule:
 - [Monitor costs for Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/billing-monitor-costs)
 - [Reduce costs for Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/billing-reduce-costs)
 - [Usage table schema reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/usage)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 10 — Table Management: Tiers & Retention](./E10_table_management.md)**

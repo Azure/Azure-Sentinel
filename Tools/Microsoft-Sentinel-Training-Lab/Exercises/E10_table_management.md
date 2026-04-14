@@ -83,7 +83,7 @@ The Lab environment ingests data into the following tables. Understanding which 
 4. The Tables screen lists all tables in your workspace with their current tier and retention settings
 
 <p align="center">
-<img src="../Images/OnboardingImage16.png?raw=true">
+<img src="../Images/OnboardingImage16.png?raw=true" alt="Table management screen in the Defender portal" width="800">
 </p>
 
 
@@ -102,7 +102,7 @@ The Lab environment ingests data into the following tables. Understanding which 
    - **Total retention** — total data lifespan including data lake
 
 <p align="center">
-<img src="../Images/OnboardingImage17.png?raw=true">
+<img src="../Images/OnboardingImage17.png?raw=true" alt="Table details showing tier and retention settings" width="800">
 </p>
 
 Questions to consider:
@@ -127,7 +127,7 @@ In this step, you will extend the analytics retention for a custom table.
 9. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage18.png?raw=true">
+<img src="../Images/OnboardingImage18.png?raw=true" alt="Changing table tier from Analytics to Data Lake" width="800">
 </p>
 
 
@@ -154,7 +154,7 @@ Moving a table to the data lake tier is useful for tables with high ingestion vo
 6. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage19.png?raw=true">
+<img src="../Images/OnboardingImage19.png?raw=true" alt="Retention configuration for a table" width="800">
 </p>
 
 
@@ -171,7 +171,7 @@ Now reverse the change to restore real-time capabilities:
 5. Select **Save**
 
 <p align="center">
-<img src="../Images/OnboardingImage20.png?raw=true">
+<img src="../Images/OnboardingImage20.png?raw=true" alt="Table management confirmation after changes" width="800">
 </p>
 
 
@@ -193,8 +193,8 @@ The tier a table lives in directly affects which detection rules can query it. R
 
 **Practical example from this Lab:**
 
-- The `CommonSecurityLog` table **must** stay in the analytics tier because detection rules like `Lab Stage 3.5 Internal Port Scan` and `Lab Stage 6 Large Data Exfiltration` query it in real time
-- The `PaloAlto_ThreatSummary_KQL_CL` table **must** stay in the analytics tier because the `[S8]` detection rule queries it
+- The `CommonSecurityLog` table **must** stay in the analytics tier because detection rules like `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage 6 - Large Data Exfiltration (Palo Alto)` query it in real time
+- The `PaloAlto_ThreatSummary_KQL_CL` table **must** stay in the analytics tier because the `Lab Stage S8 - Data Lake Promoted Threat (Palo Alto)` detection rule queries it
 - However, `OfficeActivity_CL` could potentially be moved to the data lake tier if no active detection rules reference it, and you could use a KQL job (Exercise 11) to promote relevant data when needed
 
 ---
@@ -213,3 +213,9 @@ The tier a table lives in directly affects which detection rules can query it. R
 - [Manage data tiers and retention in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/manage-data-overview)
 - [Microsoft Sentinel data lake overview](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-lake-overview)
 - [Understand the full billing model for Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/billing)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 11 — Data Lake KQL Jobs](./E11_datalake_kql_jobs.md)**

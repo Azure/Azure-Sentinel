@@ -1,9 +1,8 @@
 # Exercise 6 — Port Scan Detection & Threshold Tuning
 
-**Rule:** `[E2] [Palo Alto] Port Scan Detection` _(the `[E2]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1046 (Network Service Discovery)
-**Difficulty:** Beginner
+**Rule:** `Lab Stage E2 - Port Scan Detection (Palo Alto)`  
+**Difficulty:** Beginner  
+**Prerequisites:** None
 
 ---
 
@@ -132,3 +131,9 @@ The deployed rule already works with a threshold of 20. The extension challenge 
 - [dcount aggregation function](https://learn.microsoft.com/en-us/kusto/query/dcount-aggfunction)
 - [Advanced hunting query best practices](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-best-practices)
 - [MITRE T1046 — Network Service Discovery](https://attack.mitre.org/techniques/T1046/)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 7 — Okta MFA Factor Manipulation](./E07_okta_mfa_manipulation.md)**
