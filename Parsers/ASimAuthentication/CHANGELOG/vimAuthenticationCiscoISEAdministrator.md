@@ -2,7 +2,7 @@
 
 ## Version 0.1.1
 
-- (2026-04-14) Fix mapping HostIP TargetIpAddr - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
+- (2026-04-14) Fix mapping HostIP TargetIpAddr - [PR #14076](https://github.com/Azure/Azure-Sentinel/pull/14076)
 - Fix mapping of AdminIPAddress to SrcIpAddr
 - Add User alias to TargetUsername
 
