@@ -1,0 +1,238 @@
+Parser:
+  Title: Authentication ASIM parser for Palo Alto PAN-OS GlobalProtect
+  Version: '0.1.0'
+  LastUpdated: Apr 06, 2026
+Product:
+  Name: Palo Alto PAN-OS GlobalProtect
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Palo Alto GlobalProtect CEF Fields
+  Link: https://docs.paloaltonetworks.com/strata-logging-service/log-reference/network-logs/network-globalprotect-log/network-globalprotect-cef-fields
+Description: |
+  This ASIM parser supports normalizing Palo Alto PAN-OS GlobalProtect authentication logs from the CommonSecurityLog table to the ASIM Authentication normalized schema. GlobalProtect events include VPN gateway and portal authentication events.
+ParserName: ASimAuthenticationPaloAltoGlobalProtect
+EquivalentBuiltInParser: _ASim_Authentication_PaloAltoGlobalProtect
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Low",
+      "5", "Low",
+      "6", "Medium",
+      "7", "Medium",
+      "8", "Medium",
+      "9", "High",
+      "10", "High",
+      "Informational", "Informational"
+  ];
+  let parser = (disabled: bool=false, pack: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+          and DeviceVendor == "Palo Alto Networks"
+          and DeviceProduct == "PAN-OS"
+          and DeviceEventClassID == "GLOBALPROTECT"
+      | where AdditionalExtensions has_any ("gateway-login", "gateway-logout", "gateway-auth", "portal-auth", "portal-prelogin", "gateway-connected")
+      | parse-kv AdditionalExtensions as (
+          PanOSEventID: string,
+          PanOSStage: string,
+          PanOSLogTimeStamp: string,
+          PanOSAuthMethod: string,
+          PanOSTunnelType: string,
+          PanOSSourceUserName: string,
+          PanOSSourceRegion: string,
+          PanOSEndpointDeviceName: string,
+          PanOSPublicIPv4: string,
+          PanOSPublicIPv6: string,
+          PanOSPrivateIPv4: string,
+          PanOSPrivateIPv6: string,
+          PanOSHostID: string,
+          PanOSGlobalProtectClientVersion: string,
+          PanOSEndpointOSType: string,
+          PanOSEndpointOSVersion: string,
+          PanOSEventStatus: string,
+          PanOSGPGatewayLocation: string,
+          PanOSPortal: string,
+          PanOSLoginDuration: string,
+          PanOSConnectionError: string,
+          PanOSDescription: string,
+          PanOSDeviceSN: string,
+          PanOSVirtualSystem: string
+      ) with (pair_delimiter=";", kv_delimiter="=")
+      | extend EventType = case(
+            PanOSEventID =~ "gateway-login", "Logon",
+            PanOSEventID =~ "gateway-logout", "Logoff",
+            PanOSEventID =~ "gateway-auth", "Logon",
+            PanOSEventID =~ "portal-auth", "Logon",
+            PanOSEventID =~ "portal-prelogin", "Logon",
+            PanOSEventID =~ "gateway-connected", "Logon",
+            ""
+        )
+      | where isnotempty(EventType)
+      | extend LogonMethod = case(
+            PanOSAuthMethod =~ "LDAP", "Username & Password",
+            PanOSAuthMethod =~ "RADIUS", "Username & Password",
+            PanOSAuthMethod =~ "SAML", "Other",
+            PanOSAuthMethod =~ "certificate", "PKI",
+            PanOSAuthMethod =~ "local-database", "Username & Password",
+            PanOSAuthMethod =~ "Kerberos", "Username & Password",
+            PanOSAuthMethod =~ "TACACS+", "Username & Password",
+            PanOSAuthMethod =~ "Cookie", "Other",
+            ""
+        )
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | invoke _ASIM_ResolveSrcFQDN('PanOSEndpointDeviceName')
+      | lookup EventSeverityLookup on LogSeverity
+      | extend EventSeverity = iif(isempty(EventSeverity), "Informational", EventSeverity)
+      | extend
+          EventResult = case(
+              PanOSEventStatus =~ "success", "Success",
+              PanOSEventStatus =~ "failure", "Failure",
+              isnotempty(PanOSConnectionError), "Failure",
+              "Success"
+          ),
+          EventResultDetails = case(
+              PanOSConnectionError has "auth", "No such user or password",
+              PanOSConnectionError has "expired", "Session expired",
+              PanOSConnectionError has "timeout", "Session expired",
+              PanOSConnectionError has "cert", "Incorrect key",
+              PanOSConnectionError has "policy", "Logon violates policy",
+              PanOSConnectionError has "locked", "User locked",
+              PanOSConnectionError has "disabled", "User disabled",
+              isnotempty(PanOSConnectionError), "Other",
+              ""
+          ),
+          TargetUsername = coalesce(SourceUserName, PanOSSourceUserName),
+          SrcIpAddr = coalesce(SourceIP, PanOSPublicIPv4, PanOSPublicIPv6),
+          EventStartTime = coalesce(todatetime(PanOSLogTimeStamp), TimeGenerated),
+          EventMessage = Message,
+          SrcDvcOs = coalesce(PanOSEndpointOSVersion, PanOSEndpointOSType),
+          TargetAppName = coalesce(PanOSPortal, "GlobalProtect"),
+          TargetAppType = "Service",
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "PanOSPortal", PanOSPortal,
+                  "PanOSGPGatewayLocation", PanOSGPGatewayLocation,
+                  "PanOSTunnelType", PanOSTunnelType,
+                  "PanOSGlobalProtectClientVersion", PanOSGlobalProtectClientVersion,
+                  "PanOSLoginDuration", PanOSLoginDuration,
+                  "PanOSHostID", PanOSHostID,
+                  "PanOSSourceRegion", PanOSSourceRegion,
+                  "PanOSVirtualSystem", PanOSVirtualSystem,
+                  "PanOSDescription", PanOSDescription,
+                  "PanOSPublicIPv4", PanOSPublicIPv4,
+                  "PanOSPublicIPv6", PanOSPublicIPv6,
+                  "PanOSPrivateIPv4", PanOSPrivateIPv4,
+                  "PanOSPrivateIPv6", PanOSPrivateIPv6,
+                  "PanOSDeviceSN", PanOSDeviceSN,
+                  "PanOSStage", PanOSStage
+              ),
+              dynamic([])
+          )
+      | project-rename
+          DvcIpAddr = Computer,
+          DvcId = DeviceExternalID,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalUid = ExtID,
+          EventProductVersion = DeviceVersion,
+          EventOriginalSubType = PanOSEventID,
+          EventOriginalResultDetails = PanOSConnectionError,
+          LogonProtocol = PanOSTunnelType,
+          TargetIpAddr = DestinationIP,
+          EventUid = _ResourceId
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Dst = TargetIpAddr,
+          Src = coalesce(SrcFQDN, SrcHostname, SrcIpAddr),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          User = TargetUsername,
+          IpAddr = SrcIpAddr,
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          Application = TargetAppName,
+          DvcAction = iff(EventResult == "Success", "Allowed", "Blocked"),
+          TargetHostname = DvcHostname,
+          TargetDomain = DvcDomain,
+          TargetDomainType = DvcDomainType,
+          EventSubType = "Remote",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.4",
+          EventProduct = "PAN-OS",
+          EventVendor = "Palo Alto",
+          Type = "CommonSecurityLog",
+          EventCount = int(1)
+      | project
+          TimeGenerated,
+          EventType,
+          EventResult,
+          EventResultDetails,
+          EventOriginalResultDetails,
+          EventMessage,
+          EventStartTime,
+          EventEndTime,
+          EventCount,
+          EventSeverity,
+          EventOriginalSeverity,
+          EventOriginalType,
+          EventOriginalSubType,
+          EventOriginalUid,
+          EventSubType,
+          EventProduct,
+          EventProductVersion,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventUid,
+          Dvc,
+          DvcIpAddr,
+          DvcId,
+          DvcIdType,
+          DvcHostname,
+          DvcDomain,
+          DvcFQDN,
+          DvcDomainType,
+          TargetUsername,
+          TargetUsernameType,
+          TargetUserType,
+          User,
+          TargetAppName,
+          TargetAppType,
+          TargetIpAddr,
+          Dst,
+          SrcIpAddr,
+          SrcHostname,
+          SrcDomain,
+          SrcFQDN,
+          SrcDomainType,
+          SrcDvcOs,
+          Src,
+          IpAddr,
+          LogonMethod,
+          LogonProtocol,
+          Application,
+          DvcAction,
+          TargetHostname,
+          TargetDomain,
+          TargetDomainType,
+          AdditionalFields,
+          Type
+  };
+  parser(disabled=disabled, pack=pack)
