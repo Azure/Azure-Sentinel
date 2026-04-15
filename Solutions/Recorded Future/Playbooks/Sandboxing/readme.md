@@ -2,11 +2,19 @@
 
 More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
 
+### Configure API keys
 The Recorded Future Sandbox integration requires an API key for `Recorded Future Sandbox for Microsoft Sentinel`. **Note**: this is different from the one used in the `Recorded Future for Microsoft Sentinel` integration.
 
-If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Sandbox API token`.
+If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 
 Refer to [Recorded Future API Key](../readme.md#recorded-future-api-key) for guidance on obtaining and using the necessary API keys.
+
+### Configure Sandbox region
+Recorded Future has multiple sandbox regions available. By default, the playbooks will submit to the `us` sandbox.
+But you can configure this in the logic apps by changing the parameter `SandboxRegion` to one of the following values:
+* `eu` (default)
+* `us`
+* `apj`
 
 ## **Malware Sandbox Analysis**
 

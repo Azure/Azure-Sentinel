@@ -25,7 +25,7 @@ Recorded Future requires API keys to communicate with our API. To obtain API key
 
 The Recorded Future Sandbox integration requires an API key for `Recorded Future Sandbox for Microsoft Sentinel`. **Note**: this is different from the one used in the `Recorded Future for Microsoft Sentinel` integration.
 
-If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Sandbox API token`.
+If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 
 <details>
 <summary>Expand to see API request form</summary>
