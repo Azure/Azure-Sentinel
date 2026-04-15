@@ -36,7 +36,7 @@ Look for incidents created by the lab's detection rules. You should see incident
 
 - `Lab Stage 3.5 - Internal port scan detected (Palo Alto)`
 - `Lab Stage 6 - Large data exfiltration to external IP (Palo Alto)`
-- `Lab Stage 4 - Account takeover (Okta)`
+- `Lab Stage 4 - Account Takeover Chain (Okta)`
 
 ![Sentinel incidents list](../Images/OnboardingImage29.png?raw=true)
 
