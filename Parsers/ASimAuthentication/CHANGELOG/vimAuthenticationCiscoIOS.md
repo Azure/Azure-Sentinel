@@ -4,6 +4,7 @@
 
 - (2026-04-14) Add mapping of HostName to TargetIpAddr if HostName is an IPv4 address - [PR #14077](https://github.com/Azure/Azure-Sentinel/pull/14077)
 - Add User alias
+- Remove TargetHostname mapping from HostName
 
 ## Version 0.1.0
 
