@@ -240,6 +240,7 @@ After deployment - create/validate the Connections in each of deployed Playbooks
 
 <img src="./images/playbookauth2.png" alt="Logic Apps Parameters #1" width="70%"/>
 
+After all the Connections are created/validated, it's important to enable the Logic App.
 
 <a id="API-connector-authorization"></a>
 ### API connector authorization
@@ -250,8 +251,9 @@ The Recorded Future identity solution uses the following connectors, some are re
 | **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
-| **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id)
-| **/azuresentinel** (Optional)| <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors </a> |
+| **/azureloganalyticsdatacollector** (Optional) | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id) |
+|**/azuremonitorlogs** (Optional)| <a href="https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/" target="_blank">Documentation on Microsoft azure monitor logs</a>
+| **/azuresentinel** - DEPRECATED (Optional)| <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors </a> |
 
 
 Each installed Logic App uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type.
@@ -320,7 +322,7 @@ These steps will be needed for each Logic App that uses the **azuresentinel** / 
 
 </details>
 <details>
-<summary>Expand to see azureloganalyticsdatacollector managed identity authorization guide</summary>
+<summary>Expand to see azureloganalyticsdatacollector/azuremonitorlogs managed identity authorization guide</summary>
 
 <br>
 
@@ -371,6 +373,7 @@ The playbook parameters can be found and set in the Logic App designer:
 | **save_to_log_analytics_workspace** |(Optional, requires Log Analytics Workspace) - Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
 | **create_incident** | **DEPRECATED** - (Optional, requires Microsoft Sentinel) - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
 |**playbook_alert_log_analytics_custom_log_name**| (Optional, requires Log Analytics Workspace) - Name of custom log where detailed Playbook Alert lookup information will be stored. Defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`|
+|**log_analytics_workspace_name**| (Optional, required for Log Analytics Workspace) - Name of the workspace where the logs should be saved.|
 
 
 <br/>
@@ -423,6 +426,8 @@ To change/add actions, modify the items under `added_actions_taken` parameter in
 
 Following changes made by Microsoft, removing the possibility to create incidents via Logic Apps, we now provide the following analytic rules. For these to work out of the box, it's important that the `Custom Log Names` in the corresponding Logic Apps are used.
 
+It's important that the logic app has at least one run ___before___ deploying the analytic rule, since the analytic rule **requires** that the custom log table with **all** used fields are created. This is done at the first run of the `RFI-Playbook-Alert-Importer-LAW` playbook.
+
 There is a general limitation of ***3*** fields in the alert description. More information is available in Log Analytics Workspace.
 
 |Use Case|Analytic Rule|Custom Log Name
@@ -440,6 +445,10 @@ Microsoft Entra ID Protection is a premium feature. You need an Microsoft Entra 
 
 #### Playbook Alert set to resolved but not added to Security Group
 When the user that authorizes the Entra ID connector can search for a user in Entra ID, but lacks sufficient privileges to add the user to a group (e.g, same organization, but no permissions to modify users) there can be a scenario where the Logic App does not fail, and the Playbook Alert is incorrectly set to resolve, even if no remediation action has been done. A possible remediation can be that the user which authorizes the Entra ID connector has sufficient privileges to modify all users in  a organization.
+
+
+#### Custom log table RecordedFutureIdentity_PlaybookAlertResults_CL is not created
+This can occur when the user authorizing the **azureloganalyticsdatacollector** connection in the playbook does not have sufficient permissions. Unfortunately the action will display `Success` even though the table never was created. If this happens, please review permissions. See [API connector authorization](readme#api-connector-authorization) for more information.
 
 <a id="useful_documentation"></a>
 ## Useful Azure documentation
