@@ -582,6 +582,210 @@
                                                                             "Succeeded"
                                                                         ]
                                                                     }
+                                                                },
+                                                                "Post_user_unblock_option": {
+                                                                    "type": "ApiConnectionWebhook",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "body": {
+                                                                            "notificationUrl": "@{listCallbackUrl()}",
+                                                                            "body": {
+                                                                                "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.4\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Option to unblock SAP ERP user @{variables('SAP_User')} on system @{variables('SidGuid')}\",\n            \"size\": \"Medium\",\n            \"weight\": \"Bolder\",\n            \"wrap\": true\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Unblock user\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"unlockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"unlock\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ]\n}",
+                                                                                "updateMessage": "Unblock window closed. Review the incident manually if the account should be re-enabled.",
+                                                                                "recipient": {
+                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Close_Sentinel_incident": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "limit": {
+                                                                        "timeout": "PT30M"
+                                                                    }
+                                                                },
+                                                                "Parse_unblock_response": {
+                                                                    "type": "ParseJson",
+                                                                    "inputs": {
+                                                                        "content": "@body('Post_user_unblock_option')",
+                                                                        "schema": {
+                                                                            "properties": {
+                                                                                "data": {
+                                                                                    "properties": {
+                                                                                        "unlockComment": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "messageId": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "submitActionId": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Post_user_unblock_option": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "Condition_unblock_chosen": {
+                                                                    "type": "If",
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@body('Parse_unblock_response')?['submitActionId']",
+                                                                                    "unlock"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "actions": {
+                                                                        "Get_OAuth_token_for_SAP_unblock": {
+                                                                            "type": "Http",
+                                                                            "inputs": {
+                                                                                "uri": "@{parameters('SAPOAuthTokenEndpoint')}",
+                                                                                "method": "POST",
+                                                                                "headers": {
+                                                                                    "Content-Type": "application/x-www-form-urlencoded"
+                                                                                },
+                                                                                "body": "grant_type=client_credentials",
+                                                                                "authentication": {
+                                                                                    "type": "Basic",
+                                                                                    "username": "@{parameters('SAPOAuthClientId')}",
+                                                                                    "password": "@{parameters('SAPOAuthClientSecret')}"
+                                                                                }
+                                                                            },
+                                                                            "runtimeConfiguration": {
+                                                                                "contentTransfer": {
+                                                                                    "transferMode": "Chunked"
+                                                                                },
+                                                                                "secureData": {
+                                                                                    "properties": [
+                                                                                        "outputs"
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "Unblock_User_via_SAP": {
+                                                                            "type": "Http",
+                                                                            "inputs": {
+                                                                                "uri": "@{variables('AgentGuid')}/http/community/sentinel/sap-user-block",
+                                                                                "method": "POST",
+                                                                                "headers": {
+                                                                                    "Content-Type": "application/json",
+                                                                                    "rfcDestinationName": "@{variables('SidGuid')}"
+                                                                                },
+                                                                                "body": {
+                                                                                    "Action": "unblock",
+                                                                                    "SAPUserName": "@{variables('SAP_User')}",
+                                                                                    "IT_R_MANDT": "@{parameters('SAPClientId')}"
+                                                                                },
+                                                                                "authentication": {
+                                                                                    "type": "Raw",
+                                                                                    "value": "Bearer @{body('Get_OAuth_token_for_SAP_unblock')?['access_token']}"
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Get_OAuth_token_for_SAP_unblock": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        "Condition_SAP_Unblock_success": {
+                                                                            "type": "If",
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "greaterOrEquals": [
+                                                                                            "@outputs('Unblock_User_via_SAP')['statusCode']",
+                                                                                            200
+                                                                                        ]
+                                                                                    },
+                                                                                    {
+                                                                                        "less": [
+                                                                                            "@outputs('Unblock_User_via_SAP')['statusCode']",
+                                                                                            300
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "actions": {
+                                                                                "Reply_unblock_success_in_channel": {
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": {
+                                                                                            "parentMessageId": "@body('Parse_unblock_response')?['messageId']",
+                                                                                            "recipient": {
+                                                                                                "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                                "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                            },
+                                                                                            "messageBody": "<p>✅ SAP User <b>@{variables('SAP_User')}</b> unblocked on system <b>@{variables('SidGuid')}</b>!</p>"
+                                                                                        },
+                                                                                        "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Reply_unblock_error_in_channel": {
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "post",
+                                                                                            "body": {
+                                                                                                "parentMessageId": "@body('Parse_unblock_response')?['messageId']",
+                                                                                                "recipient": {
+                                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                                },
+                                                                                                "messageBody": "<p>❌ SAP User <b>@{variables('SAP_User')}</b> could not be unblocked. Error (code @{outputs('Unblock_User_via_SAP')['statusCode']}): @{body('Unblock_User_via_SAP')}</p>"
+                                                                                            },
+                                                                                            "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Unblock_User_via_SAP": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {}
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Parse_unblock_response": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    }
                                                                 }
                                                             },
                                                             "else": {
