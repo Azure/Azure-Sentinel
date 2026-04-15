@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+|3.0.17       | 02-04-2026                     |  Updated **TI map Domain entity to SecurityAlert** analytic rule with deduplication and filters   |
 | 3.0.16      | 25-03-2026                     | Optimized **TI map Domain entity to EmailUrlInfo** analytic rule with deduplication and filters |
 | 3.0.15      | 09-03-2026                     | Update **IPEntity_DuoSecurity Analytic Rule**                |
 | 3.0.14      | 16-02-2026                     | Added **Analytic Rule** for URL IOC                  |
