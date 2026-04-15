@@ -1,3 +1,3 @@
-**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**
-|------------|-------------------------------|-------------------------------------------------------------------------------------------|
-| 3.0.0      | 02-04-2026                    | Initial release. Polls Vaikora AI agent signals every 6 hours and pushes high/critical risk actions and anomaly detections as Custom IOCs to CrowdStrike Falcon. Severity mapping: critical→prevent, high→detect, medium/low→detect. Dynamic IOC type detection (ipv4/url/domain). Conditional tags: ai-agent-anomaly, ai-threat-detected. externalId set to vaikora-{action_id} for deduplication. |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
+|---|---|---|
+| 3.0.0 | 02-04-2026 | Initial release. Polls Vaikora AI agent signals and pushes high/critical risk actions as Custom IOCs to CrowdStrike Falcon. Severity mapping, dynamic IOC type detection, conditional tags, and deduplication via externalId. |
