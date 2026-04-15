@@ -6,6 +6,8 @@
 - Rename ActorUsername to TargetUsername
 - Add alias User, which maps to TargetUsername
 - Add post-filtering of TargetUsername
+- Extract DvcId from Message
+- Add alias Dvc, which maps to DvcId
 
 ## Version 0.1.0
 

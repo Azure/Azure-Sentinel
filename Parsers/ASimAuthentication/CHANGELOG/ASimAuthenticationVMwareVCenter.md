@@ -5,6 +5,8 @@
 - (2026-04-14) Add missing column EventSeverity - [PR #14075](https://github.com/Azure/Azure-Sentinel/pull/14075)
 - Rename ActorUsername to TargetUsername
 - Add alias User, which maps to TargetUsername
+- Extract DvcId from Message
+- Add alias Dvc, which maps to DvcId
 
 ## Version 0.1.0
 
