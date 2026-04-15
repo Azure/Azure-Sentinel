@@ -8,18 +8,46 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of the log analytics Workspace."
+                "description": "Log analytics workspace name. Can be found under Log analytics \"Settings\"."
             }
         },
-        "WorkspaceKey": {
+        "AzureClientId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client Id that you have created during app registration"
+            }
+        },
+        "AzureClientSecret": {
             "type": "securestring",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace Key of log analytics Workspace."
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Tenant Id of your Microsoft Entra Id"
             }
         },
         "DetectionsTableName":{
@@ -52,10 +80,570 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dataRuleName": "[concat(toLower(parameters('FunctionName')),'dataCollectionRule', variables('suffix'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('DetectionsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('DetectionsTableName'), '_CL')]",
+                    "columns": [ 
+                        {
+                            "name": "DetectionTitle",
+                            "type": "string"
+                        },
+                        {
+                            "name": "DetectionType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "src_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_hostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_ipaddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_endpoint",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_external",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "src_device",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "src_device_oid",
+                            "type": "real"
+                        },
+                        {
+                            "name": "src_device_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_device_ipaddrs",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "src_device_macaddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_device_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "src_username",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "dst_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_hostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_ipaddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_endpoint",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_external",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "dst_device",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "dst_device_oid",
+                            "type": "real"
+                        },
+                        {
+                            "name": "dst_device_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_device_ipaddrs",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "dst_device_macaddr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_device_role",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dst_username",
+                            "type": "string"
+                        },
+                        {
+                            "name": "additional_participants",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "properties",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "properties_randomness",
+                            "type": "real"
+                        },
+                        {
+                            "name": "properties_client_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "properties_server_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "properties_user",
+                            "type": "string"
+                        },
+                        {
+                            "name": "properties_command",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_ids",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "mitre_techniques",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "recommended",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "recommended_factors",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "risk_score",
+                            "type": "real"
+                        },
+                        {
+                            "name": "timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "id",
+                            "type": "real"
+                        },
+                        {
+                            "name": "is_user_created",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "mod_time",
+                            "type": "real"
+                        },
+                        {
+                            "name": "resolution",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ticket_id",
+                            "type": "real"
+                        },
+                        {
+                            "name": "assignee",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_array",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "categories_string",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mitre_tactics_string",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mitre_techniques_string",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dataRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('DetectionsTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('DetectionsTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "title",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "src_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_hostname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_ipaddr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_endpoint",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_external",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "src_device",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "src_device_oid",
+                                "type": "real"
+                            },
+                            {
+                                "name": "src_device_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_device_ipaddrs",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "src_device_macaddr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_device_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "src_username",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "dst_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_hostname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_ipaddr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_endpoint",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_external",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "dst_device",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "dst_device_oid",
+                                "type": "real"
+                            },
+                            {
+                                "name": "dst_device_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_device_ipaddrs",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "dst_device_macaddr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_device_role",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dst_username",
+                                "type": "string"
+                            },
+                            {
+                                "name": "additional_participants",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "properties",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "properties_randomness",
+                                "type": "real"
+                            },
+                            {
+                                "name": "properties_client_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "properties_server_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "properties_user",
+                                "type": "string"
+                            },
+                            {
+                                "name": "properties_command",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_ids",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "mitre_techniques",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "recommended",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "recommended_factors",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "risk_score",
+                                "type": "real"
+                            },
+                            {
+                                "name": "time",
+                                "type": "real"
+                            },
+                            {
+                                "name": "id",
+                                "type": "real"
+                            },
+                            {
+                                "name": "is_user_created",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "mod_time",
+                                "type": "real"
+                            },
+                            {
+                                "name": "resolution",
+                                "type": "string"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ticket_id",
+                                "type": "real"
+                            },
+                            {
+                                "name": "assignee",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_array",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "categories_string",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mitre_tactics_string",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mitre_techniques_string",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "[concat('Custom-', parameters('DetectionsTableName'))]" ],
+                        "destinations": [ "[concat('RuleDest', variables('suffix'))]" ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_src = parse_json(src), json_dst = parse_json(dst), json_properties = parse_json(properties)\n| extend json_src_device = parse_json(json_src.device), json_dst_device = parse_json(json_dst.device)\n| extend src_type = tostring(json_src.type), src_hostname = tostring(json_src.hostname), src_ipaddr = tostring(json_src.ipaddr), src_role = tostring(json_src.role), src_endpoint = tostring(json_src.endpoint), src_external = tobool(json_src.external), src_device_oid = toreal(json_src_device.oid), src_device_name = tostring(json_src_device.name), src_device_ipaddrs = todynamic(json_src_device.ipaddrs), src_device_macaddr = tostring(json_src_device.macaddr), src_device_role = tostring(json_src_device.role), src_username = tostring(json_src.username), dst_type = tostring(json_dst.type), dst_hostname = tostring(json_dst.hostname), dst_ipaddr = tostring(json_dst.ipaddr), dst_role = tostring(json_dst.role), dst_endpoint = tostring(json_dst.endpoint), dst_external = tobool(json_dst.external), dst_device_oid = toreal(json_dst_device.oid), dst_device_name = tostring(json_dst_device.name), dst_device_ipaddrs = todynamic(json_dst_device.ipaddrs), dst_device_macaddr = tostring(json_dst_device.macaddr), dst_device_role = tostring(json_dst_device.role), dst_username = tostring(json_dst.username), properties_randomness = toreal(json_properties.randomness) ,properties_client_port = toreal(json_properties.client_port), properties_server_port = toreal(json_properties.server_port), properties_user = tostring(json_properties.user), properties_command = tostring(json_properties.command)\n| project-away json_src, src, json_src_device, src_device, json_dst, dst, json_dst_device, dst_device, json_properties, properties \n| project-rename DetectionType = ['type'], DetectionTitle = ['title'], timestamp = ['time']",
+                        "outputStream": "[concat('Custom-', parameters('DetectionsTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Non Statistics DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [ "[variables('dcrRoleId')]", "[variables('dataRuleName')]" ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -159,7 +747,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -176,12 +764,16 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
+                        "WorkspaceName": "[parameters('WorkspaceName')]",
                         "DetectionsTableName": "[parameters('DetectionsTableName')]",
                         "LogLevel": "[parameters('LogLevel')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ExtraHop-functionapp"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ExtraHop-functionapp",
+                        "AZURE_CLIENT_ID": "[parameters('AzureClientId')]",
+                        "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
+                        "AZURE_TENANT_ID": "[parameters('TenantId')]",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))).immutableId]",
+                        "SCOPE": "[variables('scope')]"
                     }
                 }
             ]
