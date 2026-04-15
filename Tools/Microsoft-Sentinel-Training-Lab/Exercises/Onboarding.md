@@ -39,7 +39,7 @@ If you already have a workspace, skip to [Exercise 2](#exercise-2-add-microsoft-
 ## Exercise 3: Access Microsoft Sentinel in the Defender portal
 
 1. Sign in to the [Microsoft Defender portal](https://security.microsoft.com/).
-2. You'll see **Microsoft Sentinel** in the navigation pane.
+2. Once provisioned, you'll see **Microsoft Sentinel** in the navigation pane. If this is your first time, there may be a delay of a few minutes.
 <img src="../Images/OnboardingImage3.png" alt="Microsoft Sentinel in the Defender portal navigation pane" width="600">
 
 3. Go to **Settings > Microsoft Sentinel > Workspaces**, verify your workspace is listed, and click **Connect**.

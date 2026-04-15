@@ -73,10 +73,9 @@ Usage
     DailyAvgGB = round(sum(Quantity) / 1024 / 30, 3)
     by DataType
 | top 5 by TotalGB
-| extend EstMonthlyCostUSD = round(TotalGB * 4.30, 2) // Approximate pay-as-you-go rate — check link below for current pricing
 ```
 
-> **Note:** The cost estimate above uses an approximate rate. Your actual rate depends on your pricing tier, commitment tier, and region. Check the [Microsoft Sentinel pricing page](https://azure.microsoft.com/pricing/details/microsoft-sentinel/) for current rates.
+> **Note:** To estimate costs, multiply the GB values by your per-GB rate. Your actual rate depends on your pricing tier, commitment tier, and region. Check the [Microsoft Sentinel pricing page](https://azure.microsoft.com/pricing/details/microsoft-sentinel/) for current rates.
 
 In a lab environment, your ingestion is likely small. In production, `CommonSecurityLog` (firewall) and `SecurityEvent` (Windows) are typically the largest tables.
 
