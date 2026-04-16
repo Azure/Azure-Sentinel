@@ -1,5 +1,7 @@
 # Solution Releases
 
+Agentless solution release notes can be found in the [Agentless README](./Agentless/README.md) file.
+
 | Date issued | Version Number | Content |
 | --- | --- | --- |
 | 28/06/23 | 2.0.74 | SAP Audit Control Workbook |
