@@ -11,30 +11,6 @@ Microsoft Sentinel playbooks are automation workflows built on Azure Logic Apps 
 
 ---
 
-## Playbook Use Cases
-
-Playbooks address common security operations scenarios:
-
-### Incident Enrichment
-- Collect additional data on suspicious entities (IP addresses, user accounts, domains)
-- Gather context from external threat intelligence sources
-- Enhance alerts with WHOIS lookups, file reputation data, or user information
-
-### SOC Ticketing System Integration
-- Synchronize Microsoft Sentinel incidents with ServiceNow, Jira, or other ticketing systems
-- Create bidirectional sync for ticket updates
-- Automatically close incidents when tickets are resolved
-
-### Automated Response Actions
-- Send Teams/Slack messages to security teams for confirmation or awareness
-- Block malicious IPs/URLs in firewalls or proxy systems
-- Disable compromised user accounts
-- Quarantine suspicious files
-- Reset user passwords
-- Generate compliance reports
-
----
-
 ## Directory Structure
 
 ### For Standalone Playbooks
@@ -42,25 +18,46 @@ Playbooks address common security operations scenarios:
 Playbooks/
 ├── [PlaybookName]/
 │   ├── azuredeploy.json          (REQUIRED)
-│   └── README.md                  (REQUIRED)
+│   └── README.md                 (REQUIRED)
 ```
 
-### For Playbooks with Custom Connectors
+### For Solution Playbooks
 ```
 Solutions/[SolutionName]/Playbooks/
-├── CustomConnector/
-│   └── [CustomConnectorName]/
-│       ├── azuredeploy.json
-│       └── README.md
 ├── [PlaybookName]/
-│   ├── azuredeploy.json
-│   └── README.md
+│   ├── azuredeploy.json          (REQUIRED)
+│   └── README.md                 (REQUIRED)
 ```
 
-### Directory Naming
-- Use descriptive, action-oriented names
-- Use PascalCase or kebab-case consistency
-- Examples: `EnrichIP`, `SyncToServiceNow`, `BlockUserAccount`
+### For Custom Connectors
+```
+Solutions/[SolutionName]/Playbooks/CustomConnector/
+└── [ConnectorName]CustomConnector/
+    ├── azuredeploy.json          (REQUIRED - ARM template)
+    ├── README.md                 (REQUIRED)
+    └── images/                   (OPTIONAL - for local image references)
+```
+- Custom Connector name must end with "CustomConnector" (e.g., `OktaCustomConnector`)
+- ARM template must include `CustomConnectorName` and `HostName` parameters
+- Custom connector default name in ARM must end with "CustomConnector"
+
+### For Function App Connectors
+```
+Solutions/[SolutionName]/Playbooks/FunctionAppConnector/
+└── [FunctionAppName]SOAR/
+    ├── azuredeploy.json          (REQUIRED)
+    ├── README.md                 (REQUIRED)
+    ├── host.json                 (REQUIRED)
+    ├── requirements.txt          (REQUIRED)
+    ├── proxies.json              (REQUIRED)
+    ├── [FunctionName]/           (Function code folder)
+    ├── images/                   (OPTIONAL)
+    └── [FunctionAppName]SOAR.zip (REQUIRED - deployment package)
+```
+- Function App name must end with "SOAR" (e.g., `GetIPGeoInfoSOAR`)
+- ARM template must include `FunctionAppName` and `HostName` parameters
+- Function app name must be unique per resource group: `"[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]"`
+
 
 ---
 
@@ -279,23 +276,6 @@ Within `properties.parameters.$connections.value`, each connection must have:
 
 ---
 
-## Custom Connector Requirements
-
-### OpenAPI Definition (Swagger)
-- Must include OpenAPI specification for the API
-- Must document all endpoints, parameters, and responses
-- Must include authentication method in definition
-- Must validate against OpenAPI standards
-
-### Custom Connector ARM Template
-- Must NOT include `runtimeUrls`, `apiDefinitions`, or `wsdlDefinition` fields
-- Must include `swagger` content and `backendService` configuration
-- Must have valid `host`, `basePath`, and `schemes` parameters
-- Must document API parameters and authentication configuration
-- Must specify required vs optional parameters
-
----
-
 ## Documentation Requirements
 
 README.md is **MANDATORY** for all playbooks and custom connectors. Must include:
@@ -306,24 +286,6 @@ README.md is **MANDATORY** for all playbooks and custom connectors. Must include
 - **Post-Deployment Configuration** - Authentication, manual setup, permissions, testing
 - **Usage & Triggering** - Manual/automatic trigger details, trigger conditions, examples
 - **Troubleshooting** - Common issues, solutions, log locations, connection validation
-
----
-
-## Naming Conventions
-
-### Playbook Names
-- Use action-oriented verbs: `Enrich`, `Block`, `Sync`, `Alert`, `Disable`, `Add`, `Update`
-- Format: `[Action]-[Entity/System]` or `[Solution]-[Action]`
-
-### Connection Names
-- Format: `[ConnectorType]_Connection`
-
-### Parameter Names
-- Use PascalCase
-- Be descriptive and meaningful
-
-### Resource Names
-- Use consistent prefix for related resources
 
 ---
 
@@ -447,13 +409,67 @@ When reviewing playbooks in pull requests, validate against these criteria:
 - ✓ `swagger` and `backendService` configuration included
 - ✓ `host`, `basePath`, `schemes` are valid
 
-### Documentation Review
-- ✓ README.md includes all 6 required sections
-- ✓ Title and description accurately reflect functionality
-- ✓ Prerequisites section lists all required roles, permissions, API access
-- ✓ Deployment section explains each parameter
-- ✓ Post-deployment section includes specific configuration steps
-- ✓ Usage section explains triggering and expected behavior
-- ✓ Troubleshooting section addresses common issues
+### Trigger Type Validation
+- ✓ Trigger type must be `sentinel-incident-trigger` (recommended)
+- ✓ Alternatively `sentinel-alert-trigger` only in exceptional cases
+- ✓ Manual triggers acceptable for non-automated playbooks
+
+---
+
+## Naming Conventions & Standards
+
+### Directory Names
+- Use descriptive, action-oriented names (e.g., `EnrichIP`, `SyncToServiceNow`, `BlockUserAccount`)
+- Use PascalCase or kebab-case consistency
+- No spaces or special characters allowed (except underscore `_`)
+
+### File Names
+- **Maximum length**: 80 characters
+- **Allowed characters**: Alphabets, numbers, underscore `_`, hyphen `-`, dot `.`
+- **NOT allowed**: Spaces, special characters (except those listed above)
+- **Mandatory file**: `azuredeploy.json` for all playbooks/connectors
+
+### Playbook Names (in Azure)
+- Use action-oriented verbs: `Enrich`, `Block`, `Sync`, `Alert`, `Disable`, `Add`, `Update`
+- Format: `[Action]-[Entity/System]` or `[Solution]-[Action]` (e.g., `Block-User`, `Enrich_IP`)
+- **No spaces**: Use hyphen or underscore instead
+- **Allowed characters**: Alphabets, numbers, underscore `_`
+
+### Connection Names
+- Format: `[ConnectorType]_Connection` (e.g., `AzureAD_Connection`)
+- Use variables, not hardcoded values
+
+### Parameter Names
+- Use PascalCase (e.g., `PlaybookName`, `CustomConnectorName`)
+- Be descriptive and meaningful
+
+### Resource Names (in ARM template)
+- **NO special characters** except: dot `.`, underscore `_`, hyphen `-`
+- Use variables for all resource names (avoid hardcoding)
+- Applies to all resources: connections, logic apps, workflows, etc.
+
+---
+
+## Testing & Validation
+
+### Deployment Validation
+- ✓ ARM template must deploy successfully without errors
+- ✓ Template validation passes in Azure Resource Manager
+- ✓ All parameter inputs are correctly populated
+- ✓ All connections authorize successfully
+
+### Functional Testing
+- ✓ Playbook appears correctly in the gallery/template section
+- ✓ Metadata displays correctly (title, description, entities, tags)
+- ✓ Trigger works as expected with sample incidents
+- ✓ All actions execute with valid credentials or embedded test responses
+- ✓ Playbook handles different incident types (if applicable)
+
+### Test Cases
+- ✓ Run at least one test instance per incident input type
+- ✓ Validate with actual credentials if available
+- ✓ For unavailable credentials, use static/embedded API responses
+- ✓ Verify all playbook actions complete successfully
+- ✓ Validate error handling with edge cases
 
 ---
