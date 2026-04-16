@@ -1,0 +1,527 @@
+﻿{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.6",
+    "parameters":  {
+                       "location":  {
+                                        "type":  "string",
+                                        "minLength":  1,
+                                        "defaultValue":  "[resourceGroup().location]",
+                                        "metadata":  {
+                                                         "description":  "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+                                                     }
+                                    },
+                       "workspace-location":  {
+                                                  "type":  "string",
+                                                  "minLength":  1,
+                                                  "defaultValue":  "[parameters('location')]",
+                                                  "metadata":  {
+                                                                   "description":  "Region to deploy solution resources"
+                                                               }
+                                              },
+                       "workspaceName":  {
+                                             "type":  "string",
+                                             "metadata":  {
+                                                              "description":  "The Log Analytics workspace name (4-63 letters, digits or '-'). The '-' shouldn't be the first or the last symbol"
+                                                          }
+                                         },
+                       "formattedTimeNow":  {
+                                                "type":  "string",
+                                                "defaultValue":  "[utcNow('g')]",
+                                                "metadata":  {
+                                                                 "description":  "Appended to workbook displayNames to make them unique"
+                                                             }
+                                            },
+                       "artifactsVersion":  {
+                                                "type":  "string",
+                                                "defaultValue":  "[utcNow('yyyyMMddHHmmss')]",
+                                                "metadata":  {
+                                                                 "description":  "Cache-busting version for linked templates"
+                                                             }
+                                            },
+                       "scheduleStartTime":  {
+                                                 "type":  "string",
+                                                 "defaultValue":  "[dateTimeAdd(utcNow('yyyy-MM-ddTHH:mm:ssZ'), 'PT15M')]",
+                                                 "metadata":  {
+                                                                  "description":  "UTC start time for the one-time ingestion schedule"
+                                                              }
+                                             },
+                       "detectionRulesScheduleStartTime":  {
+                                                               "type":  "string",
+                                                               "defaultValue":  "[dateTimeAdd(utcNow('yyyy-MM-ddTHH:mm:ssZ'), 'PT30M')]",
+                                                               "metadata":  {
+                                                                                "description":  "UTC start time for the detection-rules runbook (runs after ingestion)"
+                                                                            }
+                                                           },
+                       "detectionRulesAuthMethod":  {
+                                                        "type":  "string",
+                                                        "defaultValue":  "none",
+                                                        "allowedValues":  [
+                                                                              "none",
+                                                                              "uami",
+                                                                              "spn"
+                                                                          ],
+                                                        "metadata":  {
+                                                                         "description":  "Authentication method for detection rules deployment."
+                                                                     }
+                                                    },
+                       "detectionRulesIdentityResourceId":  {
+                                                                "type":  "string",
+                                                                "defaultValue":  "",
+                                                                "metadata":  {
+                                                                                 "description":  "Full resource ID of a pre-created User-Assigned Managed Identity with Microsoft Graph CustomDetection.ReadWrite.All permission. Required when using Managed Identity auth (leave SPN params empty)."
+                                                                             }
+                                                            },
+                       "detectionRulesSpnTenantId":  {
+                                                         "type":  "string",
+                                                         "defaultValue":  "",
+                                                         "metadata":  {
+                                                                          "description":  "Microsoft Entra tenant ID for service principal authentication. Provide together with SpnClientId and SpnClientSecret to use SPN auth instead of Managed Identity."
+                                                                      }
+                                                     },
+                       "detectionRulesSpnClientId":  {
+                                                         "type":  "string",
+                                                         "defaultValue":  "",
+                                                         "metadata":  {
+                                                                          "description":  "Application (client) ID of the service principal with CustomDetection.ReadWrite.All permission."
+                                                                      }
+                                                     },
+                       "detectionRulesSpnClientSecret":  {
+                                                             "type":  "securestring",
+                                                             "defaultValue":  "",
+                                                             "metadata":  {
+                                                                              "description":  "Client secret of the service principal."
+                                                                          }
+                                                         },
+                       "enableIngestion":  {
+                                               "type":  "bool",
+                                               "defaultValue":  true,
+                                               "metadata":  {
+                                                                "description":  "Whether to run the ingestEvents deployment script. Disabled for tenants that block storage account key auth."
+                                                            }
+                                           },
+                       "workbook1-name":  {
+                                              "type":  "string",
+                                              "defaultValue":  "LabWorkbook",
+                                              "metadata":  {
+                                                               "description":  "Name for the workbook"
+                                                           }
+                                          },
+                       "playbook1-PlaybookName":  {
+                                                      "defaultValue":  "Get-GeoFromIpAndTagIncident",
+                                                      "type":  "string",
+                                                      "minLength":  1,
+                                                      "metadata":  {
+                                                                       "description":  "Resource name for the logic app playbook.  No spaces are allowed"
+                                                                   }
+                                                  }
+                   },
+    "variables":  {
+                      "_artifactsLocation":  "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Microsoft-Sentinel-Training-Lab/",
+                      "automationAccountName":  "[concat('sentineltraining', uniqueString(resourceGroup().id))]",
+                      "scheduleName":  "[concat('IngestTrainingTelemetryOnce-', uniqueString(resourceGroup().id, deployment().name))]"
+                  },
+    "resources":  [
+                      {
+                          "name":  "workspaceCreation",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/workspace.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "workspaceName":  {
+                                                                                      "value":  "[parameters('workspaceName')]"
+                                                                                  },
+                                                                "pricingTier":  {
+                                                                                    "value":  "PerGB2018"
+                                                                                },
+                                                                "dataRetention":  {
+                                                                                      "value":  90
+                                                                                  },
+                                                                "location":  {
+                                                                                 "value":  "[parameters('workspace-location')]"
+                                                                             }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "deployDetectionRules",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "condition":  "[not(equals(parameters('detectionRulesAuthMethod'), 'none'))]",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/deployDetectionRules.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "scheduleStartTime":  {
+                                                                                          "value":  "[parameters('detectionRulesScheduleStartTime')]"
+                                                                                      },
+                                                                "userAssignedIdentityResourceId":  {
+                                                                                                       "value":  "[parameters('detectionRulesIdentityResourceId')]"
+                                                                                                   },
+                                                                "spnTenantId":  {
+                                                                                    "value":  "[parameters('detectionRulesSpnTenantId')]"
+                                                                                },
+                                                                "spnClientId":  {
+                                                                                    "value":  "[parameters('detectionRulesSpnClientId')]"
+                                                                                },
+                                                                "spnClientSecret":  {
+                                                                                        "value":  "[parameters('detectionRulesSpnClientSecret')]"
+                                                                                    }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "ingestEvents",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "condition":  "[parameters('enableIngestion')]",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "expressionEvaluationOptions":  {
+                                                                                 "scope":  "Inner"
+                                                                             },
+                                             "template":  {
+                                                              "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                                              "contentVersion":  "1.0.0.0",
+                                                              "parameters":  {
+                                                                                 "WorkspaceName":  {
+                                                                                                       "type":  "string",
+                                                                                                       "metadata":  {
+                                                                                                                        "description":  "Log Analytics workspace name"
+                                                                                                                    }
+                                                                                                   },
+                                                                                 "scheduleStartTime":  {
+                                                                                                           "type":  "string",
+                                                                                                           "metadata":  {
+                                                                                                                            "description":  "UTC start time for the one-time schedule"
+                                                                                                                        }
+                                                                                                       },
+                                                                                 "scheduleName":  {
+                                                                                                      "type":  "string",
+                                                                                                      "metadata":  {
+                                                                                                                       "description":  "Unique schedule name for the runbook"
+                                                                                                                   }
+                                                                                                  },
+                                                                                 "location":  {
+                                                                                                  "type":  "string",
+                                                                                                  "metadata":  {
+                                                                                                                   "description":  "Location for the resources"
+                                                                                                               }
+                                                                                              }
+                                                                             },
+                                                              "functions":  [
+
+                                                                            ],
+                                                              "variables":  {
+                                                                                "automationAccountName":  "[concat('sentineltraining', uniqueString(resourceGroup().id))]"
+                                                                            },
+                                                              "resources":  [
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[variables('automationAccountName')]",
+                                                                                    "location":  "[parameters('location')]",
+                                                                                    "identity":  {
+                                                                                                     "type":  "SystemAssigned"
+                                                                                                 },
+                                                                                    "properties":  {
+                                                                                                       "sku":  {
+                                                                                                                   "name":  "Basic"
+                                                                                                               }
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/runbooks",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/IngestTrainingTelemetry')]",
+                                                                                    "location":  "[parameters('location')]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "runbookType":  "PowerShell",
+                                                                                                       "logProgress":  true,
+                                                                                                       "logVerbose":  true,
+                                                                                                       "publishContentLink":  {
+                                                                                                                                  "uri":  "[concat('https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Microsoft-Sentinel-Training-Lab/Artifacts/Scripts/RunIngest.ps1', '?v=', parameters('scheduleName'))]"
+                                                                                                                              }
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/schedules",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/', parameters('scheduleName'))]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "frequency":  "OneTime",
+                                                                                                       "startTime":  "[parameters('scheduleStartTime')]",
+                                                                                                       "timeZone":  "UTC"
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/variables",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/SentinelTrainingSubscriptionId')]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "isEncrypted":  false,
+                                                                                                       "value":  "[concat('\"', subscription().subscriptionId, '\"')]"
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/variables",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/SentinelTrainingResourceGroupName')]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "isEncrypted":  false,
+                                                                                                       "value":  "[concat('\"', resourceGroup().name, '\"')]"
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/variables",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/SentinelTrainingLocation')]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "isEncrypted":  false,
+                                                                                                       "value":  "[concat('\"', parameters('location'), '\"')]"
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/variables",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/SentinelTrainingWorkspaceName')]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "isEncrypted":  false,
+                                                                                                       "value":  "[concat('\"', parameters('WorkspaceName'), '\"')]"
+                                                                                                   }
+                                                                                },
+                                                                                {
+                                                                                    "type":  "Microsoft.Automation/automationAccounts/jobSchedules",
+                                                                                    "apiVersion":  "2024-10-23",
+                                                                                    "name":  "[concat(variables('automationAccountName'), '/', guid(variables('automationAccountName'), 'IngestTrainingTelemetry', parameters('scheduleName')))]",
+                                                                                    "dependsOn":  [
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/runbooks', variables('automationAccountName'), 'IngestTrainingTelemetry')]",
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/schedules', variables('automationAccountName'), parameters('scheduleName'))]",
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingSubscriptionId')]",
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingResourceGroupName')]",
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingLocation')]",
+                                                                                                      "[resourceId('Microsoft.Automation/automationAccounts/variables', variables('automationAccountName'), 'SentinelTrainingWorkspaceName')]"
+                                                                                                  ],
+                                                                                    "properties":  {
+                                                                                                       "runbook":  {
+                                                                                                                       "name":  "IngestTrainingTelemetry"
+                                                                                                                   },
+                                                                                                       "schedule":  {
+                                                                                                                        "name":  "[parameters('scheduleName')]"
+                                                                                                                    },
+                                                                                                       "parameters":  {
+                                                                                                                          "SubscriptionId":  "[subscription().subscriptionId]",
+                                                                                                                          "ResourceGroupName":  "[resourceGroup().name]",
+                                                                                                                          "Location":  "[parameters('location')]",
+                                                                                                                          "WorkspaceName":  "[parameters('WorkspaceName')]"
+                                                                                                                      }
+                                                                                                   }
+                                                                                }
+                                                                            ],
+                                                              "outputs":  {
+                                                                              "principalId":  {
+                                                                                                  "type":  "string",
+                                                                                                  "value":  "[reference(resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName')), '2024-10-23', 'Full').identity.principalId]"
+                                                                                              }
+                                                                          }
+                                                          },
+                                             "parameters":  {
+                                                                "WorkspaceName":  {
+                                                                                      "value":  "[parameters('workspaceName')]"
+                                                                                  },
+                                                                "scheduleStartTime":  {
+                                                                                          "value":  "[parameters('scheduleStartTime')]"
+                                                                                      },
+                                                                "scheduleName":  {
+                                                                                     "value":  "[variables('scheduleName')]"
+                                                                                 },
+                                                                "location":  {
+                                                                                 "value":  "[parameters('workspace-location')]"
+                                                                             }
+                                                            }
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.Authorization/roleAssignments",
+                          "apiVersion":  "2022-04-01",
+                          "name":  "[guid(resourceGroup().id, variables('automationAccountName'), deployment().name, 'monitoring-contrib')]",
+                          "condition":  "[parameters('enableIngestion')]",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments', 'ingestEvents')]"
+                                        ],
+                          "properties":  {
+                                             "roleDefinitionId":  "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '749f88d5-cbae-40b8-bcfc-e573ddc772fa')]",
+                                             "principalId":  "[reference('ingestEvents').outputs.principalId.value]",
+                                             "principalType":  "ServicePrincipal"
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.Authorization/roleAssignments",
+                          "apiVersion":  "2022-04-01",
+                          "name":  "[guid(resourceGroup().id, variables('automationAccountName'), deployment().name, 'la-contrib')]",
+                          "condition":  "[parameters('enableIngestion')]",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments', 'ingestEvents')]"
+                                        ],
+                          "properties":  {
+                                             "roleDefinitionId":  "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '92aaf0da-9dab-42b6-94a3-d43ce8d16293')]",
+                                             "principalId":  "[reference('ingestEvents').outputs.principalId.value]",
+                                             "principalType":  "ServicePrincipal"
+                                         }
+                      },
+                      {
+                          "type":  "Microsoft.Authorization/roleAssignments",
+                          "apiVersion":  "2022-04-01",
+                          "name":  "[guid(resourceGroup().id, variables('automationAccountName'), deployment().name, 'metrics-publisher')]",
+                          "condition":  "[parameters('enableIngestion')]",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments', 'ingestEvents')]"
+                                        ],
+                          "properties":  {
+                                             "roleDefinitionId":  "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+                                             "principalId":  "[reference('ingestEvents').outputs.principalId.value]",
+                                             "principalType":  "ServicePrincipal"
+                                         }
+                      },
+                      {
+                          "name":  "alertRules",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments','workbook')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/alertRules.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "workspaceName":  {
+                                                                                      "value":  "[parameters('workspaceName')]"
+                                                                                  }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "playbook",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/playbook.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "PlaybookName":  {
+                                                                                     "value":  "[parameters('playbook1-PlaybookName')]"
+                                                                                 }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "workbook",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/workbook.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "workbookDisplayName":  {
+                                                                                            "value":  "[concat(parameters('workbook1-name'),' - ',parameters('formattedTimeNow'))]"
+                                                                                        },
+                                                                "workbookSourceId":  {
+                                                                                         "value":  "[reference('workspaceCreation').outputs.workspaceResourceIdOutput.value]"
+                                                                                     }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "workbookLakeUsage",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/WorkspaceLakeUsage-ARM.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "workbookDisplayName":  {
+                                                                                            "value":  "[concat('Workspace & Lake Usage - ',parameters('formattedTimeNow'))]"
+                                                                                        },
+                                                                "WorkspaceId":  {
+                                                                                    "value":  "[reference('workspaceCreation').outputs.workspaceResourceIdOutput.value]"
+                                                                                }
+                                                            }
+                                         }
+                      },
+                      {
+                          "name":  "watchlist",
+                          "type":  "Microsoft.Resources/deployments",
+                          "apiVersion":  "2024-07-01",
+                          "dependsOn":  [
+                                            "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+                                        ],
+                          "properties":  {
+                                             "mode":  "Incremental",
+                                             "templateLink":  {
+                                                                  "uri":  "[uri(variables('_artifactsLocation'), concat('Artifacts/LinkedTemplates/watchlist.json?v=', parameters('artifactsVersion')))]",
+                                                                  "contentVersion":  "1.0.0.0"
+                                                              },
+                                             "parameters":  {
+                                                                "workspaceName":  {
+                                                                                      "value":  "[parameters('workspaceName')]"
+                                                                                  }
+                                                            }
+                                         }
+                      }
+                  ],
+    "outputs":  {
+
+                }
+}
