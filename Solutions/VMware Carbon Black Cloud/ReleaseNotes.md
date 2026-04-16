@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                        |
 |-------------|--------------------------------|-----------------------------------------------------------|
+| 3.0.8       | 24-03-2026                     | Deprecate to VMware Carbon Black Cloud (using Azure Function) |
 | 3.0.7       | 24-03-2026                     | Rename to VMware Carbon Black Cloud via AWS S3(via Codeless Connector Framework)	   |
 | 3.0.6       | 28-01-2026                     | Updated all VMware Carbon Black Cloud product page URLs to now point to the new  **Broadcom URL**	   |
 | 3.0.5       | 22-01-2025                     | Removed Custom Entity mappings from **Analytic rules**	   |
