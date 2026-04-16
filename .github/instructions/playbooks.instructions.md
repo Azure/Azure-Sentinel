@@ -38,13 +38,13 @@ Solutions/[SolutionName]/Playbooks/CustomConnector/
     └── images/                   (OPTIONAL - for local image references)
 ```
 - Custom Connector name must end with "CustomConnector" (e.g., `OktaCustomConnector`)
-- ARM template must include `CustomConnectorName` and `HostName` parameters
+- ARM template must include `CustomConnectorName` parameter
 - Custom connector default name in ARM must end with "CustomConnector"
 
 ### For Function App Connectors
 ```
 Solutions/[SolutionName]/Playbooks/FunctionAppConnector/
-└── [FunctionAppName]SOAR/
+└── [FunctionAppName]/
     ├── azuredeploy.json          (REQUIRED)
     ├── README.md                 (REQUIRED)
     ├── host.json                 (REQUIRED)
@@ -52,10 +52,9 @@ Solutions/[SolutionName]/Playbooks/FunctionAppConnector/
     ├── proxies.json              (REQUIRED)
     ├── [FunctionName]/           (Function code folder)
     ├── images/                   (OPTIONAL)
-    └── [FunctionAppName]SOAR.zip (REQUIRED - deployment package)
+    └── [FunctionAppName].zip     (REQUIRED - deployment package)
 ```
-- Function App name must end with "SOAR" (e.g., `GetIPGeoInfoSOAR`)
-- ARM template must include `FunctionAppName` and `HostName` parameters
+- ARM template must include `FunctionAppName` parameter
 - Function app name must be unique per resource group: `"[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]"`
 
 
@@ -233,7 +232,7 @@ Examples of connector names in API ID:
 ### Workflow Resource Structure
 Must include:
 - `type`: `"Microsoft.Logic/workflows"`
-- `apiVersion`: `"2017-07-01"`
+- `apiVersion`: `"2019-05-01"`
 - `name`: `"[parameters('PlaybookName')]"`
 - `location`: `"[resourceGroup().location]"`
 - `tags`: 
@@ -370,7 +369,7 @@ When reviewing playbooks in pull requests, validate against these criteria:
 ### Resources - Logic App Workflow Validation
 - ✓ Resource has:
   - `type`: `"Microsoft.Logic/workflows"`
-  - `apiVersion`: `"2017-07-01"`
+  - `apiVersion`: `"2019-05-01"`
   - `name`: `"[parameters('PlaybookName')]"` (NOT hardcoded)
   - `location`: `"[resourceGroup().location]"`
   - `identity.type`: `"SystemAssigned"`
