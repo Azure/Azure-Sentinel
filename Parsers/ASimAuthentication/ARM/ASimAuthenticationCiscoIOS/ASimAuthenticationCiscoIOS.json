@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimAuthenticationCiscoIOS')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM parser for Cisco IOS Syslog Message",
+        "category": "ASIM",
+        "FunctionAlias": "ASimAuthenticationCiscoIOS",
+        "query": "let parser = (disabled: bool = false) {\n  let EventResultDetailsLookup = datatable(EventOriginalResultDetails: string, EventResultDetails: string)\n  [\n      \"Login Authentication Failed - BadUser\", \"No such user or password\",\n      \"Login Authentication Failed\", \"Incorrect password\"\n  ];\n  let LoginSuccessIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SEC_LOGIN-5-LOGIN_SUCCESS\"\n      | parse SyslogMessage with * \"%SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user:\" TargetUsername: string \"] [Source:\" SrcIpAddr: string \"] [localport: \" SrcPortNumber: string \"]\" *\n      | extend EventType = \"Logon\", EventResult = \"Success\"\n  };\n  let LoginFailureIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SEC_LOGIN-4-LOGIN_FAILED\"\n      | parse SyslogMessage with * \"%SEC_LOGIN-4-LOGIN_FAILED: Login failed [user:\" TargetUsername: string \"] [Source:\" SrcIpAddr: string \"] [localport: \" SrcPortNumber: string \"] [Reason: \" EventOriginalResultDetails: string \"]\" *\n      | extend EventType = \"Logon\", EventResult = \"Failure\"\n  };\n  let LogoutIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SYS-6-LOGOUT\"\n      | parse SyslogMessage with * \"%SYS-6-LOGOUT: User \" TargetUsername: string \" \" * \"(\" SrcIpAddr: string \")\"\n      | extend EventType = \"Logoff\", EventResult = \"Success\"\n  };\n  let SyslogLogs = Syslog\n  | where not(disabled);\n  union\n      LoginSuccessIOS(SyslogLogs),\n      LoginFailureIOS(SyslogLogs),\n      LogoutIOS(SyslogLogs)\n  | extend\n      EventSchema = \"Authentication\",\n      EventSchemaVersion = \"0.1.4\",\n      EventVendor = \"Cisco\",\n      EventProduct = \"IOS\",\n      EventCount = int(1),\n      EventStartTime = EventTime,\n      EventEndTime = EventTime,\n      Type = \"Syslog\"\n  | project-rename\n      DvcIpAddr = HostIP,\n      TargetHostname = HostName,\n      EventOriginalSeverity = SeverityLevel,\n      EventMessage = SyslogMessage\n  | lookup EventResultDetailsLookup on EventOriginalResultDetails\n  | extend\n      EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),\n      SrcPortNumber = toint(SrcPortNumber),\n      TargetUsernameType = iff(isnotempty(TargetUsername), \"Simple\", \"\")\n  | extend\n      Dvc = DvcIpAddr,\n      Src = SrcIpAddr,\n      IpAddr = SrcIpAddr\n  | project\n      TimeGenerated,\n      Type,\n      EventType,\n      EventResult,\n      EventSchema,\n      EventSchemaVersion,\n      EventVendor,\n      EventProduct,\n      EventCount,\n      EventStartTime,\n      EventEndTime,\n      DvcIpAddr,\n      TargetHostname,\n      EventOriginalSeverity,\n      EventSeverity,\n      EventOriginalResultDetails,\n      EventResultDetails,\n      TargetUsername,\n      TargetUsernameType,\n      SrcIpAddr,\n      SrcPortNumber,\n      Dvc,\n      Src,\n      IpAddr\n};\nparser(disabled=disabled)",
+        "version": 1,
+        "functionParameters": "disabled:bool=False"
+      }
+    }
+  ]
+}
