@@ -1,0 +1,42 @@
+id: 8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f
+name: A365 AI Agents - Publicly Shared
+description: |
+  This query identifies A365 AI agents that are shared publicly.
+  Such configurations significantly increase the risk of unauthorized access by unintended users, which could lead to data exposure or misuse of agent capabilities. 
+  Public sharing is especially sensitive because it extends access beyond organizational boundaries.
+  Recommended Action: Review these agents to confirm whether broad sharing is necessary for the business scenario. 
+  If not, restrict access to specific users or groups and apply least-privilege principles. For public configurations, ensure proper governance and compliance checks are in place.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn));
+  AIAgentsInfo
+  | where RegistrySource == "A365"
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend Scope = tostring(RawAgentInfoJson.scope)
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | where Scope == "public"
+  | project-away RawAgentInfoJson, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, OwnerUpn, CreatorUpn, DeveloperName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0
