@@ -1,4 +1,4 @@
-id: b1b2c3d4-0001-4000-8000-000000000001
+id: ad6df9bc-5c1d-4dcd-8df9-516bc35f4dfe
 name: Valimail Enforce - DMARC Policy Change History
 description: |
   Hunt for all DMARC policy changes across domains over the selected time range.
@@ -12,15 +12,36 @@ requiredDataConnectors:
     dataTypes:
       - ValimailEnforceEvents_CL
 query: |
+  // All DMARC policy changes in the timeframe, with actor and affected domain
+  let timeframe = 30d;
   ValimailEnforceEvents_CL
+  | where PerformedAt > ago(timeframe)
   | where EventCategory == "DMARCPolicy"
+  | extend
+      AccountName   = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1])
   | project
       PerformedAt,
       Domain = Subject,
       ChangedBy = User,
+      AccountName,
+      AccountDomain,
       PolicyAction = EventType,
       ChangeDetail = EventChange,
       Severity = EventSeverity,
       IsHighValue = IsHighValueEvent
   | order by PerformedAt desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ChangedBy
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
 version: 1.0.0

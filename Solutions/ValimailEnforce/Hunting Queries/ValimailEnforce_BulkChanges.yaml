@@ -1,4 +1,4 @@
-id: b1b2c3d4-0002-4000-8000-000000000002
+id: 85db7cdc-378e-48b9-b6cf-77fd622aa617
 name: Valimail Enforce - Bulk Domain Changes by Single User
 description: |
   Hunt for users who have made configuration changes to an unusually high number
@@ -9,14 +9,17 @@ tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1562
-  - T1531
+  - T1098
 requiredDataConnectors:
   - connectorId: ValimailEnforce
     dataTypes:
       - ValimailEnforceEvents_CL
 query: |
-  let threshold = 5; // flag users who touched more than this many domains
+  // Flag users who touched more than this many distinct domains within the timeframe
+  let threshold = 5;
+  let timeframe = 1d;
   ValimailEnforceEvents_CL
+  | where PerformedAt > ago(timeframe)
   | where IsHighValueEvent == true
   | summarize
       DomainCount = dcount(Subject),
@@ -24,11 +27,20 @@ query: |
       Actions = make_set(EventType),
       FirstSeen = min(PerformedAt),
       LastSeen = max(PerformedAt)
-    by User, bin(PerformedAt, 1h)
+    by User
   | where DomainCount > threshold
   | extend
       AccountName = tostring(split(User, "@")[0]),
       AccountDomain = tostring(split(User, "@")[1])
-  | project FirstSeen, LastSeen, User, DomainCount, Domains, Actions
+  | project FirstSeen, LastSeen, User, AccountName, AccountDomain, DomainCount, Domains, Actions
   | order by DomainCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
 version: 1.0.0

@@ -1,4 +1,4 @@
-id: b1b2c3d4-0004-4000-8000-000000000004
+id: ce30ce49-2eaf-483c-85cd-c27a645d5355
 name: Valimail Enforce - Configuration Change Rate Trend
 description: |
   Hunt for configuration change and user addition activity grouped by user and
@@ -11,15 +11,18 @@ tactics:
   - PrivilegeEscalation
 relevantTechniques:
   - T1562
-  - T1531
+  - T1098
   - T1078
 requiredDataConnectors:
   - connectorId: ValimailEnforce
     dataTypes:
       - ValimailEnforceEvents_CL
 query: |
+  // Configuration change activity per user per hour; flag buckets exceeding the threshold
   let threshold = 3;
+  let timeframe = 7d;
   ValimailEnforceEvents_CL
+  | where PerformedAt > ago(timeframe)
   | where EventCategory in (
       "DMARCPolicy",
       "SPFConfiguration",
@@ -34,15 +37,17 @@ query: |
       Categories     = make_set(EventCategory),
       Domains        = make_set(Subject),
       DomainCount    = dcount(Subject)
-    by User, bin(PerformedAt, 1h)
+    by User, TimeBucket = bin(PerformedAt, 1h)
   | extend
       ExceedsThreshold = ChangeCount > threshold,
       ChangesPerMin    = round(todouble(ChangeCount) / 60.0, 2),
       AccountName      = tostring(split(User, "@")[0]),
       AccountDomain    = tostring(split(User, "@")[1])
   | project
-      PerformedAt,
+      TimeBucket,
       User,
+      AccountName,
+      AccountDomain,
       ChangeCount,
       HighValueCount,
       DomainCount,
@@ -51,5 +56,14 @@ query: |
       Domains,
       Actions,
       Categories
-  | order by PerformedAt desc
+  | order by TimeBucket desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
 version: 1.0.0
