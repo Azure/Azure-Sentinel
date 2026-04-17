@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication filtering parser for VMware vCenter
-  Version: '0.1.0'
-  LastUpdated: Mar 26, 2026
+  Version: '0.1.1'
+  LastUpdated: Apr 14, 2026
 Product:
   Name: VMware vCenter
 Normalization:
@@ -76,13 +76,15 @@ ParserQuery: |
         T
         | where Message has "UserLoginSessionEvent"
         | extend Type = TableType
-        | parse Message with * "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *;
+        | parse Message with PreEventString "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *
+        | extend DvcId = split(PreEventString, " ")[3];
     };
     let LogoutEvents = (T: (Message: string), TableType: string) {
         T
         | where Message has "UserLogoutSessionEvent"
         | extend Type = TableType
-        | parse Message with * "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " ActorUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *;
+        | parse Message with PreEventString "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *
+        | extend DvcId = split(PreEventString, " ")[3];
     };
     let vCenterLogs = vcenter_CL
     | where not(disabled)
@@ -108,6 +110,7 @@ ParserQuery: |
         LoginEvents(AzureVCenterLogs, "AVSVcSyslog"),
         LogoutEvents(AzureVCenterLogs, "AVSVcSyslog")
         | where ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+        | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
         | extend
             EventVendor = "VMware",
             EventProduct = "vCenter",
@@ -117,7 +120,7 @@ ParserQuery: |
             EventStartTime = EventTime,
             EventEndTime = EventTime,
             EventCount = coalesce(toint(APIInvocationCount), int(1)),
-            ActorUsernameType = "Simple",
+            TargetUsernameType = "Simple",
             EventResult = "Success"
         | lookup EventTypeLookup on EventOriginalType
         | where (array_length(eventtype_in) == 0) or EventType in~ (eventtype_in)
@@ -127,7 +130,8 @@ ParserQuery: |
         | extend
             AdditionalFields = iff(pack, bag_pack("LoginTime", LoginTime), dynamic([])),
             IpAddr = SrcIpAddr,
-            Dvc = EventProduct
+            User = TargetUsername,
+            Dvc = DvcId
         | project
             TimeGenerated,
             Type,
@@ -138,19 +142,22 @@ ParserQuery: |
             EventStartTime,
             EventEndTime,
             EventCount,
-            ActorUsernameType,
+            TargetUsernameType,
             EventResult,
             EventOriginalType,
             EventType,
+            EventSeverity,
             EventOriginalSeverity,
             EventOriginalResultDetails,
             EventOriginalUid,
-            ActorUsername,
+            TargetUsername,
             SrcIpAddr,
             HttpUserAgent,
             AdditionalFields,
             IpAddr,
-            Dvc;
+            Dvc,
+            DvcId,
+            User;
   };
   parser(
       starttime=starttime,
