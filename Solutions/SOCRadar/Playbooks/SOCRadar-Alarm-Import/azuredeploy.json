@@ -143,13 +143,18 @@
     },
     "variables": {
         "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "SentinelContributorRoleId": "ab8e14d6-4a74-4a29-9ba8-549422addade",
-        "SentinelResponderRoleId": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+        "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+        "_SentinelResponderRoleGuid": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+        "_LogAnalyticsReaderRoleGuid": "73c42c96-874c-492b-b04d-ab87d138a893",
+        "_MonitoringMetricsPublisherRoleGuid": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "SentinelContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]",
+        "SentinelResponderRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelResponderRoleGuid'))]",
         "sentinelRoleDefinitionId": "[if(equals(parameters('SentinelRoleLevel'), 'Responder'), variables('SentinelResponderRoleId'), variables('SentinelContributorRoleId'))]",
-        "LogAnalyticsReaderRoleId": "73c42c96-874c-492b-b04d-ab87d138a893",
-        "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "LogAnalyticsReaderRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_LogAnalyticsReaderRoleGuid'))]",
+        "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_MonitoringMetricsPublisherRoleGuid'))]",
         "workspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
-        "AuditStreamName": "Custom-SOCRadarAuditLog_CL"
+        "AuditStreamName": "Custom-SOCRadarAuditLog_CL",
+        "_managementBaseUrl": "[environment().resourceManager]"
     },
     "resources": [
         {
@@ -243,6 +248,10 @@
                         },
                         "ResourceGroupName": {
                             "type": "String"
+                        },
+                        "ManagementBaseUrl": {
+                            "type": "String",
+                            "defaultValue": ""
                         }
                     },
                     "triggers": {
@@ -261,7 +270,7 @@
                             "type": "Http",
                             "inputs": {
                                 "method": "GET",
-                                "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1&$filter=startswith(properties/title, ''[SOCRadar]'')')]",
+                                "uri": "[concat(variables('_managementBaseUrl'), 'subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1&$filter=startswith(properties/title, ''[SOCRadar]'')')]",
                                 "authentication": {
                                     "type": "ManagedServiceIdentity"
                                 },
@@ -506,7 +515,7 @@
                                     {
                                         "name": "incidents_next_link",
                                         "type": "string",
-                                        "value": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=startswith(properties/title, ''[SOCRadar]'')')]"
+                                        "value": "[concat(variables('_managementBaseUrl'), 'subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=startswith(properties/title, ''[SOCRadar]'')')]"
                                     }
                                 ]
                             },
@@ -742,13 +751,13 @@
                                                                     "type": "Http",
                                                                     "inputs": {
                                                                         "method": "PUT",
-                                                                        "uri": "https://management.azure.com/subscriptions/@{parameters('SubscriptionId')}/resourceGroups/@{parameters('ResourceGroupName')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('WorkspaceName')}/providers/Microsoft.SecurityInsights/incidents/@{guid()}?api-version=2023-11-01",
+                                                                        "uri": "@{concat(parameters('ManagementBaseUrl'), '/subscriptions/', parameters('SubscriptionId'), '/resourceGroups/', parameters('ResourceGroupName'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents/', guid(), '?api-version=2023-11-01')}",
                                                                         "headers": {
                                                                             "Content-Type": "application/json"
                                                                         },
                                                                         "authentication": {
                                                                             "type": "ManagedServiceIdentity",
-                                                                            "audience": "https://management.azure.com"
+                                                                            "audience": "[variables('_managementBaseUrl')]"
                                                                         },
                                                                         "body": {
                                                                             "properties": "@outputs('Add_ClassificationReason_If_Needed')"
@@ -959,6 +968,9 @@
                     },
                     "ResourceGroupName": {
                         "value": "[parameters('WorkspaceResourceGroup')]"
+                    },
+                    "ManagementBaseUrl": {
+                        "value": "[variables('_managementBaseUrl')]"
                     }
                 }
             }
@@ -972,7 +984,7 @@
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
             ],
             "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('sentinelRoleDefinitionId'))]",
+                "roleDefinitionId": "[variables('sentinelRoleDefinitionId')]",
                 "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }
@@ -986,7 +998,7 @@
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
             ],
             "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('LogAnalyticsReaderRoleId'))]",
+                "roleDefinitionId": "[variables('LogAnalyticsReaderRoleId')]",
                 "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }
