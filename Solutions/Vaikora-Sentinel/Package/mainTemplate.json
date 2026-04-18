@@ -162,8 +162,8 @@
                   ],
                   "sampleQueries": [
                     {
-                      "description": "High-risk agent actions (last 24 hours)",
-                      "query": "Vaikora_AgentSignals_CL | where TimeGenerated >= ago(24h) | where risk_score_d >= 75 | project TimeGenerated, agent_id_s, action_type_s, severity_s, policy_decision_s, risk_score_d, anomaly_score_d"
+                      "description": "High severity agent actions (last 24 hours)",
+                      "query": "Vaikora_AgentSignals_CL | where TimeGenerated >= ago(24h) | where severity_s in ('high', 'critical') | project TimeGenerated, agent_id_s, action_type_s, severity_s, policy_decision_s, anomaly_score_d"
                     },
                     {
                       "description": "Anomalous agent behavior (last 7 days)",
@@ -290,83 +290,11 @@
               "properties": {
                 "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
                 "streamDeclarations": {
-                  "Custom-Vaikora_AgentSignals_CL": {
+                  "Custom-Vaikora_AgentSignals_Raw": {
                     "columns": [
                       {
-                        "name": "TimeGenerated",
-                        "type": "datetime"
-                      },
-                      {
-                        "name": "payload",
+                        "name": "action",
                         "type": "dynamic"
-                      },
-                      {
-                        "name": "timestamp",
-                        "type": "datetime"
-                      },
-                      {
-                        "name": "action_type_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "agent_id_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "status_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "severity_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "policy_decision_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "policy_id_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "risk_score_d",
-                        "type": "int"
-                      },
-                      {
-                        "name": "risk_level_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "is_anomaly_b",
-                        "type": "boolean"
-                      },
-                      {
-                        "name": "anomaly_score_d",
-                        "type": "real"
-                      },
-                      {
-                        "name": "anomaly_reason_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "threat_detected_b",
-                        "type": "boolean"
-                      },
-                      {
-                        "name": "threat_score_d",
-                        "type": "int"
-                      },
-                      {
-                        "name": "log_hash_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "resource_type_s",
-                        "type": "string"
-                      },
-                      {
-                        "name": "action_id_s",
-                        "type": "string"
                       }
                     ]
                   }
@@ -382,12 +310,12 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Custom-Vaikora_AgentSignals_CL"
+                      "Custom-Vaikora_AgentSignals_Raw"
                     ],
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend p=todynamic(payload) | extend TimeGenerated=todatetime(timestamp), action_type_s=tostring(p.action_type), agent_id_s=tostring(p.agent_id), status_s=tostring(p.status), severity_s=tostring(p.severity), policy_decision_s=tostring(p.policy_decision), policy_id_s=tostring(p.policy_id), risk_score_d=toint(p.risk_score), risk_level_s=tostring(p.risk_level), is_anomaly_b=tobool(p.is_anomaly), anomaly_score_d=toreal(p.anomaly_score), anomaly_reason_s=tostring(p.anomaly_reason), threat_detected_b=tobool(p.threat_detected), threat_score_d=toint(p.threat_score), log_hash_s=tostring(p.log_hash), resource_type_s=tostring(p.resource_type), action_id_s=tostring(p.id) | project TimeGenerated, action_type_s, agent_id_s, status_s, severity_s, policy_decision_s, policy_id_s, risk_score_d, risk_level_s, is_anomaly_b, anomaly_score_d, anomaly_reason_s, threat_detected_b, threat_score_d, log_hash_s, resource_type_s, action_id_s",
+                    "transformKql": "source | extend a = todynamic(action) | project TimeGenerated=todatetime(a.timestamp), action_id_s=tostring(a.id), agent_id_s=tostring(a.agent_id), action_type_s=tostring(a.action_type), resource_type_s=tostring(a.resource_type), status_s=tostring(a.status), severity_s=tostring(a.severity), policy_id_s=tostring(a.policy_id), policy_decision_s=tostring(a.policy_decision), is_anomaly_b=tobool(a.is_anomaly), anomaly_score_d=toreal(a.anomaly_score), anomaly_reason_s=tostring(a.anomaly_reason), log_hash_s=tostring(a.log_hash)",
                     "outputStream": "Custom-Vaikora_AgentSignals_CL"
                   }
                 ]
@@ -457,7 +385,7 @@
                 "connectorDefinitionName": "VaikoraSentinel",
                 "dataType": "Vaikora_AgentSignals_CL",
                 "dcrConfig": {
-                  "streamName": "Custom-Vaikora_AgentSignals_CL",
+                  "streamName": "Custom-Vaikora_AgentSignals_Raw",
                   "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
                   "dataCollectionRuleImmutableId": "[parameters('dcrImmutableId')]"
                 },
@@ -471,10 +399,9 @@
                   "httpMethod": "GET",
                   "queryParameters": {
                     "agent_id": "[parameters('vaikoraAgentId')]",
-                    "per_page": 100,
-                    "page": 1
+                    "per_page": 100
                   },
-                  "queryWindowInMin": 360,
+                  "queryWindowInMin": 120,
                   "rateLimitQps": 1,
                   "retryCount": 3,
                   "timeoutInSeconds": 60,
@@ -484,12 +411,10 @@
                   }
                 },
                 "paging": {
-                  "pagingType": "PageNumber",
+                  "pagingType": "CountBasedPaging",
                   "pageSize": 100,
-                  "pageSizeParaName": "per_page",
-                  "pageNumberParaName": "page",
-                  "pageNumberStart": 1,
-                  "hasNextPageFilter": "$.actions | length > 0"
+                  "pageSizeParameterName": "per_page",
+                  "countAttributePath": "$.total"
                 },
                 "response": {
                   "eventsJsonPaths": [
@@ -535,10 +460,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Identifies high-risk AI agent actions from Vaikora where the risk score is 75 or above and severity is high or critical. These events may indicate an agent operating outside safe parameters or triggering policy thresholds.",
-                "displayName": "Vaikora - High risk AI agent action detected",
+                "description": "Identifies AI agent actions from Vaikora classified as high or critical severity. These events may indicate an agent operating outside safe parameters or triggering policy thresholds.",
+                "displayName": "Vaikora - High severity AI agent action detected",
                 "enabled": false,
-                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where risk_score_d >= 75\n| where severity_s in ('high', 'critical')\n| summarize\n    ActionCount = count(),\n    MaxRiskScore = max(risk_score_d),\n    Actions = make_set(action_type_s),\n    PolicyDecisions = make_set(policy_decision_s),\n    ResourceTypes = make_set(resource_type_s)\n  by AgentId = agent_id_s, RiskLevel = risk_level_s, Severity = severity_s\n| extend\n    ActionList = strcat_array(Actions, ', '),\n    PolicyList = strcat_array(PolicyDecisions, ', '),\n    ResourceList = strcat_array(ResourceTypes, ', ')",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where severity_s in (\"high\", \"critical\")\n| summarize\n    ActionCount = count(),\n    MaxAnomalyScore = max(anomaly_score_d),\n    Actions = make_set(action_type_s),\n    PolicyDecisions = make_set(policy_decision_s),\n    ResourceTypes = make_set(resource_type_s),\n    LogHashes = make_set(log_hash_s)\n  by AgentId = agent_id_s, Severity = severity_s\n| extend\n    ActionList = strcat_array(Actions, \", \"),\n    PolicyList = strcat_array(PolicyDecisions, \", \"),\n    ResourceList = strcat_array(ResourceTypes, \", \")\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "High",
@@ -577,10 +502,11 @@
                   }
                 ],
                 "customDetails": {
-                  "MaxRiskScore": "MaxRiskScore",
+                  "MaxAnomalyScore": "MaxAnomalyScore",
                   "ActionCount": "ActionCount",
                   "Actions": "ActionList",
-                  "PolicyDecisions": "PolicyList"
+                  "PolicyDecisions": "PolicyList",
+                  "ResourceTypes": "ResourceList"
                 },
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
@@ -590,7 +516,7 @@
                   "groupingConfiguration": {
                     "enabled": true,
                     "reopenClosedIncident": false,
-                    "lookbackDuration": "PT1H",
+                    "lookbackDuration": "1h",
                     "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
@@ -604,7 +530,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
               "properties": {
-                "description": "Vaikora Analytics Rule 1",
+                "description": "Identifies AI agent actions from Vaikora classified as high or critical severity. These events may indicate an agent operating outside safe parameters or triggering policy thresholds.",
                 "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
                 "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
                 "kind": "AnalyticsRule",
@@ -623,7 +549,8 @@
                   "email": "support@data443.com",
                   "tier": "Partner",
                   "link": "https://www.data443.com"
-                }
+                },
+                "displayName": "Vaikora - High severity AI agent action detected"
               }
             }
           ]
@@ -665,7 +592,7 @@
                 "description": "Identifies AI agent behavioral anomalies flagged by Vaikora with an anomaly score of 0.7 or above, indicating significant deviation from the agent's established behavioral baseline.",
                 "displayName": "Vaikora - Behavioral anomaly detected",
                 "enabled": false,
-                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where is_anomaly_b == true\n| where anomaly_score_d >= 0.7\n| summarize\n    AnomalyCount = count(),\n    MaxAnomalyScore = max(anomaly_score_d),\n    AvgAnomalyScore = avg(anomaly_score_d),\n    AnomalyReasons = make_set(anomaly_reason_s),\n    ActionTypes = make_set(action_type_s)\n  by AgentId = agent_id_s, Severity = severity_s\n| extend\n    ReasonList = strcat_array(AnomalyReasons, '; '),\n    ActionList = strcat_array(ActionTypes, ', ')",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where is_anomaly_b == true\n| where anomaly_score_d >= 0.7\n| summarize\n    AnomalyCount = count(),\n    MaxAnomalyScore = max(anomaly_score_d),\n    AvgAnomalyScore = avg(anomaly_score_d),\n    AnomalyReasons = make_set(anomaly_reason_s),\n    ActionTypes = make_set(action_type_s)\n  by AgentId = agent_id_s, Severity = severity_s\n| extend\n    ReasonList = strcat_array(AnomalyReasons, \"; \"),\n    ActionList = strcat_array(ActionTypes, \", \")\n",
                 "queryFrequency": "PT30M",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -703,8 +630,10 @@
                 ],
                 "customDetails": {
                   "MaxAnomalyScore": "MaxAnomalyScore",
+                  "AvgAnomalyScore": "AvgAnomalyScore",
                   "AnomalyCount": "AnomalyCount",
-                  "AnomalyReasons": "ReasonList"
+                  "AnomalyReasons": "ReasonList",
+                  "ActionTypes": "ActionList"
                 },
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
@@ -714,7 +643,7 @@
                   "groupingConfiguration": {
                     "enabled": true,
                     "reopenClosedIncident": false,
-                    "lookbackDuration": "PT1H",
+                    "lookbackDuration": "1h",
                     "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
@@ -728,7 +657,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject2').analyticRuleId2,'/'))))]",
               "properties": {
-                "description": "Vaikora Analytics Rule 2",
+                "description": "Identifies AI agent behavioral anomalies flagged by Vaikora with an anomaly score of 0.7 or above, indicating significant deviation from the agent's established behavioral baseline.",
                 "parentId": "[variables('analyticRuleObject2').analyticRuleId2]",
                 "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
                 "kind": "AnalyticsRule",
@@ -747,7 +676,8 @@
                   "email": "support@data443.com",
                   "tier": "Partner",
                   "link": "https://www.data443.com"
-                }
+                },
+                "displayName": "Vaikora - Behavioral anomaly detected"
               }
             }
           ]
@@ -789,7 +719,7 @@
                 "description": "Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.",
                 "displayName": "Vaikora - Agent policy violation",
                 "enabled": false,
-                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where policy_decision_s == 'block'\n| summarize\n    ViolationCount = count(),\n    PolicyIds = make_set(policy_id_s),\n    ActionTypes = make_set(action_type_s),\n    ResourceTypes = make_set(resource_type_s),\n    MaxRiskScore = max(risk_score_d)\n  by AgentId = agent_id_s\n| extend\n    PolicyList = strcat_array(PolicyIds, ', '),\n    ActionList = strcat_array(ActionTypes, ', '),\n    ResourceList = strcat_array(ResourceTypes, ', ')\n| where ViolationCount >= 1",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where policy_decision_s == \"block\"\n| summarize\n    ViolationCount = count(),\n    PolicyIds = make_set(policy_id_s),\n    ActionTypes = make_set(action_type_s),\n    ResourceTypes = make_set(resource_type_s),\n    MaxAnomalyScore = max(anomaly_score_d),\n    Severities = make_set(severity_s),\n    LogHashes = make_set(log_hash_s)\n  by AgentId = agent_id_s\n| extend\n    PolicyList = strcat_array(PolicyIds, \", \"),\n    ActionList = strcat_array(ActionTypes, \", \"),\n    ResourceList = strcat_array(ResourceTypes, \", \")\n| where ViolationCount >= 1\n",
                 "queryFrequency": "PT15M",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -828,7 +758,8 @@
                 "customDetails": {
                   "ViolationCount": "ViolationCount",
                   "PolicyIds": "PolicyList",
-                  "MaxRiskScore": "MaxRiskScore"
+                  "ActionTypes": "ActionList",
+                  "MaxAnomalyScore": "MaxAnomalyScore"
                 },
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
@@ -838,7 +769,7 @@
                   "groupingConfiguration": {
                     "enabled": true,
                     "reopenClosedIncident": false,
-                    "lookbackDuration": "PT1H",
+                    "lookbackDuration": "1h",
                     "matchingMethod": "Selected",
                     "groupByEntities": [
                       "Account"
@@ -852,7 +783,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject3').analyticRuleId3,'/'))))]",
               "properties": {
-                "description": "Vaikora Analytics Rule 3",
+                "description": "Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.",
                 "parentId": "[variables('analyticRuleObject3').analyticRuleId3]",
                 "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
                 "kind": "AnalyticsRule",
@@ -871,7 +802,8 @@
                   "email": "support@data443.com",
                   "tier": "Partner",
                   "link": "https://www.data443.com"
-                }
+                },
+                "displayName": "Vaikora - Agent policy violation"
               }
             }
           ]
@@ -914,7 +846,7 @@
               },
               "properties": {
                 "displayName": "[parameters('workbook1-name')]",
-                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Vaikora AI Agent Behavioral Signals\\n\\nThis workbook visualizes AI agent behavioral data ingested from Vaikora into Microsoft Sentinel.\"},\"name\":\"header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| summarize TotalActions=count(), BlockedActions=countif(policy_decision_s=='block'), Anomalies=countif(is_anomaly_b==true), HighRisk=countif(risk_score_d>=75)\\n| project TotalActions, BlockedActions, Anomalies, HighRisk\",\"size\":4,\"title\":\"Signal Overview (last 24h)\",\"queryType\":0,\"visualization\":\"tiles\"},\"name\":\"overview-tiles\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| summarize TotalActions=count(), Blocked=countif(policy_decision_s=='block'), Anomalies=countif(is_anomaly_b==true) by bin(TimeGenerated,1h)\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"Agent Actions Over Time\",\"queryType\":0,\"visualization\":\"timechart\"},\"name\":\"actions-timechart\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| summarize Count=count() by severity_s\",\"size\":3,\"title\":\"Actions by Severity\",\"queryType\":0,\"visualization\":\"piechart\"},\"name\":\"severity-pie\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| where is_anomaly_b==true\\n| summarize Count=count() by bin(TimeGenerated,1h)\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"Anomalies Over Time\",\"queryType\":0,\"visualization\":\"timechart\"},\"name\":\"anomaly-timechart\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| where risk_score_d>=75 or severity_s in ('high','critical')\\n| project TimeGenerated, agent_id_s, action_type_s, severity_s, risk_score_d, anomaly_score_d, policy_decision_s, anomaly_reason_s\\n| order by TimeGenerated desc\\n| take 50\",\"size\":0,\"title\":\"Recent High-Risk Actions\",\"queryType\":0,\"visualization\":\"table\"},\"name\":\"highrisk-table\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Vaikora_AgentSignals_CL\\n| where TimeGenerated > ago(24h)\\n| where policy_decision_s=='block'\\n| summarize ViolationCount=count(), MaxRiskScore=max(risk_score_d), Actions=make_set(action_type_s), LastSeen=max(TimeGenerated) by agent_id_s, policy_id_s\\n| extend ActionList=strcat_array(Actions,', ')\\n| project agent_id_s, policy_id_s, ViolationCount, MaxRiskScore, ActionList, LastSeen\\n| order by ViolationCount desc\",\"size\":0,\"title\":\"Policy Violations by Agent\",\"queryType\":0,\"visualization\":\"table\"},\"name\":\"violations-table\"}],\"styleSettings\":{},\"fromTemplateId\":\"sentinel-VaikoraAgentSignalsDashboard\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
+                "serializedData": "{\"version\": \"Notebook/1.0\", \"items\": [{\"type\": 1, \"content\": {\"json\": \"## Vaikora AI Agent Behavioral Signals\\n\\nThis workbook visualizes AI agent behavioral data ingested from Vaikora into Microsoft Sentinel. Use it to monitor agent activity, detect anomalies, and investigate policy violations.\"}, \"name\": \"header\"}, {\"type\": 9, \"content\": {\"version\": \"KqlParameterItem/1.0\", \"parameters\": [{\"id\": \"timeRange\", \"version\": \"KqlParameterItem/1.0\", \"name\": \"TimeRange\", \"label\": \"Time Range\", \"type\": 4, \"value\": {\"durationMs\": 1209600000}, \"typeSettings\": {\"selectableValues\": [{\"durationMs\": 3600000}, {\"durationMs\": 14400000}, {\"durationMs\": 43200000}, {\"durationMs\": 86400000}, {\"durationMs\": 259200000}, {\"durationMs\": 604800000}, {\"durationMs\": 2592000000}]}}, {\"id\": \"agentId\", \"version\": \"KqlParameterItem/1.0\", \"name\": \"AgentId\", \"label\": \"Agent ID\", \"type\": 2, \"query\": \"Vaikora_AgentSignals_CL | where isnotempty(agent_id_s) | summarize by agent_id_s | project value=agent_id_s, label=agent_id_s | take 50\", \"typeSettings\": {\"additionalResourceOptions\": [\"value::all\"], \"showDefault\": false}, \"defaultValue\": \"value::all\", \"queryType\": 0}], \"style\": \"pills\"}, \"name\": \"parameters\"}, {\"type\": 1, \"content\": {\"json\": \"### Summary\"}, \"name\": \"summary-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| summarize\\n    TotalActions = count(),\\n    BlockedActions = countif(policy_decision_s == 'block'),\\n    Anomalies = countif(is_anomaly_b == true),\\n    HighSeverity = countif(severity_s == 'high'),\\n    CriticalSeverity = countif(severity_s == 'critical')\\n| project TotalActions, BlockedActions, Anomalies, HighSeverity, CriticalSeverity\", \"size\": 4, \"title\": \"Signal Overview\", \"queryType\": 0, \"visualization\": \"tiles\", \"tileSettings\": {\"showBorder\": true, \"titleContent\": {\"columnMatch\": \"\", \"formatter\": 1}, \"leftContent\": {\"columnMatch\": \"TotalActions\", \"formatter\": 12, \"formatOptions\": {\"palette\": \"blue\"}}}}, \"name\": \"overview-tiles\"}, {\"type\": 1, \"content\": {\"json\": \"### Actions Over Time\"}, \"name\": \"timechart-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| summarize\\n    TotalActions = count(),\\n    Blocked = countif(policy_decision_s == 'block'),\\n    Anomalies = countif(is_anomaly_b == true)\\n  by bin(TimeGenerated, 1h)\\n| order by TimeGenerated asc\", \"size\": 0, \"title\": \"Agent Actions Over Time\", \"queryType\": 0, \"visualization\": \"timechart\"}, \"name\": \"actions-timechart\"}, {\"type\": 1, \"content\": {\"json\": \"### Actions by Severity\"}, \"name\": \"severity-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| summarize Count = count() by severity_s\\n| order by Count desc\", \"size\": 3, \"title\": \"Actions by Severity\", \"queryType\": 0, \"visualization\": \"piechart\"}, \"name\": \"severity-pie\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| summarize Count = count() by policy_decision_s\\n| order by Count desc\", \"size\": 3, \"title\": \"Actions by Policy Decision\", \"queryType\": 0, \"visualization\": \"piechart\"}, \"name\": \"policy-pie\"}, {\"type\": 1, \"content\": {\"json\": \"### Anomaly Detection\"}, \"name\": \"anomaly-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| where is_anomaly_b == true\\n| summarize Count = count() by bin(TimeGenerated, 1h)\\n| order by TimeGenerated asc\", \"size\": 0, \"title\": \"Anomalies Over Time\", \"queryType\": 0, \"visualization\": \"timechart\", \"chartSettings\": {\"seriesLabelSettings\": [{\"seriesName\": \"Count\", \"color\": \"orange\"}]}}, \"name\": \"anomaly-timechart\"}, {\"type\": 1, \"content\": {\"json\": \"### Recent High-Risk Actions\"}, \"name\": \"highrisk-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| where severity_s in ('high', 'critical')\\n| project TimeGenerated, agent_id_s, action_type_s, severity_s, anomaly_score_d, policy_decision_s, status_s, resource_type_s, action_id_s\\n| order by TimeGenerated desc\\n| take 50\", \"size\": 0, \"title\": \"Recent High-Risk Actions (top 50)\", \"queryType\": 0, \"visualization\": \"table\", \"gridSettings\": {\"formatters\": [{\"columnMatch\": \"severity_s\", \"formatter\": 18, \"formatOptions\": {\"thresholdsOptions\": \"colors\", \"thresholdsGrid\": [{\"operator\": \"==\", \"thresholdValue\": \"critical\", \"representation\": \"red\", \"text\": \"{0}\"}, {\"operator\": \"==\", \"thresholdValue\": \"high\", \"representation\": \"orange\", \"text\": \"{0}\"}, {\"operator\": \"Default\", \"thresholdValue\": null, \"representation\": \"blue\", \"text\": \"{0}\"}]}}, {\"columnMatch\": \"policy_decision_s\", \"formatter\": 18, \"formatOptions\": {\"thresholdsOptions\": \"colors\", \"thresholdsGrid\": [{\"operator\": \"==\", \"thresholdValue\": \"block\", \"representation\": \"red\", \"text\": \"{0}\"}, {\"operator\": \"Default\", \"thresholdValue\": null, \"representation\": \"green\", \"text\": \"{0}\"}]}}]}}, \"name\": \"highrisk-table\"}, {\"type\": 1, \"content\": {\"json\": \"### Policy Violations\"}, \"name\": \"violations-header\"}, {\"type\": 3, \"content\": {\"version\": \"KqlItem/1.0\", \"query\": \"Vaikora_AgentSignals_CL\\n| where TimeGenerated {TimeRange}\\n| where isnotempty(agent_id_s)\\n| where policy_decision_s == 'block'\\n| summarize\\n    ViolationCount = count(),\\n    MaxAnomalyScore = max(anomaly_score_d),\\n    Actions = make_set(action_type_s),\\n    Resources = make_set(resource_type_s),\\n    LastSeen = max(TimeGenerated)\\n  by AgentId = agent_id_s, PolicyId = policy_id_s\\n| extend ActionList = strcat_array(Actions, ', '), ResourceList = strcat_array(Resources, ', ')\\n| project AgentId, PolicyId, ViolationCount, MaxAnomalyScore, ActionList, ResourceList, LastSeen\\n| order by ViolationCount desc\", \"size\": 0, \"title\": \"Policy Violations by Agent and Policy\", \"queryType\": 0, \"visualization\": \"table\"}, \"name\": \"violations-table\"}], \"styleSettings\": {}, \"fromTemplateId\": \"sentinel-VaikoraAgentSignalsDashboard\", \"$schema\": \"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
                 "version": "1.0",
                 "sourceId": "[variables('workspaceResourceId')]",
                 "category": "sentinel"
