@@ -1,7 +1,8 @@
 # Exercise 4 — Automation Rules
 
-**Topic:** Create automation rules to enrich incidents with tags and manage SOC workflow
-**Difficulty:** Beginner
+**Topic:** Create automation rules to enrich incidents with tags and manage SOC workflow  
+**Difficulty:** Beginner  
+**Prerequisites:** None
 
 ---
 
@@ -33,9 +34,9 @@ Before creating automation, let's identify an alert we want to enrich. Navigate 
 
 Look for incidents created by the lab's detection rules. You should see incidents from rules like:
 
-- `Lab Stage 3.5 - Internal port scan detected via Palo Alto`
-- `Lab Stage 6 - Large data exfiltration to external IP`
-- `Lab [S4] [Okta] Account Takeover Chain`
+- `Lab Stage 3.5 - Internal port scan detected (Palo Alto)`
+- `Lab Stage 6 - Large data exfiltration to external IP (Palo Alto)`
+- `Lab Stage 4 - Account Takeover Chain (Okta)`
 
 ![Sentinel incidents list](../Images/OnboardingImage29.png?raw=true)
 
@@ -64,7 +65,7 @@ For this exercise, we will create automation rules targeting two scenarios:
    - Click **+ Add condition** → **Analytics rule name**
    - Select **Contains** → enter `port scan`
 
-   This matches any incident created by a rule whose name contains "port scan" — covering both `Lab Stage 3.5 Internal Port Scan Detected` and `Lab [E2] Port Scan Detection`.
+   This matches any incident created by a rule whose name contains "port scan" — covering both `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage E2 - Port Scan Detection (Palo Alto)`.
 
 5. Under **Actions**, add two actions:
 
@@ -144,7 +145,7 @@ To verify the rules work:
 If no new incidents have been created since you set up the rules, you can trigger them by running the detection rules manually:
 
 1. Go to **Hunting** → **Custom detection rules**
-2. Find the `Lab Stage 3.5 Internal Port Scan Detected` rule
+2. Find the `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` rule
 3. Click **Run** to generate a new incident
 
 Then check the incident — it should have the tags `reconnaissance` and `network` applied automatically.
@@ -186,3 +187,9 @@ To explore playbook integration:
 - [Automation rules reference](https://learn.microsoft.com/en-us/azure/sentinel/automation-rules-reference)
 - [Automate incident handling in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/automate-incident-handling-with-automation-rules)
 - [Tutorial: Use playbooks with automation rules](https://learn.microsoft.com/en-us/azure/sentinel/tutorial-respond-threats-playbook)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 5 — Cross-Platform Response Actions](./E05_device_isolation_response.md)** (optional, requires MDE) or skip to **[Exercise 6 — Port Scan Detection & Threshold Tuning](./E06_port_scan_threshold_tuning.md)**
