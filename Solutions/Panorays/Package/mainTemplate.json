@@ -2,201 +2,732 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "author": "Panorays",
-    "support": {
-      "tier": "Partner",
-      "name": "Panorays",
-      "email": "support@panorays.com",
-      "link": "https://support.panoraysapp.com/"
-    }
+    "author": "Panorays - support@panorays.com",
+    "comments": "Solution template for Panorays"
   },
   "parameters": {
     "location": {
       "type": "string",
-      "defaultValue": ""
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
     },
     "workspace": {
+      "defaultValue": "",
       "type": "string",
-      "defaultValue": ""
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
     },
-    "apitoken": {
-      "type": "securestring"
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
+    "email": "support@panorays.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Panorays",
+    "_solutionVersion": "3.0.0",
     "solutionId": "panorays.azure-sentinel-solution-panorays",
-    "productId": "panorays-sentinel-solution-3-0-0",
-    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
-    "panoraysAPIBaseUrl": "https://api.panoraysapp.com"
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "Panorays_ConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "Panorays_ConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
-      "type": "Microsoft.Insights/dataCollectionEndpoints",
-      "apiVersion": "2024-03-11",
-      "name": "PanoraysDCE",
-      "location": "[parameters('location')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
       "properties": {
-        "networkAcls": { "publicNetworkAccess": "Enabled" }
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Panorays",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "Panorays_ConnectorDefinition",
+                  "title": "Panorays",
+                  "publisher": "Panorays",
+                  "descriptionMarkdown": "The Panorays data connector allows ingesting company findings from the Panorays API into Microsoft Sentinel.",
+                  "graphQueriesTableName": "PanoraysCompanyFindingPOC_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total findings found",
+                      "legend": "Company Findings",
+                      "baseQuery": "PanoraysCompanyFindingPOC_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Panorays Company Findings",
+                      "query": "PanoraysCompanyFindingPOC_CL | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "PanoraysCompanyFindingPOC_CL",
+                      "lastDataReceivedQuery": "PanoraysCompanyFindingPOC_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write required for workspace in resource group [parameters('resourceGroupName')] within subscription [parameters('subscription')]. Data ingestion requires a valid API Token: [parameters('apitoken')] for endpoint [parameters('panoraysAPIBaseUrl')].",
+                        "ProviderDisplayName": "Log Analytics Workspace",
+                        "Scope": "ResourceGroup",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Configuration steps for the Panorays API"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Token",
+                            "placeholder": "API Token",
+                            "type": "securestring",
+                            "name": "apitoken",
+                            "toolTip": "The API Token provided by Panorays to authenticate the connector.",
+                            "validations": [
+                              {
+                                "regex": "^.{1,1000}$",
+                                "message": "The API Token is required."
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Panorays",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Panorays",
+                  "email": "support@panorays.com",
+                  "tier": "Partner",
+                  "link": "https://support.panoraysapp.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "PanoraysCompanyFindingsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Direct",
+              "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'PanoraysDCE')]",
+                "streamDeclarations": {
+                  "Custom-PanoraysCompanyFindings_API": {
+                    "columns": [
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FindingKey",
+                        "type": "string"
+                      },
+                      {
+                        "name": "metadata",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "cves",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "asset_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sub_category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "test_text",
+                        "type": "string"
+                      },
+                      {
+                        "name": "insert_ts",
+                        "type": "string"
+                      },
+                      {
+                        "name": "update_ts",
+                        "type": "string"
+                      },
+                      {
+                        "name": "test_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "segments",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-PanoraysCompanyFindings_API"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project TimeGenerated = todatetime(insert_ts), Status = status, FindingKey = FindingKey, Metadata = metadata, CVEs = cves, AssetName = asset_name, Category = category, SubCategory = sub_category, TestText = test_text, InsertTimestamp = insert_ts, UpdateTimestamp = update_ts, TestName = test_name, Segments = segments",
+                    "outputStream": "Custom-PanoraysCompanyFindingPOC_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "PanoraysCompanyFindingPOC_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                  "name": "PanoraysCompanyFindingPOC_CL",
+                  "columns": [
+                    {
+                      "name": "asset_name",
+                      "type": "string",
+                      "description": "The specific digital asset where the finding was detected (e.g., a domain, subdomain, IP address, or URL)."
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The UTC timestamp when this event was ingested into Microsoft Sentinel. Use this for time-range filtering in KQL"
+                    },
+                    {
+                      "name": "category",
+                      "type": "string",
+                      "description": "The high-level security domain of the finding (Possible values: Human, Network and IT, Application)"
+                    },
+                    {
+                      "name": "cves",
+                      "type": "dynamic",
+                      "description": "A list of Common Vulnerabilities and Exposures (CVE) IDs associated with this finding, if applicable (e.g., [CVE-2024-44228])."
+                    },
+                    {
+                      "name": "description",
+                      "type": "string",
+                      "description": "A detailed explanation of the vulnerability, including why it is a risk and the potential impact"
+                    },
+                    {
+                      "name": "evidence",
+                      "type": "dynamic",
+                      "description": "Technical proof collected during the scan. May include HTTP headers, open port nr., or specific configuration settings that triggered the finding."
+                    },
+                    {
+                      "name": "finding_text",
+                      "type": "string",
+                      "description": "The headline or short title of the specific finding (e.g., Cloud Private Services Exposed)"
+                    },
+                    {
+                      "name": "id",
+                      "type": "string",
+                      "description": "The unique identifier for this specific finding within the Panorays platform."
+                    },
+                    {
+                      "name": "is_hidden",
+                      "type": "boolean",
+                      "description": "Indicates if this finding has been manually suppressed or hidden in the Panorays dashboard (true = hidden)"
+                    },
+                    {
+                      "name": "metadata",
+                      "type": "dynamic",
+                      "description": "A JSON object containing additional context specific to the finding type (e.g., specific port numbers, certificate details)"
+                    },
+                    {
+                      "name": "previously_disputed",
+                      "type": "boolean",
+                      "description": "Flag indicating if this finding was previously marked as a false positive or disputed by an analyst."
+                    },
+                    {
+                      "name": "segments",
+                      "type": "dynamic",
+                      "description": "A list of business units, tags, or asset groups within Panorays that this finding is associated with"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string",
+                      "description": "The risk level assigned to this finding. Possible values: Critical, High, Medium, Low, Info."
+                    },
+                    {
+                      "name": "status",
+                      "type": "string",
+                      "description": "The current lifecycle state of the finding. Possible values Open, Done, Closed."
+                    },
+                    {
+                      "name": "status_update_ts",
+                      "type": "string",
+                      "description": "The timestamp (as a string) reflecting specifically when the status field last changed."
+                    },
+                    {
+                      "name": "sub_category",
+                      "type": "string",
+                      "description": "A granular classification of the finding within the parent category (e.g., Exposed Services, Mail Server etc.)."
+                    },
+                    {
+                      "name": "test_name",
+                      "type": "string",
+                      "description": "test name"
+                    },
+                    {
+                      "name": "test_text",
+                      "type": "string",
+                      "description": "test text"
+                    },
+                    {
+                      "name": "update_ts",
+                      "type": "datetime",
+                      "description": "The timestamp (UTC) when the record was last modified in the Panorays."
+                    },
+                    {
+                      "name": "updated_by",
+                      "type": "string",
+                      "description": "The user or system process that performed the last update to this record."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/tables",
-      "apiVersion": "2025-07-01",
-      "name": "[concat(parameters('workspace'), '/PanoraysCompanyFindingPOC_CL')]",
-      "location": "[parameters('location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
       "properties": {
-        "schema": {
-          "name": "PanoraysCompanyFindingPOC_CL",
-          "columns": [
-            { "name": "TimeGenerated", "type": "datetime" },
-            { "name": "asset_name", "type": "string" },
-            { "name": "status", "type": "string" },
-            { "name": "FindingKey", "type": "string" }
+        "connectorUiConfig": {
+          "id": "Panorays_ConnectorDefinition",
+          "title": "Panorays",
+          "publisher": "Panorays",
+          "descriptionMarkdown": "The Panorays data connector allows ingesting company findings from the Panorays API into Microsoft Sentinel.",
+          "graphQueriesTableName": "PanoraysCompanyFindingPOC_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total findings found",
+              "legend": "Company Findings",
+              "baseQuery": "PanoraysCompanyFindingPOC_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Panorays Company Findings",
+              "query": "PanoraysCompanyFindingPOC_CL | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "PanoraysCompanyFindingPOC_CL",
+              "lastDataReceivedQuery": "PanoraysCompanyFindingPOC_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write required for workspace in resource group [parameters('resourceGroupName')] within subscription [parameters('subscription')]. Data ingestion requires a valid API Token: [parameters('apitoken')] for endpoint [parameters('panoraysAPIBaseUrl')].",
+                "ProviderDisplayName": "Log Analytics Workspace",
+                "Scope": "ResourceGroup",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Configuration steps for the Panorays API"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Token",
+                    "placeholder": "API Token",
+                    "type": "securestring",
+                    "name": "apitoken",
+                    "toolTip": "The API Token provided by Panorays to authenticate the connector.",
+                    "validations": [
+                      {
+                        "regex": "^.{1,1000}$",
+                        "message": "The API Token is required."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
           ]
         }
       }
     },
     {
-      "type": "Microsoft.Insights/dataCollectionRules",
-      "apiVersion": "2024-03-11",
-      "name": "PanoraysCompanyFindingsDCR",
-      "location": "[parameters('location')]",
-      "kind": "Direct",
-      "dependsOn": [ "PanoraysDCE" ],
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
       "properties": {
-        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'PanoraysDCE')]",
-        "streamDeclarations": {
-          "Custom-PanoraysCompanyFindings_API": {
-            "columns": [
-              { "name": "status", "type": "string" },
-              { "name": "FindingKey", "type": "string" },
-              { "name": "insert_ts", "type": "string" }
-            ]
-          }
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
         },
-        "destinations": {
-          "logAnalytics": [ { "workspaceResourceId": "[variables('workspaceResourceId')]", "name": "clv2ws1" } ]
+        "author": {
+          "name": "Panorays",
+          "email": "[variables('_email')]"
         },
-        "dataFlows": [
-          {
-            "streams": [ "Custom-PanoraysCompanyFindings_API" ],
-            "destinations": [ "clv2ws1" ],
-            "transformKql": "source | project TimeGenerated = todatetime(insert_ts), status = status, FindingKey = FindingKey",
-            "outputStream": "Custom-PanoraysCompanyFindingPOC_CL"
-          }
-        ]
+        "support": {
+          "name": "Panorays",
+          "email": "support@panorays.com",
+          "tier": "Partner",
+          "link": "https://support.panoraysapp.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/Panorays_ConnectorDefinition')]",
-      "location": "[parameters('location')]",
-      "kind": "Customizable",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
       "properties": {
-        "connectorUiConfig": {
-          "id": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', 'Panorays_ConnectorDefinition')]",
-          "title": "Panorays",
-          "publisher": "Panorays",
-          "descriptionMarkdown": "Panorays findings connector.",
-          "graphQueriesTableName": "PanoraysCompanyFindingPOC_CL",
-          "graphQueries": [ { "metricName": "Total findings", "legend": "Findings", "baseQuery": "PanoraysCompanyFindingPOC_CL" } ],
-          "sampleQueries": [ { "description": "Samples", "query": "PanoraysCompanyFindingPOC_CL | take 10" } ],
-          "dataTypes": [ { "name": "PanoraysCompanyFindingPOC_CL", "lastDataReceivedQuery": "PanoraysCompanyFindingPOC_CL | summarize max(TimeGenerated)" } ],
-          "connectivityCriteria": [ { "type": "HasDataConnectors" } ],
-          "availability": { "status": 1, "isPreview": false },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "ProviderDisplayName": "Log Analytics Workspace",
-                "scope": "ResourceGroup",
-                "permissionsDisplayText": "Read/Write required.",
-                "requiredPermissions": { "read": true, "write": true, "delete": true, "action": false }
-              }
-            ]
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Panorays",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Panorays",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apitoken": {
+              "defaultValue": "apitoken",
+              "type": "securestring",
+              "minLength": 1
+            }
           },
-          "instructionSteps": [ { "instructions": [ { "type": "Markdown", "parameters": { "content": "Connect Panorays." } }, { "type": "Textbox", "parameters": { "label": "API Token", "name": "apitoken" } }, { "type": "ConnectionToggleButton", "parameters": { "label": "toggle", "name": "toggle" } } ] } ]
-        }
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Panorays",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Panorays",
+                  "email": "support@panorays.com",
+                  "tier": "Partner",
+                  "link": "https://support.panoraysapp.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'Panorays_Poller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "Panorays_ConnectorDefinition",
+                "dataType": "PanoraysCompanyFindingPOC_CL",
+                "contentProductId": "panorays-sentinel-solution-3-0-0",
+                "dcrConfig": {
+                  "streamName": "Custom-PanoraysCompanyFindings_API",
+                  "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'PanoraysDCE'), '2024-03-11').logsIngestion.endpoint]",
+                  "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'PanoraysCompanyFindingsDCR'), '2024-03-11').immutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[parameters('apitoken')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[concat(parameters('panoraysAPIBaseUrl'), '/v2/findings')]",
+                  "rateLimitQPS": 10,
+                  "httpMethod": "GET",
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "PanoraysSentinelConnector/1.0"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "PageSize": "1000",
+                  "NextPageTokenJsonPath": "$.pagination.nextCursor",
+                  "NextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('solutionId'))]",
-      "location": "[parameters('location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', 'Panorays_ConnectorDefinition')]"
-      ],
+      "location": "[parameters('workspace-location')]",
       "properties": {
-        "contentProductId": "[variables('productId')]",
-        "contentId": "[variables('solutionId')]",
         "version": "3.0.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Panorays",
         "publisherDisplayName": "Panorays",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Panorays/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://panorays.com/\">Panorays</a> solution provides the capability to ingest company findings from the Panorays API into Microsoft Sentinel using the Codeless Connector Framework (CCF).</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
-        "source": { 
-          "kind": "Solution", 
-          "name": "Panorays", 
-          "sourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentPackages', parameters('workspace'), 'Microsoft.SecurityInsights', variables('solutionId'))]" 
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Panorays",
+          "sourceId": "[variables('_solutionId')]"
         },
-        "author": { "name": "Panorays", "email": "support@panorays.com" },
+        "author": {
+          "name": "Panorays",
+          "email": "[variables('_email')]"
+        },
         "support": {
-          "tier": "Partner",
           "name": "Panorays",
           "email": "support@panorays.com",
+          "tier": "Partner",
           "link": "https://support.panoraysapp.com/"
         },
         "dependencies": {
           "operator": "AND",
-          "criteria": [ { "kind": "DataConnector", "contentId": "Panorays_ConnectorDefinition", "version": "3.0.0" } ]
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
         },
-        "firstPublishDate": "2026-03-26",
-        "providers": [ "Panorays" ],
-        "categories": { "domains": [ "Security - Vulnerability Management" ] }
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2023-02-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/Panorays_Poller')]",
-      "location": "[parameters('location')]",
-      "kind": "RestApiPoller",
-      "dependsOn": [
-        "PanoraysCompanyFindingsDCR",
-        "PanoraysDCE",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', 'Panorays_ConnectorDefinition')]"
-      ],
-      "properties": {
-        "connectorDefinitionName": "Panorays_ConnectorDefinition",
-        "dataType": "PanoraysCompanyFindingPOC_CL",
-        "contentProductId": "[variables('productId')]",
-        "dcrConfig": {
-          "streamName": "Custom-PanoraysCompanyFindings_API",
-          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'PanoraysDCE'), '2024-03-11').logsIngestion.endpoint]",
-          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'PanoraysCompanyFindingsDCR'), '2024-03-11').immutableId]"
-        },
-        "auth": {
-          "type": "APIKey",
-          "ApiKey": "[parameters('apitoken')]",
-          "ApiKeyName": "Authorization",
-          "ApiKeyIdentifier": "Bearer"
-        },
-        "request": {
-          "apiEndpoint": "[concat(variables('panoraysAPIBaseUrl'), '/v2/findings')]",
-          "headers": { "Accept": "application/json" },
-          "rateLimitQPS": 10,
-          "httpMethod": "GET"
-        },
-        "paging": {
-          "pagingType": "NextPageToken",
-          "NextPageTokenJsonPath": "$.pagination.nextCursor",
-          "NextPageParaName": "cursor"
-        },
-        "response": { "eventsJsonPaths": [ "$.data" ] }
-      }
+        "categories": {
+          "domains": [
+            "Security - Vulnerability Management"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
     }
   ],
   "outputs": {}
