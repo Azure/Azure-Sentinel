@@ -135,7 +135,7 @@ ParserQuery: |
                 ),
                 EventType = "Logon",
                 EventSubType = "Remote",
-                EventResultDetails = extract(@"@[\d.]+: (.+)$", 1, SyslogMessage),
+                EventOriginalResultDetails = extract(@"@[\d.]+: (.+)$", 1, SyslogMessage),
                 TargetSessionId = extract(@"session=(\S+)", 1, SyslogMessage),
                 OperationId = extract(@"opID=([^\s\]]+)", 1, SyslogMessage),
                 SessionIdShort = extract(@"sid=([a-f0-9]+)", 1, SyslogMessage)
@@ -146,10 +146,10 @@ ParserQuery: |
             | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
             | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
             | where (eventresult == "*" or EventResult =~ eventresult)
-            // Hostd double-logs each auth failure: once as "Rejected password" (PAM) and once as "Cannot login" (Event Manager), typically within 35-300ms of each other.
-            // A 1-second deduplication window collapses these into a single event. The window is intentionally conservative relative to observed duplicate gaps (<100ms).
-            | summarize arg_min(TimeGenerated, *) by TargetUsername, SrcIpAddr, EventResult, HostName, bin(TimeGenerated, 1s)
-            | project-away TimeGenerated1
+            | extend EventResultDetails = case(
+                EventOriginalResultDetails == "no permission", "Logon violates policy", //Event Type Description: A user could not log in due to insufficient access permission 
+                ""
+            )
         );
         union DCUIEvents, HostdEvents
         | invoke _ASIM_ResolveDvcFQDN("HostName")
