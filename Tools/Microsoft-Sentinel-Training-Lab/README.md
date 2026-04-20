@@ -59,7 +59,7 @@ az rest --method POST `
 
 #### A3. Deploy
 
-Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Exercise 8](./Exercises/Onboarding.md#exercise-8-deploy-the-microsoft-sentinel-training-lab-solution)):
+Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Exercise 4](./Exercises/Onboarding.md#exercise-4-deploy-the-microsoft-sentinel-training-lab-solution)):
 
 ```
 /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/SentinelDetectionRulesIdentity
@@ -126,13 +126,24 @@ During deployment, provide the following three parameters (leave the UAMI field 
 
 ## Getting started
 
-Start with the **Onboarding** exercise to set up your workspace, install solutions, and deploy the lab. Then work through the exercises in order. Exercises 1–4 are introductory and can be done in any order. Exercise 5 is optional (requires MDE). Exercises 6–7 cover cost and table management. Exercises 8–10 cover detection engineering and data lake topics (do 9 before 10). Exercises 11–12 are detection-focused. Exercises 13–14 are independent demos.
+Start with the **Onboarding** exercise to set up your workspace and deploy the lab. Then work through the exercises in order.
+
+### Exercise Dependencies
+
+| Exercise | Prerequisites | Notes |
+|---|---|---|
+| **1–4** | None | Introductory — can be done in any order |
+| **5** | MDE-onboarded device | Optional — skip if you don't have MDE |
+| **6–8** | None | Detection engineering (SIEM) |
+| **9–10** | None | Operations (cost & table management) |
+| **11** | Data lake enabled | Data lake KQL jobs |
+| **12** | Exercise 11 | Builds on the KQL job output table |
+| **14** | None | Independent — MCP server demo |
 
 ## Exercises
 
 [**Onboarding — Setting up the environment**](./Exercises/Onboarding.md)
 - Create a Log Analytics workspace and onboard Microsoft Sentinel
-- Install Content Hub solutions and set up data connectors
 - Deploy the Training Lab solution
 
 [**Exercise 1 — Exploration: Hunting Across Your Data**](./Exercises/E01_exploration.md)

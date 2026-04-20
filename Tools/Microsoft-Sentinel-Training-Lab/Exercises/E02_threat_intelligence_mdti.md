@@ -1,11 +1,12 @@
 # Exercise 2 — Threat Intelligence: Microsoft Defender Threat Intelligence
 
-**Topic:** Enable the MDTI data connector and query the `ThreatIntelIndicators` table
-**Difficulty:** Beginner
+**Topic:** Enable the MDTI data connector and query the `ThreatIntelIndicators` table  
+**Difficulty:** Beginner  
+**Prerequisites:** None
 
 ---
 
-### Objective
+## Objective
 
 Enable the **Microsoft Defender Threat Intelligence (MDTI)** data connector in Microsoft Sentinel to ingest threat intelligence indicators, then use the `ThreatIntelIndicators` table to match IOCs against your environment's telemetry.
 
@@ -40,7 +41,7 @@ When you enable the MDTI data connector, indicators are automatically ingested i
 4. Select the connector and click **Open connector page**
 
 <p align="center">
-<img src="../Images/OnboardingImage24.png?raw=true">
+<img src="../Images/OnboardingImage24.png?raw=true" alt="MDTI data connector in the Content Hub" width="800">
 </p>
 
 5. On the connector page, review the **Prerequisites** section:
@@ -50,7 +51,7 @@ When you enable the MDTI data connector, indicators are automatically ingested i
 6. Under **Configuration**, select **Connect** to enable the connector
 
 <p align="center">
-<img src="../Images/OnboardingImage23.png?raw=true">
+<img src="../Images/OnboardingImage23.png?raw=true" alt="MDTI data connector configuration page" width="800">
 </p>
 
 7. Once connected, the **Status** changes to **Connected**. Indicators will begin ingesting within a few minutes.
@@ -190,7 +191,7 @@ Microsoft Sentinel provides a dedicated UI for managing threat intelligence:
 4. Select an indicator to view its full details, including associated threat actors and campaigns
 
 <p align="center">
-<img src="../Images/OnboardingImage25.png?raw=true">
+<img src="../Images/OnboardingImage25.png?raw=true" alt="ThreatIntelIndicators query results in Advanced Hunting" width="800">
 </p>
 
 > **Tip:** You can also manually add indicators from this blade, upload STIX files, or connect additional TI feeds (e.g., TAXII servers, open-source feeds).
@@ -212,3 +213,9 @@ Microsoft Sentinel provides a dedicated UI for managing threat intelligence:
 - [Connect Microsoft Defender Threat Intelligence data connector](https://learn.microsoft.com/en-us/azure/sentinel/connect-mdti-data-connector)
 - [Work with threat indicators in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/work-with-threat-indicators)
 - [ThreatIntelIndicators table schema](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/threatintelindicators)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 3 — MITRE ATT&CK Coverage](./E03_mitre_attack_coverage.md)**
