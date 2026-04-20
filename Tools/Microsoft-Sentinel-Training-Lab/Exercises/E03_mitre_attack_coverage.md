@@ -38,7 +38,7 @@ The lab solution deploys **17 detection rules** covering a multi-stage attack th
 #### Step 1 — Open the MITRE ATT&CK Page
 
 1. Open the [**Microsoft Defender portal**](https://security.microsoft.com)
-2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK (Preview)**
+2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK**
 
 ![MITRE ATT&CK matrix overview](../Images/OnboardingImage26.png?raw=true)
 

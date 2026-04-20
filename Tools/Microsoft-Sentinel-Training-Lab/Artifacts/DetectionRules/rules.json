@@ -3,7 +3,7 @@
     "displayName": "Lab Stage 2 - Malicious Payload Execution (CrowdStrike)",
     "isEnabled": true,
     "queryCondition": {
-      "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(1h)\n| where Tactic == \"Execution\" or Technique has \"T1204\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Filepath,\n    Sha256,\n    Md5,\n    Cmdline,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    SHA256 = Sha256,\n    FileName = Filename,\n    ProcessCommandLine = Cmdline,\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
+      "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(1h)\n| where Tactic == \"Execution\" or Technique has \"T1204\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Filepath,\n    Sha256,\n    Md5,\n    Cmdline,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    SHA256 = Sha256,\n    FileName = Filename,\n    ProcessCommandLine = Cmdline,\n    RemoteIP = tostring(Device.external_ip),\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
     },
     "schedule": {
       "period": "1H"
@@ -35,7 +35,7 @@
     "displayName": "Lab Stage 3 - Credential Dumping Detected (CrowdStrike)",
     "isEnabled": true,
     "queryCondition": {
-        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(1h)\n| where Tactic == \"Credential Access\" or Technique has \"T1003\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Filepath,\n    Cmdline,\n    Objective,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    ProcessCommandLine = Cmdline,\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
+        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(1h)\n| where Tactic == \"Credential Access\" or Technique has \"T1003\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Filepath,\n    Cmdline,\n    Objective,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    ProcessCommandLine = Cmdline,\n    SHA256 = Sha256,\n    FileName = Filename,\n    RemoteIP = tostring(Device.external_ip),\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
     },
     "schedule": {
         "period": "1H"
@@ -67,7 +67,7 @@
     "displayName": "Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)",
     "isEnabled": true,
     "queryCondition": {
-        "queryText": "CommonSecurityLog\n| where TimeGenerated > ago(1h)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceEventClassID == \"TRAFFIC\"\n| where Activity in (\"drop\", \"deny\", \"end\")\n| where ApplicationProtocol == \"incomplete\"\n| summarize\n    DistinctPorts = dcount(DestinationPort),\n    DistinctHosts = dcount(DestinationIP),\n    SessionCount = count(),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    SourceHostName = take_any(SourceHostName)\n    by SourceIP, SourceUserName\n| where DistinctPorts > 20\n| extend\n    TimeGenerated = FirstSeen,\n    AccountUpn = SourceUserName,\n    DeviceName = SourceHostName,\n    ReportId = tostring(hash_sha256(strcat(SourceIP, SourceUserName, tostring(DistinctPorts))))"
+        "queryText": "CommonSecurityLog\n| where TimeGenerated > ago(1h)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceEventClassID == \"TRAFFIC\"\n| where Activity in (\"drop\", \"deny\", \"end\")\n| where ApplicationProtocol == \"incomplete\"\n| summarize\n    DistinctPorts = dcount(DestinationPort),\n    DistinctHosts = dcount(DestinationIP),\n    SessionCount = count(),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    SourceHostName = take_any(SourceHostName)\n    by SourceIP, SourceUserName\n| where DistinctPorts > 20\n| extend\n    TimeGenerated = FirstSeen,\n    AccountUpn = SourceUserName,\n    DeviceName = SourceHostName,\n    RemoteIP = SourceIP,\n    ReportId = tostring(hash_sha256(strcat(SourceIP, SourceUserName, tostring(DistinctPorts))))"
     },
     "schedule": {
         "period": "1H"
@@ -239,7 +239,7 @@
     "displayName": "Lab Stage 10 - Phishing Emails Bypassing MailGuard365 (MailGuard)",
     "isEnabled": true,
     "queryCondition": {
-        "queryText": "MailGuard365_Threats_CL\n| where TimeGenerated > ago(1h)\n| where ThreatVerdict == \"Phishing\" and Action == \"Allow\"\n| where toint(ThreatConfidence) >= 80\n| extend SenderDomainLower = tolower(SenderDomain)\n| summarize\n    PhishCount = count(),\n    Subjects = make_set(Subject),\n    TargetRecipients = make_set(RecipientAddress),\n    SenderAddresses = make_set(SenderAddress),\n    SenderIPs = make_set(SenderIP),\n    AvgConfidence = avg(toint(ThreatConfidence)),\n    MaliciousUrls = make_set(Urls),\n    MaliciousAttachments = make_set(AttachmentName),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by SenderDomainLower\n| where PhishCount >= 2\n| project\n    FirstSeen,\n    LastSeen,\n    SenderDomainLower,\n    PhishCount,\n    AvgConfidence,\n    SenderAddresses,\n    SenderIPs,\n    TargetRecipients,\n    Subjects,\n    MaliciousUrls,\n    MaliciousAttachments\n| extend\n    TimeGenerated = FirstSeen,\n    AccountUpn = \"mirage@pkwork.onmicrosoft.com\",\n    RemoteIP = tostring(SenderIPs[0]),\n    ReportId = tostring(hash_sha256(strcat(SenderDomainLower, tostring(PhishCount), tostring(FirstSeen))))"
+        "queryText": "MailGuard365_Threats_CL\n| where TimeGenerated > ago(1h)\n| where ThreatVerdict == \"Phishing\" and Action == \"Allow\"\n| where toint(ThreatConfidence) >= 80\n| extend SenderDomainLower = tolower(SenderDomain)\n| summarize\n    PhishCount = count(),\n    Subjects = make_set(Subject),\n    TargetRecipients = make_set(RecipientAddress),\n    SenderAddresses = make_set(SenderAddress),\n    SenderIPs = make_set(SenderIP),\n    AvgConfidence = avg(toint(ThreatConfidence)),\n    MaliciousUrls = make_set(Urls),\n    MaliciousAttachments = make_set(AttachmentName),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by SenderDomainLower\n| where PhishCount >= 2\n| project\n    FirstSeen,\n    LastSeen,\n    SenderDomainLower,\n    PhishCount,\n    AvgConfidence,\n    SenderAddresses,\n    SenderIPs,\n    TargetRecipients,\n    Subjects,\n    MaliciousUrls,\n    MaliciousAttachments\n| extend\n    TimeGenerated = FirstSeen,\n    AccountUpn = \"mirage@pkwork.onmicrosoft.com\",\n    RemoteIP = tostring(SenderIPs[0]),\n    RecipientEmailAddress = tostring(TargetRecipients[0]),\n    FileName = tostring(MaliciousAttachments[0]),\n    RemoteUrl = tostring(MaliciousUrls[0]),\n    ReportId = tostring(hash_sha256(strcat(SenderDomainLower, tostring(PhishCount), tostring(FirstSeen))))"
     },
     "schedule": {
         "period": "1H"
@@ -253,6 +253,10 @@
             "mitreTechniques": ["T1566.001", "T1566.002"],
             "recommendedActions": null,
             "impactedAssets": [
+                {
+                    "@odata.type": "#microsoft.graph.security.impactedMailboxAsset",
+                    "identifier": "recipientEmailAddress"
+                },
                 {
                     "@odata.type": "#microsoft.graph.security.impactedUserAsset",
                     "identifier": "accountUpn"
@@ -390,7 +394,7 @@
     "description": "EXERCISE: Detects critical CrowdStrike alerts and resolves the MDE DeviceId via a DeviceInfo join to enable automatic device isolation. Students should start with the base query (no join), add the DeviceInfo join, then configure the isolateDevice response action. Requires a VM onboarded to MDE.",
     "isEnabled": false,
     "queryCondition": {
-        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(4h)\n| where SeverityName == \"Critical\"\n| extend CSHostname = tostring(Device.hostname)\n| join kind=inner (\n    DeviceInfo\n    | where Timestamp > ago(14d)\n    | summarize arg_max(Timestamp, DeviceId) by DeviceName\n    | project DeviceName, DeviceId\n) on $left.CSHostname == $right.DeviceName\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    TechniqueId,\n    SourceAccountUpn,\n    CSHostname,\n    DeviceId,\n    Filename,\n    Sha256,\n    Cmdline\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = CSHostname,\n    FileName = Filename,\n    SHA256 = Sha256,\n    ProcessCommandLine = Cmdline,\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, CSHostname)))"
+        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(4h)\n| where SeverityName == \"Critical\"\n| extend CSHostname = tostring(Device.hostname)\n| join kind=inner (\n    DeviceInfo\n    | where Timestamp > ago(14d)\n    | summarize arg_max(Timestamp, DeviceId) by DeviceName\n    | project DeviceName, DeviceId\n) on $left.CSHostname == $right.DeviceName\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    TechniqueId,\n    SourceAccountUpn,\n    CSHostname,\n    DeviceId,\n    Filename,\n    Sha256,\n    Cmdline\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = CSHostname,\n    FileName = Filename,\n    SHA256 = Sha256,\n    ProcessCommandLine = Cmdline,\n    RemoteIP = tostring(Device.external_ip),\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, CSHostname)))"
     },
     "schedule": { "period": "1H" },
     "detectionAction": {
@@ -453,6 +457,129 @@
             "recommendedActions": "Search for the email in user mailboxes. Remove the email. Check if the user clicked any links or opened attachments. Block the sender domain.",
             "impactedAssets": [
                 { "@odata.type": "#microsoft.graph.security.impactedMailboxAsset", "identifier": "recipientEmailAddress" },
+                { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
+            ]
+        },
+        "organizationalScope": null,
+        "responseActions": []
+    }
+},
+{
+    "displayName": "Lab Stage 5 - C2 Beaconing Detected (Palo Alto)",
+    "description": "Detects Palo Alto threat logs with spyware categories indicating command and control beaconing from an internal host to an external C2 server.",
+    "isEnabled": true,
+    "queryCondition": {
+        "queryText": "CommonSecurityLog\n| where TimeGenerated > ago(4h)\n| where DeviceVendor == \"Palo Alto Networks\"\n| where Activity == \"spyware\"\n| project\n    TimeGenerated,\n    SourceIP,\n    DestinationIP,\n    DestinationPort,\n    ApplicationProtocol,\n    SourceUserName,\n    SourceHostName,\n    DeviceAction,\n    Activity\n| extend\n    AccountUpn = SourceUserName,\n    DeviceName = SourceHostName,\n    RemoteIP = DestinationIP,\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), SourceIP, DestinationIP)))"
+    },
+    "schedule": { "period": "1H" },
+    "detectionAction": {
+        "alertTemplate": {
+            "title": "Lab Stage 5 - C2 beaconing detected from {{DeviceName}} (Palo Alto)",
+            "description": "Palo Alto firewall detected spyware/C2 beacon traffic from an internal host to an external IP. Stage 5 of the Lab attack chain (T1071.001).",
+            "severity": "high",
+            "category": "CommandAndControl",
+            "mitreTechniques": ["T1071.001"],
+            "recommendedActions": null,
+            "impactedAssets": [
+                { "@odata.type": "#microsoft.graph.security.impactedDeviceAsset", "identifier": "deviceName" },
+                { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
+            ]
+        },
+        "organizationalScope": null,
+        "responseActions": []
+    }
+},
+{
+    "displayName": "Lab Stage 5.5 - C2 Activity Detected (CrowdStrike)",
+    "description": "Detects CrowdStrike Command and Control detections indicating an endpoint is communicating with a C2 server. Multi-source correlation with the Palo Alto C2 rule strengthens confidence.",
+    "isEnabled": true,
+    "queryCondition": {
+        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(4h)\n| where Tactic == \"Command and Control\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Sha256,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    RemoteIP = tostring(Device.external_ip),\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
+    },
+    "schedule": { "period": "1H" },
+    "detectionAction": {
+        "alertTemplate": {
+            "title": "Lab Stage 5.5 - C2 activity detected on {{DeviceName}} (CrowdStrike)",
+            "description": "CrowdStrike detected command and control activity on an endpoint. Stage 5.5 of the Lab attack chain (T1071.001). When correlated with the Palo Alto C2 alert, this confirms multi-source C2 detection.",
+            "severity": "high",
+            "category": "CommandAndControl",
+            "mitreTechniques": ["T1071.001"],
+            "recommendedActions": null,
+            "impactedAssets": [
+                { "@odata.type": "#microsoft.graph.security.impactedDeviceAsset", "identifier": "deviceName" },
+                { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
+            ]
+        },
+        "organizationalScope": null,
+        "responseActions": []
+    }
+},
+{
+    "displayName": "Lab Stage 7.5 - Security Group Opened to Internet (AWS)",
+    "description": "Detects when an AWS security group is modified to allow inbound traffic from 0.0.0.0/0, indicating the attacker is opening network access for persistence or lateral movement.",
+    "isEnabled": true,
+    "queryCondition": {
+        "queryText": "AWSCloudTrail\n| where TimeGenerated > ago(2h)\n| where EventName == \"AuthorizeSecurityGroupIngress\"\n| extend RequestParams = parse_json(RequestParameters)\n| extend CidrIp = tostring(RequestParams.ipPermissions.items[0].ipRanges.items[0].cidrIp)\n| where CidrIp == \"0.0.0.0/0\"\n| project\n    TimeGenerated,\n    UserIdentityUserName,\n    SourceIpAddress,\n    AWSRegion,\n    CidrIp,\n    UserIdentityArn\n| extend\n    AccountUpn = strcat(UserIdentityUserName, \"@pkwork.onmicrosoft.com\"),\n    RemoteIP = SourceIpAddress,\n    ReportId = tostring(hash_sha256(strcat(UserIdentityUserName, SourceIpAddress, tostring(TimeGenerated))))"
+    },
+    "schedule": { "period": "1H" },
+    "detectionAction": {
+        "alertTemplate": {
+            "title": "Lab Stage 7.5 - Security group opened to 0.0.0.0/0 (AWS)",
+            "description": "An AWS security group was modified to allow inbound traffic from any IP (0.0.0.0/0). This is a high-risk configuration change often performed by attackers to enable external access. Stage 7.5 of the Lab attack chain.",
+            "severity": "high",
+            "category": "Persistence",
+            "mitreTechniques": ["T1562.007"],
+            "recommendedActions": null,
+            "impactedAssets": [
+                { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
+            ]
+        },
+        "organizationalScope": null,
+        "responseActions": []
+    }
+},
+{
+    "displayName": "Lab Stage 7.6 - S3 Data Exfiltration (AWS)",
+    "description": "Detects bulk S3 GetObject operations from the attacker IP on sensitive buckets, indicating cloud data exfiltration.",
+    "isEnabled": true,
+    "queryCondition": {
+        "queryText": "AWSCloudTrail\n| where TimeGenerated > ago(2h)\n| where EventName == \"GetObject\"\n| where EventSource == \"s3.amazonaws.com\"\n| extend BucketName = tostring(parse_json(RequestParameters).bucketName)\n| where SourceIpAddress !startswith \"10.\"\n| summarize\n    ObjectCount = count(),\n    Buckets = make_set(BucketName),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by UserIdentityUserName, SourceIpAddress\n| where ObjectCount >= 2\n| project\n    FirstSeen,\n    LastSeen,\n    UserIdentityUserName,\n    SourceIpAddress,\n    ObjectCount,\n    Buckets\n| extend\n    TimeGenerated = FirstSeen,\n    AccountUpn = strcat(UserIdentityUserName, \"@pkwork.onmicrosoft.com\"),\n    RemoteIP = SourceIpAddress,\n    ReportId = tostring(hash_sha256(strcat(UserIdentityUserName, SourceIpAddress, tostring(ObjectCount))))"
+    },
+    "schedule": { "period": "1H" },
+    "detectionAction": {
+        "alertTemplate": {
+            "title": "Lab Stage 7.6 - S3 data exfiltration by {{UserIdentityUserName}} (AWS)",
+            "description": "An AWS IAM user performed multiple S3 GetObject operations on sensitive buckets from an external IP, indicating cloud data exfiltration. Stage 7.6 of the Lab attack chain (T1530).",
+            "severity": "high",
+            "category": "Exfiltration",
+            "mitreTechniques": ["T1530"],
+            "recommendedActions": null,
+            "impactedAssets": [
+                { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
+            ]
+        },
+        "organizationalScope": null,
+        "responseActions": []
+    }
+},
+{
+    "displayName": "Lab Stage 2.5 - Persistence Mechanism Detected (CrowdStrike)",
+    "description": "Detects registry Run key persistence mechanisms set by malware after initial execution. The attacker adds an auto-start entry to maintain access across reboots.",
+    "isEnabled": true,
+    "queryCondition": {
+        "queryText": "CrowdStrikeDetections\n| where TimeGenerated > ago(4h)\n| where Tactic == \"Persistence\"\n| where SeverityName in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    Name,\n    Description,\n    SeverityName,\n    Tactic,\n    Technique,\n    UserName,\n    SourceAccountUpn,\n    Filename,\n    Filepath,\n    Sha256,\n    Cmdline,\n    Device\n| extend\n    AccountUpn = SourceAccountUpn,\n    DeviceName = tostring(Device.hostname),\n    ProcessCommandLine = Cmdline,\n    RemoteIP = tostring(Device.external_ip),\n    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, tostring(Device.hostname))))"
+    },
+    "schedule": { "period": "1H" },
+    "detectionAction": {
+        "alertTemplate": {
+            "title": "Lab Stage 2.5 - Persistence mechanism detected on {{DeviceName}} (CrowdStrike)",
+            "description": "CrowdStrike detected a persistence mechanism (registry Run key) on an endpoint. Stage 2.5 of the Lab attack chain (T1547.001). The attacker establishes persistence after initial payload execution.",
+            "severity": "high",
+            "category": "Persistence",
+            "mitreTechniques": ["T1547.001"],
+            "recommendedActions": null,
+            "impactedAssets": [
+                { "@odata.type": "#microsoft.graph.security.impactedDeviceAsset", "identifier": "deviceName" },
                 { "@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn" }
             ]
         },
