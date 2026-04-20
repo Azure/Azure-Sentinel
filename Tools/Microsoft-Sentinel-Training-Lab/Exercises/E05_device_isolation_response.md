@@ -1,15 +1,16 @@
-# (Optional) Exercise 5 — Cross-Platform Response Actions (Device Isolation) - Requires a VM onboarded to MDE
+# Exercise 5 — Cross-Platform Response Actions (Device Isolation)
 
-**Rule:** `[E5] [CrowdStrike] Device Isolation Response` _(the `[E5]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1204.002 (User Execution: Malicious File)
-**Difficulty:** Advanced
+**Rule:** `Lab Stage E5 - Device Isolation Response (CrowdStrike)`  
+**Difficulty:** Advanced  
+**Prerequisites:** A VM onboarded to Microsoft Defender for Endpoint (MDE)
+
+> **Note:** This exercise is optional. Skip it if you don't have an MDE-onboarded device.
 
 ---
 
 ## Objective
 
-Add an automated **device isolation** response action to a Custom Detection rule. This exercise demonstrates **cross-platform response**: a detection from CrowdStrike EDR triggers an isolation action via Microsoft Defender for Endpoint (MDE). You'll learn how to resolve the MDE `DeviceId` by joining the `DeviceInfo` table.
+Add an automated **device isolation** response action to a custom detection rule. This exercise demonstrates **cross-platform response**: a detection from CrowdStrike EDR triggers an isolation action via Microsoft Defender for Endpoint (MDE). You'll learn how to resolve the MDE `DeviceId` by joining the `DeviceInfo` table.
 
 ## Background
 
@@ -26,7 +27,7 @@ CrowdStrike alerts contain the **hostname** but not the MDE **DeviceId**. To bri
 
 ### Available Response Actions
 
-Custom Detection rules in Defender XDR support the following automated response actions:
+Custom detection rules in Defender XDR support the following automated response actions:
 
 | Action | Required Column | Scope |
 |---|---|---|
@@ -243,3 +244,9 @@ Then redeploy using the deployment script:
 - [DeviceInfo table schema](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-deviceinfo-table)
 - [Manage existing custom detection rules](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-manage)
 - [MITRE T1204.002 — User Execution: Malicious File](https://attack.mitre.org/techniques/T1204/002/)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 6 — Port Scan Detection & Threshold Tuning](./E06_port_scan_threshold_tuning.md)**
