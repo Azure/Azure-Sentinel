@@ -59,7 +59,7 @@ az rest --method POST `
 
 #### A3. Deploy
 
-Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Exercise 4](./Exercises/Onboarding.md#exercise-4-deploy-the-microsoft-sentinel-training-lab-solution)):
+Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Step 4](./Exercises/Onboarding.md#step-4-deploy-the-microsoft-sentinel-training-lab-solution)):
 
 ```
 /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/SentinelDetectionRulesIdentity

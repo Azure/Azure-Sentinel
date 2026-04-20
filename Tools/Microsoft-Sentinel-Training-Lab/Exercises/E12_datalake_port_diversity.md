@@ -154,4 +154,4 @@ The second filter adds a bytes constraint — low bytes + many ports = scanning,
 
 ## Next Steps
 
-Continue to **[Exercise 14 — Sentinel MCP Server Demo Prompts](./E14_MCP.md)**
+Continue to **[Exercise 13 — Data Lake Notebooks](./E13_notebooks.md)**
