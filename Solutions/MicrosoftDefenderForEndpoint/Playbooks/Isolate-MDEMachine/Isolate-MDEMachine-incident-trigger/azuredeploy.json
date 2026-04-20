@@ -85,26 +85,9 @@
                                 ]
                             }
                         },
-                        "Machines_-_Get_list_of_machines": {
-                            "runAfter": {
-                                "Initialize_variables": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/api/machines"
-                            }
-                        },
                         "Entities_-_Get_Hosts": {
                             "runAfter": {
-                                "Machines_-_Get_list_of_machines": [
+                                "Initialize_variables": [
                                     "Succeeded"
                                 ]
                             },
@@ -127,109 +110,114 @@
                                     "type": "Compose",
                                     "inputs": "@item()?['HostName']"
                                 },
-                                "For_each_mde_host": {
-                                    "foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
-                                    "actions": {
-                                        "Compose_MDE_host": {
-                                            "type": "Compose",
-                                            "inputs": "@item()?['computerDnsName']"
-                                        },
-                                        "Condition": {
-                                            "actions": {
-                                                "Set_variable": {
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "MDEDeviceId",
-                                                        "value": "@item()?['id']"
-                                                    }
-                                                },
-                                                "Actions_-_Isolate_machine": {
-                                                    "runAfter": {
-                                                        "Set_variable": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": {
-                                                            "Comment": "Host is isolated by Microsoft Sentinel using playbook Isolate-MDE-machine-incidentTrigger",
-                                                            "IsolationType": "Full"
-                                                        },
-                                                        "path": "/api/machines/@{encodeURIComponent(variables('MDEDeviceId'))}/isolate"
-                                                    }
-                                                },
-                                                "Add_comment_to_incident_(V3)": {
-                                                    "runAfter": {
-                                                        "Actions_-_Isolate_machine": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "ApiConnection",
-                                                    "inputs": {
-                                                        "host": {
-                                                            "connection": {
-                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                            }
-                                                        },
-                                                        "method": "post",
-                                                        "body": {
-                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                            "message": "<p class=\"editor-paragraph\">Host- @{outputs('Compose_sentinel_hostname')}- is successfully isolated!</p>"
-                                                        },
-                                                        "path": "/Incidents/Comment"
-                                                    }
-                                                }
-                                            },
-                                            "runAfter": {
-                                                "Compose_MDE_host": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "else": {
-                                                "actions": {
-                                                    "Add_comment_to_incident_(V3)1": {
-                                                        "type": "ApiConnection",
-                                                        "inputs": {
-                                                            "host": {
-                                                                "connection": {
-                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                                                }
-                                                            },
-                                                            "method": "post",
-                                                            "body": {
-                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                "message": "<p class=\"editor-paragraph\">Host- @{outputs('Compose_sentinel_hostname')}- is not isolated!</p><p class=\"editor-paragraph\">Reason : It is not present in Defender for endpoint</p>"
-                                                            },
-                                                            "path": "/Incidents/Comment"
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            "expression": {
-                                                "and": [
-                                                    {
-                                                        "contains": [
-                                                            "@outputs('Compose_MDE_host')",
-                                                            "@outputs('Compose_sentinel_hostname')"
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            "type": "If"
-                                        }
-                                    },
+                                "Machines_-_Get_machine_by_hostname": {
                                     "runAfter": {
                                         "Compose_sentinel_hostname": [
                                             "Succeeded"
                                         ]
                                     },
-                                    "type": "Foreach"
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/machines",
+                                        "queries": {
+                                            "$filter": "@concat('computerDnsName eq ''', outputs('Compose_sentinel_hostname'), '''')"
+                                        }
+                                    }
+                                },
+                                "Condition_Machine_Found": {
+                                    "actions": {
+                                        "Actions_-_Isolate_machine": {
+                                            "runAfter": {
+                                                "Set_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['wdatp']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "Comment": "Host is isolated by Microsoft Sentinel using playbook Isolate-MDE-machine-incidentTrigger",
+                                                    "IsolationType": "Full"
+                                                },
+                                                "path": "/api/machines/@{encodeURIComponent(variables('MDEDeviceId'))}/isolate"
+                                            }
+                                        },
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Actions_-_Isolate_machine": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p class=\"editor-paragraph\">Host-@{item()?['HostName']} - is successfully isolated!</p>"
+                                                },
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Set_variable": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "MDEDeviceId",
+                                                "value": "@first(body('Machines_-_Get_machine_by_hostname')?['value'])?['id']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Machines_-_Get_machine_by_hostname": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)1": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p class=\"editor-paragraph\">Host-@{item()?['HostName']} - is not isolated!</p><p class=\"editor-paragraph\">Reason : It is not present in Defender for endpoint</p>"
+                                                    },
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Machines_-_Get_machine_by_hostname')?['value'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
                                 }
                             },
                             "runAfter": {
