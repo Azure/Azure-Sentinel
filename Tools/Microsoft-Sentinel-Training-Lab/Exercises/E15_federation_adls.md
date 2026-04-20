@@ -31,7 +31,7 @@ In this exercise, you'll federate an ADLS Gen2 storage account containing sample
 | **ADLS Gen2 Storage Account** | Hosts the delta parquet files (hierarchical namespace enabled) |
 | **Service Principal** | Authenticates Sentinel to the storage account |
 | **Azure Key Vault** | Stores the service principal's client secret |
-| **Sample data** | Two datasets in `Artifacts/Federation/` — one with TimeGenerated, one without |
+| **Sample data** | Download from the [SentinelTrainingDemo repo](https://github.com/kapetanios55/SentinelTrainingDemo/tree/master/Training/Microsoft-Sentinel-Training-Lab/Artifacts/Federation) |
 
 ---
 
@@ -39,10 +39,12 @@ In this exercise, you'll federate an ADLS Gen2 storage account containing sample
 
 The lab provides **two versions** of the same security events dataset in delta parquet format. Both are ready to upload to your ADLS Gen2 storage account. The difference is whether the data includes a `TimeGenerated` column — this has a significant impact on how the data appears in the Sentinel data lake.
 
-| Dataset | Location | TimeGenerated? | Records |
+Download both datasets from the [SentinelTrainingDemo repo](https://github.com/kapetanios55/SentinelTrainingDemo/tree/master/Training/Microsoft-Sentinel-Training-Lab/Artifacts/Federation).
+
+| Dataset | Folder | TimeGenerated? | Records |
 |---|---|---|---|
-| **With TimeGenerated** | `Artifacts/Federation/security_events/` | Yes | 100 |
-| **Without TimeGenerated** | `Artifacts/Federation/security_events_no_timegen/` | No | 100 |
+| **With TimeGenerated** | `security_events/` | Yes | 100 |
+| **Without TimeGenerated** | `security_events_no_timegen/` | No | 100 |
 
 **Dataset with TimeGenerated — schema:**
 
