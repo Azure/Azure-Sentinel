@@ -30,6 +30,12 @@ Complete **one** of the two options below before deployment.
 
 ### Option A — User-Assigned Managed Identity (UAMI)
 
+> **Tip — Use GitHub Copilot:** You can complete this entire setup by pasting the following prompt into GitHub Copilot Chat (in VS Code or the Defender portal):
+>
+> *"Create a User-Assigned Managed Identity called SentinelDetectionRulesIdentity in my resource group, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, and give me the full resource ID to use during deployment."*
+>
+> Copilot will generate the exact CLI commands for your environment.
+
 #### A1. Create the UAMI
 
 ```powershell
@@ -70,6 +76,10 @@ Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` p
 ### Option B — Service Principal (App Registration)
 
 Use this option when you cannot create or use a Managed Identity (e.g., cross-tenant deployments or restricted RBAC environments).
+
+> **Tip — Use GitHub Copilot:** You can complete this setup by pasting the following prompt into GitHub Copilot Chat:
+>
+> *"Create an App Registration called SentinelDetectionRulesSPN, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, create a client secret, and give me the Tenant ID, Client ID, and Client Secret to use during deployment."*
 
 **Prefer the portal?** You can complete steps B1–B3 entirely from the Azure portal by following [Create a Microsoft Entra app and service principal in the portal](https://learn.microsoft.com/entra/identity-platform/howto-create-service-principal-portal). That guide covers app registration, API permission assignment (use **Microsoft Graph → Application permissions → CustomDetection.ReadWrite.All**), and client secret creation. Once done, skip ahead to **B4** below.
 
