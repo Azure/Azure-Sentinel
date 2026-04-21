@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
-| 3.1.5       | 01-04-2026                     | Added **GitHub Webhook V2** data connector (CLv2/Logs Ingestion API) public preview |
+| 3.1.5       | 21-04-2026                     | Added **GitHub Webhook V2** data connector (CLv2/Logs Ingestion API) public preview |
 | 3.1.4       | 19-03-2026                     | Fix NRT 2FA rule for new parser format. |
 | 3.1.3       | 29-01-2026                     | Promoted GitHub Enterprise Cloud Audit Log CCF connector from Public Preview to GA. |
 | 3.1.2       | 24-11-2025                     | Added clarity to Github Enterprise Audit CCF connector definition to use API URL. |
