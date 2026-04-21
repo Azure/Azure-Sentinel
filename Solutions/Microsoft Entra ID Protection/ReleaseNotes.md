@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.4       | 21-04-2026                     | Updated the **CorrelateIPC_Unfamiliar-Atypical** Analytic Rule
 | 3.0.3       | 07-07-2025                     | To enhance functionality, improve entity mappings, and update **playbook** configurations. |
 | 3.0.2       | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.1       | 01-18-2024                     | Updated mapping in **Analytic Rule** for better correlation   | 
