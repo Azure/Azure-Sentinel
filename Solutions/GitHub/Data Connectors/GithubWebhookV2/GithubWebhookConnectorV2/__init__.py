@@ -12,7 +12,7 @@ from azure.core.exceptions import HttpResponseError
 github_webhook_secret = os.environ.get('GithubWebhookSecret')
 dce_endpoint = os.environ.get('DCE_ENDPOINT')
 dcr_rule_id = os.environ.get('DCR_RULE_ID')
-dcr_stream_name = os.environ.get('DCR_STREAM_NAME', 'Custom-GitHubWebhookEvents_CL')
+dcr_stream_name = os.environ.get('DCR_STREAM_NAME', 'Custom-GitHubAdvancedSecurityAlerts_CL')
 
 credential = DefaultAzureCredential()
 client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential)
@@ -85,4 +85,7 @@ def post_data(body):
         logging.info('Info:Event was ingested via Logs Ingestion API')
     except HttpResponseError as e:
         logging.error("Upload failed. Response code: {}. Message: {}".format(e.status_code, e.message))
+        raise
+    except Exception as e:
+        logging.error("Unexpected error during upload: %s (%s)", e, type(e).__name__)
         raise
