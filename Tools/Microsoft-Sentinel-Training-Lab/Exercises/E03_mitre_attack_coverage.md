@@ -1,7 +1,8 @@
 # Exercise 3 — MITRE ATT&CK Coverage
 
-**Topic:** Understand and review detection coverage mapped to the MITRE ATT&CK framework
-**Difficulty:** Beginner
+**Topic:** Understand and review detection coverage mapped to the MITRE ATT&CK framework  
+**Difficulty:** Beginner  
+**Prerequisites:** None
 
 ---
 
@@ -37,7 +38,7 @@ The lab solution deploys **17 detection rules** covering a multi-stage attack th
 #### Step 1 — Open the MITRE ATT&CK Page
 
 1. Open the [**Microsoft Defender portal**](https://security.microsoft.com)
-2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK (Preview)**
+2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK**
 
 ![MITRE ATT&CK matrix overview](../Images/OnboardingImage26.png?raw=true)
 
@@ -69,7 +70,7 @@ Click on a **shaded cell** — for example, **T1046 (Network Service Discovery)*
 A side panel opens showing:
 
 - **Description** of the technique
-- List of **analytics rules** mapped to it — you should see rules like `Lab Stage 3.5 Internal Port Scan Detected (Palo Alto)` and `Lab [E2] [Palo Alto] Port Scan Detection`
+- List of **analytics rules** mapped to it — you should see rules like `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage E2 - Port Scan Detection (Palo Alto)`
 - Coverage from **hunting queries** and **threat intelligence** (if applicable)
 
 ![Technique detail side panel](../Images/OnboardingImage28.png?raw=true)
@@ -147,3 +148,9 @@ This finds a single IP failing authentication against 5 or more distinct users �
 - [View MITRE ATT&CK coverage for your organization](https://learn.microsoft.com/en-us/azure/sentinel/mitre-coverage)
 - [MITRE ATT&CK framework](https://attack.mitre.org/)
 - [Map data sources to the MITRE ATT&CK framework](https://learn.microsoft.com/en-us/azure/sentinel/map-data-fields-to-entities)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 4 — Automation Rules](./E04_automation_rules.md)**

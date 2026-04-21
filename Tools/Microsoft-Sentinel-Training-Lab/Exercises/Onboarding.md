@@ -13,9 +13,9 @@ Complete the [Prerequisites](../README.md#prerequisites) and [Custom Detection R
 
 ---
 
-## Exercise 1: Create a Log Analytics workspace
+## Step 1: Create a Log Analytics workspace
 
-If you already have a workspace, skip to [Exercise 2](#exercise-2-add-microsoft-sentinel-to-your-workspace).
+If you already have a workspace, skip to [Step 2](#step-2-add-microsoft-sentinel-to-your-workspace).
 
 1. In the [Azure portal](https://portal.azure.com/), search for **Sentinel** and select **Microsoft Sentinel**.
 2. Select **Create** → **Create a new workspace**.
@@ -24,7 +24,7 @@ If you already have a workspace, skip to [Exercise 2](#exercise-2-add-microsoft-
 
 ---
 
-## Exercise 2: Add Microsoft Sentinel to your workspace
+## Step 2: Add Microsoft Sentinel to your workspace
 
 1. From the [Azure portal](https://portal.azure.com/), search for and select **Microsoft Sentinel**.
 <img src="../Images/OnboardingImage1.png" alt="Microsoft Sentinel in the Azure portal navigation" width="600">
@@ -32,14 +32,14 @@ If you already have a workspace, skip to [Exercise 2](#exercise-2-add-microsoft-
 2. Select **Create**.
 <img src="../Images/OnboardingImage2.png" alt="Create a new Microsoft Sentinel instance" width="600">
 
-3. Select the workspace you created in Exercise 1 and select **Add**.
+3. Select the workspace you created in Step 1 and select **Add**.
 
 ---
 
-## Exercise 3: Access Microsoft Sentinel in the Defender portal
+## Step 3: Access Microsoft Sentinel in the Defender portal
 
 1. Sign in to the [Microsoft Defender portal](https://security.microsoft.com/).
-2. You'll see **Microsoft Sentinel** in the navigation pane.
+2. Once provisioned, you'll see **Microsoft Sentinel** in the navigation pane. If this is your first time, there may be a delay of a few minutes.
 <img src="../Images/OnboardingImage3.png" alt="Microsoft Sentinel in the Defender portal navigation pane" width="600">
 
 3. Go to **Settings > Microsoft Sentinel > Workspaces**, verify your workspace is listed, and click **Connect**.
@@ -48,7 +48,7 @@ If you already have a workspace, skip to [Exercise 2](#exercise-2-add-microsoft-
 
 ---
 
-## Exercise 4: Deploy the Microsoft Sentinel Training Lab Solution
+## Step 4: Deploy the Microsoft Sentinel Training Lab Solution
 
 This deploys pre-recorded telemetry (~20 MB) and creates analytics rules, workbooks, watchlists, and playbooks used in the subsequent exercises.
 
@@ -56,7 +56,7 @@ Make sure you have completed the **Custom Detection Rules Setup** from the [READ
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FMicrosoft-Sentinel-Training-Lab%2FPackage%2FmainTemplate.json)
 
-1. Select the **Subscription**, **Resource Group**, and **Workspace** from the previous exercises.
+1. Select the **Subscription**, **Resource Group**, and **Workspace** from the previous steps.
 2. Under **Detection Rules Auth Method**, choose your preferred option:
    - **User-Assigned Managed Identity** — paste the UAMI's full resource ID.
    - **Service Principal (App Registration)** — enter the Tenant ID, Client ID, and Client Secret.
