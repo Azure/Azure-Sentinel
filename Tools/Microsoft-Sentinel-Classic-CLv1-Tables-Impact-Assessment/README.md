@@ -4,7 +4,7 @@
 ![Az.Accounts 2.13+](https://img.shields.io/badge/Az.Accounts-2.13%2B-0078D4?logo=microsoft-azure&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/github/license/noodlemctwoodle/Sentinel-CLv1-Analyzer)
-![Solution Mapping Update](https://github.com/noodlemctwoodle/Sentinel-CLv1-Analyzer/actions/workflows/update-solution-mapping.yml/badge.svg)
+
 
 Discover, assess, and plan the migration of **Classic Custom Log Tables (CLv1)** in
 Microsoft Sentinel before the
