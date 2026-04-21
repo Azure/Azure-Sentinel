@@ -1,7 +1,7 @@
 id: 81a8880f-cc20-40ce-98d6-2fc6a1c5b9a4
-name: Suspicious EC2 launched without a key pair
+name: AWS EC2 Instance Launched Without Key Pair
 description: |
-  'An attacker with limited permissions, or a sophisticated attacker disguising his activity, may have launched an EC2 instance without a key pair, allowing him to execute code on the machine using the UserData attribute (for example, by executing a reverse shell).'
+  Detects EC2 RunInstances events without a key pair and with user data present, which may indicate malicious startup script execution on newly provisioned instances.
 severity: High
 requiredDataConnectors:
   - connectorId: AWS
@@ -11,6 +11,7 @@ tactics:
   - Execution
 relevantTechniques:
   - T1204
+  - T1059
 query: |
     AWSCloudTrail
     | where EventName == "RunInstances" and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -19,13 +20,14 @@ query: |
     | extend keyName=tostring(todynamic(items.['keyName']))
     | where isempty(keyName) and RequestParameters contains "userData" and SourceIpAddress !contains "amazonaws.com"
     | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+    | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

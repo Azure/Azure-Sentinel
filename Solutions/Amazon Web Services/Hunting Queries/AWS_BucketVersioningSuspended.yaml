@@ -1,7 +1,7 @@
 id: 48c49b1d-2aa0-442b-96e3-cae6ad1251cd
-name: Bucket versioning suspended
+name: AWS S3 Bucket Versioning Suspended
 description: |
-  'Detected Bucket versioning suspended event. Attackers could use this technique to be able to ransom buckets without the option for the victim to have a backup.'
+  Detects S3 bucket versioning suspension events that may indicate preparation for destructive actions such as ransomware attack by reducing object recovery options.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
@@ -11,19 +11,21 @@ tactics:
   - Impact
 relevantTechniques:
   - T1485
+  - T1565.001
 query: |
   AWSCloudTrail
   | where EventName == "PutBucketVersioning" and isempty(ErrorCode) and isempty(ErrorMessage)
   | extend status = tostring(parse_json(RequestParameters).VersioningConfiguration.Status)
   | where status == "Suspended"
   | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

@@ -1,5 +1,5 @@
 id: 82ecf967-d6e9-4757-8f5d-42c562a8f05f
-name: Suspicious activity of STS token related to EC2
+name: AWS STS token suspicious activity from EC2
 description: |
   'Suspicious activity of the STS token of an EC2 machine hosted by ECS (for example, by SSRF) indicates a possible token hijacking. An attacker may have stolen the token and could abuse its permissions to escalate privileges and move laterally in the cloud account.'
 severity: High
@@ -8,9 +8,11 @@ requiredDataConnectors:
     dataTypes:
       - AWSCloudTrail
 tactics:
-  - Credential Access
+  - CredentialAccess
+  - LateralMovement
 relevantTechniques:
   - T1528
+  - T1550.001
 query: |
     let aws_public_ips = externaldata(prefixes: string)
     [ 
@@ -52,16 +54,16 @@ query: |
     | where ipv4_is_private(SourceIpAddress) == false
     | extend IsInRange = ipv4_is_in_range(SourceIpAddress, ip_prefix)
     | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, AssumedRoleArn = UserIdentityArn
-    | summarize timestamp=arg_max(timestamp,*), r = make_set(IsInRange) by SourceIpAddress, UserIdentityUserName, UserIdentityArn
+    | summarize TimeGenerated=arg_max(TimeGenerated,*), r = make_set(IsInRange, 100) by SourceIpAddress, UserIdentityUserName, UserIdentityArn
     | where not (set_has_element(r, true))
     | project-away ip_prefix, IsInRange
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

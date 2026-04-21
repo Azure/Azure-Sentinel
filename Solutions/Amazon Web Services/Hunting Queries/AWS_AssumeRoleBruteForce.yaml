@@ -1,29 +1,32 @@
 id: 2b8cecfe-f705-432d-9f38-08207b9473e1
-name: IAM assume role policy brute force
+name: AWS IAM Assume Role Brute Force
 description: |
-  'Several failed "assume role" attempts occurred on existing roles in the account. This could be an attacker trying to escalate privileges and move laterally by assuming roles in a compromised account. Verify with the user identity that the activity is legitimate.'
+  Identify repeated failed AssumeRole attempts against existing IAM roles, which may indicate privilege escalation or lateral movement using a compromised identity.
 severity: High
 requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
 tactics:
-  - Credential Access
+  - CredentialAccess
+  - PrivilegeEscalation
 relevantTechniques:
-  - T1110
+  - T1110.001
+  - T1098.003
 query: |
-    AWSCloudTrail
-    | where EventName == "AssumeRole" and ErrorMessage == "AccessDenied"
-    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
-    | summarize timestamp=arg_max(timestamp,*), failed_roles=dcount(ErrorMessage) by IPCustomEntity, AccountCustomEntity
-    | where failed_roles > 2
+  AWSCloudTrail
+  | where EventName == "AssumeRole" and ErrorMessage == "AccessDenied"
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | summarize TimeGenerated = max(TimeGenerated), failed_roles=dcount(ErrorMessage) by SourceIpAddress, UserIdentityUserName
+  | where failed_roles > 2
+  | order by failed_roles desc, TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0
