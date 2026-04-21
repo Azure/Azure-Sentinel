@@ -34,7 +34,7 @@ This lab deploys **custom detection rules** to Microsoft Defender XDR via the Mi
 
 #### 1. Create the UAMI
 
-Replace `<your-resource-group>` with your resource group name, then run:
+Open the [Azure portal](https://portal.azure.com/) and click the **Cloud Shell** button (>_) in the top navigation bar. Select **PowerShell** if prompted. Then replace `<your-resource-group>` with your resource group name and run:
 
 ```powershell
 az identity create --resource-group <your-resource-group> --name SentinelDetectionRulesIdentity
@@ -42,7 +42,7 @@ az identity create --resource-group <your-resource-group> --name SentinelDetecti
 
 #### 2. Grant the Microsoft Graph permission
 
-Replace `<your-resource-group>` and run each line:
+In the same Cloud Shell session, replace `<your-resource-group>` and run each command:
 
 ```powershell
 $miObjectId = (az identity show --resource-group <your-resource-group> --name SentinelDetectionRulesIdentity --query principalId -o tsv)
