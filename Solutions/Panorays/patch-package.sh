@@ -1,4 +1,4 @@
-bash# Step 1: run the build as normal
+# Step 1: run the build as normal
 pwsh ./createSolutionV3.ps1 -SolutionName "Panorays" \
   -InputFilePath "/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Data/Panorays_Input.json" \
   -OutputDirectory "/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package"
@@ -46,6 +46,18 @@ t['parameters'].pop('subscription', None)
 with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Removed unreferenced parameters: resourceGroupName, subscription')
+"
+
+# Step 3c: Remove script-injected unreferenced TemplateEmptyArray variable
+python3 -c "
+import json
+path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
+with open(path) as f:
+    t = json.load(f)
+t['variables'].pop('TemplateEmptyArray', None)
+with open(path, 'w') as f:
+    json.dump(t, f, indent=4)
+print('Removed TemplateEmptyArray variable')
 "
 
 
