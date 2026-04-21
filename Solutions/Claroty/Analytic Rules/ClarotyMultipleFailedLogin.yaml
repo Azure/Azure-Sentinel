@@ -1,35 +1,42 @@
 id: 4b5bb3fc-c690-4f54-9a74-016213d699b4
 name: Claroty - Multiple failed logins by user
-description: |
-  'Detects multiple failed logins by same user.'
+description: 'Detects multiple failed logins by the same user in Claroty SRA event logs. The rule looks for failed Login to
+  SRA events, extracts the source username from the event message, and alerts when a user exceeds 5 failed logins within 5
+  minutes.'
 severity: High
 status: Available
 requiredDataConnectors:
-  - connectorId: CefAma
-    dataTypes:
-      - CommonSecurityLog
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess
+- InitialAccess
 relevantTechniques:
-  - T1190
-  - T1133
-query: |
+- T1110
+- T1190
+- T1133
+query: |-
   let threshold = 5;
-  ClarotyEvent
-  | where EventType has 'Login to SRA'
-  | where EventType !has 'succeeded'
-  | extend SrcUsername = extract(@'User\s(.*?)\sfailed', 1, EventMessage)
-  | summarize count() by SrcUsername, bin(TimeGenerated, 5m)
-  | where count_ > threshold
-  | extend AccountCustomEntity = SrcUsername
+    ClarotyEvent
+    | where EventType has 'Login to SRA'
+    | where EventType !has 'succeeded'
+    | extend SrcUsername = trim(' ', tostring(extract(@'User\s(.*?)\sfailed', 1, EventMessage)))
+    | where isnotempty(SrcUsername)
+    | summarize FailedLogins = count() by SrcUsername, bin(TimeGenerated, 5m)
+    | where FailedLogins > threshold
+    | extend AccountCustomEntity = SrcUsername
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: Name
-        columnName: AccountCustomEntity
-version: 1.0.3
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: AccountCustomEntity
+alertDetailsOverride:
+  alertDisplayNameFormat: Claroty multiple failed logins for {{SrcUsername}}
+  alertDescriptionFormat: '{{FailedLogins}} failed logins for user {{SrcUsername}} exceeded the threshold of {{threshold}}
+    in 5 minutes.'
+version: 1.0.4
 kind: Scheduled
