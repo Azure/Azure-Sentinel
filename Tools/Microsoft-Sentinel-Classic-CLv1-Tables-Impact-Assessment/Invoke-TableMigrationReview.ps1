@@ -49,13 +49,9 @@
 
 .NOTES
     Version: 0.1.0
+    Last Updated: 2026-04-20
 
-    Contributors:
-        Toby G      — Developer, Co-Designer, Tester
-                       https://github.com/noodlemctwoodle
-        Sreedhar A  — Co-Designer, Tester
-                       https://github.com/sreedharande
-
+    
     Data source:
         Azure-Sentinel Solutions Analyzer
         https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Solutions%20Analyzer

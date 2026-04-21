@@ -10,12 +10,23 @@ Discover, assess, and plan the migration of **Classic Custom Log Tables (CLv1)**
 Microsoft Sentinel before the
 [HTTP Data Collector API retirement on **September 14, 2026**](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate).
 
-## Accreditations
+## Authors
+**Toby Goulden**, **Sreedhar Ande**
 
-| Contributor | Role | GitHub |
-| --- | --- | --- |
-| **Toby G** | Developer, Designer, Tester | [@noodlemctwoodle](https://github.com/noodlemctwoodle) |
-| **Sreedhar A** | Developer, Designer, Tester | [@sreedharande](https://github.com/sreedharande) |
+## Download and run the PowerShell script
+
+1. Download the script 
+  
+   [![Download]("/Tools/Microsoft Sentinel Classic (CLv1) Impact Assessment/Templates/Download.png")](https://aka.ms/Archive-Logs-Tool-Zip)
+
+2. Extract the folder and open "Configure-Long-Term-Retention.ps1" either in Visual Studio Code/PowerShell
+
+   ***Note***  
+   The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
+   
+   ```PowerShell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
+   ```  
 
 ## Why this tool exists
 

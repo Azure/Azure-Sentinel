@@ -1,4 +1,4 @@
-# Microsoft Sentinel Classic (CLv1) Impact Assessment — Copilot Instructions
+# Microsoft Sentinel Classic (CLv1) Table Impact Assessment — Copilot Instructions
 
 These instructions apply to **all** Copilot interactions in this repository. They
 provide context about the project, coding conventions, and domain knowledge so that

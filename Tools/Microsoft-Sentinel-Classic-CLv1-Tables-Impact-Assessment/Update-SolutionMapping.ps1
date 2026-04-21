@@ -12,6 +12,10 @@
 .EXAMPLE
     ./data/Update-SolutionMapping.ps1
 
+.NOTES
+    Version: 0.1.0
+    Last Updated: 2026-04-20
+
 .OUTPUTS
     data/solution-mapping.json          (this folder - used by the PS script)
     src/lib/data/solution-mapping.json  (web app - if the repo root is reachable)
