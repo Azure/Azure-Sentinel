@@ -125,3 +125,9 @@ print("🗑️ Table deleted")
 - [Sample notebooks for Microsoft Sentinel data lake](https://learn.microsoft.com/en-us/azure/sentinel/datalake/notebook-examples) — additional examples
 - [Microsoft Sentinel Provider class reference](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-provider-class-reference) — complete API docs
 - [Create and manage notebook jobs](https://learn.microsoft.com/en-us/azure/sentinel/datalake/notebook-jobs) — scheduling and automation
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 14 — Sentinel MCP Server Demo Prompts](./E14_MCP.md)**

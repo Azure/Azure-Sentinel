@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Cisco ISE Administrator events
-  Version: '0.1.0'
-  LastUpdated: Apr 09, 2026
+  Version: '0.1.1'
+  LastUpdated: Apr 14, 2026
 Product:
   Name: Cisco ISE Administrator
 Normalization:
@@ -38,11 +38,10 @@ ParserQuery: |
       EventCount = int(1),
       EventStartTime = TimeGenerated,
       EventEndTime = TimeGenerated,
-      EventSeverity = "Informational",
       EventType = "Logon",
       Type = "Syslog"
   | project-rename
-      SrcIpAddr = HostIP,
+      TargetIpAddr = HostIP,
       SrcDvcId = HostName
   | extend
       SrcDvcIdType = "Other"
@@ -58,9 +57,11 @@ ParserQuery: |
       TargetUsername = coalesce(AdminName, ""),
       TargetUsernameType = iff(isnotempty(AdminName), "Simple", "")
   | project-rename
-      TargetIpAddr = AdminIPAddress,
+      SrcIpAddr = AdminIPAddress,
       EventOriginalResultDetails = OperationMessageText,
-      TargetPortNumber = Port
+      TargetPortNumber = Port,
+      EventOriginalSeverity = SeverityLevel
+  | extend EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity)
   | extend AdditionalFields = iff(pack, bag_pack(
       "AdminInterface", AdminInterface,
       "ConfigVersionId", ConfigVersionId,
@@ -69,7 +70,8 @@ ParserQuery: |
   ), dynamic([]))
   | extend
       IpAddr = SrcIpAddr,
-      Dvc = SrcDvcId
+      Dvc = SrcDvcId,
+      User = TargetUsername
   | project
       TimeGenerated,
       Type,
@@ -81,6 +83,7 @@ ParserQuery: |
       EventStartTime,
       EventEndTime,
       EventSeverity,
+      EventOriginalSeverity,
       EventType,
       SrcIpAddr,
       SrcDvcId,
@@ -94,6 +97,7 @@ ParserQuery: |
       TargetPortNumber,
       AdditionalFields,
       IpAddr,
-      Dvc
+      Dvc,
+      User
   };
   parser(disabled=disabled, pack=pack)
