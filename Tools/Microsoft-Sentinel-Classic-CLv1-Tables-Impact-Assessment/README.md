@@ -1,4 +1,4 @@
-# Microsoft Sentinel Classic (CLv1) Impact Assessment
+# Microsoft Sentinel Classic (CLv1) Tables Impact Assessment
 
 ![PowerShell 7+](https://img.shields.io/badge/PowerShell-7.0%2B-blue?logo=powershell&logoColor=white)
 ![Az.Accounts 2.13+](https://img.shields.io/badge/Az.Accounts-2.13%2B-0078D4?logo=microsoft-azure&logoColor=white)
@@ -17,9 +17,9 @@ Microsoft Sentinel before the
 
 1. Download the script 
   
-   [![Download]("/Tools/Microsoft Sentinel Classic (CLv1) Impact Assessment/Templates/Download.png")](https://aka.ms/Archive-Logs-Tool-Zip)
+   [![Download]("/Tools/Microsoft-Sentinel-Classic-CLv1-Tables-Impact-Assessment/Templates/Download.png")](https://aka.ms/CLv1-Tables-Impact-Assessment)
 
-2. Extract the folder and open "Configure-Long-Term-Retention.ps1" either in Visual Studio Code/PowerShell
+2. Extract the folder and open "Invoke-TableMigrationReview.ps1" either in Visual Studio Code/PowerShell
 
    ***Note***  
    The script runs from the user's machine. You must allow PowerShell script execution. To do so, run the following command:
