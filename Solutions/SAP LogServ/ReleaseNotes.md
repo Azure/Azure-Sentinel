@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.5       | 01-04-2026                     |preview tag remove, UI update|
+| 3.0.5       | 21-04-2026                     | Preview tag remove, UI update. ASIM DCR routing: Linux→Syslog, Windows→WindowsEvent, DNS/Network/Web→ASIM tables. Removed test columns. |
 | 3.0.4       |  11-08-2025                    | Connector UI updates |
 | 3.0.3       |  17-07-2025                    | Observability Workbook added |
 | 3.0.2       |  25-06-2025                    | Analytic Rules for HANA DB added |

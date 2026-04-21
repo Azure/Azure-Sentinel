@@ -41,14 +41,6 @@
                         "type": "string"
                     },
                     {
-                        "name": "test",
-                        "type": "dynamic"
-                    },
-                    {
-                        "name": "test1",
-                        "type": "dynamic"
-                    },
-                    {
                         "name": "region",
                         "type": "string"
                     },
@@ -83,7 +75,57 @@
                 "destinations": [
                     "clv2ws1"
                 ],
-                "transformKql": "let fromUnixTime = (t: real) { \n    datetime(1970-01-01) + t * 1sec \n};\nsource\n| extend TimeGenerated = fromUnixTime(_time)\n| extend Raw = _raw\n| extend UnixTimestamp =_time\n| project-away  _raw, _time\n",
+                "transformKql": "source\n| where clz_dir == \"linux\"\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend SyslogMessage = _raw\n| extend HostName = host\n| extend Computer = host\n| extend SourceSystem = \"SAPLogServ\"\n| extend Facility = case(clz_subdir == \"cron\", \"cron\", clz_subdir == \"slapd\", \"daemon\", clz_subdir == \"sudolog\", \"authpriv\", \"daemon\")\n| extend SeverityLevel = \"info\"\n| extend ProcessName = clz_subdir\n| project TimeGenerated, Computer, HostName, SourceSystem, Facility, SeverityLevel, SyslogMessage, ProcessName",
+                "outputStream": "Microsoft-Syslog"
+            },
+            {
+                "streams": [
+                    "Custom-SAPLogServ_CL"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n| where clz_dir == \"windows\"\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend Channel = case(clz_subdir has \"Application\", \"Application\", clz_subdir has \"System\", \"System\", clz_subdir has \"Security\", \"Security\", \"Application\")\n| extend Computer = host\n| extend RawEventData = _raw\n| extend Provider = \"\"\n| extend EventID = toint(extract(@\"EventID[>:\\s]+(\\d+)\", 1, _raw))\n| project TimeGenerated, Channel, Computer, RawEventData, Provider, EventID",
+                "outputStream": "Microsoft-WindowsEvent"
+            },
+            {
+                "streams": [
+                    "Custom-SAPLogServ_CL"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n| where clz_dir == \"dns\"\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend EventType = \"Query\"\n| extend EventProduct = \"SAP LogServ DNS\"\n| extend EventVendor = \"SAP\"\n| extend EventSchema = \"Dns\"\n| extend EventSchemaVersion = \"0.1.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend Dvc = host\n| extend DnsQuery = extract(@\"query:\\s+(\\S+)\", 1, _raw)\n| extend DnsResponseCode = extract(@\"status:\\s+(\\w+)\", 1, _raw)\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventSchema, EventSchemaVersion, EventCount, EventResult, Dvc, DnsQuery, DnsResponseCode",
+                "outputStream": "Microsoft-ASimDnsActivityLogs"
+            },
+            {
+                "streams": [
+                    "Custom-SAPLogServ_CL"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n| where clz_dir in (\"network\", \"firewall\", \"proxy\")\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend EventType = \"NetworkSession\"\n| extend EventProduct = \"SAP LogServ Network\"\n| extend EventVendor = \"SAP\"\n| extend EventSchema = \"NetworkSession\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend Dvc = host\n| extend SrcIpAddr = extract(@\"src[=:\\s]+(\\d+\\.\\d+\\.\\d+\\.\\d+)\", 1, _raw)\n| extend DstIpAddr = extract(@\"dst[=:\\s]+(\\d+\\.\\d+\\.\\d+\\.\\d+)\", 1, _raw)\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventSchema, EventSchemaVersion, EventCount, EventResult, Dvc, SrcIpAddr, DstIpAddr",
+                "outputStream": "Microsoft-ASimNetworkSessionLogs"
+            },
+            {
+                "streams": [
+                    "Custom-SAPLogServ_CL"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n| where clz_dir == \"webdispatcher\" and clz_subdir == \"accesslog\"\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend EventType = \"WebSession\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventSchema = \"WebSession\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend Url = extract(@\"(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\\s+(\\S+)\", 1, _raw)\n| extend HttpStatusCode = extract(@\"\\s(\\d{3})\\s\", 1, _raw)\n| extend SrcIpAddr = extract(@\"^(\\d+\\.\\d+\\.\\d+\\.\\d+)\", 1, _raw)\n| extend _code = toint(HttpStatusCode)\n| extend EventResult = case(_code >= 200 and _code <= 399, \"Success\", _code >= 400 and _code <= 599, \"Failure\", \"NA\")\n| extend Dvc = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventSchema, EventSchemaVersion, EventCount, EventResult, Url, HttpStatusCode, SrcIpAddr, Dvc",
+                "outputStream": "Microsoft-ASimWebSessionLogs"
+            },
+            {
+                "streams": [
+                    "Custom-SAPLogServ_CL"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n| where isempty(clz_dir) or (clz_dir !in (\"linux\", \"windows\", \"dns\", \"network\", \"firewall\", \"proxy\") and not (clz_dir == \"webdispatcher\" and clz_subdir == \"accesslog\"))\n| extend TimeGenerated = datetime(1970-01-01) + _time * 1sec\n| extend Raw = _raw\n| extend UnixTimestamp = _time\n| project-away _raw, _time",
                 "outputStream": "Custom-SAPLogServ_CL"
             }
         ]
