@@ -17,7 +17,7 @@ Microsoft Sentinel before the
 
 1. Download the script 
   
-   [![Download]("/Tools/Microsoft-Sentinel-Classic-CLv1-Tables-Impact-Assessment/Templates/Download.png")](https://aka.ms/CLv1-Tables-Impact-Assessment)
+   [![Download](Templates/Download.png)](https://aka.ms/CLv1-Tables-Impact-Assessment)
 
 2. Extract the folder and open "Invoke-TableMigrationReview.ps1" either in Visual Studio Code/PowerShell
 
