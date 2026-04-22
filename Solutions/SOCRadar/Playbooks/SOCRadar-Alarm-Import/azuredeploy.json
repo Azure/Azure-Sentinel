@@ -34,6 +34,21 @@
                 "description": "Microsoft Sentinel Log Analytics Workspace Name"
             }
         },
+        "WorkspaceLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "Location/region of the Log Analytics workspace (e.g., centralus, northeurope)."
+            }
+        },
+        "TableRetentionDays": {
+            "type": "int",
+            "defaultValue": 90,
+            "minValue": 30,
+            "maxValue": 730,
+            "metadata": {
+                "description": "Retention period (days) for SOCRadar custom tables created by this template (30-730)."
+            }
+        },
         "PollingIntervalMinutes": {
             "type": "int",
             "defaultValue": 5,
@@ -63,42 +78,14 @@
             "type": "bool",
             "defaultValue": false,
             "metadata": {
-                "description": "Enable audit logging to Log Analytics custom table"
-            }
-        },
-        "AuditDcrEndpoint": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Data Collection Rule logs ingestion endpoint (required if EnableAuditLogging=true)"
-            }
-        },
-        "AuditDcrImmutableId": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Data Collection Rule immutable ID (required if EnableAuditLogging=true)"
+                "description": "Enable audit logging to the SOCRadarAuditLog_CL table created by this template"
             }
         },
         "EnableAlarmsTable": {
             "type": "bool",
             "defaultValue": false,
             "metadata": {
-                "description": "Enable writing alarms to custom Log Analytics table (SOCRadar_Alarms_CL)"
-            }
-        },
-        "DceEndpoint": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Data Collection Endpoint URL (required if EnableAlarmsTable=true)"
-            }
-        },
-        "AlarmsDcrImmutableId": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Alarms DCR immutable ID (required if EnableAlarmsTable=true)"
+                "description": "Enable writing alarms to the SOCRadar_Alarms_CL table created by this template"
             }
         },
         "AlarmsStreamName": {
@@ -154,7 +141,17 @@
         "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_MonitoringMetricsPublisherRoleGuid'))]",
         "workspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
         "AuditStreamName": "Custom-SOCRadarAuditLog_CL",
-        "_managementBaseUrl": "[environment().resourceManager]"
+        "_managementBaseUrl": "[environment().resourceManager]",
+        "DceName": "SOCRadar-DCE",
+        "AlarmsTableName": "SOCRadar_Alarms_CL",
+        "AlarmsDcrName": "SOCRadar-Alarms-DCR",
+        "AuditTableName": "SOCRadarAuditLog_CL",
+        "AuditDcrName": "SOCRadar-Audit-DCR",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "alarmsTableResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('AlarmsTableName'))]",
+        "auditTableResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('AuditTableName'))]",
+        "alarmsDcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('AlarmsDcrName'))]",
+        "auditDcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('AuditDcrName'))]"
     },
     "resources": [
         {
@@ -172,6 +169,158 @@
             }
         },
         {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DceName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "properties": {
+                "description": "Data Collection Endpoint used by the SOCRadar alarms and audit logs ingestion DCRs",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('AlarmsTableName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('AlarmsTableName')]",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Ingestion timestamp" },
+                        { "name": "AlarmId", "type": "string", "description": "SOCRadar alarm ID" },
+                        { "name": "CompanyId", "type": "string", "description": "SOCRadar company ID" },
+                        { "name": "AlarmMainType", "type": "string", "description": "Main alarm category" },
+                        { "name": "AlarmSubType", "type": "string", "description": "Alarm sub-category" },
+                        { "name": "Severity", "type": "string", "description": "CRITICAL/HIGH/MEDIUM/LOW/INFO" },
+                        { "name": "Status", "type": "string", "description": "Alarm status" },
+                        { "name": "Title", "type": "string", "description": "Alarm title" },
+                        { "name": "AlarmText", "type": "string", "description": "Alarm description (truncated to 4000 chars)" },
+                        { "name": "AlarmDate", "type": "string", "description": "Original alarm date from SOCRadar" },
+                        { "name": "AlarmPayload", "type": "dynamic", "description": "Full SOCRadar alarm JSON" }
+                    ]
+                },
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', variables('AuditTableName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('AuditTableName')]",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Event timestamp" },
+                        { "name": "EventType", "type": "string", "description": "AlarmImported, AlarmSynced, Error" },
+                        { "name": "AlarmId", "type": "string", "description": "SOCRadar alarm ID" },
+                        { "name": "IncidentId", "type": "string", "description": "Microsoft Sentinel incident ID" },
+                        { "name": "AlarmType", "type": "string", "description": "Main alarm type" },
+                        { "name": "Status", "type": "string", "description": "Alarm status" },
+                        { "name": "Severity", "type": "string", "description": "Alarm severity" },
+                        { "name": "Message", "type": "string", "description": "Details or error message" },
+                        { "name": "FullAlarmJson", "type": "dynamic", "description": "Complete SOCRadar alarm object" }
+                    ]
+                },
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('AlarmsDcrName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('alarmsTableResourceId')]"
+            ],
+            "properties": {
+                "description": "DCR for SOCRadar alarms ingestion into SOCRadar_Alarms_CL",
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "Custom-SOCRadar_Alarms_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "AlarmId", "type": "string" },
+                            { "name": "CompanyId", "type": "string" },
+                            { "name": "AlarmMainType", "type": "string" },
+                            { "name": "AlarmSubType", "type": "string" },
+                            { "name": "Severity", "type": "string" },
+                            { "name": "Status", "type": "string" },
+                            { "name": "Title", "type": "string" },
+                            { "name": "AlarmText", "type": "string" },
+                            { "name": "AlarmDate", "type": "string" },
+                            { "name": "AlarmPayload", "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "Custom-SOCRadar_Alarms_CL" ],
+                        "destinations": [ "workspace" ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-SOCRadar_Alarms_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('AuditDcrName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('auditTableResourceId')]"
+            ],
+            "properties": {
+                "description": "DCR for SOCRadar audit log ingestion into SOCRadarAuditLog_CL",
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "Custom-SOCRadarAuditLog_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "EventType", "type": "string" },
+                            { "name": "AlarmId", "type": "string" },
+                            { "name": "IncidentId", "type": "string" },
+                            { "name": "AlarmType", "type": "string" },
+                            { "name": "Status", "type": "string" },
+                            { "name": "Severity", "type": "string" },
+                            { "name": "Message", "type": "string" },
+                            { "name": "FullAlarmJson", "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "Custom-SOCRadarAuditLog_CL" ],
+                        "destinations": [ "workspace" ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-SOCRadarAuditLog_CL"
+                    }
+                ]
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
@@ -180,7 +329,9 @@
                 "type": "SystemAssigned"
             },
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                "[variables('alarmsDcrResourceId')]",
+                "[variables('auditDcrResourceId')]"
             ],
             "properties": {
                 "state": "Enabled",
@@ -943,10 +1094,10 @@
                         "value": "[parameters('EnableAuditLogging')]"
                     },
                     "AuditDcrEndpoint": {
-                        "value": "[parameters('AuditDcrEndpoint')]"
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
                     },
                     "AuditDcrImmutableId": {
-                        "value": "[parameters('AuditDcrImmutableId')]"
+                        "value": "[reference(variables('auditDcrResourceId'), '2024-03-11').immutableId]"
                     },
                     "AuditStreamName": {
                         "value": "[variables('AuditStreamName')]"
@@ -955,10 +1106,10 @@
                         "value": "[parameters('EnableAlarmsTable')]"
                     },
                     "DceEndpoint": {
-                        "value": "[parameters('DceEndpoint')]"
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
                     },
                     "AlarmsDcrImmutableId": {
-                        "value": "[parameters('AlarmsDcrImmutableId')]"
+                        "value": "[reference(variables('alarmsDcrResourceId'), '2024-03-11').immutableId]"
                     },
                     "AlarmsStreamName": {
                         "value": "[parameters('AlarmsStreamName')]"
@@ -978,7 +1129,7 @@
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('sentinelRoleDefinitionId'), deployment().name)]",
+            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('sentinelRoleDefinitionId'))]",
             "scope": "[variables('workspaceResourceId')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
@@ -992,13 +1143,43 @@
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('LogAnalyticsReaderRoleId'), deployment().name)]",
+            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('LogAnalyticsReaderRoleId'))]",
             "scope": "[variables('workspaceResourceId')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
             ],
             "properties": {
                 "roleDefinitionId": "[variables('LogAnalyticsReaderRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('alarmsDcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('alarmsDcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[variables('alarmsDcrResourceId')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('auditDcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('auditDcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[variables('auditDcrResourceId')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
                 "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }
@@ -1032,6 +1213,26 @@
         "auditLoggingEnabled": {
             "type": "bool",
             "value": "[parameters('EnableAuditLogging')]"
+        },
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+        },
+        "alarmsTableName": {
+            "type": "string",
+            "value": "[variables('AlarmsTableName')]"
+        },
+        "auditTableName": {
+            "type": "string",
+            "value": "[variables('AuditTableName')]"
+        },
+        "alarmsDcrName": {
+            "type": "string",
+            "value": "[variables('AlarmsDcrName')]"
+        },
+        "auditDcrName": {
+            "type": "string",
+            "value": "[variables('AuditDcrName')]"
         }
     }
 }

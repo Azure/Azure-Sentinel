@@ -2,6 +2,8 @@
 
 Imports SOCRadar XTI platform alarms into Microsoft Sentinel as incidents.
 
+Deploying this playbook also provisions the Data Collection Endpoint, the `SOCRadar_Alarms_CL` and `SOCRadarAuditLog_CL` custom log tables, the associated Data Collection Rules, and the role assignments required by the Logic App's managed identity. No separate infrastructure deployment is needed.
+
 ## Features
 
 - Paginated alarm fetching (100 per page)
