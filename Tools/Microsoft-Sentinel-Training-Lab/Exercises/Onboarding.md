@@ -52,15 +52,12 @@ If you already have a workspace, skip to [Step 2](#step-2-add-microsoft-sentinel
 
 This deploys pre-recorded telemetry (~20 MB) and creates analytics rules, workbooks, watchlists, and playbooks used in the subsequent exercises.
 
-Make sure you have completed the **Custom Detection Rules Setup** from the [README](../README.md) (either Option A — UAMI or Option B — Service Principal). You will need the credentials during deployment.
+Make sure you have completed the **Custom Detection Rules Setup** from the [README](../README.md) (creating the User-Assigned Managed Identity). You will need the UAMI resource ID during deployment.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FMicrosoft-Sentinel-Training-Lab%2FPackage%2FmainTemplate.json)
 
 1. Select the **Subscription**, **Resource Group**, and **Workspace** from the previous steps.
-2. Under **Detection Rules Auth Method**, choose your preferred option:
-   - **User-Assigned Managed Identity** — paste the UAMI's full resource ID.
-   - **Service Principal (App Registration)** — enter the Tenant ID, Client ID, and Client Secret.
-   - **None** — skip custom detection rules deployment.
+2. Under **Detection Rules Identity Resource Id**, paste the full resource ID of your UAMI (or leave empty to skip detection rules deployment).
 3. Select **Review + create**, then **Create**.
 
 > **Note:** The deployment takes approximately **15 minutes**.
