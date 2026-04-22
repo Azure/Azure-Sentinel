@@ -321,12 +321,15 @@ class S3Client:
     def unpack_file(self, downloaded_obj, key):
         try:
             file_obj = io.BytesIO(downloaded_obj)
+            extracted_file = None
             if '.csv.gz' in key.lower():
                 extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode()
             elif '.json.gz' in key.lower():
                 extracted_file = gzip.GzipFile(fileobj=file_obj)
             elif '.json' in key.lower():
                 extracted_file = file_obj
+            else:
+                logging.error('Unsupported file type for key {} while unpacking.'.format(key))
             return extracted_file
 
         except Exception as err:
