@@ -1,0 +1,174 @@
+Parser:
+  Title: ASIM Authentication filtering parser for VMware vCenter
+  Version: '0.1.1'
+  LastUpdated: Apr 14, 2026
+Product:
+  Name: VMware vCenter
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: VMware vCenter documentation
+  Link: 
+    https://www.vmware.com/products/cloud-infrastructure/vcenter/future-overview#overview
+Description: |
+  This ASIM filtering parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema. Logs can come from on-premises instances with AMA agent, or Azure VMware instances.
+ParserName: vimAuthenticationVMwareVCenter
+EquivalentBuiltInParser: _Im_Authentication_VMwareVCenter
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    username_has_any: dynamic = dynamic([]),
+    targetappname_has_any: dynamic = dynamic([]),
+    srcipaddr_has_any_prefix: dynamic = dynamic([]),
+    srchostname_has_any: dynamic = dynamic([]),
+    eventtype_in: dynamic = dynamic([]),
+    eventresultdetails_in: dynamic = dynamic([]),
+    eventresult: string = '*',
+    disabled: bool=false,
+    pack:bool = false) {
+    let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [
+        "info", "Informational"
+    ];
+    let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [
+        "vim.event.UserLoginSessionEvent", "Logon",
+        "vim.event.UserLogoutSessionEvent", "LogOff"
+    ];
+    let LoginEvents = (T: (Message: string), TableType: string) {
+        T
+        | where Message has "UserLoginSessionEvent"
+        | extend Type = TableType
+        | parse Message with PreEventString "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *
+        | extend DvcId = split(PreEventString, " ")[3];
+    };
+    let LogoutEvents = (T: (Message: string), TableType: string) {
+        T
+        | where Message has "UserLogoutSessionEvent"
+        | extend Type = TableType
+        | parse Message with PreEventString "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *
+        | extend DvcId = split(PreEventString, " ")[3];
+    };
+    let vCenterLogs = vcenter_CL
+    | where not(disabled)
+        and (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and ((array_length(username_has_any) == 0) or Message has_any (username_has_any))
+        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+        and (array_length(srchostname_has_any) == 0) // SrcHostName not availabine in source
+        and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source
+        and (eventresult == "*" or (eventresult == "Success")); 
+    let AzureVCenterLogs = AVSVcSyslog
+    | where not(disabled)
+        and (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and ((array_length(username_has_any) == 0) or Message has_any (username_has_any))
+        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+        and (array_length(srchostname_has_any) == 0) // SrcHostName not availabine in source
+        and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source
+        and (eventresult == "*" or (eventresult == "Success"));
+    union
+        LoginEvents(vCenterLogs, "vcenter_CL"),
+        LogoutEvents(vCenterLogs, "vcenter_CL"),
+        LoginEvents(AzureVCenterLogs, "AVSVcSyslog"),
+        LogoutEvents(AzureVCenterLogs, "AVSVcSyslog")
+        | where ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+        | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
+        | extend
+            EventVendor = "VMware",
+            EventProduct = "vCenter",
+            EventSchema = "Authentication",
+            EventSchemaVersion = "0.1.4",
+            Type = "vcenter_CL",
+            EventStartTime = EventTime,
+            EventEndTime = EventTime,
+            EventCount = coalesce(toint(APIInvocationCount), int(1)),
+            TargetUsernameType = "Simple",
+            EventResult = "Success"
+        | lookup EventTypeLookup on EventOriginalType
+        | where (array_length(eventtype_in) == 0) or EventType in~ (eventtype_in)
+        | lookup EventSeverityLookup on EventOriginalSeverity
+        | project-rename
+            EventOriginalResultDetails = Message
+        | extend
+            AdditionalFields = iff(pack, bag_pack("LoginTime", LoginTime), dynamic([])),
+            IpAddr = SrcIpAddr,
+            User = TargetUsername,
+            Dvc = DvcId
+        | project
+            TimeGenerated,
+            Type,
+            EventVendor,
+            EventProduct,
+            EventSchema,
+            EventSchemaVersion,
+            EventStartTime,
+            EventEndTime,
+            EventCount,
+            TargetUsernameType,
+            EventResult,
+            EventOriginalType,
+            EventType,
+            EventSeverity,
+            EventOriginalSeverity,
+            EventOriginalResultDetails,
+            EventOriginalUid,
+            TargetUsername,
+            SrcIpAddr,
+            HttpUserAgent,
+            AdditionalFields,
+            IpAddr,
+            Dvc,
+            DvcId,
+            User;
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled,
+      pack=pack
+  )
