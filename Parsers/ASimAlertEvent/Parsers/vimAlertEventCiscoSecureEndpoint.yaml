@@ -56,6 +56,24 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+    let AttackTacticLookup = datatable(_ta: string, AttackTactic:string)
+        [
+            'TA0043', 'Reconnaissance (TA0043)',
+            'TA0042', 'Resource Development (TA0042)',
+            'TA0001', 'Initial Access (TA0001)',
+            'TA0002', 'Execution (TA0002)',
+            'TA0003', 'Persistence (TA0003)',
+            'TA0004', 'Privilege Escalation (TA0004)',
+            'TA0005', 'Defense Evasion (TA0005)',
+            'TA0006', 'Credential Access (TA0006)',
+            'TA0007', 'Discovery (TA0007)',
+            'TA0008', 'Lateral Movement (TA0008)',
+            'TA0009', 'Collection (TA0009)',
+            'TA0011', 'Command and Control (TA0011)',
+            'TA0010', 'Exfiltration (TA0010)',
+            'TA0040', 'Impact (TA0040)'
+        ]
+    ;
     let CiscoSEParser = (
         starttime: datetime=datetime(null),
         endtime: datetime=datetime(null),
@@ -159,23 +177,21 @@ ParserQuery: |
             ParentFileSHA256 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].sha256, dynamic(null)),
             ParentFileMD5 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].md5, dynamic(null)),
             UsernameType = iff(isnotempty(Username), 'Simple', dynamic(null))
-        | mv-apply _t = parse_json(Techniques) on (
-            extend Technique = iff(isnotempty(_t), strcat('(',tostring(_t),')'), dynamic(null))
-            | summarize AttackTechniques = strcat_array(make_set(Technique), ', ')
-        )
+        | extend
+            Tactics = iif(isempty(Tactics), dynamic([""]), Tactics),
+            Techniques = iif(isempty(Techniques), dynamic([""]), Techniques)
+        | as T
+            | mv-expand
+                _ta = parse_json(Tactics) to typeof(string),
+                _t = parse_json(Techniques) to typeof(string)
+            | extend AttackTechnique = iff(isnotempty(_t), strcat('(', _t,')'), dynamic(null))
+            | lookup AttackTacticLookup on _ta
+            | summarize
+                AttackTactics = strcat_array(make_set_if(AttackTactic, isnotempty(AttackTactic)), ', '),
+                AttackTechniques = strcat_array(make_set_if(AttackTechnique, isnotempty(AttackTechnique)), ', ')
+                by _ItemId
+        | lookup T on _ItemId
         | where ((array_length(attacktechniques_has_any) == 0) or (AttackTechniques has_any (attacktechniques_has_any)))
-        | mv-apply _t = parse_json(Tactics) to typeof(string) on (
-            extend Tactic = iff(
-                isnotempty(_t),
-                replace_strings(
-                    _t,
-                    dynamic(['TA0043', 'TA0042', 'TA0001', 'TA0002', 'TA0003', 'TA0004', 'TA0005', 'TA0006', 'TA0007', 'TA0008', 'TA0009', 'TA0011', 'TA0010', 'TA0040']),
-                    dynamic(['Reconnaissance (TA0043)', 'Resource Development (TA0042)', 'Initial Access (TA0001)', 'Execution (TA0002)', 'Persistence (TA0003)', 'Privilege Escalation (TA0004)', 'Defense Evasion (TA0005)', 'Credential Access (TA0006)', 'Discovery (TA0007)', 'Lateral Movement (TA0008)','Collection (TA0009)', 'Command and Control (TA0011)', 'Exfiltration (TA0010)', 'Impact (TA0040)'])
-                ),
-                ''
-            )
-            | summarize AttackTactics = strcat_array(make_set(Tactic), ', ')
-        )
         | where ((array_length(attacktactics_has_any) == 0) or (AttackTactics has_any (attacktactics_has_any)))
         | extend
             EventProduct = 'Secure Endpoint',
