@@ -1,0 +1,107 @@
+Parser:
+  Title: ASIM Authentication parser for VMware vCenter
+  Version: '0.1.1'
+  LastUpdated: Apr 14, 2026
+Product:
+  Name: VMware vCenter
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: VMware vCenter documentation
+  Link: 
+    https://www.vmware.com/products/cloud-infrastructure/vcenter/future-overview#overview
+Description: |
+  This ASIM parser supports normalizing VMware vCenter logs to the ASIM Authentication normalized schema. Logs can come from on-premises instances with AMA agent, or Azure VMware instances.
+ParserName: ASimAuthenticationVMwareVCenter
+EquivalentBuiltInParser: _ASim_Authentication_VMwareVCenter
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [
+        "info", "Informational"
+    ];
+    let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [
+        "vim.event.UserLoginSessionEvent", "Logon",
+        "vim.event.UserLogoutSessionEvent", "LogOff"
+    ];
+    let LoginEvents = (T: (Message: string), TableType: string) {
+        T
+        | where Message has "UserLoginSessionEvent"
+        | extend Type = TableType
+        | parse Message with PreEventString "Event [" EventOriginalUid:string "] [1-1] [" EventTime:datetime "] [" EventOriginalType:string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr:string " logged in as " HttpUserAgent:string "]" *
+        | extend DvcId = split(PreEventString, " ")[3];
+    };
+    let LogoutEvents = (T: (Message: string), TableType: string) {
+        T
+        | where Message has "UserLogoutSessionEvent"
+        | extend Type = TableType
+        | parse Message with PreEventString "Event [" EventOriginalUid: string "] [1-1] [" EventTime: datetime "] [" EventOriginalType: string "] [" EventOriginalSeverity:string "]" * "[User " TargetUsername:string "@" SrcIpAddr " logged out (login time:" LoginTime: string ", number of API invocations: " APIInvocationCount: string ", user agent:" HttpUserAgent: string ")]" *
+        | extend DvcId = split(PreEventString, " ")[3];
+    };
+    let vCenterLogs = vcenter_CL
+    | where not(disabled);
+    let AzureVCenterLogs = AVSVcSyslog
+    | where not(disabled);
+    union
+        LoginEvents(vCenterLogs, "vcenter_CL"),
+        LogoutEvents(vCenterLogs, "vcenter_CL"),
+        LoginEvents(AzureVCenterLogs, "AVSVcSyslog"),
+        LogoutEvents(AzureVCenterLogs, "AVSVcSyslog")
+        | extend
+            EventVendor = "VMware",
+            EventProduct = "vCenter",
+            EventSchema = "Authentication",
+            EventSchemaVersion = "0.1.4",
+            EventStartTime = EventTime,
+            EventEndTime = EventTime,
+            EventCount = coalesce(toint(APIInvocationCount), int(1)),
+            TargetUsernameType = "Simple",
+            EventResult = "Success"
+        | lookup EventTypeLookup on EventOriginalType
+        | lookup EventSeverityLookup on EventOriginalSeverity
+        | project-rename
+            EventOriginalResultDetails = Message
+        | extend
+            AdditionalFields = iff(pack, bag_pack("LoginTime", LoginTime), dynamic([])),
+            IpAddr = SrcIpAddr,
+            User = TargetUsername,
+            Dvc = DvcId
+        | project
+            TimeGenerated,
+            Type,
+            EventVendor,
+            EventProduct,
+            EventSchema,
+            EventSchemaVersion,
+            EventStartTime,
+            EventEndTime,
+            EventCount,
+            TargetUsernameType,
+            EventResult,
+            EventOriginalType,
+            EventType,
+            EventSeverity,
+            EventOriginalSeverity,
+            EventOriginalResultDetails,
+            EventOriginalUid,
+            TargetUsername,
+            SrcIpAddr,
+            HttpUserAgent,
+            AdditionalFields,
+            IpAddr,
+            Dvc,
+            DvcId,
+            User;
+  };
+  parser(disabled=disabled, pack=pack)

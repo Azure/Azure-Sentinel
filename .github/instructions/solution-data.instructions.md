@@ -35,8 +35,9 @@ All Solution_*.json files must contain these mandatory fields:
 **Naming Requirements:**
 - Use official product/vendor names when possible
 - Match the solution folder name (converted appropriately)
-- **Only alphanumeric characters (a-z, A-Z, 0-9) and spaces allowed**
-- No special characters including hyphens, underscores, dots, or symbols
+- **Alphanumeric characters (a-z, A-Z, 0-9), spaces, and parentheses allowed**
+- Parentheses can be used for acronyms and short forms (e.g., "Visa Threat Intelligence (VTI)")
+- No other special characters including hyphens, underscores, dots, or symbols
 - Maximum length: 100 characters
 - Must be unique across all solutions
 

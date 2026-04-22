@@ -47,17 +47,22 @@
     "email": "support@d3security.com",
     "_email": "[variables('email')]",
     "_solutionName": "D3SmartSOAR",
-    "_solutionVersion": "3.2.0",
+    "_solutionVersion": "3.3.0",
     "solutionId": "d3securitymanagementsystemsinc1599258630765.azure-sentinel-solution-d3smartsoar",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.2.0",
+    "dataConnectorCCPVersion": "3.3.0",
     "_dataConnectorContentIdConnectorDefinition1": "D3SOARConnectorDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "D3SOARConnectorDefinitionConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
+    "analyticRuleVersion1": "1.0.0",
+    "_analyticRulecontentId1": "48ef0be4-8240-4a03-bbb9-320b562d6ce4",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('_analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1'))))]",
+    "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId1'),'-', variables('analyticRuleVersion1'))))]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -757,16 +762,119 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "D3SmartSOAR-HighOrCriticalSeverityIncident Analytics Rule with template version 3.3.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('_analyticRulecontentId1')]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Identifies when a D3 Smart SOAR incident with High or Critical severity is ingested. This helps security teams prioritize response to the most impactful incidents reported by D3 Smart SOAR.",
+                "displayName": "D3 Smart SOAR - High or critical severity incident detected",
+                "enabled": false,
+                "query": "D3SOARIncidents_CL\n| where TimeGenerated > ago(1h)\n| where IncidentSeverity in (\"High\", \"Critical\")\n| project\n    TimeGenerated,\n    IncidentNumber,\n    IncidentTitle,\n    IncidentSeverity,\n    IncidentStatus,\n    IncidentType,\n    IncidentPriority,\n    IncidentOwner,\n    IncidentCreator,\n    IncidentDescription,\n    IncidentStage\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "D3SOARConnectorDefinition",
+                    "dataTypes": [
+                      "D3SOARIncidents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "Impact"
+                ],
+                "techniques": [
+                  "T1499"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "IncidentOwner"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "D3SmartSOAR Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "D3SmartSOAR",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "D3 Security",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "D3 Security",
+                  "email": "d3support@d3security.com",
+                  "tier": "Partner",
+                  "link": "https://d3security.com/company/contact/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[variables('_analyticRulecontentProductId1')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_analyticRulecontentId1')]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "D3 Smart SOAR - High or critical severity incident detected",
+        "version": "[variables('analyticRuleVersion1')]"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.2.0",
+        "version": "3.3.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "D3SmartSOAR",
         "publisherDisplayName": "D3 Security",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/D3SmartSOAR/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The D3 Smart SOAR solution for Microsoft Sentinel enables ingestion of D3 Smart SOAR alerts and events into Microsoft Sentinel via a codeless connector.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/D3SmartSOAR/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The D3 Smart SOAR solution for Microsoft Sentinel enables ingestion of D3 Smart SOAR alerts and events into Microsoft Sentinel via a codeless connector.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -795,6 +903,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentIdConnections1')]",
               "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('_analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
             }
           ]
         },
