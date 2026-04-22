@@ -30,6 +30,12 @@ Complete **one** of the two options below before deployment.
 
 ### Option A — User-Assigned Managed Identity (UAMI)
 
+> **Tip — Use GitHub Copilot:** You can complete this entire setup by pasting the following prompt into GitHub Copilot Chat (in VS Code or the Defender portal):
+>
+> *"Create a User-Assigned Managed Identity called SentinelDetectionRulesIdentity in my resource group, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, and give me the full resource ID to use during deployment."*
+>
+> Copilot will generate the exact CLI commands for your environment.
+
 #### A1. Create the UAMI
 
 ```powershell
@@ -59,7 +65,7 @@ az rest --method POST `
 
 #### A3. Deploy
 
-Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Exercise 4](./Exercises/Onboarding.md#exercise-4-deploy-the-microsoft-sentinel-training-lab-solution)):
+Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Step 4](./Exercises/Onboarding.md#step-4-deploy-the-microsoft-sentinel-training-lab-solution)):
 
 ```
 /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/SentinelDetectionRulesIdentity
@@ -70,6 +76,10 @@ Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` p
 ### Option B — Service Principal (App Registration)
 
 Use this option when you cannot create or use a Managed Identity (e.g., cross-tenant deployments or restricted RBAC environments).
+
+> **Tip — Use GitHub Copilot:** You can complete this setup by pasting the following prompt into GitHub Copilot Chat:
+>
+> *"Create an App Registration called SentinelDetectionRulesSPN, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, create a client secret, and give me the Tenant ID, Client ID, and Client Secret to use during deployment."*
 
 **Prefer the portal?** You can complete steps B1–B3 entirely from the Azure portal by following [Create a Microsoft Entra app and service principal in the portal](https://learn.microsoft.com/entra/identity-platform/howto-create-service-principal-portal). That guide covers app registration, API permission assignment (use **Microsoft Graph → Application permissions → CustomDetection.ReadWrite.All**), and client secret creation. Once done, skip ahead to **B4** below.
 
@@ -139,6 +149,8 @@ Start with the **Onboarding** exercise to set up your workspace and deploy the l
 | **11** | Data lake enabled | Data lake KQL jobs |
 | **12** | Exercise 11 | Builds on the KQL job output table |
 | **14** | None | Independent — MCP server demo |
+| **15** | ADLS Gen2 storage account | Data federation |
+| **16** | Data lake enabled | Split transformation |
 
 ## Exercises
 
@@ -204,6 +216,14 @@ Start with the **Onboarding** exercise to set up your workspace and deploy the l
 
 [**Exercise 14 — Sentinel MCP Server Demo Prompts**](./Exercises/E14_MCP.md)
 - 10 AI assistant prompts demonstrating Sentinel MCP Server capabilities
+
+[**Exercise 15 — Data Federation with ADLS Gen2**](./Exercises/E15_federation_adls.md)
+- Federate external data from Azure Data Lake Storage Gen2
+- Query security events alongside Sentinel tables without ingestion
+
+[**Exercise 16 — Data Transformation: Split Ingestion by Tier**](./Exercises/E16_split_transformation.md)
+- Create a split transformation to route firewall data between Analytics and Data lake tiers
+- Understand cost optimisation through tiered ingestion
 
 ---
 
