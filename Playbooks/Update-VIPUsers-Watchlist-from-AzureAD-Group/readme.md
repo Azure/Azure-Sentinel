@@ -37,7 +37,7 @@ Now you need either to assign User Administrator role in Azure AD or to grant fo
 |
 
 <br>
-To assign Microsft Graph API permissions, first you will have to connect to Azure AD PowerShell module - https://docs.microsoft.com/powershell/module/azuread/?view=azureadps-2.0#connect-to-your-directory
+To assign Microsoft Graph API permissions, first you will have to connect to Azure AD PowerShell module - https://docs.microsoft.com/powershell/module/azuread/?view=azureadps-2.0#connect-to-your-directory
 <br>
 After login, run the following code replacing the managed identity object ID. You can find the managed identity object ID on the Identity blade under Settings for the Logic App.<br><br>
 
