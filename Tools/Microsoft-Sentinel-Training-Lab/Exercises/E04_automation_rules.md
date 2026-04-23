@@ -57,15 +57,16 @@ For this exercise, we will create automation rules targeting two scenarios:
    | Field | Value |
    | --- | --- |
    | **Name** | `Tag port scan incidents` |
-   | **Trigger** | When incident is created |
+   | **Rule type** | Enhanced rule |
+   | **Trigger** | When alert is created |
    | **Conditions** | |
 
 4. Under **Conditions**, configure:
 
-   - Click **+ Add condition** → **Analytics rule name**
+   - Click **+ Add condition** → **Alert Title**
    - Select **Contains** → enter `port scan`
 
-   This matches any incident created by a rule whose name contains "port scan" — covering both `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage E2 - Port Scan Detection (Palo Alto)`.
+   This matches any alert whose title contains "port scan" — covering both `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage E2 - Port Scan Detection (Palo Alto)`.
 
 5. Under **Actions**, add two actions:
 
@@ -91,17 +92,12 @@ Create a second automation rule for the Okta account takeover scenario:
    | Field | Value |
    | --- | --- |
    | **Name** | `Escalate Okta account takeover` |
-   | **Trigger** | When incident is created |
+   | **Rule type** | Enhanced rule |
+   | **Trigger** | When alert is created |
 
-3. Under **Conditions**, add two conditions:
+3. Under **Conditions**, configure:
 
-   **Condition 1:**
-   - **Analytics rule name** → **Contains** → `Account Takeover`
-
-   **Condition 2:** (click **+ Add condition**)
-   - **Entity** → **Account** → **Name** → **Contains** → `attacker`
-
-   > **Note:** The value `attacker` matches the `ActorUsername` from the Okta telemetry data. In a real environment, you would use a more targeted condition like a specific user or domain.
+   - **Alert Title** → **Contains** → `Account takeover`
 
 4. Under **Actions**, add three actions:
 
