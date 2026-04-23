@@ -59,6 +59,18 @@ When reviewing pull requests, follow these rules strictly.
 3. Validate parser syntax, KQL accuracy, YAML structure, and all required fields from that custom instruction file
 4. Do NOT use general instructions for these files - only use the parsers custom instructions
 
+### For Building, Packaging, or Validating Solutions
+When the user asks to **build**, **package**, **validate**, or **run validations** on a solution:
+1. **LOAD and USE:** `.github/instructions/packaging.instructions.md`
+2. Apply ALL guidelines from that file — it contains the script path, parameters, fuzzy matching behavior, and report display rules
+3. **Always use the build script** at `.script/local-validation/build-and-validate.ps1` — do NOT run validators manually or write your own validation logic
+4. **BEFORE running the script, tell the user:** "🔄 Running full build & validation suite for {SolutionName}. This typically takes 3-5 minutes — I'll present the complete report when it finishes." This message MUST appear in chat before the script executes so the user knows work is happening.
+5. **The script takes 3-10 minutes.** NEVER tell the user to "check the terminal."
+6. Present the full report — the text between `[REPORT_START]` and `[REPORT_END]` — in your chat response
+7. This applies to ALL solutions, including newly created ones that may not have a Package/ folder yet
+
+**Trigger phrases:** "build solution", "package solution", "validate solution", "run validations", "run CI checks", "check if solution passes", "create V3 package"
+
 ---
 
 ## Files and folders to ignore
@@ -75,3 +87,79 @@ When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`, f
 
 - **`run-solution-analyzer`** — running the mapper, doc generator, ASIM browser, and `upload_to_kusto`; output locations; force-refresh and caching.
 - **`update-solution-analyzer`** — modifying scripts, updating `script-docs/`, README changelog rules, CSV output sync with `upload_to_kusto.py`, and static/interactive index plus markdown/HTML entity page synchronization.
+
+There are THREE different output scenarios - **never confuse them**:
+
+1. **Default (development):** CSVs are written to `Tools/Solutions Analyzer/` in the current branch
+   - This is the normal case when developing/testing
+   - **Never generate documentation here**
+
+2. **Output worktree (publishing CSVs):** `C:\Users\ofshezaf\GitHub\Azure-Sentinel-solution-analyzer-output\Tools\Solutions Analyzer`
+   - Only use this when **specifically requested** to "publish CSVs to the output branch"
+   - This is a separate git worktree for the CSV output branch
+   - **Only CSVs go here, never documentation**
+
+3. **Documentation output:** `C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs`
+   - This is where generated markdown documentation goes
+   - This is in a **separate repository** (sentinelninja)
+   - Empty the target folder before generating new docs
+
+### Key Rules
+
+- **Never generate docs locally** in the Azure-Sentinel repository
+- **Generate docs only in the sentinelninja repo** when asked or needed
+- **For official CSV releases**, generate CSVs **only** in the solution analyzer output worktree
+- Always use `--output-dir` flag when running `generate_connector_docs.py`
+
+### Running Scripts
+
+#### Mapper Script
+```powershell
+cd "Tools/Solutions Analyzer"
+python map_solutions_connectors_tables.py
+```
+
+**Note:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). The script prints timestamped progress messages to the console that the user needs to see. Run with `isBackground: false` and `timeout: 0` so the full output is visible.
+
+#### Documentation Generator
+```powershell
+python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentinelninja\Solutions Docs" --skip-input-generation
+```
+
+**IMPORTANT:** Never run without `--output-dir` flag.
+
+**IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
+
+**IMPORTANT:** Always use `--skip-input-generation` unless you specifically need to regenerate the input CSVs (mapper + collect_table_info). Without this flag, the doc generator will re-run those scripts automatically, which is slow and unnecessary if the CSVs are already up-to-date.
+
+**IMPORTANT:** Run the mapper script before generating docs if:
+- The mapper script itself was modified, OR
+- Any override YAML file in the `overrides/` folder was modified (including adding, editing, or removing `additional_connectors` entries), OR
+- You specifically need to refresh the CSV data, OR
+- You are explicitly asked to run the mapper
+
+### Caching and Logging
+
+- **Cache:** `.cache/` folder for analysis caching
+- **Logs:** `.logs/` folder for log files
+
+**Log file:** `Tools/Solutions Analyzer/.logs/map_solutions_connectors_tables.log`
+
+Use `--force-refresh` with these types when modifying analysis logic:
+- `asim` - ASIM parser analysis
+- `parsers` - Non-ASIM parser analysis
+- `solutions` - Solution content analysis
+- `standalone` - Standalone content item analysis
+- `marketplace` - Marketplace availability check (requires network)
+- `tables` - Table reference info (requires network)
+
+### Script Documentation
+
+**Before updating a script:** Always review the relevant script documentation in `Tools/Solutions Analyzer/docs/` first.
+
+**When updating a script**, update the corresponding script doc to reflect:
+- Any script parameters added or changed
+- Any output file changes, including changes to CSV files (new columns, renamed columns, removed columns)
+- Any changes to analysis methods or logic
+- Update the primary readme.md if needed and add the change to the change log. Do not add a version if the previous version as manifested by the changelog, was not committed yet.
+
