@@ -20,119 +20,53 @@ Before you begin, make sure you have:
 
 ## Custom Detection Rules Setup
 
-This lab deploys **custom detection rules** to Microsoft Defender XDR via the Microsoft Graph Security API. The Automation runbook that creates the rules needs an identity with the `CustomDetection.ReadWrite.All` Microsoft Graph application permission. You can use **either** a User-Assigned Managed Identity (UAMI) **or** a Service Principal (App Registration) — pick the option that suits your environment.
+This lab deploys **custom detection rules** to Microsoft Defender XDR via the Microsoft Graph Security API. The Automation runbook that creates the rules needs a **User-Assigned Managed Identity (UAMI)** with the `CustomDetection.ReadWrite.All` Microsoft Graph application permission.
 
-> **Tip:** Leave all identity fields empty during deployment if you want to skip custom detection rules entirely.
-
-Complete **one** of the two options below before deployment.
+> **Tip:** Leave the identity field empty during deployment if you want to skip custom detection rules entirely.
 
 ---
 
-### Option A — User-Assigned Managed Identity (UAMI)
+### Create a User-Assigned Managed Identity (UAMI)
 
-> **Tip — Use GitHub Copilot:** You can complete this entire setup by pasting the following prompt into GitHub Copilot Chat (in VS Code or the Defender portal):
+> **Tip — Use GitHub Copilot:** You can complete this entire setup by pasting the following prompt into GitHub Copilot Chat in VS Code:
 >
 > *"Create a User-Assigned Managed Identity called SentinelDetectionRulesIdentity in my resource group, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, and give me the full resource ID to use during deployment."*
->
-> Copilot will generate the exact CLI commands for your environment.
 
-#### A1. Create the UAMI
+#### 1. Create the UAMI
 
-```powershell
-# Create the UAMI (adjust resource group and name as needed)
-az identity create `
-  --resource-group <your-resource-group> `
-  --name SentinelDetectionRulesIdentity
-```
-
-#### A2. Grant the Microsoft Graph permission
+Open the [Azure portal](https://portal.azure.com/) and click the **Cloud Shell** button (>_) in the top navigation bar. Select **PowerShell** if prompted. Then replace `<your-resource-group>` with your resource group name and run:
 
 ```powershell
-# Variables
-$miObjectId   = (az identity show --resource-group <your-resource-group> --name SentinelDetectionRulesIdentity --query principalId -o tsv)
-$graphAppId   = "00000003-0000-0000-c000-000000000000"   # Microsoft Graph
-$appRoleId    = "e0fd9c8d-a12e-4cc9-9827-20c8c3cd6fb8"   # CustomDetection.ReadWrite.All
-
-# Get the Microsoft Graph service principal
-$graphSpId = (az ad sp show --id $graphAppId --query id -o tsv)
-
-# Assign the app role to the managed identity
-az rest --method POST `
-  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$graphSpId/appRoleAssignedTo" `
-  --headers "Content-Type=application/json" `
-  --body "{\"principalId\":\"$miObjectId\",\"resourceId\":\"$graphSpId\",\"appRoleId\":\"$appRoleId\"}"
+az identity create --resource-group <your-resource-group> --name SentinelDetectionRulesIdentity
 ```
 
-#### A3. Deploy
+#### 2. Grant the Microsoft Graph permission
+
+In the same Cloud Shell session, replace `<your-resource-group>` and run each command:
+
+```powershell
+$miObjectId = (az identity show --resource-group <your-resource-group> --name SentinelDetectionRulesIdentity --query principalId -o tsv)
+```
+
+```powershell
+$graphSpId = (az ad sp show --id "00000003-0000-0000-c000-000000000000" --query id -o tsv)
+```
+
+```powershell
+$body = @{principalId=$miObjectId; resourceId=$graphSpId; appRoleId="e0fd9c8d-a12e-4cc9-9827-20c8c3cd6fb8"} | ConvertTo-Json -Compress
+```
+
+```powershell
+az rest --method POST --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$graphSpId/appRoleAssignedTo" --headers "Content-Type=application/json" --body $body
+```
+
+#### 3. Deploy
 
 Pass the UAMI's **full resource ID** as the `detectionRulesIdentityResourceId` parameter when deploying (in [Onboarding Step 4](./Exercises/Onboarding.md#step-4-deploy-the-microsoft-sentinel-training-lab-solution)):
 
 ```
 /subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/SentinelDetectionRulesIdentity
 ```
-
----
-
-### Option B — Service Principal (App Registration)
-
-Use this option when you cannot create or use a Managed Identity (e.g., cross-tenant deployments or restricted RBAC environments).
-
-> **Tip — Use GitHub Copilot:** You can complete this setup by pasting the following prompt into GitHub Copilot Chat:
->
-> *"Create an App Registration called SentinelDetectionRulesSPN, grant it the Microsoft Graph CustomDetection.ReadWrite.All application permission, create a client secret, and give me the Tenant ID, Client ID, and Client Secret to use during deployment."*
-
-**Prefer the portal?** You can complete steps B1–B3 entirely from the Azure portal by following [Create a Microsoft Entra app and service principal in the portal](https://learn.microsoft.com/entra/identity-platform/howto-create-service-principal-portal). That guide covers app registration, API permission assignment (use **Microsoft Graph → Application permissions → CustomDetection.ReadWrite.All**), and client secret creation. Once done, skip ahead to **B4** below.
-
-<p align="center">
-<img src="./Images/OnboardingImage8.png?raw=true">
-</p>
-
-#### B1. Create an App Registration
-
-```powershell
-# Create the app registration
-az ad app create --display-name SentinelDetectionRulesSPN
-
-# Note the appId (client ID) from the output
-$appId = (az ad app list --display-name SentinelDetectionRulesSPN --query "[0].appId" -o tsv)
-
-# Create a service principal for the app
-az ad sp create --id $appId
-```
-
-#### B2. Grant the Microsoft Graph permission
-
-```powershell
-$spObjectId   = (az ad sp show --id $appId --query id -o tsv)
-$graphAppId   = "00000003-0000-0000-c000-000000000000"   # Microsoft Graph
-$appRoleId    = "e0fd9c8d-a12e-4cc9-9827-20c8c3cd6fb8"   # CustomDetection.ReadWrite.All
-
-$graphSpId = (az ad sp show --id $graphAppId --query id -o tsv)
-
-az rest --method POST `
-  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$graphSpId/appRoleAssignedTo" `
-  --headers "Content-Type=application/json" `
-  --body "{\"principalId\":\"$spObjectId\",\"resourceId\":\"$graphSpId\",\"appRoleId\":\"$appRoleId\"}"
-```
-
-> **Note:** Granting application permissions requires **Global Administrator** or **Privileged Role Administrator** in Microsoft Entra ID, or admin consent must be granted afterwards.
-
-#### B3. Create a client secret
-
-```powershell
-az ad app credential reset --id $appId --append
-# Save the "password" value — it will not be shown again.
-```
-
-#### B4. Deploy
-
-During deployment, provide the following three parameters (leave the UAMI field empty):
-
-| Parameter | Value |
-|---|---|
-| `detectionRulesSpnTenantId` | Your Microsoft Entra **Tenant ID** |
-| `detectionRulesSpnClientId` | The **Application (client) ID** from step B1 |
-| `detectionRulesSpnClientSecret` | The **client secret** from step B3 |
 
 ## Getting started
 
