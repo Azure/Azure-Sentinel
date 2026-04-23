@@ -1,5 +1,9 @@
 # Changelog for ASimProcessEventMicrosoft365D.yaml
 
+## Version 0.3.0
+
+- (2026-03-10) [ASIM] Update Process Event Defender Parsers With Additional Fields - [PR #13785](https://github.com/Azure/Azure-Sentinel/pull/13785)
+
 ## Version 0.2.0
 
 - (2026-01-13) [ASIM] ProcessEvent - Microsoft365D Parser changes - [PR #13411](https://github.com/Azure/Azure-Sentinel/pull/13411)

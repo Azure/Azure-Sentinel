@@ -19,6 +19,7 @@
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
-| 3.0.2 | 04/21/2026 | Updated **createUiDefinition** to include connector information |
+| 3.0.3 | 04/21/2026 | Updated **createUiDefinition** to include connector information|
+| 3.0.2 | 04/21/2026 | Fixed issue with the zip file|
 | 3.0.1 | 03/10/2026 | Fixed missing data connector information from **mainTemplate** file |
 | 3.0.0 | 12/16/2025 | Initial release with **Data Connector**, **Workbook**, and **Analytic Rules** for Visa Threat Intelligence |
