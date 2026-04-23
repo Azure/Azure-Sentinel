@@ -85,6 +85,7 @@ Start with the **Onboarding** exercise to set up your workspace and deploy the l
 | **14** | None | Independent — MCP server demo |
 | **15** | ADLS Gen2 storage account | Data federation |
 | **16** | Data lake enabled | Split transformation |
+| **17** | Data lake enabled, E01 | Custom graph notebook + AI authoring |
 
 ## Exercises
 
@@ -158,6 +159,12 @@ Start with the **Onboarding** exercise to set up your workspace and deploy the l
 [**Exercise 16 — Data Transformation: Split Ingestion by Tier**](./Exercises/E16_split_transformation.md)
 - Create a split transformation to route firewall data between Analytics and Data lake tiers
 - Understand cost optimisation through tiered ingestion
+
+**--- Graphs ---**
+
+[**Exercise 17 — Custom Graph: Cross-Source Attack Chain**](./Exercises/E17_custom_graph.md)
+- Build a custom graph linking 6 data sources (CrowdStrike, Palo Alto, Okta, AWS, GCP, MailGuard)
+- Materialize the graph as a scheduled job and explore AI-assisted graph authoring with Copilot
 
 ---
 
