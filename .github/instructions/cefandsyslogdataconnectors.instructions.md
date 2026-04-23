@@ -8,9 +8,13 @@ applyTo: "DataConnectors/**/*.json,Solutions/**/Data Connectors/**/*.json"
 
 This instruction file covers guidance for reviewing **Common Event Format (CEF)** and **Syslog** data connectors. These are standard ingestion methods for collecting security logs from network appliances and systems into Azure Sentinel.
 
-**Applicability**: These instructions apply **only** to data connectors with the following dataTypes:
+**Applicability**: Before applying these checks, **you must first determine whether the connector is CEF or Syslog type** by examining its `dataTypes` field:
 - **CEF connectors**: Must have `"dataTypes": [{"name": "CommonSecurityLog (DATATYPE_NAME)", ...}]`
 - **Syslog connectors**: Must have `"dataTypes": [{"name": "Syslog (DATATYPE_NAME)", ...}]`
+
+**If the connector does NOT have one of these dataTypes, these instructions do NOT apply** — use general connector review guidelines instead.
+
+If the connector IS CEF or Syslog, proceed with the relevant section below.
 
 ---
 

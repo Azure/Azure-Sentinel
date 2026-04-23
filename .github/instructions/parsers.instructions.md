@@ -1,5 +1,5 @@
 ---
-applyTo: "**/Solutions/**/Parsers/*.yaml"
+applyTo: "**/Solutions/**/Parsers/*.yaml, **/Solutions/**/Parsers/*.yml"
 ---
 
 # Parser File Validation Instructions
@@ -87,7 +87,7 @@ All fields under `Function:` are mandatory:
 #### 3.6 FunctionQuery
 - **Rule**: Must contain valid KQL code
 - **Requirements**:
-  - Must start with a table reference (e.g., `CommonSecurityLog`, `AIShield_CL`)
+  - After optional `let` bindings, the query must reference a table (e.g., `CommonSecurityLog`, `AIShield_CL`)
   - Cannot be empty
   - Should use `|` for piping operators
   - Multi-line queries should use the `|` separator with proper indentation
@@ -203,7 +203,7 @@ Use this checklist when creating or updating parser files:
 - [ ] `FunctionName` uses valid KQL naming (alphanumeric + underscore)
 - [ ] `FunctionAlias` matches `FunctionName` (recommended)
 - [ ] `FunctionQuery` contains valid KQL code and is non-empty
-- [ ] Query starts with a table reference
+- [ ] Query references a table after optional `let` bindings
 - [ ] Query uses proper pipe operators and formatting
 - [ ] No duplicate UUIDs across solutions
 - [ ] No duplicate function names within same solution
@@ -214,11 +214,10 @@ Use this checklist when creating or updating parser files:
 ## Common Issues & Fixes
 
 ### Issue 1: Invalid YAML Syntax
-**Problem**: File doesn't parse as valid YAML
+**Problem**: File doesn't parse as valid YAML (missing colon after key)
 ```yaml
-id: 574a5c4d-051c-41c8-83a9-f06962e14d85  # Missing colon
-Function:
-  Title: Parser Name
+id: 574a5c4d-051c-41c8-83a9-f06962e14d85
+Function  Title: Parser Name
 ```
 **Fix**: Ensure proper YAML syntax with colons after keys:
 ```yaml
