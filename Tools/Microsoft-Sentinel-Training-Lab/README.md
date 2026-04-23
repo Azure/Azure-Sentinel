@@ -77,7 +77,7 @@ Start with the **Onboarding** exercise to set up your workspace and deploy the l
 | Exercise | Prerequisites | Notes |
 |---|---|---|
 | **1–4** | None | Introductory — can be done in any order |
-| **5** | MDE-onboarded device | Optional — skip if you don't have MDE |
+| **5** | MDE-onboarded device | Reference guide — hands-on requires MDE |
 | **6–8** | None | Detection engineering (SIEM) |
 | **9–10** | None | Operations (cost & table management) |
 | **11** | Data lake enabled | Data lake KQL jobs |
