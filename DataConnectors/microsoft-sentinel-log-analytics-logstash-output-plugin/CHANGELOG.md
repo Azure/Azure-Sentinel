@@ -1,5 +1,11 @@
-## 1.2.1
-- Adds configurable `retransmission_delay` parameter to control the delay in seconds between retry attempts (default: 2 seconds). This helps reduce request rate during throttling (HTTP 429) scenarios.
+## 2.1.0
+- Fixed event normalization.
+
+## 2.0.0
+- Refactored the plugin from Ruby to Java.
+- Added ManagedIdentity authentication.
+- Moved codebase from GitHub to Azure DevOps.
+- Closed codebase.
 
 ## 1.2.0
 - Adds managed identity authentication support for Azure VMs/VMSS (system-assigned and user-assigned via IMDS).

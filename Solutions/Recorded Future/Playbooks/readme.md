@@ -23,7 +23,9 @@ Microsoft article that describes roles and permissions in Microsoft Sentinel <a 
 ### Recorded Future API Key
 Recorded Future requires API keys to communicate with our API. To obtain API keys. <a href="https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta" target="_blank">Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here</a> or visit <a href="https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens" target="_blank">Recorded Future Requesting API Tokens</a> (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
 
-The Recorded Future Sandbox integration requires **BOTH** a API key for ```Recorded Future Sandbox for Microsoft Sentinel``` **AND** a ```Recorded Future for Microsoft Sentinel``` API key that is different than the one used in the ```Recorded Future for Microsoft Sentinel``` integration. They need to both be input in their respective places.
+The Recorded Future Sandbox integration requires an API key for `Recorded Future Sandbox for Microsoft Sentinel`. **Note**: this is different from the one used in the `Recorded Future for Microsoft Sentinel` integration.
+
+If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 
 <details>
 <summary>Expand to see API request form</summary>
