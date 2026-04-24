@@ -284,7 +284,6 @@ def get_utc_time() -> str:
     current_time = datetime.now(timezone.utc)
     formatted_time = (
         current_time.strftime(UTC_DATE_FORMAT)
-        + f"{current_time.microsecond // 1000:03d}Z"
     )
     return formatted_time
 

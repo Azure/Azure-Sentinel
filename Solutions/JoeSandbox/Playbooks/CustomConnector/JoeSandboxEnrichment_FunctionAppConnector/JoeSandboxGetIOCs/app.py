@@ -35,9 +35,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         analysis_info = joe_sandbox.get_analysis_info(web_id)
         json_file_data = loads(file_data)
         iocs = parse_analysis_data(json_file_data)
+        INDICATOR_LIST.clear()
         for key, value in iocs.items():
             if key in IOC_LIST:
-                IOC_MAPPING_FUNCTION[key](value, analysis_info)
+                INDICATOR_LIST.extend(IOC_MAPPING_FUNCTION[key](value, analysis_info))
         return func.HttpResponse(
             dumps({"api_response": json_file_data, "custom_response": INDICATOR_LIST}),
             headers={"Content-Type": "application/json"},
