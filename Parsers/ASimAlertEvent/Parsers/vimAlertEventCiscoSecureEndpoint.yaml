@@ -117,20 +117,20 @@ ParserQuery: |
             EventMessage = coalesce(CloudIocDescription, CloudIocShortDescription, BpDataName, Detection),
             EventProductVersion = coalesce(BpDataDetailsEngVer, 'Cloud'),
             EventStartTime = unixtime_seconds_todatetime(Timestamp),
-            EventOriginalUid = coalesce(BpDataId, DetectionId, dynamic(null)),
+            EventOriginalUid = coalesce(BpDataId, DetectionId, ""),
             EventSeverity = case(
                 EventOriginalSeverity in ('Critical', 'High'), 'High',
                 EventOriginalSeverity == 'Medium', 'Medium',
                 EventOriginalSeverity == 'Low', 'Low',
                 'Informational'
             ),
-            DvcOriginalAction = coalesce(FileParentDisposition, dynamic(null)),
+            DvcOriginalAction = coalesce(FileParentDisposition, ""),
             DvcId = coalesce(BpDataDeviceOsMachineUuid, ComputerConnectorGuid),
-            DvcOs = coalesce(strcat(BpDataDeviceOsName, ' ', BpDataDeviceOsEdition), dynamic(null)),
-            DvcOsVersion = coalesce(BpDataDeviceOsBuild, dynamic(null)),
-            DvcDescription = coalesce(BpDataDeviceHwInfoVendorName, dynamic(null)),
-            RuleName = coalesce(Detection, BpDataDetection, dynamic(null)),
-            ThreatId = coalesce(BpDataDetection, dynamic(null)),
+            DvcOs = coalesce(strcat(BpDataDeviceOsName, ' ', BpDataDeviceOsEdition), ""),
+            DvcOsVersion = coalesce(BpDataDeviceOsBuild, ""),
+            DvcDescription = coalesce(BpDataDeviceHwInfoVendorName, ""),
+            RuleName = coalesce(Detection, BpDataDetection, ""),
+            ThreatId = coalesce(BpDataDetection, ""),
             Hostname = coalesce(ComputerHostname, Hostname),
             DvcIdType = 'Other',
             DvcIpAddr = extract_json('$[0].ip', ComputerNetworkAddresses),
@@ -159,10 +159,10 @@ ParserQuery: |
         | where ((array_length(username_has_any) == 0) or (Username has_any (username_has_any)))
         | extend
             BpDataObservablesFile = parse_json(BpDataObservablesFile),
-            FileName = coalesce(FileFileName, FileName, dynamic(null)),
-            FilePath = coalesce(FileFilePath, FilePath, dynamic(null)),
-            ProcessCommandLine = coalesce(ProcessCommandLine, CommandLineArguments, dynamic(null)),
-            UserIdType = iff(isnotempty(UserId), 'Other', dynamic(null)),
+            FileName = coalesce(FileFileName, FileName, ""),
+            FilePath = coalesce(FileFilePath, FilePath, ""),
+            ProcessCommandLine = coalesce(ProcessCommandLine, CommandLineArguments, ""),
+            UserIdType = iff(isnotempty(UserId), 'Other', ""),
             DvcAction = case(
                 DvcOriginalAction == 'Clean', 'Allow',
                 DvcOriginalAction == 'Unknown', 'Unknown',
@@ -170,21 +170,21 @@ ParserQuery: |
             ),
             Username = coalesce(IsolationUser, ComputerUser, Username)
         | extend
-            FileSHA1 = coalesce(FileIdentitySha1, BpDataObservablesFile.[0].sha1, dynamic(null)),//orginal file always first item in array
-            FileSHA256 = coalesce(FileIdentitySha256, BpDataObservablesFile.[0].sha256, dynamic(null)),
-            FileMD5 = coalesce(FileIdentityMd5, BpDataObservablesFile.[0].md5, dynamic(null)),
-            ParentFileSHA1 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].sha1, dynamic(null)),//parent file always first item in array
-            ParentFileSHA256 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].sha256, dynamic(null)),
-            ParentFileMD5 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].md5, dynamic(null)),
-            UsernameType = iff(isnotempty(Username), 'Simple', dynamic(null))
+            FileSHA1 = coalesce(FileIdentitySha1, BpDataObservablesFile.[0].sha1, ""),//orginal file always first item in array
+            FileSHA256 = coalesce(FileIdentitySha256, BpDataObservablesFile.[0].sha256, ""),
+            FileMD5 = coalesce(FileIdentityMd5, BpDataObservablesFile.[0].md5, ""),
+            ParentFileSHA1 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].sha1, ""),//parent file always first item in array
+            ParentFileSHA256 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].sha256, ""),
+            ParentFileMD5 = coalesce(FileParentIdentityMd5, BpDataObservablesFile.[1].md5, ""),
+            UsernameType = iff(isnotempty(Username), 'Simple', "")
         | extend
-            Tactics = iif(isempty(Tactics), dynamic([""]), Tactics),
-            Techniques = iif(isempty(Techniques), dynamic([""]), Techniques)
+            Tactics = iif(isempty(todynamic(Tactics)), dynamic([""]), todynamic(Tactics)),
+            Techniques = iif(isempty(todynamic(Techniques)), dynamic([""]), todynamic(Techniques))
         | as T
             | mv-expand
                 _ta = parse_json(Tactics) to typeof(string),
                 _t = parse_json(Techniques) to typeof(string)
-            | extend AttackTechnique = iff(isnotempty(_t), strcat('(', _t,')'), dynamic(null))
+            | extend AttackTechnique = iff(isnotempty(_t), strcat('(', _t,')'), "")
             | lookup AttackTacticLookup on _ta
             | summarize
                 AttackTactics = strcat_array(make_set_if(AttackTactic, isnotempty(AttackTactic)), ', '),
