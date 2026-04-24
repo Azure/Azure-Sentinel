@@ -1,5 +1,9 @@
 # Changelog for imAuditEvent.yaml
 
+## Version 0.1.7
+- (2026-03-10) [ASIM] AuditEvent - Azure Key Vault (New Parser) - [PR #13745](https://github.com/Azure/Azure-Sentinel/pull/13745)
+- Add SQL Security Audit events parser to ASimAuditEvent
+
 ## Version 0.1.6
 
 - (2026-03-10) [ASIM] AuditEvent - Azure Key Vault (New Parser) - [PR #13757](https://github.com/Azure/Azure-Sentinel/pull/13757)
