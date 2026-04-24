@@ -80,6 +80,12 @@
                 "description": "Required. The name of the Log Analytics Workspace table where Playbook Alerts should be saved."
             },
             "type": "String"
+        },
+        "log_analytics_workspace_name": {
+            "metadata": {
+                "description": "Required. The name of the Log Analytics Workspace to query for existing tables."
+            },
+            "type": "String"
         }
     },
     "resources": [
@@ -89,7 +95,8 @@
                 "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -372,6 +379,7 @@
                             "type": "Foreach"
                         },
                         "Playbook_Alerts_-_Search_for_novel_identity_exposures": {
+                            "type": "ApiConnection",
                             "inputs": {
                                 "body": {
                                     "lookback_days": 7,
@@ -388,8 +396,63 @@
                                 "method": "post",
                                 "path": "/playbook-alerts/search"
                             },
-                            "runAfter": {},
-                            "type": "ApiConnection"
+                            "runAfter": {
+                                "Create_table_if_missing": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ],
+                                "Check_if_table_exists": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
+                        },
+                        "Check_if_table_exists": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "query": "RecordedFutureIdentity_PlaybookAlertResults_CL | take 1",
+                                    "timerangetype": "2",
+                                    "timerange": {
+                                        "relativeTimeRange": "Last 7 days"
+                                    }
+                                },
+                                "path": "/queryDataV2",
+                                "queries": {
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "resourcename": "[parameters('log_analytics_workspace_name')]"
+                                }
+                            },
+                            "runAfter": {}
+                        },
+                        "Create_table_if_missing": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "[\n    {\n       \"panel_evidence_summary_assessments\": \"TEST_ASSESSMENTS\",\n        \"panel_evidence_summary_authorization_url\": \"https://test.example.com/test\",\n        \"panel_evidence_summary_compromised_host_antivirus\": \"TEST_ANTIVIRUS\",\n        \"panel_evidence_summary_compromised_host_computer_name\": \"TEST_COMPUTER\",\n        \"panel_evidence_summary_compromised_host_exfiltration_date\": \"2020-01-01T00:00:00.000Z\",\n        \"panel_evidence_summary_compromised_host_malware_file\": \"TEST_MALWARE_FILE\",\n        \"panel_evidence_summary_compromised_host_os\": \"TEST_OS\",\n        \"panel_evidence_summary_compromised_host_os_username\": \"TEST_USERNAME\",\n        \"panel_evidence_summary_compromised_host_timezone\": \"TEST_TIMEZONE\",\n        \"panel_evidence_summary_compromised_host_uac\": \"TEST_UAC\",\n        \"panel_evidence_summary_dump_description\": \"TEST_DUMP_DESCRIPTION\",\n        \"panel_evidence_summary_dump_name\": \"TEST_DUMP_NAME\",\n        \"panel_evidence_summary_exposed_secret_details_clear_text_hint\": \"TEST_HINT\",\n        \"panel_evidence_summary_exposed_secret_details_properties\": \"TEST_PROPERTIES\",\n        \"panel_evidence_summary_exposed_secret_effectively_clear\": false,\n        \"panel_evidence_summary_exposed_secret_hashes\": \"TEST_HASHES\",\n        \"panel_evidence_summary_exposed_secret_type\": \"TEST_SECRET_TYPE\",\n        \"panel_evidence_summary_infrastructure_ip\": \"0.0.0.0\",\n        \"panel_evidence_summary_malware_family_id\": \"TEST_MALWARE_ID\",\n        \"panel_evidence_summary_malware_family_name\": \"TEST_MALWARE_NAME\",\n        \"panel_evidence_summary_subject\": \"TEST_SUBJECT\",\n        \"panel_evidence_summary_technologies\": \"TEST_TECHNOLOGIES\",\n        \"panel_status_actions_taken\": \"TEST_ACTIONS\",\n        \"panel_status_alert_rule_id\": \"TEST_ALERT_RULE_ID\",\n        \"panel_status_alert_rule_label\": \"TEST_ALERT_RULE_LABEL\",\n        \"panel_status_alert_rule_name\": \"TEST_ALERT_RULE_NAME\",\n        \"panel_status_assignee_id\": \"TEST_ASSIGNEE_ID\",\n        \"panel_status_assignee_name\": \"TEST_ASSIGNEE_NAME\",\n        \"panel_status_case_rule_id\": \"TEST_CASE_RULE_ID\",\n        \"panel_status_case_rule_label\": \"TEST_CASE_RULE_LABEL\",\n        \"panel_status_created\": \"2020-01-01T00:00:00.000Z\",\n        \"panel_status_entity_id\": \"TEST_ENTITY_ID\",\n        \"panel_status_entity_name\": \"TEST_ENTITY_NAME\",\n        \"panel_status_organisation_id\": \"TEST_ORG_ID\",\n        \"panel_status_organisation_name\": \"TEST_ORG_NAME\",\n        \"panel_status_owner_id\": \"TEST_OWNER_ID\",\n        \"panel_status_owner_name\": \"TEST_OWNER_NAME\",\n        \"panel_status_owner_organisation_details_enterprise_id\": \"TEST_ENTERPRISE_ID\",\n        \"panel_status_owner_organisation_details_enterprise_name\": \"TEST_ENTERPRISE_NAME\",\n        \"panel_status_owner_organisation_details_organisations\": \"TEST_ORGANISATIONS\",\n        \"panel_status_priority\": \"TEST_PRIORITY\",\n        \"panel_status_reopen\": \"TEST_REOPEN\",\n        \"panel_status_status\": \"TEST_STATUS\",\n        \"panel_status_targets\": \"TEST_TARGETS\",\n        \"panel_status_updated\": \"2020-01-01T00:00:00.000Z\",\n        \"playbook_alert_id\": \"TEST_PLAYBOOK_ALERT_ID\",\n        \"alert_description\": \"TEST_ALERT_DESCRIPTION\"\n    }\n]\n",
+                                "headers": {
+                                    "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
+                                },
+                                "path": "/api/logs"
+                            },
+                            "runAfter": {
+                                "Check_if_table_exists": [
+                                    "Failed"
+                                ]
+                            }
                         }
                     },
                     "contentVersion": "1.0.0.0",
@@ -456,6 +519,11 @@
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                                 "connectionName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('RFICustomConnector'))]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                             }
                         }
                     }
@@ -520,12 +588,27 @@
                 "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
             },
             "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
         }
     ],
     "variables": {
         "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
         "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
         "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
         "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
     }
 }
