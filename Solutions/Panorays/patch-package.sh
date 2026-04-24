@@ -37,7 +37,7 @@ for step in ui['parameters']['steps']:
                 'defaultValue': 'https://api.panoraysapp.com',
                 'constraints': {
                     'required': True,
-                    'regex': '^https://.+',
+                    'regex': r'^https://.{1,500}$',
                     'validationMessage': 'Please enter a valid URL starting with https://'
                 }
             },
@@ -51,11 +51,11 @@ for step in ui['parameters']['steps']:
                 'toolTip': 'Your Panorays API Token.',
                 'constraints': {
                     'required': True,
-                    'regex': r'^\S+$',
-                    'validationMessage': 'The API Token must not contain spaces.'
+                    'regex': r'^[\s\S]{8,}$',
+                    'validationMessage': 'The API Token must be at least 8 characters.'
                 },
                 'options': {
-                    'hideConfirmation': True
+                    'hideConfirmation': False
                 },
                 'visible': True
             }
