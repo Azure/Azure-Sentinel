@@ -39,6 +39,26 @@ When reviewing pull requests, follow these rules strictly.
 3. Verify all required fields are present and properly formatted
 4. Do NOT use general instructions for these files - only use the huntingqueries custom instructions
 
+### For Playbooks Files (`Playbooks/**/*.json`, `Playbooks/**/README.md`, `Solutions/**/Playbooks/**/*.json`, `Solutions/**/Playbooks/**/README.md`)
+1. **LOAD and USE:** `.github/instructions/playbooks.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate ARM template structure, metadata fields, parameters, and README requirements from that custom instruction file
+4. Check all required sections in README.md and ARM template metadata
+5. Do NOT use general instructions for these files - only use the playbooks custom instructions
+
+### For Workbooks Files (`Workbooks/*.json`, `Solutions/**/Workbooks/*.json`)
+1. **LOAD and USE:** `.github/instructions/workbook.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate workbook JSON structure, required fields, items array, and metadata requirements from that custom instruction file
+4. Check all required top-level fields and item structure validation
+5. Do NOT use general instructions for these files - only use the workbook custom instructions
+
+### For Parser Files (`Parsers/**/*.yaml`, `Parsers/**/*.yml`, `Solutions/**/Parsers/**/*.yaml`, `Solutions/**/Parsers/**/*.yml`)
+1. **LOAD and USE:** `.github/instructions/parsers.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate parser syntax, KQL accuracy, YAML structure, and all required fields from that custom instruction file
+4. Do NOT use general instructions for these files - only use the parsers custom instructions
+
 ---
 
 ## Files and folders to ignore
