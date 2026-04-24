@@ -1,0 +1,96 @@
+Parser:
+  Title: Authentication ASIM parser for Cisco DNAC Syslog Message
+  Version: '0.1.0'
+  LastUpdated: Apr 24, 2026
+Product:
+  Name: Cisco DNAC
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: About Cisco DNAC System Log Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/routers/access/wireless/software/guide/SysMsgLogging.html
+Description: |
+  This ASIM parser supports normalizing authentication events, collected from Cisco DNAC devices using the AMA agent to the ASIM Authentication schema.
+ParserName: ASimAuthenticationCiscoDNAC
+EquivalentBuiltInParser: _ASim_Authentication_CiscoDNAC
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false) {
+  let DNACEvents = Syslog
+  | where not(disabled)
+  | where ProcessName == "DNAC";
+  let LogonEvents = DNACEvents
+  | where SyslogMessage has "LOGIN_USER_EVENT"
+  | extend EventType = "Logon";
+  let LogoffEvents = DNACEvents
+  | where SyslogMessage has "LOGOFF_USER_EVENT"
+  | extend EventType = "Logoff";
+  union LogonEvents, LogoffEvents
+  | extend 
+      EventVendor = "Cisco",
+      EventProduct = "DNAC",
+      EventSchema = "Authentication",
+      EventSchemaVersion = "0.1.4",
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventCount = int(1),
+      Type = "Syslog"
+  | extend SyslogJson = parse_json(SyslogMessage)
+  | extend 
+      SrcIpAddr = tostring(SyslogJson.source),
+      EventOriginalType = tostring(SyslogJson.name),
+      EventOriginalSubType = tostring(SyslogJson.type),
+      TargetUsername = tostring(SyslogJson.userId),
+      TargetUsernameType = "Simple",
+      EventMessage = tostring(SyslogJson.message),
+      EventOriginalUid = tostring(SyslogJson.correlationId),
+      DvcId = tostring(SyslogJson.instanceId),
+      DvcIdType = "Other"
+  | extend EventResult = iff(EventMessage has "successfully", "Success", "Failure")
+  | extend EventSeverity = _ASIM_LookupSyslogSeverityLevel(SeverityLevel)
+  | project-rename
+      TargetIpAddr = HostIP,
+      EventOriginalSeverity = SeverityLevel
+  | extend
+      User = TargetUsername,
+      Dvc = DvcId,
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr
+  | project
+      TimeGenerated,
+      Type,
+      EventType,
+      EventVendor,
+      EventProduct,
+      EventSchema,
+      EventSchemaVersion,
+      EventStartTime,
+      EventEndTime,
+      EventCount,
+      SrcIpAddr,
+      EventOriginalType,
+      EventOriginalSubType,
+      TargetUsername,
+      TargetUsernameType,
+      EventMessage,
+      EventOriginalUid,
+      DvcId,
+      DvcIdType,
+      EventResult,
+      EventSeverity,
+      TargetIpAddr,
+      EventOriginalSeverity,
+      User,
+      Dvc,
+      IpAddr,
+      Src
+  };
+  parser(disabled=disabled);
