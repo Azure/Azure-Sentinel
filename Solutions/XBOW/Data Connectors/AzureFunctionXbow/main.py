@@ -56,8 +56,10 @@ XBOW_API_TOKEN          = os.environ.get("XBOW_API_TOKEN")
 XBOW_ORG_ID             = os.environ.get("XBOW_ORG_ID")
 STORAGE_CONN_STR        = os.environ.get("AzureWebJobsStorage")
 
+__version__ = "1.1"
+
 XBOW_API_BASE    = "https://console.xbow.com/api/v1"
-XBOW_API_VERSION = "2026-02-01"
+XBOW_API_VERSION = "2026-04-01"
 PAGE_SIZE        = 100
 INGEST_BATCH_SIZE = 500          # max records per upload() call
 STATE_CONTAINER  = "xbow-connector-state"
@@ -153,10 +155,19 @@ def _max_ts(a: str | None, b: str | None) -> str | None:
 
 def _xbow_headers() -> dict:
     return {
-        "User-Agent": "XBOW-Sentinel-Connector/1.0",
+        "User-Agent": f"XBOW-Sentinel-Connector/{__version__}",
         "Authorization": f"Bearer {XBOW_API_TOKEN}",
         "X-XBOW-API-Version": XBOW_API_VERSION,
     }
+
+
+def _check_response(resp: requests.Response) -> None:
+    """Raise immediately on 400 Bad Request; otherwise delegate to raise_for_status."""
+    if resp.status_code == 400:
+        raise RuntimeError(
+            f"XBOW API returned 400 Bad Request for {resp.url}: {resp.text}"
+        )
+    resp.raise_for_status()
 
 
 def _paginate(url: str, params: dict | None = None) -> Generator[dict, None, None]:
@@ -167,7 +178,7 @@ def _paginate(url: str, params: dict | None = None) -> Generator[dict, None, Non
         if cursor:
             p["after"] = cursor
         resp = requests.get(url, headers=_xbow_headers(), params=p, timeout=30)
-        resp.raise_for_status()
+        _check_response(resp)
         data = resp.json()
         for item in data.get("items", []):
             yield item
@@ -183,7 +194,7 @@ def _fetch_finding_detail(finding_id: str) -> dict:
         headers=_xbow_headers(),
         timeout=30,
     )
-    resp.raise_for_status()
+    _check_response(resp)
     return resp.json()
 
 
@@ -194,7 +205,7 @@ def _fetch_asset_detail(asset_id: str) -> dict:
         headers=_xbow_headers(),
         timeout=30,
     )
-    resp.raise_for_status()
+    _check_response(resp)
     return resp.json()
 
 
@@ -244,6 +255,8 @@ def collect_finding_events(
             # Enrich with full detail (evidence, recipe, impact, mitigations)
             try:
                 detail = _fetch_finding_detail(finding["id"])
+            except RuntimeError:
+                raise
             except Exception as exc:
                 logging.warning(
                     f"{logs_prefix}: Could not enrich finding {finding['id']}: {exc}. "
@@ -300,6 +313,8 @@ def collect_asset_events(
 
         try:
             detail = _fetch_asset_detail(asset_id)
+        except RuntimeError:
+            raise
         except Exception as exc:
             logging.warning(
                 f"{logs_prefix}: Could not fetch asset detail for {asset_id}: {exc}. "
