@@ -1,0 +1,726 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Cyren to SentinelOne IOC Automation",
+    "description": "This playbook fetches IP reputation and/or malware URL threat intelligence indicators from the Cyren CCF API feed and creates corresponding IOC indicators in SentinelOne for automated threat detection and response. Customers can provide one or both Cyren feed tokens.",
+    "prerequisites": [
+      "1. Cyren CCF JWT Bearer Token for IP Reputation feed (optional if not purchased)",
+      "2. Cyren CCF JWT Bearer Token for Malware URL feed (optional if not purchased)",
+      "3. At least one of the above tokens is required",
+      "4. SentinelOne API Token with Threat Intelligence IOC management permissions",
+      "5. SentinelOne Console URL",
+      "6. SentinelOne Account ID"
+    ],
+    "postDeployment": [
+      "1. Provide the Cyren_IpReputation_JwtToken if you purchased the IP Reputation feed (leave empty if not).",
+      "2. Provide the Cyren_MalwareUrl_JwtToken if you purchased the Malware URL feed (leave empty if not).",
+      "3. Configure the SentinelOne_ApiToken, SentinelOne_BaseUrl, and SentinelOne_AccountId parameters.",
+      "4. Enable the Logic App and verify the recurrence trigger is set to your desired interval."
+    ],
+    "lastUpdateTime": "2026-03-23T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "ThreatIntelligence",
+      "IOC",
+      "SentinelOne",
+      "Cyren"
+    ],
+    "support": {
+      "tier": "Partner"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "pb-cyren-to-sentinelone",
+        "notes": [
+          "Initial version of Cyren to SentinelOne IOC Automation playbook with dual-feed support"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "pb-cyren-to-sentinelone"
+    },
+    "Cyren_IpReputation_JwtToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Cyren CCF JWT Bearer Token for IP Reputation feed. Leave empty if not purchased."
+      }
+    },
+    "Cyren_MalwareUrl_JwtToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Cyren CCF JWT Bearer Token for Malware URL feed. Leave empty if not purchased."
+      }
+    },
+    "SentinelOne_ApiToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne API Token"
+      }
+    },
+    "SentinelOne_BaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Your SentinelOne console URL (e.g. https://usea1-021.sentinelone.net). Log in to SentinelOne and copy the URL from your browser address bar."
+      }
+    },
+    "SentinelOne_AccountId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne Account ID"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics"
+      }
+    }
+  },
+  "variables": {
+    "workspace-name": "[parameters('workspace')]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspace-name'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "CyrenToSentinelOne",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]"
+      },
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "Cyren_IpReputation_JwtToken": {
+            "value": "[parameters('Cyren_IpReputation_JwtToken')]"
+          },
+          "Cyren_MalwareUrl_JwtToken": {
+            "value": "[parameters('Cyren_MalwareUrl_JwtToken')]"
+          },
+          "SentinelOne_ApiToken": {
+            "value": "[parameters('SentinelOne_ApiToken')]"
+          },
+          "SentinelOne_BaseUrl": {
+            "value": "[parameters('SentinelOne_BaseUrl')]"
+          },
+          "SentinelOne_AccountId": {
+            "value": "[parameters('SentinelOne_AccountId')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "Cyren_ApiUrl": {
+              "type": "string",
+              "defaultValue": "https://api-feeds.cyren.com/v1/feed/data"
+            },
+            "Cyren_IpReputation_JwtToken": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "Cyren_MalwareUrl_JwtToken": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "SentinelOne_BaseUrl": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "SentinelOne_ApiToken": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "SentinelOne_AccountId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Hour",
+                "interval": 6,
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_IpRep_PersistentToken": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ipRepPersistentToken",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Initialize_MalwareUrl_PersistentToken": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_IpRep_PersistentToken": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "malwareUrlPersistentToken",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Initialize_IpRep_HasMoreData": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_MalwareUrl_PersistentToken": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ipRepHasMoreData",
+                    "type": "boolean",
+                    "value": true
+                  }
+                ]
+              }
+            },
+            "Initialize_MalwareUrl_HasMoreData": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_IpRep_HasMoreData": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "malwareUrlHasMoreData",
+                    "type": "boolean",
+                    "value": true
+                  }
+                ]
+              }
+            },
+            "List_STAR_Rules": {
+              "type": "Http",
+              "runAfter": {
+                "Initialize_MalwareUrl_HasMoreData": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/cloud-detection/rules?accountIds=@{parameters('SentinelOne_AccountId')}",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                }
+              }
+            },
+            "Check_Rule_Exists": {
+              "type": "If",
+              "runAfter": {
+                "List_STAR_Rules": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@contains(string(body('List_STAR_Rules')), 'Cyren IOC Detection')",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Create_STAR_Rule": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/cloud-detection/rules",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                    },
+                    "body": {
+                      "filter": {
+                        "accountIds": [
+                          "@{parameters('SentinelOne_AccountId')}"
+                        ]
+                      },
+                      "data": {
+                        "name": "Cyren IOC Detection",
+                        "s1ql": "IndicatorSource = \"Cyren\"",
+                        "queryType": "events",
+                        "severity": "High",
+                        "status": "Active",
+                        "expirationMode": "Permanent",
+                        "treatAsThreat": "Suspicious"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Scope_IpReputation_Feed": {
+              "type": "If",
+              "runAfter": {
+                "Check_Rule_Exists": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@parameters('Cyren_IpReputation_JwtToken')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Paginate_IpReputation_Feed": {
+                  "type": "Until",
+                  "expression": "@equals(variables('ipRepHasMoreData'), false)",
+                  "limit": {
+                    "count": 10,
+                    "timeout": "PT1H"
+                  },
+                  "actions": {
+                    "Build_IpRep_Api_Url": {
+                      "type": "Compose",
+                      "inputs": "@{concat(parameters('Cyren_ApiUrl'), '?feedId=ip_reputation&count=1000&queryWindowInMin=360', if(equals(variables('ipRepPersistentToken'), ''), '', uriComponentToString(uri('&token=', encodeUriComponent(variables('ipRepPersistentToken'))))))}"
+                    },
+                    "Get_IpRep_Feed_Page": {
+                      "type": "Http",
+                      "runAfter": {
+                        "Build_IpRep_Api_Url": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{outputs('Build_IpRep_Api_Url')}",
+                        "headers": {
+                          "Authorization": "@{concat('Bearer ', parameters('Cyren_IpReputation_JwtToken'))}",
+                          "Accept": "application/json",
+                          "User-Agent": "Microsoft-Sentinel-Cyren-SentinelOne/1.0"
+                        }
+                      }
+                    },
+                    "Split_IpRep_NDJSON": {
+                      "type": "Compose",
+                      "inputs": "@split(trim(string(body('Get_IpRep_Feed_Page'))), decodeUriComponent('%0A'))",
+                      "runAfter": {
+                        "Get_IpRep_Feed_Page": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Filter_IpRep_Empty_Lines": {
+                      "type": "Query",
+                      "inputs": {
+                        "from": "@outputs('Split_IpRep_NDJSON')",
+                        "where": "@not(equals(trim(item()), ''))"
+                      },
+                      "runAfter": {
+                        "Split_IpRep_NDJSON": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Check_IpRep_Has_Data": {
+                      "type": "If",
+                      "runAfter": {
+                        "Filter_IpRep_Empty_Lines": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "greater": [
+                              "@length(body('Filter_IpRep_Empty_Lines'))",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "For_Each_IpRep_Indicator": {
+                          "type": "Foreach",
+                          "foreach": "@body('Filter_IpRep_Empty_Lines')",
+                          "runtimeConfiguration": {
+                            "concurrency": {
+                              "repetitions": 1
+                            }
+                          },
+                          "actions": {
+                            "Check_IpRep_LastSeen_Recent": {
+                              "type": "If",
+                              "expression": {
+                                "or": [
+                                  {
+                                    "equals": [
+                                      "@coalesce(item()?['last_seen'], '')",
+                                      ""
+                                    ]
+                                  },
+                                  {
+                                    "greaterOrEquals": [
+                                      "@coalesce(item()?['last_seen'], utcNow())",
+                                      "@addDays(utcNow(), -2)"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "actions": {
+                                "Post_IpRep_IOC_to_SentinelOne": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "POST",
+                                    "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                                    },
+                                    "body": {
+                                      "filter": {
+                                        "accountIds": [
+                                          "@{parameters('SentinelOne_AccountId')}"
+                                        ]
+                                      },
+                                      "data": [
+                                        {
+                                          "value": "@{item()?['identifier']}",
+                                          "type": "IPV4",
+                                          "source": "Cyren",
+                                          "method": "EQUALS",
+                                          "validUntil": "@{addDays(utcNow(), 90)}",
+                                          "externalId": "@{concat('cyren-ip_reputation-', coalesce(item()?['identifier'], 'unknown'))}",
+                                          "description": "@{concat('Cyren ip_reputation: Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Extract_IpRep_Last_Offset": {
+                          "type": "Compose",
+                          "inputs": "@string(json(last(body('Filter_IpRep_Empty_Lines')))?['offset'])",
+                          "runAfter": {
+                            "For_Each_IpRep_Indicator": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Update_IpRep_PersistentToken": {
+                          "type": "SetVariable",
+                          "runAfter": {
+                            "Extract_IpRep_Last_Offset": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "name": "ipRepPersistentToken",
+                            "value": "@{outputs('Extract_IpRep_Last_Offset')}"
+                          }
+                        },
+                        "Check_IpRep_Page_Full": {
+                          "type": "If",
+                          "runAfter": {
+                            "Update_IpRep_PersistentToken": [
+                              "Succeeded"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "less": [
+                                  "@length(body('Filter_IpRep_Empty_Lines'))",
+                                  1000
+                                ]
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "End_IpRep_Pagination": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "ipRepHasMoreData",
+                                "value": false
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "No_More_IpRep_Data": {
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "ipRepHasMoreData",
+                              "value": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Scope_MalwareUrl_Feed": {
+              "type": "If",
+              "runAfter": {
+                "Scope_IpReputation_Feed": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@parameters('Cyren_MalwareUrl_JwtToken')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Paginate_MalwareUrl_Feed": {
+                  "type": "Until",
+                  "expression": "@equals(variables('malwareUrlHasMoreData'), false)",
+                  "limit": {
+                    "count": 10,
+                    "timeout": "PT1H"
+                  },
+                  "actions": {
+                    "Build_MalwareUrl_Api_Url": {
+                      "type": "Compose",
+                      "inputs": "@{concat(parameters('Cyren_ApiUrl'), '?feedId=malware_urls&count=1000&queryWindowInMin=360', if(equals(variables('malwareUrlPersistentToken'), ''), '', uriComponentToString(uri('&token=', encodeUriComponent(variables('malwareUrlPersistentToken'))))))}"
+                    },
+                    "Get_MalwareUrl_Feed_Page": {
+                      "type": "Http",
+                      "runAfter": {
+                        "Build_MalwareUrl_Api_Url": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{outputs('Build_MalwareUrl_Api_Url')}",
+                        "headers": {
+                          "Authorization": "@{concat('Bearer ', parameters('Cyren_MalwareUrl_JwtToken'))}",
+                          "Accept": "application/json",
+                          "User-Agent": "Microsoft-Sentinel-Cyren-SentinelOne/1.0"
+                        }
+                      }
+                    },
+                    "Split_MalwareUrl_NDJSON": {
+                      "type": "Compose",
+                      "inputs": "@split(trim(string(body('Get_MalwareUrl_Feed_Page'))), decodeUriComponent('%0A'))",
+                      "runAfter": {
+                        "Get_MalwareUrl_Feed_Page": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Filter_MalwareUrl_Empty_Lines": {
+                      "type": "Query",
+                      "inputs": {
+                        "from": "@outputs('Split_MalwareUrl_NDJSON')",
+                        "where": "@not(equals(trim(item()), ''))"
+                      },
+                      "runAfter": {
+                        "Split_MalwareUrl_NDJSON": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Check_MalwareUrl_Has_Data": {
+                      "type": "If",
+                      "runAfter": {
+                        "Filter_MalwareUrl_Empty_Lines": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "greater": [
+                              "@length(body('Filter_MalwareUrl_Empty_Lines'))",
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "For_Each_MalwareUrl_Indicator": {
+                          "type": "Foreach",
+                          "foreach": "@body('Filter_MalwareUrl_Empty_Lines')",
+                          "runtimeConfiguration": {
+                            "concurrency": {
+                              "repetitions": 1
+                            }
+                          },
+                          "actions": {
+                            "Check_MalwareUrl_LastSeen_Recent": {
+                              "type": "If",
+                              "expression": {
+                                "or": [
+                                  {
+                                    "equals": [
+                                      "@coalesce(item()?['last_seen'], '')",
+                                      ""
+                                    ]
+                                  },
+                                  {
+                                    "greaterOrEquals": [
+                                      "@coalesce(item()?['last_seen'], utcNow())",
+                                      "@addDays(utcNow(), -2)"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "actions": {
+                                "Post_MalwareUrl_IOC_to_SentinelOne": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "POST",
+                                    "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                                    },
+                                    "body": {
+                                      "filter": {
+                                        "accountIds": [
+                                          "@{parameters('SentinelOne_AccountId')}"
+                                        ]
+                                      },
+                                      "data": [
+                                        {
+                                          "value": "@{coalesce(item()?['url'], item()?['identifier'])}",
+                                          "type": "URL",
+                                          "source": "Cyren",
+                                          "method": "EQUALS",
+                                          "validUntil": "@{addDays(utcNow(), 90)}",
+                                          "externalId": "@{concat('cyren-malware_urls-', coalesce(item()?['identifier'], 'unknown'))}",
+                                          "description": "@{concat('Cyren malware_urls: Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Extract_MalwareUrl_Last_Offset": {
+                          "type": "Compose",
+                          "inputs": "@string(json(last(body('Filter_MalwareUrl_Empty_Lines')))?['offset'])",
+                          "runAfter": {
+                            "For_Each_MalwareUrl_Indicator": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Update_MalwareUrl_PersistentToken": {
+                          "type": "SetVariable",
+                          "runAfter": {
+                            "Extract_MalwareUrl_Last_Offset": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "name": "malwareUrlPersistentToken",
+                            "value": "@{outputs('Extract_MalwareUrl_Last_Offset')}"
+                          }
+                        },
+                        "Check_MalwareUrl_Page_Full": {
+                          "type": "If",
+                          "runAfter": {
+                            "Update_MalwareUrl_PersistentToken": [
+                              "Succeeded"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "less": [
+                                  "@length(body('Filter_MalwareUrl_Empty_Lines'))",
+                                  1000
+                                ]
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "End_MalwareUrl_Pagination": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "malwareUrlHasMoreData",
+                                "value": false
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "No_More_MalwareUrl_Data": {
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "malwareUrlHasMoreData",
+                              "value": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

@@ -90,6 +90,9 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'offline_enrollment' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
         process_offline_enrollment_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
 
     logging.info('Script finished. Sent events: {}'.format(sentinel.successfull_sent_events_number))
 
@@ -197,6 +200,7 @@ def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
 def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     limit = 1000
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
+    res = None
     try:
         res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     except Exception as err:
@@ -279,6 +283,7 @@ def process_admin_logs(admin_api: duo_client.Admin, start_ts, state_manager: Sta
 
 def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
+    events = None
     logging.info('Making administrator logs request: mintime={}'.format(mintime))
     try:
         events = admin_api.get_administrator_log(mintime)
@@ -362,6 +367,7 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state
 def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
     logging.info('Making offline_enrollment logs request: mintime={}'.format(mintime))
+    events = None
     try:
         events = make_offline_enrollment_logs_request(admin_api, mintime)
     except Exception as err:
@@ -507,7 +513,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
             'api_version': 2,
             'mintime': mintime,
             'maxtime': maxtime,
-            'limit': str(limit),
+            'limit': limit,
             'sort': 'ts:asc'
         }
         if next_offset:

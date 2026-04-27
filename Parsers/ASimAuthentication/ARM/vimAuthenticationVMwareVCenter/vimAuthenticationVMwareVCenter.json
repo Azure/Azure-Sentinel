@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAuthenticationVMwareVCenter')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "ASIM Authentication filtering parser for VMware vCenter",
+        "category": "ASIM",
+        "FunctionAlias": "vimAuthenticationVMwareVCenter",
+        "query": "let parser = (starttime: datetime=datetime(null), \n  endtime: datetime=datetime(null), \n  username_has_any: dynamic = dynamic([]),\n  targetappname_has_any: dynamic = dynamic([]),\n  srcipaddr_has_any_prefix: dynamic = dynamic([]),\n  srchostname_has_any: dynamic = dynamic([]),\n  eventtype_in: dynamic = dynamic([]),\n  eventresultdetails_in: dynamic = dynamic([]),\n  eventresult: string = '*',\n  disabled: bool=false,\n  pack:bool = false) {\n  let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [\n      \"info\", \"Informational\"\n  ];\n  let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [\n      \"vim.event.UserLoginSessionEvent\", \"Logon\",\n      \"vim.event.UserLogoutSessionEvent\", \"LogOff\"\n  ];\n  let LoginEvents = (T: (Message: string), TableType: string) {\n      T\n      | where Message has \"UserLoginSessionEvent\"\n      | extend Type = TableType\n      | parse Message with PreEventString \"Event [\" EventOriginalUid:string \"] [1-1] [\" EventTime:datetime \"] [\" EventOriginalType:string \"] [\" EventOriginalSeverity:string \"]\" * \"[User \" TargetUsername:string \"@\" SrcIpAddr:string \" logged in as \" HttpUserAgent:string \"]\" *\n      | extend DvcId = split(PreEventString, \" \")[3];\n  };\n  let LogoutEvents = (T: (Message: string), TableType: string) {\n      T\n      | where Message has \"UserLogoutSessionEvent\"\n      | extend Type = TableType\n      | parse Message with PreEventString \"Event [\" EventOriginalUid: string \"] [1-1] [\" EventTime: datetime \"] [\" EventOriginalType: string \"] [\" EventOriginalSeverity:string \"]\" * \"[User \" TargetUsername:string \"@\" SrcIpAddr \" logged out (login time:\" LoginTime: string \", number of API invocations: \" APIInvocationCount: string \", user agent:\" HttpUserAgent: string \")]\" *\n      | extend DvcId = split(PreEventString, \" \")[3];\n  };\n  let vCenterLogs = vcenter_CL\n  | where not(disabled)\n      and (isnull(starttime) or TimeGenerated >= starttime) \n      and (isnull(endtime) or TimeGenerated <= endtime)\n      and ((array_length(username_has_any) == 0) or Message has_any (username_has_any))\n      and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source\n      and (array_length(srchostname_has_any) == 0) // SrcHostName not availabine in source\n      and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source\n      and (eventresult == \"*\" or (eventresult == \"Success\")); \n  let AzureVCenterLogs = AVSVcSyslog\n  | where not(disabled)\n      and (isnull(starttime) or TimeGenerated >= starttime) \n      and (isnull(endtime) or TimeGenerated <= endtime)\n      and ((array_length(username_has_any) == 0) or Message has_any (username_has_any))\n      and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source\n      and (array_length(srchostname_has_any) == 0) // SrcHostName not availabine in source\n      and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source\n      and (eventresult == \"*\" or (eventresult == \"Success\"));\n  union\n      LoginEvents(vCenterLogs, \"vcenter_CL\"),\n      LogoutEvents(vCenterLogs, \"vcenter_CL\"),\n      LoginEvents(AzureVCenterLogs, \"AVSVcSyslog\"),\n      LogoutEvents(AzureVCenterLogs, \"AVSVcSyslog\")\n      | where ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))\n      | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))\n      | extend\n          EventVendor = \"VMware\",\n          EventProduct = \"vCenter\",\n          EventSchema = \"Authentication\",\n          EventSchemaVersion = \"0.1.4\",\n          Type = \"vcenter_CL\",\n          EventStartTime = EventTime,\n          EventEndTime = EventTime,\n          EventCount = coalesce(toint(APIInvocationCount), int(1)),\n          TargetUsernameType = \"Simple\",\n          EventResult = \"Success\"\n      | lookup EventTypeLookup on EventOriginalType\n      | where (array_length(eventtype_in) == 0) or EventType in~ (eventtype_in)\n      | lookup EventSeverityLookup on EventOriginalSeverity\n      | project-rename\n          EventOriginalResultDetails = Message\n      | extend\n          AdditionalFields = iff(pack, bag_pack(\"LoginTime\", LoginTime), dynamic([])),\n          IpAddr = SrcIpAddr,\n          User = TargetUsername,\n          Dvc = DvcId\n      | project\n          TimeGenerated,\n          Type,\n          EventVendor,\n          EventProduct,\n          EventSchema,\n          EventSchemaVersion,\n          EventStartTime,\n          EventEndTime,\n          EventCount,\n          TargetUsernameType,\n          EventResult,\n          EventOriginalType,\n          EventType,\n          EventSeverity,\n          EventOriginalSeverity,\n          EventOriginalResultDetails,\n          EventOriginalUid,\n          TargetUsername,\n          SrcIpAddr,\n          HttpUserAgent,\n          AdditionalFields,\n          IpAddr,\n          Dvc,\n          DvcId,\n          User;\n};\nparser(\n    starttime=starttime,\n    endtime=endtime,\n    username_has_any=username_has_any,\n    targetappname_has_any=targetappname_has_any,\n    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,\n    srchostname_has_any=srchostname_has_any,\n    eventtype_in=eventtype_in,\n    eventresultdetails_in=eventresultdetails_in,\n    eventresult=eventresult,\n    disabled=disabled,\n    pack=pack\n)\n",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),username_has_any:dynamic=dynamic([]),targetappname_has_any:dynamic=dynamic([]),srcipaddr_has_any_prefix:dynamic=dynamic([]),srchostname_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
