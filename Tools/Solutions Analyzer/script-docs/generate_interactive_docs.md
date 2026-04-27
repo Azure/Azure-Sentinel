@@ -218,6 +218,20 @@ Each tab includes a legend at the bottom. Icons used across tabs:
 - **Click-to-filter**: Click any cell value to filter that column by the clicked text
 - **Global search**: Quick filter input for full-text search across all columns
 - **Clear All Filters**: A yellow notification bar appears when any filter is active, with a button to clear all filters at once
+
+### Marketplace Fields in the Solutions Tab
+
+The Solutions tab surfaces marketplace metadata sourced from the `mp_*` columns of `solutions.csv` (populated by `map_solutions_connectors_tables.py` from the Azure Marketplace API):
+
+| Column | Source field(s) | Display |
+|--------|-----------------|---------|
+| Status | `mp_is_published`, `mp_is_preview`, `mp_is_stop_sell`, `is_deprecated` | Active / Deprecated / Unpublished badge |
+| Publisher | `mp_publisher_display_name` (falls back to `publisher`) | Plain text |
+| First Published | `mp_creation_date` | Formatted date |
+| Popularity | `mp_popularity` | Bucketed icon: 🟢 High / 🔵 Medium / 🟡 Low / ⚪ Very Low |
+
+Other `mp_*` fields (summary, categories, keywords, ratings, pricing model, Microsoft product flag) are consumed by the static doc generator for the solution property table and are not displayed as separate columns in the interactive index.
+
 - **Entity links**: All entity names link to their individual documentation pages (`.html` or `.md` depending on configuration)
 - **Collection method links**: Method names in the Connectors tab link to their method documentation pages
 - **Solution logos**: Displayed in the Solutions and Connectors tabs (loaded lazily)

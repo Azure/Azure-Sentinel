@@ -29,7 +29,8 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - All tables ingested by connectors
    - All tables referenced by content items
    - **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution.
-   - "Discovered Via" column showing discovery sources (Connector, Content, Azure Monitor, Defender XDR, Sentinel API, Schema)
+   - "Discovered Via" column showing the **single primary** discovery source per table, chosen by priority order: **Connector > Content > Docs > Schema**. "Docs" combines all documentation-based sources (Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API).
+   - The Tables Index includes an inline explanation of the discovery sources and their priority hierarchy.
    - 📖 icon for tables with schema information
    - 🔶 icon for Custom Log V1 (CLv1) tables with type-suffixed columns
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
@@ -188,6 +189,8 @@ connector-docs/
 - **Solution logo** from Solution JSON (displayed at top of page)
 - **Rich description** extracted from `createUiDefinition.json`
 - **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, deprecation date if applicable, dependencies)
+- **Azure Marketplace** row (combined): when the solution is published to the marketplace, the property table includes a combined row with the marketplace URL and uses **"Rating:"** and **"Popularity:"** labels for the rating average/count and popularity score (sourced from the `mp_*` columns of `solutions.csv`)
+- **Content item counts** are split between **"in solution"** (listed in the Solution JSON) and **"discovered"** (found in the solution folder but not in the Solution JSON), shown both in the solution properties and on the statistics page
 - **Additional Information** section (from overrides, if configured)
 - **Dependencies** section listing explicit (required) and ASIM-based (optional) dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
@@ -200,7 +203,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, and deprecation date (for deprecated connectors)
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, deprecation date (for deprecated connectors), and a combined **Azure Marketplace** row using **"Rating:"** and **"Popularity:"** labels (from the `mp_*` columns) when the parent solution is published
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
@@ -211,6 +214,7 @@ connector-docs/
 **Table Pages** include:
 - **Table description** from Azure Monitor documentation
 - **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, Custom Log V1 (CLv1) indicator, and documentation links
+- **Documentation References** are listed individually with specific names and links per applicable source: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API. Tables discovered via docs-only sources show the relevant doc link.
 - **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
@@ -266,7 +270,12 @@ connector-docs/
 - **Connectors** section with statistics by collection method, deprecation status, and support tier cross-tabulation
 - **Ingestion API** subsection with API summary and by-collection-method breakdown for API-based connectors
 - **CCF Capabilities** subsection with connector kind distribution, authentication methods, and request features for CCF/CCF Push/CCF Legacy connectors
-- **Tables** section with statistics by source, category, and usage
+- **Tables** section with a unified **Discovery Sources** table:
+  - **Discovered Via** column showing the count of tables whose single primary source is each value (priority: Connector > Content > per-doc-source > Schema)
+  - **Total** column showing how many tables have each source regardless of priority (a table can appear in multiple sources)
+  - Documentation sources listed individually with links: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+  - **Schema Sources** subsection: breakdown of `table_schemas.csv` rows by origin (DCR, Azure Monitor docs, connector definitions, KQL validation)
+  - Additional breakdowns by category and usage
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type
 - **Non-ASIM Parsers** section with statistics by location

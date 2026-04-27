@@ -128,6 +128,18 @@ For markdown-only output (no HTML):
 python generate_connector_docs.py --skip-input-generation --output-dir "path/to/output"
 ```
 
+To refresh and publish ASIM field data and the ASIM Schema Browser:
+
+```bash
+# Collect/refresh ASIM field definitions (depends on tables_reference.csv and table_schemas.csv)
+python collect_asim_fields.py --refresh-cache
+
+# Generate the interactive ASIM Schema Browser (asim-browser.html)
+python generate_asim_browser.py --output-dir "path/to/site-root"
+```
+
+Alternatively, `python map_solutions_connectors_tables.py --force-refresh asim` will automatically re-run `collect_asim_fields.py` with `--refresh-cache`.
+
 ## Data Flow
 
 ![Solutions Analyzer Data Flow](graphics/data-flow-diagram.svg)
@@ -185,6 +197,19 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.6 - ASIM Field Collection & Schema Browser
+
+**ASIM Field Collection:**
+- New `collect_asim_fields.py` script collecting ASIM field definitions from three sources: Microsoft Learn documentation, ASimTester.csv, and physical table schemas (`table_schemas.csv`)
+- Merges fields by `(schema, field_name)` key with deduplication — tester/physical columns only populated when values differ from documentation
+- New output CSVs: `asim_fields.csv` (2445 fields across 13 schemas), `asim_entity_fields.csv`, `asim_logical_types.csv`, `asim_vendors_products.csv`
+- `--force-refresh=asim` (or `all`) now automatically re-runs `collect_asim_fields.py` with `--refresh-cache`, mirroring the existing `tables` → `collect_table_info.py` pattern
+
+**ASIM Schema Browser:**
+- New `generate_asim_browser.py` script producing an interactive ASIM Schema Browser (`asim-browser.html`)
+- Browser has primary tabs for each ASIM schema, with sub-tabs for Fields (interactive DataTable) and Parsers
+- Visual style matches the main `index.html` interactive index, with links to entity documentation pages
+
 ### v9.5 - Extended Marketplace Data & Content Count Split
 
 **Extended Marketplace Data Collection:**
@@ -192,23 +217,12 @@ See the script documentation for details:
 - New fields include: display name, summary, publisher name, preview/stop-sell status, creation/modification dates, categories, keywords, popularity score, user ratings, pricing model, and Microsoft product flag
 - Cache format changed from CSV (`marketplace_availability.csv`) to JSON (`marketplace_data.json`) with automatic migration of old cache
 - Added marketplace URL row to solution documentation pages
+- Combined marketplace row in connector and solution property tables uses "Rating:" and "Popularity:" labels for clarity
 
 **Content Item Count Splitting:**
 - Solution pages, statistics page, and interactive index now show separate counts for "in solution" vs "discovered" content items
 - CLv1 identification footnote includes accuracy caveat (CLv1 prefixes are allowed for CLv2)
 - Standardized discovered connector footnote format across all pages
-
-**ASIM Parser Filtering Fix:**
-- ASIM parser function names (e.g., `ASimAuditEvent`, `imDns`, `_Im_Dns`) are no longer treated as tables in `tables.csv` and `content_tables_mapping.csv`
-- Previously, `is_valid_table_candidate()` had a carve-out that accepted any `im*`/`asim*`/`_im_*`/`_asim_*` prefixed name as a valid table, bypassing the Azure Monitor reference check
-- This also caused false positives for non-ASIM names like `Image`, `ImpactScore`, `ImpactedUser` matching the overly broad `im*` prefix
-- Real ASIM log tables (e.g., `ASimAuditEventLogs`, `ASimDnsActivityLogs`) remain because they are in the Azure Monitor table reference
-
-**DCR Schema Extraction Fix:**
-- DCR stream columns are no longer attributed to output tables when a non-trivial `transformKql` is present
-- Previously, vendor-specific input stream columns (e.g., Carbon Black's `auth_cleartext_credentials_logon`, `process_cmdline`) were incorrectly recorded as columns of ASIM output tables (e.g., `ASimAuthenticationEventLogs`)
-- DCR schema rows are now only emitted for passthrough streams (no transform or trivial `source` transform)
-- DCR rows in `table_schemas.csv` reduced from ~8100 to ~680
 
 ### v9.4 - Interactive HTML Index
 
@@ -241,32 +255,6 @@ See the script documentation for details:
 - Browse-bar links to static index pages (e.g. `solutions-index.html`) are rewritten to `index.html#tab` links
 - `index.html` links automatically use `.html` extension when HTML entity pages are generated
 - Eliminates dependency on GitHub blob view for reading entity pages — everything is served from GitHub Pages
-
-### v9.5 - Connector ARM Table Schemas & CLv1 Fix
-
-**Connector ARM Table Definition Schemas:**
-- New schema source: ARM table definition files found in `Solutions/*/Data Connectors/` directories (files with `type: Microsoft.OperationalInsights/workspaces/tables`)
-- Extracts `properties.schema.columns` including column name, type, and description — richer metadata than the KQL validation test directory
-- 84 ARM table definition files found across 50 connector directories, covering 78 unique tables
-- Integrated into the schema loading pipeline as the third source (after DCR and Azure Monitor docs, before KQL validation CustomTables)
-- Source labeled as "Connector definition" with GitHub URL in `table_schemas.csv`
-- Schema stats now report across all four sources: DCR, Azure Monitor docs, connector definitions, and KQL validation
-
-**CLv1 False Positive Fix:**
-- The connector-based CLv1 inference rule (which marks `_CL` tables as CLv1 when any connector uses HTTP Data Collector API) now checks the table's actual schema first
-- If a table has schema data with zero type-suffixed columns, the connector-based rule is skipped — the schema evidence takes precedence over the connector heuristic
-- Fixes false positives for tables like `CrowdStrike_Additional_Events_CL` which are served by both modern (CCF) and legacy (HTTP Data Collector API) connectors but have no CLv1 column suffixes
-
-**Marketplace Display Labels:**
-- Added "Rating:" and "Popularity:" labels to the combined marketplace row in connector and solution property tables for clarity
-
-**ASIM Field Collection & Schema Browser:**
-- New `collect_asim_fields.py` script collecting ASIM field definitions from three sources: Microsoft Learn documentation, ASimTester.csv, and physical table schemas (table_schemas.csv)
-- Merges fields by (schema, field_name) key with deduplication — tester/physical columns only populated when values differ from documentation
-- New output CSVs: `asim_fields.csv` (2445 fields across 13 schemas), `asim_entity_fields.csv`, `asim_logical_types.csv`, `asim_vendors_products.csv`
-- New `generate_asim_browser.py` script producing an interactive ASIM Schema Browser (`asim-browser.html`)
-- Browser has primary tabs for each ASIM schema, with sub-tabs for Fields (interactive DataTable) and Parsers
-- Visual style matches the main `index.html` interactive index, with links to entity documentation pages
 
 ### v9.3 - Solution Deprecation & Deprecation Dates
 
@@ -353,15 +341,16 @@ See the script documentation for details:
   - **Discovered Via** column: single primary discovery source per table by priority (Connector > Content > per-doc-source > Schema)
   - **Total** column: how many tables have each source regardless of priority, since a table can appear in multiple sources
   - Doc sources shown individually with links: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
-  - **Schema Sources** subsection: breakdown by origin (Azure Monitor docs, DCR, KQL validation)
+  - **Schema Sources** subsection: breakdown by origin (Azure Monitor docs, DCR, connector definitions, KQL validation)
 
 ### v8.0 - Solution Dependencies, CCF Legacy, Capabilities Statistics, and Table Schemas
 
-**Table Schemas from DCR Definitions and Azure Monitor Documentation:**
-- New `table_schemas.csv` output file combining column schemas from three sources:
-  - **DCR files** (`*_DCR.json`): stream declarations for CCP/CCF connectors with column name, type, stream name, transform KQL, connector ID, solution name
+**Table Schemas from DCR Definitions, ARM Table Definitions, and Azure Monitor Documentation:**
+- New `table_schemas.csv` output file combining column schemas from four sources:
+  - **DCR files** (`*_DCR.json`): stream declarations for CCP/CCF connectors with column name, type, stream name, transform KQL, connector ID, solution name. Only passthrough streams (no transform, or trivial `source` transform) emit schema rows so vendor-specific input columns are not attributed to ASIM output tables.
   - **Azure Monitor docs**: column schemas from rendered learn.microsoft.com table reference pages with column name, type, description
-  - **KQL validation tables** (`.script/tests/KqlvalidationsTests/CustomTables/`): table schemas used for CI query validation, only for tables not already covered by the other sources
+  - **ARM table definition files** in `Solutions/*/Data Connectors/` directories (`type: Microsoft.OperationalInsights/workspaces/tables`): extracts `properties.schema.columns` (name, type, description). Source labeled as "Connector definition" with GitHub URL.
+  - **KQL validation tables** (`.script/tests/KqlvalidationsTests/CustomTables/`): table schemas used for CI query validation, only for `_CL` custom log tables not already covered by the other sources
 - New `la_table_schemas.csv` intermediate file generated by `collect_table_info.py` containing documentation-sourced column schemas
 - New `source` and `description` columns in `table_schemas.csv` to distinguish data origin
 - New `source_url` column in `table_schemas.csv` with link to the source file (GitHub for DCR/KQL validation, learn.microsoft.com for docs)
@@ -415,7 +404,7 @@ See the script documentation for details:
 
 **New Tool: `upload_to_kusto.py`**
 - Upload CSV files to Azure Data Explorer (Kusto) clusters
-- **Solution Analyzer mode** (`--solution-analyzer`): uploads all 10 Solution Analyzer CSVs with predefined table names
+- **Solution Analyzer mode** (`--solution-analyzer`): uploads all 12 Solution Analyzer CSVs with predefined table names
 - **Custom CSV mode**: upload any CSV files with automatic schema detection
 - **Local source directory** (`--source-dir`): read Solution Analyzer CSVs from a local folder instead of downloading from GitHub
 - **Dry run mode** (`--dry-run`): preview operations before executing
