@@ -1,0 +1,64 @@
+id: 15c49777-7cb7-4746-8064-6fa4c7a73df8
+name: Vaikora - High severity AI agent action detected
+description: |
+  Identifies AI agent actions from Vaikora classified as high or critical severity. These events may indicate an agent operating outside safe parameters or triggering policy thresholds.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: VaikoraSentinel
+    dataTypes:
+      - Vaikora_AgentSignals_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+  - Execution
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1059
+  - T1078
+  - T1548
+query: |
+  Vaikora_AgentSignals_CL
+  | where TimeGenerated > ago(1h)
+  | where severity_s in ("high", "critical")
+  | summarize
+      ActionCount = count(),
+      MaxAnomalyScore = max(anomaly_score_d),
+      Actions = make_set(action_type_s),
+      PolicyDecisions = make_set(policy_decision_s),
+      ResourceTypes = make_set(resource_type_s),
+      LogHashes = make_set(log_hash_s)
+    by AgentId = agent_id_s, Severity = severity_s
+  | extend
+      ActionList = strcat_array(Actions, ", "),
+      PolicyList = strcat_array(PolicyDecisions, ", "),
+      ResourceList = strcat_array(ResourceTypes, ", ")
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  MaxAnomalyScore: MaxAnomalyScore
+  ActionCount: ActionCount
+  Actions: ActionList
+  PolicyDecisions: PolicyList
+  ResourceTypes: ResourceList
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AgentId
+version: 1.0.0
+kind: Scheduled
