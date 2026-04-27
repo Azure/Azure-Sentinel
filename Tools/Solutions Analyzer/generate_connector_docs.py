@@ -81,7 +81,8 @@ DEPRECATED_SOLUTION_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This soluti
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
 ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
 SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
-CLV1_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
+CLV1_TABLE_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
+CLV1_CONNECTOR_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This connector ingests into a table that uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
 
 # Collection method metadata: descriptions and documentation links
 COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
@@ -1103,7 +1104,8 @@ def get_item_selection_criteria(item: Dict[str, str], table: str,
 
 def write_content_items_section(f, items: List[Dict[str, str]], section_header: str, 
                                   table: str, content_filter_fields_lookup: Dict[str, str],
-                                  relative_path: str = "../content/") -> List[str]:
+                                  relative_path: str = "../content/",
+                                  content_type_label: str = "Content Item") -> List[str]:
     """
     Write a section of content items with smart selection criteria handling.
     If all items have the same selection criteria, put it in the header.
@@ -1115,6 +1117,7 @@ def write_content_items_section(f, items: List[Dict[str, str]], section_header: 
         table: Table name to get criteria for
         content_filter_fields_lookup: Dictionary of content_id/key to filter_fields
         relative_path: Relative path to content directory
+        content_type_label: Column header label (e.g., "Analytic Rule", "Hunting Query")
         
     Returns:
         List of selection criteria strings found (for summary stats)
@@ -1139,12 +1142,12 @@ def write_content_items_section(f, items: List[Dict[str, str]], section_header: 
     if all_same_criteria and common_criteria:
         # Put criteria in header, omit column
         f.write(f"{section_header} {format_selection_criteria(common_criteria)}\n\n")
-        f.write("| Content Item |\n")
+        f.write(f"| {content_type_label} |\n")
         f.write("|:-------------|\n")
     else:
         # Different criteria, use column
         f.write(f"{section_header}\n\n")
-        f.write("| Content Item | Selection Criteria |\n")
+        f.write(f"| {content_type_label} | Selection Criteria |\n")
         f.write("|:-------------|:-------------------|\n")
     
     # Write items
@@ -3678,7 +3681,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             for cid in connectors_map.keys()
         )
         if has_clv1_connectors:
-            f.write(CLV1_FOOTNOTE + "\n\n")
+            f.write(CLV1_CONNECTOR_FOOTNOTE + "\n\n")
         
         # Generate sections by letter with table format
         for letter in letters:
@@ -4401,7 +4404,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         # Check if any tables are CLv1 and add footnote
         has_clv1_tables = any(tables_reference.get(t, {}).get('is_clv1', '').lower() == 'true' for t in tables_map.keys())
         if has_clv1_tables:
-            f.write(CLV1_FOOTNOTE + "\n\n")
+            f.write(CLV1_TABLE_FOOTNOTE + "\n\n")
         
         # Generate sections by letter - compact format with counts linking to table pages
         for letter in letters:
@@ -4625,15 +4628,19 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 attributes.append(('Custom Log V1', f'Yes {CLV1_ICON} — uses type-suffixed column names'))
             
             # Table characteristics from reference CSV
+            # Build source links for inline attribution
+            feature_support_link = ' ([source](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support))' if table_ref.get('source_feature_support', '').lower() == 'yes' else ''
+            sentinel_tables_link = ' ([source](https://learn.microsoft.com/azure/sentinel/data-connectors-reference))' if table_ref.get('source_sentinel_tables', '').lower() == 'yes' else ''
+
             basic_logs = table_ref.get('basic_logs_eligible', '')
             if basic_logs:
                 basic_logs_display = "✓ Yes" if basic_logs.lower() == 'yes' else "✗ No" if basic_logs.lower() == 'no' else basic_logs
-                attributes.append(('Basic Logs Eligible', basic_logs_display))
+                attributes.append(('Basic Logs Eligible', basic_logs_display + feature_support_link))
             
             supports_transforms = table_ref.get('supports_transformations', '')
             if supports_transforms:
                 transforms_display = "✓ Yes" if supports_transforms.lower() == 'yes' else "✗ No" if supports_transforms.lower() == 'no' else supports_transforms
-                attributes.append(('Supports Transformations', transforms_display))
+                attributes.append(('Supports Transformations', transforms_display + feature_support_link))
             
             ingestion_api = table_ref.get('ingestion_api_supported', '')
             if ingestion_api:
@@ -4643,12 +4650,12 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             lake_only = table_ref.get('lake_only_supported', '')
             if lake_only:
                 lake_only_display = "✓ Yes" if lake_only.lower() == 'yes' else "✗ No" if lake_only.lower() == 'no' else lake_only
-                attributes.append(('Lake-Only Ingestion', lake_only_display))
+                attributes.append(('Lake-Only Ingestion', lake_only_display + sentinel_tables_link))
             
             search_job = table_ref.get('search_job_support', '')
             if search_job:
                 search_display = "✓ Yes" if search_job.lower() == 'yes' else "✗ No" if search_job.lower() == 'no' else search_job
-                attributes.append(('Search Job Support', search_display))
+                attributes.append(('Search Job Support', search_display + feature_support_link))
             
             plan = table_ref.get('plan', '')
             if plan:
@@ -4667,10 +4674,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 doc_refs.append(('Azure Monitor Tables Reference', azure_monitor_link))
             if defender_xdr_link:
                 doc_refs.append(('Defender XDR Advanced Hunting Schema', defender_xdr_link))
-            if table_ref.get('source_sentinel_tables', '').lower() == 'yes':
-                doc_refs.append(('Sentinel Tables and Connectors Reference', 'https://learn.microsoft.com/azure/sentinel/data-connectors-reference'))
-            if table_ref.get('source_feature_support', '').lower() == 'yes':
-                doc_refs.append(('Azure Monitor Tables Feature Support', 'https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support'))
+
             if table_ref.get('source_ingestion_api', '').lower() == 'yes':
                 doc_refs.append(('Azure Monitor Logs Ingestion API', 'https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview'))
             
@@ -4686,6 +4690,42 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     f.write(f"| **{attr_name}** | {attr_value} |\n")
                 f.write("\n")
             
+            # Build and write Table of Contents
+            toc_entries = []
+            _has_schema = bool(table_schemas_by_table.get(table, []))
+            _has_additional_info = bool(get_doc_override('table', table, 'additional_information'))
+            _has_solutions = bool(info['solutions'])
+            _has_connectors = bool(info['connectors'])
+            _has_content_items = bool(content_tables_by_table.get(table, []))
+            _table_asim = asim_parsers_by_table.get(table, [])
+            _table_non_asim = parsers_by_table.get(table, [])
+            _has_parsers = bool(_table_asim) or bool(_table_non_asim)
+            _has_resource_types = bool(table_ref.get('resource_types', '')) and table_ref.get('resource_types', '') != '-'
+            _has_retention = bool(table_ref.get('retention_default', '')) or bool(table_ref.get('retention_max', ''))
+
+            if _has_schema:
+                toc_entries.append(("Schema", "schema"))
+            if _has_additional_info:
+                toc_entries.append(("Additional Information", "additional-information"))
+            if _has_solutions:
+                toc_entries.append(("Solutions", "solutions"))
+            if _has_connectors:
+                toc_entries.append(("Connectors", "connectors"))
+            if _has_content_items:
+                toc_entries.append(("Content Items", "content-items-using-this-table"))
+            if _has_parsers:
+                toc_entries.append(("Parsers", "parsers-using-this-table"))
+            if _has_resource_types:
+                toc_entries.append(("Resource Types", "resource-types"))
+            if _has_retention:
+                toc_entries.append(("Retention", "retention"))
+
+            if len(toc_entries) > 2:
+                f.write("## Contents\n\n")
+                for title, anchor in toc_entries:
+                    f.write(f"- [{title}](#{anchor})\n")
+                f.write("\n")
+
             # Schema section - show column definitions if available
             schema_columns = table_schemas_by_table.get(table, [])
             if schema_columns:
@@ -4950,15 +4990,26 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                             normalized_criteria = normalize_selection_criteria(criteria)
                             criteria_stats[normalized_criteria]['content'] += 1
                     
+                    # Singular label for column header
+                    content_type_singular = {
+                        'analytic_rule': 'Analytic Rule',
+                        'hunting_query': 'Hunting Query',
+                        'workbook': 'Workbook',
+                        'playbook': 'Playbook',
+                        'parser': 'Parser',
+                        'watchlist': 'Watchlist',
+                    }
+                    col_label = content_type_singular.get(content_type, 'Content Item')
+
                     # Write Solution-based items using smart helper
                     for solution_name, sol_items in sorted(items_by_solution.items()):
                         solution_filename = sanitize_filename(solution_name) + ".md"
                         header = f"**In solution [{solution_name}](../solutions/{solution_filename}):**"
-                        write_content_items_section(f, sol_items, header, table, content_filter_fields_lookup, "../content/")
+                        write_content_items_section(f, sol_items, header, table, content_filter_fields_lookup, "../content/", col_label)
                     
                     # Write Standalone items
                     if standalone_items:
-                        write_content_items_section(f, standalone_items, "**Standalone Content:**", table, content_filter_fields_lookup, "../content/")
+                        write_content_items_section(f, standalone_items, "**Standalone Content:**", table, content_filter_fields_lookup, "../content/", col_label)
                     
                     # Write GitHub Only items
                     if github_only_items:
@@ -4966,7 +5017,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                         for item in github_only_items:
                             if not item.get('solution_name'):
                                 item['solution_name'] = 'GitHub Only'
-                        write_content_items_section(f, github_only_items, "**GitHub Only:**", table, content_filter_fields_lookup, "../content/")
+                        write_content_items_section(f, github_only_items, "**GitHub Only:**", table, content_filter_fields_lookup, "../content/", col_label)
                 
                 # Add footnote if any content items have status flags
                 has_unlisted = any(item.get('not_in_solution_json', 'false') == 'true' for item in table_content_items)
@@ -6053,7 +6104,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 for cid in all_solution_connector_ids
             )
             if has_clv1_solution_connectors:
-                f.write(f"\n{CLV1_FOOTNOTE}\n")
+                f.write(f"\n{CLV1_CONNECTOR_FOOTNOTE}\n\n")
             
             f.write("\n")
         
@@ -6161,7 +6212,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     for t in all_tables
                 )
                 if has_clv1_solution_tables:
-                    f.write(f"\n{CLV1_FOOTNOTE}\n")
+                    f.write(f"\n{CLV1_TABLE_FOOTNOTE}\n\n")
         
         # Content Items section
         if content_items:

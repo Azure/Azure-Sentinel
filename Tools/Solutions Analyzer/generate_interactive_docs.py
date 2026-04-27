@@ -1785,9 +1785,37 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
     _re_home_link = re.compile(r'href="[^"]*README\.html"')
     _re_interactive_link = re.compile(r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>')
     _re_schema_table = re.compile(
-        r'(<h2>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
+        r'(<h2[^>]*>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
         re.DOTALL,
     )
+    _re_heading = re.compile(r'<(h[1-6])>(.*?)</\1>', re.DOTALL)
+    _re_strip_tags = re.compile(r'<[^>]+>')
+
+    def _slugify(text: str) -> str:
+        """Convert heading text to a URL-friendly anchor slug.
+        
+        Strips HTML tags, trailing parenthetical counts (e.g. '(5)'),
+        and normalizes to lowercase hyphenated form.
+        """
+        # Strip HTML tags
+        plain = _re_strip_tags.sub('', text)
+        # Remove trailing parenthetical like " (123)" or " (5 criteria, 10 total references)"
+        plain = re.sub(r'\s*\([^)]*\)\s*$', '', plain)
+        # Remove emoji/special chars, lowercase, replace spaces with hyphens
+        slug = re.sub(r'[^\w\s-]', '', plain).strip().lower()
+        slug = re.sub(r'[\s]+', '-', slug)
+        return slug
+
+    def _add_heading_ids(html: str) -> str:
+        """Add id attributes to h1-h6 tags that don't already have one."""
+        def _replace(m: re.Match) -> str:
+            tag = m.group(1)
+            inner = m.group(2)
+            slug = _slugify(inner)
+            if slug:
+                return f'<{tag} id="{slug}">{inner}</{tag}>'
+            return m.group(0)
+        return _re_heading.sub(_replace, html)
 
     # Reuse a single Markdown converter instance (reset between files)
     # Note: 'toc' extension intentionally omitted — we don't generate a
@@ -1810,7 +1838,8 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         # Extract title from first H1
         title_match = _re_h1.search(md_content)
         if title_match:
-            title = _re_strip_md_fmt.sub('', title_match.group(1)).strip()
+            title = _re_strip_tags.sub('', title_match.group(1))
+            title = _re_strip_md_fmt.sub('', title).strip()
         else:
             title = md_file.stem
 
@@ -1820,6 +1849,9 @@ def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
         # Convert markdown → HTML body (reuse converter, reset state)
         md_converter.reset()
         html_body = md_converter.convert(md_content)
+
+        # Add id attributes to headings for anchor linking (TOC + direct section links)
+        html_body = _add_heading_ids(html_body)
 
         # Rewrite relative .md links → .html  (leave http(s) and mailto alone)
         html_body = _re_md_links.sub(r'href="\1.html"', html_body)

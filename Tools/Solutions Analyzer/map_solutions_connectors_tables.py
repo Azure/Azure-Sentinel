@@ -315,6 +315,70 @@ def init_cache(cache_dir: Path, force_refresh: str = "") -> None:
         # If 'tables' is being refreshed, also clear the collect_table_info cache files and re-run collection
         if "tables" in _force_refresh_types:
             _run_collect_table_info(cache_dir)
+        
+        # If 'asim' is being refreshed, also re-run collect_asim_fields to refresh ASIM schema field data
+        if "asim" in _force_refresh_types:
+            _run_collect_asim_fields(cache_dir)
+
+
+def _run_subprocess_with_streaming(script_path: Path, args_list: List[str], label: str) -> None:
+    """Run a subprocess and stream its output through log_print in real-time.
+    
+    Args:
+        script_path: Path to the Python script to run.
+        args_list: Additional command-line arguments for the script.
+        label: Human-readable label for log messages (e.g., 'collect_table_info.py').
+    """
+    try:
+        process = subprocess.Popen(
+            [sys.executable, "-u", str(script_path)] + args_list,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            cwd=str(script_path.parent)
+        )
+        
+        # Stream stdout line by line using readline() to avoid read-ahead buffering
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            stripped = line.rstrip('\n\r')
+            if stripped:
+                log_print(f"    {stripped}")
+        
+        process.wait()
+        
+        if process.returncode == 0:
+            log_print(f"  {label} completed successfully")
+        else:
+            log_print(f"  Warning: {label} returned non-zero exit code: {process.returncode}")
+            stderr_output = process.stderr.read()
+            if stderr_output:
+                log_print(f"    Error: {stderr_output[:500]}")
+    except Exception as e:
+        log_print(f"  Warning: Failed to run {label}: {e}")
+
+
+def _run_collect_asim_fields(cache_dir: Path) -> None:
+    """Run collect_asim_fields.py to refresh ASIM schema field data.
+    
+    This re-runs the collection script with --refresh-cache to get fresh data from docs.
+    """
+    script_dir = Path(__file__).parent
+    collect_script = script_dir / "collect_asim_fields.py"
+    
+    if not collect_script.exists():
+        log_print(f"  Warning: collect_asim_fields.py not found at {collect_script}")
+        return
+    
+    log_print(f"  Running collect_asim_fields.py to refresh ASIM schema field data...")
+    _run_subprocess_with_streaming(
+        collect_script,
+        ["--refresh-cache", "--cache-dir", str(cache_dir)],
+        "collect_asim_fields.py"
+    )
 
 
 def _run_collect_table_info(cache_dir: Path) -> None:
@@ -330,30 +394,11 @@ def _run_collect_table_info(cache_dir: Path) -> None:
         return
     
     log_print(f"  Running collect_table_info.py to refresh table reference data...")
-    
-    try:
-        # Run the collect_table_info.py script with --refresh-cache
-        result = subprocess.run(
-            [sys.executable, str(collect_script), "--refresh-cache", "--cache-dir", str(cache_dir)],
-            capture_output=True,
-            text=True,
-            cwd=str(script_dir)
-        )
-        
-        if result.returncode == 0:
-            # Count lines in output for summary
-            output_lines = [line for line in result.stdout.strip().split('\n') if line]
-            log_print(f"  collect_table_info.py completed successfully")
-            # Print key output lines (skip verbose details)
-            for line in output_lines:
-                if 'Wrote' in line or 'Total unique tables' in line:
-                    log_print(f"    {line.strip()}")
-        else:
-            log_print(f"  Warning: collect_table_info.py returned non-zero exit code: {result.returncode}")
-            if result.stderr:
-                log_print(f"    Error: {result.stderr[:500]}")
-    except Exception as e:
-        log_print(f"  Warning: Failed to run collect_table_info.py: {e}")
+    _run_subprocess_with_streaming(
+        collect_script,
+        ["--refresh-cache", "--cache-dir", str(cache_dir)],
+        "collect_table_info.py"
+    )
 
 
 def _clear_table_info_cache(cache_dir: Path) -> None:
@@ -7253,7 +7298,9 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
             "Force re-analysis of specified types, ignoring cached results. "
             "Comma-separated list of: asim, parsers, solutions, standalone, marketplace, tables. "
             "Use 'all' to refresh everything, or 'all-offline' to refresh all except "
-            "network-dependent types (marketplace, tables). Example: --force-refresh=asim,parsers"
+            "network-dependent types (marketplace, tables). "
+            "'tables' also re-runs collect_table_info.py; 'asim' also re-runs collect_asim_fields.py. "
+            "Example: --force-refresh=asim,parsers"
         ),
     )
     return parser.parse_args()
@@ -9046,8 +9093,14 @@ def main() -> None:
     if custom_tables_dir.is_dir():
         existing_tables = set(row['table_name'] for row in table_schemas_data)
         custom_schemas = extract_schema_from_custom_tables_dir(custom_tables_dir)
+        ct_skipped_non_cl = 0
         for table_name, columns in custom_schemas.items():
             if table_name in existing_tables:
+                continue
+            # Only discover _CL (custom log) tables from KQL validation;
+            # non-CL tables should already be in the Azure Monitor table reference
+            if not table_name.endswith("_CL"):
+                ct_skipped_non_cl += 1
                 continue
             for col in columns:
                 ct_source_file = col.get('source_file', '')
@@ -9066,8 +9119,8 @@ def main() -> None:
                     "transform_kql": "",
                 })
                 custom_tables_count += 1
-        ct_tables = len(custom_schemas) - len(existing_tables & set(custom_schemas.keys()))
-        log_print(f"  Loaded {custom_tables_count} column schemas across {ct_tables} new tables from {safe_relative(custom_tables_dir, repo_root)} (skipped {len(existing_tables & set(custom_schemas.keys()))} already-covered tables)")
+        ct_tables = len(custom_schemas) - len(existing_tables & set(custom_schemas.keys())) - ct_skipped_non_cl
+        log_print(f"  Loaded {custom_tables_count} column schemas across {ct_tables} new tables from {safe_relative(custom_tables_dir, repo_root)} (skipped {len(existing_tables & set(custom_schemas.keys()))} already-covered tables, {ct_skipped_non_cl} non-CL tables)")
     else:
         log_print(f"  Note: {safe_relative(custom_tables_dir, repo_root)} not found")
 
