@@ -14,7 +14,7 @@ Use the **MITRE ATT&CK** page in Microsoft Sentinel to visualise which tactics a
 
 The MITRE ATT&CK framework is the industry standard for classifying adversary behaviour. Microsoft Sentinel maps every analytics rule to MITRE tactics and techniques, giving you a heat-map view of your detection posture.
 
-The lab solution deploys **17 detection rules** covering a multi-stage attack that spans:
+The lab solution deploys **22 detection rules** covering a multi-stage attack that spans:
 
 | Tactic | Techniques | Rule examples |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ The lab solution deploys **17 detection rules** covering a multi-stage attack th
 #### Step 1 — Open the MITRE ATT&CK Page
 
 1. Open the [**Microsoft Defender portal**](https://security.microsoft.com)
-2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK (Preview)**
+2. Navigate to **Microsoft Sentinel** → **Threat management** → **MITRE ATT&CK**
 
 ![MITRE ATT&CK matrix overview](../Images/OnboardingImage26.png?raw=true)
 

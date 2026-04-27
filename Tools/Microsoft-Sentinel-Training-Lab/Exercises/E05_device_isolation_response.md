@@ -131,7 +131,7 @@ If editing in the Defender portal instead of the Graph API:
 
 ### Step 1 — Verify the Current Rule
 
-The deployed rule E5 currently has **no join** and **no response action**. It detects CrowdStrike critical alerts but can't trigger isolation because it doesn't have the `DeviceId`.
+The deployed rule E5 is a **starting point** — it detects CrowdStrike critical alerts but currently has **no DeviceInfo join** and **no response action**. This means it can't trigger device isolation because it doesn't resolve the MDE `DeviceId`. Your task is to add both.
 
 Run the current query in Advanced Hunting:
 

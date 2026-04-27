@@ -53,6 +53,12 @@ When reviewing pull requests, follow these rules strictly.
 4. Check all required top-level fields and item structure validation
 5. Do NOT use general instructions for these files - only use the workbook custom instructions
 
+### For Parser Files (`Parsers/**/*.yaml`, `Parsers/**/*.yml`, `Solutions/**/Parsers/**/*.yaml`, `Solutions/**/Parsers/**/*.yml`)
+1. **LOAD and USE:** `.github/instructions/parsers.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate parser syntax, KQL accuracy, YAML structure, and all required fields from that custom instruction file
+4. Do NOT use general instructions for these files - only use the parsers custom instructions
+
 ---
 
 ## Files and folders to ignore
