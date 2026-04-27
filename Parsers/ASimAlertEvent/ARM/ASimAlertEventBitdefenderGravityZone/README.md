@@ -1,6 +1,6 @@
-# Bitdefender GravityZone ASIM AlertEvent Normalization Parser
+# Bitdefender ASIM AlertEvent Normalization Parser
 
-ARM template for ASIM AlertEvent schema parser for Bitdefender GravityZone.
+ARM template for ASIM AlertEvent schema parser for Bitdefender.
 
 This ASIM parser supports normalizing the Bitdefender GravityZone logs to the ASIM Alert normalized schema.
 
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM AlertEvent normalization schema reference](https://aka.ms/ASimAlertEventDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAlertEvent/CHANGELOG/ASimAlertEventBitdefenderGravityZone.md)
 
 <br>
 
