@@ -1,0 +1,58 @@
+id: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
+name: A365 AI Agents - HTTP Requests to Non-standard Ports
+description: |
+  This query identifies A365 AI agents that send HTTP requests to endpoints using non-standard ports (other than 443). 
+  Communication over uncommon ports can indicate suspicious activity, unauthorized network communication, or attempts to bypass security controls. 
+  Such behavior may expose sensitive data or create opportunities for attackers to exploit less-monitored channels.
+  Recommended Action: Review these agents to confirm whether using non-standard ports is necessary for the business scenario. 
+  If not required, update configurations to use standard secure ports (443 for HTTPS). 
+  For legitimate use cases, document the justification and apply compensating controls such as network monitoring and firewall rules.
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1041
+query: |
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)); 
+  AIAgentsInfo
+  | where RegistrySource == "A365"
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | where isnotempty(AgentActionTriggers)
+  | extend AgentActionTriggersJson = parse_json(AgentActionTriggers)
+  | where array_length(AgentActionTriggersJson) > 1
+  | mv-expand Trigger = AgentActionTriggersJson
+  | extend ServerUrls = Trigger.serverUrls
+  | mv-expand Url = ServerUrls
+  | extend ParsedUrl = parse_url(tostring(Url))
+  | extend Port = tostring(ParsedUrl["Port"]) 
+  | where isnotempty(Port) and Port != "443"
+  | project-away RawAgentInfoJson, AgentActionTriggersJson, ParsedUrl, ServerUrls, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, Url, Port, OwnerUpn, CreatorUpn, DeveloperName  
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
