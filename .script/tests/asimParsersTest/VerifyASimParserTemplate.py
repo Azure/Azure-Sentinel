@@ -25,6 +25,7 @@ parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASim
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
     {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
+    {"SchemaName": "AgentEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
     {"SchemaName": "AssetEntity", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Asset Entity Schema", "SchemaLink": "https://aka.ms/ASimAssetEntityDoc"},
     {"SchemaName": "AuditEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
     {"SchemaName": "Authentication", "SchemaVersion": "0.1.4","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
