@@ -1,0 +1,1279 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Ioannis Bakomichalis",
+    "comments": "Solution template for Strider Shield"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "[workspace().location]",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "[workspace().name]",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Strider Shield",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "nvisocvba1591630627500. nviso-strider-shield-azure-sentinel-solution",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "workspace": "[parameters('workspace')]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "StriderShieldCCF",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "StriderShieldCCFConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Strider Shield",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "StriderShieldCCF",
+                  "title": "Strider Shield",
+                  "publisher": "NVISO",
+                  "descriptionMarkdown": "The [Strider Shield](https://www.striderintel.com/shield/) Data Connector delivers curated intelligence on state-sponsored actors by ingesting Strider Shield data into Microsoft Sentinel.",
+                  "graphQueriesTableName": "StriderShieldEmailAddresses_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Email Addresses received",
+                      "legend": "Strider Shield Email Addresses",
+                      "baseQuery": "StriderShieldEmailAddresses_CL"
+                    },
+                    {
+                      "metricName": "Total Email Domains received",
+                      "legend": "Strider Shield Email Domains Events",
+                      "baseQuery": "StriderShieldEmailDomains_CL"
+                    },
+                    {
+                      "metricName": "Total Risk Signals received",
+                      "legend": "Strider Shield Risk Signals",
+                      "baseQuery": "StriderShieldRiskSignals_CL"
+                    },
+                    {
+                      "metricName": "Total Risk Signals Definitions received",
+                      "legend": "Strider Shield Risk Signals Definitions",
+                      "baseQuery": "StriderShieldRiskSignalsDefinitions_CL"
+                    },
+                    {
+                      "metricName": "Total Terms received",
+                      "legend": "Strider Shield Terms",
+                      "baseQuery": "StriderShieldTerms_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Strider Shield events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "StriderShieldEmailAddresses_CL",
+                      "lastDataReceivedQuery": "StriderShieldEmailAddresses_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "StriderShieldEmailDomains_CL",
+                      "lastDataReceivedQuery": "StriderShieldEmailDomains_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "StriderShieldRiskSignals_CL",
+                      "lastDataReceivedQuery": "StriderShieldRiskSignals_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "StriderShieldRiskSignalsDefinitions_CL",
+                      "lastDataReceivedQuery": "StriderShieldRiskSignalsDefinitions_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "StriderShieldTerms_CL",
+                      "lastDataReceivedQuery": "StriderShieldTerms_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Strider Shield API token",
+                        "description": "A Strider Shield API Token is required. See the Strider Shield documentation on how to create an API token."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "STEP 1 - Use an Authentication Strider Shield API endpoint",
+                      "description": "Follow the Strider Shield documentation for guidance on this step."
+                    },
+                    {
+                      "title": "STEP 2 - Choose the correct base URL",
+                      "description": "There are multiple Strider Shield servers which might host your events. The correct server depends on your license and region.Input the base URL as displayed by the documentation (including 'https://' and without a trailing '/')."
+                    },
+                    {
+                      "title": "STEP 3 - Enter your Strider Shield Details",
+                      "description": "Enter the Strider Shield Authentication API endpoint, Base URL, Client ID & Client Secret below:",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Authentication API endpoint",
+                            "placeholder": "Enter your Authentication API endpoint",
+                            "type": "text",
+                            "name": "AuthApiEndpoint"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Base Url",
+                            "placeholder": "Enter your Base Url",
+                            "type": "text",
+                            "name": "BaseUrl"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client ID",
+                            "placeholder": "Enter your Client ID",
+                            "type": "text",
+                            "name": "ClientID"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client Secret",
+                            "placeholder": "Enter your Client Secret",
+                            "type": "password",
+                            "name": "ClientSecret"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "connectionToggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Ioannis Bakomichalis"
+                },
+                "support": {
+                  "name": "NVISO",
+                  "tier": "Partner",
+                  "link": "https://nviso.eu/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "strider-shield-dcr",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-StriderShield": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "isNew",
+                        "type": "int"
+                      },
+                      {
+                        "name": "md5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "itemType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "itemNamePrimary",
+                        "type": "string"
+                      },
+                      {
+                        "name": "collections",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "counterparties",
+                        "type": "string"
+                      },
+                      {
+                        "name": "riskSignal",
+                        "type": "string"
+                      },
+                      {
+                        "name": "descriptions",
+                        "type": "string"
+                      },
+                      {
+                        "name": "dates_added",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "itemNameSecondary",
+                        "type": "string"
+                      },
+                      {
+                        "name": "changes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "riskSignalsCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "risk_category_abbr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_category_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_category_description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_category_email",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_category_domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "risk_category_term",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "[variables('workspace')]"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-StriderShield"
+                    ],
+                    "destinations": [
+                      "[variables('workspace')]"
+                    ],
+                    "transformKql": "source | where isnotempty(itemType) and itemType == \"emailAddress\" | extend TimeGenerated = now()",
+                    "outputStream": "Custom-StriderShieldEmailAddresses_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-StriderShield"
+                    ],
+                    "destinations": [
+                      "[variables('workspace')]"
+                    ],
+                    "transformKql": "source | where isnotempty(itemType) and itemType == \"emailDomain\" | extend TimeGenerated = now()",
+                    "outputStream": "Custom-StriderShieldEmailDomains_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-StriderShield"
+                    ],
+                    "destinations": [
+                      "[variables('workspace')]"
+                    ],
+                    "transformKql": "source | where isnotempty(riskSignalsCount) | extend TimeGenerated = now()",
+                    "outputStream": "Custom-StriderShieldRiskSignals_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-StriderShield"
+                    ],
+                    "destinations": [
+                      "[variables('workspace')]"
+                    ],
+                    "transformKql": "source | where isnotempty(risk_category_abbr) | extend TimeGenerated = now()",
+                    "outputStream": "Custom-StriderShieldRiskSignalsDefinitions_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-StriderShield"
+                    ],
+                    "destinations": [
+                      "[variables('workspace')]"
+                    ],
+                    "transformKql": "source | where isnotempty(itemType) and itemType == \"term\" | extend TimeGenerated = now()",
+                    "outputStream": "Custom-StriderShieldTerms_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "StriderShieldEmailAddresses_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StriderShieldEmailAddresses_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "isNew",
+                      "type": "int"
+                    },
+                    {
+                      "name": "md5",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemNamePrimary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "collections",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "counterparties",
+                      "type": "string"
+                    },
+                    {
+                      "name": "riskSignal",
+                      "type": "string"
+                    },
+                    {
+                      "name": "descriptions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "dates_added",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "itemNameSecondary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "changes",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "StriderShieldEmailDomains_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StriderShieldEmailDomains_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "isNew",
+                      "type": "int"
+                    },
+                    {
+                      "name": "md5",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemNamePrimary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "collections",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "counterparties",
+                      "type": "string"
+                    },
+                    {
+                      "name": "riskSignal",
+                      "type": "string"
+                    },
+                    {
+                      "name": "descriptions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "dates_added",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "itemNameSecondary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "changes",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "StriderShieldRiskSignals_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StriderShieldRiskSignals_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "riskSignal",
+                      "type": "string"
+                    },
+                    {
+                      "name": "riskSignalsCount",
+                      "type": "int"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "StriderShieldRiskSignalsDefinitions_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StriderShieldRiskSignalsDefinitions_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "risk_category_abbr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_category_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_category_description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_category_email",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_category_domain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "risk_category_term",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "StriderShieldTerms_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "StriderShieldTerms_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "isNew",
+                      "type": "int"
+                    },
+                    {
+                      "name": "md5",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "itemNamePrimary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "collections",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "counterparties",
+                      "type": "string"
+                    },
+                    {
+                      "name": "riskSignal",
+                      "type": "string"
+                    },
+                    {
+                      "name": "descriptions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "dates_added",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "itemNameSecondary",
+                      "type": "string"
+                    },
+                    {
+                      "name": "changes",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "StriderShieldCCF",
+          "title": "Strider Shield",
+          "publisher": "NVISO",
+          "descriptionMarkdown": "The [Strider Shield](https://www.striderintel.com/shield/) Data Connector delivers curated intelligence on state-sponsored actors by ingesting Strider Shield data into Microsoft Sentinel.",
+          "graphQueriesTableName": "StriderShieldEmailAddresses_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Email Addresses received",
+              "legend": "Strider Shield Email Addresses",
+              "baseQuery": "StriderShieldEmailAddresses_CL"
+            },
+            {
+              "metricName": "Total Email Domains received",
+              "legend": "Strider Shield Email Domains Events",
+              "baseQuery": "StriderShieldEmailDomains_CL"
+            },
+            {
+              "metricName": "Total Risk Signals received",
+              "legend": "Strider Shield Risk Signals",
+              "baseQuery": "StriderShieldRiskSignals_CL"
+            },
+            {
+              "metricName": "Total Risk Signals Definitions received",
+              "legend": "Strider Shield Risk Signals Definitions",
+              "baseQuery": "StriderShieldRiskSignalsDefinitions_CL"
+            },
+            {
+              "metricName": "Total Terms received",
+              "legend": "Strider Shield Terms",
+              "baseQuery": "StriderShieldTerms_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Strider Shield events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "StriderShieldEmailAddresses_CL",
+              "lastDataReceivedQuery": "StriderShieldEmailAddresses_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "StriderShieldEmailDomains_CL",
+              "lastDataReceivedQuery": "StriderShieldEmailDomains_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "StriderShieldRiskSignals_CL",
+              "lastDataReceivedQuery": "StriderShieldRiskSignals_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "StriderShieldRiskSignalsDefinitions_CL",
+              "lastDataReceivedQuery": "StriderShieldRiskSignalsDefinitions_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "StriderShieldTerms_CL",
+              "lastDataReceivedQuery": "StriderShieldTerms_CL\n | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Strider Shield API token",
+                "description": "A Strider Shield API Token is required. See the Strider Shield documentation on how to create an API token."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "STEP 1 - Use an Authentication Strider Shield API endpoint",
+              "description": "Follow the Strider Shield documentation for guidance on this step."
+            },
+            {
+              "title": "STEP 2 - Choose the correct base URL",
+              "description": "There are multiple Strider Shield servers which might host your events. The correct server depends on your license and region.Input the base URL as displayed by the documentation (including 'https://' and without a trailing '/')."
+            },
+            {
+              "title": "STEP 3 - Enter your Strider Shield Details",
+              "description": "Enter the Strider Shield Authentication API endpoint, Base URL, Client ID & Client Secret below:",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Authentication API endpoint",
+                    "placeholder": "Enter your Authentication API endpoint",
+                    "type": "text",
+                    "name": "AuthApiEndpoint"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Base Url",
+                    "placeholder": "Enter your Base Url",
+                    "type": "text",
+                    "name": "BaseUrl"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client ID",
+                    "placeholder": "Enter your Client ID",
+                    "type": "text",
+                    "name": "ClientID"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client Secret",
+                    "placeholder": "Enter your Client Secret",
+                    "type": "password",
+                    "name": "ClientSecret"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "name": "connectionToggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Ioannis Bakomichalis"
+        },
+        "support": {
+          "name": "NVISO",
+          "tier": "Partner",
+          "link": "https://nviso.eu/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Strider Shield",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Strider Shield",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "AuthApiEndpoint": {
+              "defaultValue": "AuthApiEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "BaseUrl": {
+              "defaultValue": "BaseUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientID": {
+              "defaultValue": "ClientID",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "ClientSecret": {
+              "defaultValue": "ClientSecret",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Ioannis Bakomichalis"
+                },
+                "support": {
+                  "name": "NVISO",
+                  "tier": "Partner",
+                  "link": "https://nviso.eu/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StriderShieldEmailAddresses', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StriderShieldCCF",
+                "dataType": "StriderShieldEmailAddresses_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-StriderShield",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientid')]",
+                  "ClientSecret": "[[parameters('clientsecret')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpointQueryParameters": {
+                    "audience": "https://platform-api/"
+                  },
+                  "TokenEndpoint": "[[parameters('authapiendpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'), '/api/shield')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 1440,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 180,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.emailAddresses"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StriderShieldEmailDomains', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StriderShieldCCF",
+                "dataType": "StriderShieldEmailDomains_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-StriderShield",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientid')]",
+                  "ClientSecret": "[[parameters('clientsecret')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpointQueryParameters": {
+                    "audience": "https://platform-api/"
+                  },
+                  "TokenEndpoint": "[[parameters('authapiendpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'), '/api/shield')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 1440,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 180,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.emailDomains"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StriderShieldRiskSignals', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StriderShieldCCF",
+                "dataType": "StriderShieldRiskSignals_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-StriderShield",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientid')]",
+                  "ClientSecret": "[[parameters('clientsecret')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpointQueryParameters": {
+                    "audience": "https://platform-api/"
+                  },
+                  "TokenEndpoint": "[[parameters('authapiendpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'), '/api/shield')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 1440,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 180,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.riskSignals"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StriderShieldRiskSignalsDefinitions', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StriderShieldCCF",
+                "dataType": "StriderShieldRiskSignalsDefinitions_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-StriderShield",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientid')]",
+                  "ClientSecret": "[[parameters('clientsecret')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpointQueryParameters": {
+                    "audience": "https://platform-api/"
+                  },
+                  "TokenEndpoint": "[[parameters('authapiendpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'), '/api/shield')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 1440,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 180,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.riskSignalsDefinitions"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'StriderShieldTerms', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "StriderShieldCCF",
+                "dataType": "StriderShieldTerms_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-StriderShield",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientid')]",
+                  "ClientSecret": "[[parameters('clientsecret')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpointQueryParameters": {
+                    "audience": "https://platform-api/"
+                  },
+                  "TokenEndpoint": "[[parameters('authapiendpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('BaseUrl'), '/api/shield')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 1440,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "rateLimitQps": 1,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 180,
+                  "headers": {
+                    "Content-Type": "application/json"
+                  }
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$.terms"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Strider Shield",
+        "publisherDisplayName": "NVISO",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Strider%20Shield/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.striderintel.com/shield/\">Strider Shield</a> Data Connector delivers curated intelligence on state-sponsored actors by ingesting Strider Shield data into Microsoft Sentinel.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/StriderShield.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Strider Shield",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Ioannis Bakomichalis"
+        },
+        "support": {
+          "name": "NVISO",
+          "tier": "Partner",
+          "link": "https://nviso.eu/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-04-28",
+        "providers": [
+          "NVISO"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence",
+            "Security - Others"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
