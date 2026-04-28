@@ -145,9 +145,9 @@ AWSCloudTrail
 | sort by TimeGenerated desc
 ```
 
-> **Note:** These queries may return **empty results** in the lab environment -- this is expected. The lab's pre-ingested telemetry uses synthetic IP addresses that are unlikely to appear in Microsoft's real-world threat intelligence feed. In a production environment with live traffic, these joins are how you detect connections to known-malicious infrastructure.
+> **Note:** These queries may return **empty results** in the lab environment — this is expected. The lab's pre-ingested telemetry uses synthetic IP addresses that are unlikely to appear in Microsoft's real-world threat intelligence feed. In a production environment with live traffic, these joins are how you detect connections to known-malicious infrastructure.
 >
-> **What to take away:** The query *pattern* is what matters -- `join kind=inner` between a TI indicator table and your telemetry. You can apply this same pattern to any data source (firewall logs, cloud trails, identity events) in your production workspace where real traffic will match real indicators.
+> **What to take away:** The query *pattern* is what matters — `join kind=inner` between a TI indicator table and your telemetry. You can apply this same pattern to any data source (firewall logs, cloud trails, identity events) in your production workspace where real traffic will match real indicators.
 
 #### Step 5 — Explore Indicator Statistics
 
