@@ -63,6 +63,7 @@ Once deployment is complete, you will need to authorize each connection:
   - `TenantID`: Azure AD tenant ID for authentication (From Azure App Registration)
   - `ClientID`: Application (client) ID of the service principal (From Azure App Registration)
   - `ClientSecret`: Client secret for the service principal (secure string)(From Azure App Registration)
+  - `Auth_LoginEndpoint`: Login endpoint for authentication. Copy and paste this value in the parameter-'https://login.microsoftonline.com'
 
 #### b. Configurations in Sentinel:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with IP indicators.
