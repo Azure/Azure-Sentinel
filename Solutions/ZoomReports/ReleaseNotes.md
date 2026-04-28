@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.8       | 27-04-2026                     | ZoomReports CCF Connector GA with updated parser |
 | 3.0.7       | 18-03-2026                     | Updated ZoomReports CCF to use a different table name and schema |
 | 3.0.6       | 13-03-2026                     | Added ZoomReports CCF Connector Public Preview |
 | 3.0.5       | 29-08-2024                     | Updated the python runtime version to 3.11  | 
