@@ -1,0 +1,1344 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Spur-IP-Enrichment-Incident-Trigger",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "SpurConnectorName": {
+            "defaultValue": "Spur-Context-Connector",
+            "type": "String",
+            "metadata": {
+                "description": "Spur custom connector name"
+            }
+        }
+    },
+    "variables": {
+        "SpurConnectionName": "[concat('spurconnector-', parameters('PlaybookName'))]",
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SpurConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('SpurConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpurConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('SpurConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Save_To_Custom_Table": {
+                            "defaultValue": false,
+                            "type": "Bool"
+                        },
+                        "DCE_Endpoint_URL": {
+                            "defaultValue": "DCE_Endpoint_URL",
+                            "type": "String"
+                        },
+                        "DCR_Immutable_ID": {
+                            "defaultValue": "DCR_Immutable_ID",
+                            "type": "String"
+                        },
+                        "TenantID": {
+                            "defaultValue": "TenantID",
+                            "type": "String"
+                        },
+                        "ClientID": {
+                            "defaultValue": "ClientID",
+                            "type": "String"
+                        },
+                        "ClientSecret": {
+                            "defaultValue": "ClientSecret",
+                            "type": "SecureString"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_-_IP_Entities": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Condition_check_tunnel": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p class=\"editor-paragraph\">@{variables('Spur_Comment')}</p>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Parse_IP_Entity_": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_-_IP_Entities')",
+                                        "schema": {
+                                            "properties": {
+                                                "Type": {
+                                                    "type": "string"
+                                                },
+                                                "address": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Comment": {
+                                    "runAfter": {
+                                        "Parse_IP_Entity_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Spur_Comment",
+                                        "value": "<span style=\"font-size:200%;font-weight: bold;\">Spur Encrichment Details for  @{body('Parse_IP_Entity_')?['address']}</span><br/><br/>"
+                                    }
+                                },
+                                "Get_IP_Context": {
+                                    "runAfter": {
+                                        "Set_variable_-_Custom_Table_Array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['spurconnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/context/@{encodeURIComponent(body('Parse_IP_Entity_')?['address'])}"
+                                    }
+                                },
+                                "Compose_General": {
+                                    "runAfter": {
+                                        "Condition-services": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "IP_Address": "@body('Get_IP_Context')?['ip']",
+                                        "Organization": "@body('Get_IP_Context')?['organization']",
+                                        "Infrastructure_Type": "@body('Get_IP_Context')?['infrastructure']",
+                                        "Risk_Indicators": "@variables('risk_indicators')",
+                                        "Services": "@variables('services')"
+                                    }
+                                },
+                                "Create_HTML_table_General": {
+                                    "runAfter": {
+                                        "Compose_General": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "from": "@array(outputs('Compose_General'))",
+                                        "format": "HTML"
+                                    }
+                                },
+                                "Condition-If_Risk_Indicators": {
+                                    "actions": {
+                                        "Set_variable_-_risk_indicators": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "risk_indicators",
+                                                "value": "@join(body('Get_IP_Context')?['risks'],',')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_IP_Context": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_risk_indiators_to_empty": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "risk_indicators",
+                                                    "value": "@null"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['risks'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition-services": {
+                                    "actions": {
+                                        "Set_variable_-_services": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "services",
+                                                "value": "@join(body('Get_IP_Context')?['services'],',')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition-If_Risk_Indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_services_to_empty": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "services",
+                                                    "value": "@null"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['services'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_-_Check_ASN": {
+                                    "actions": {
+                                        "Compose_-_ASN": {
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "ASN_Number": "@body('Get_IP_Context')?['as']?['number']",
+                                                "ASN_Organization": "@body('Get_IP_Context')?['as']?['organization']"
+                                            }
+                                        },
+                                        "Create_HTML_table_ASN": {
+                                            "runAfter": {
+                                                "Compose_-_ASN": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "from": "@array(outputs('Compose_-_ASN'))",
+                                                "format": "HTML"
+                                            }
+                                        },
+                                        "Append_to_comment_variable_-_ASN": {
+                                            "runAfter": {
+                                                "Create_HTML_table_ASN": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:75%%;font-weight: bold;\">Autonomous System Information</span>@{body('Create_HTML_table_ASN')}<br/>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_General_Information_to_Spur_Comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['as'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_check_location": {
+                                    "actions": {
+                                        "Compose_-_Loction_": {
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "City": "@body('Get_IP_Context')?['location']?['city']",
+                                                "State": "@body('Get_IP_Context')?['location']?['state']",
+                                                "Country": "@body('Get_IP_Context')?['location']?['country']"
+                                            }
+                                        },
+                                        "HTML_table_Location": {
+                                            "runAfter": {
+                                                "Compose_-_Loction_": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "from": "@array(outputs('Compose_-_Loction_'))",
+                                                "format": "HTML"
+                                            }
+                                        },
+                                        "Append_to_comment_variable_-_Location": {
+                                            "runAfter": {
+                                                "HTML_table_Location": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:75%%;font-weight: bold;\">Location Information</span>@{body('HTML_table_Location')}<br/>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_-_Check_ASN": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['location'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_check_client": {
+                                    "actions": {
+                                        "Compose_Client": {
+                                            "runAfter": {
+                                                "Condition_client_concentration": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "Client_Behaviors": "@variables('client_behaviours')",
+                                                "Device_Count": "@body('Get_IP_Context')?['client']?['count']",
+                                                "Distinct_Countries": "@body('Get_IP_Context')?['client']?['countries']",
+                                                "Proxy_Types": "@variables('proxies')",
+                                                "Network_Spread": "@body('Get_IP_Context')?['client']?['spread']",
+                                                "Client_Types": "@variables('client_types')",
+                                                "Geographic_Concentration_City": "@variables('geographic_concentration_city')",
+                                                "Geographic_Concentration_State": "@variables('geographic_concentration_state')",
+                                                "Geographic_Concentration_Country": "@variables('geographic_concentration_country')",
+                                                "Density_Score": "@variables('geographic_concentration_density')",
+                                                "Geohash": "@variables('geographic_concentration_geohash')",
+                                                "Skew_Value": "@variables('geographic_concentration_skew')"
+                                            }
+                                        },
+                                        "Create_HTML_table_Client": {
+                                            "runAfter": {
+                                                "Compose_Client": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "from": "@array(outputs('Compose_Client'))",
+                                                "format": "HTML"
+                                            }
+                                        },
+                                        "Condition_client_behaviours": {
+                                            "actions": {
+                                                "Set_variable_client_behaviours": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "client_behaviours",
+                                                        "value": "@join(body('Get_IP_Context')?['client']?['behaviors'],',')"
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_client_behaviours_to_empty": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "client_behaviours",
+                                                            "value": "@null"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Get_IP_Context')?['client']?['behaviors'])",
+                                                            "@false"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_proxies": {
+                                            "actions": {
+                                                "Set_variable_client_proxies": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "proxies",
+                                                        "value": "@join(body('Get_IP_Context')?['client']?['proxies'],',')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_client_behaviours": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_proxies_to_empty": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "proxies",
+                                                            "value": "@null"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Get_IP_Context')?['client']?['proxies'])",
+                                                            "@false"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_4-check_types": {
+                                            "actions": {
+                                                "Set_variable_client_types": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "client_types",
+                                                        "value": "@join(body('Get_IP_Context')?['client']?['types'],',')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_proxies": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_types_to_empty": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "client_types",
+                                                            "value": "@null"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Get_IP_Context')?['client']?['types'])",
+                                                            "@false"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_client_concentration": {
+                                            "actions": {
+                                                "Set_variable_concentration_city": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_city",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['city']"
+                                                    }
+                                                },
+                                                "Set_variable_conecentration_state": {
+                                                    "runAfter": {
+                                                        "Set_variable_concentration_city": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_state",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['state']"
+                                                    }
+                                                },
+                                                "Set_variable_conecentration_country": {
+                                                    "runAfter": {
+                                                        "Set_variable_conecentration_state": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_country",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['country']"
+                                                    }
+                                                },
+                                                "Set_variable_conecentration_density": {
+                                                    "runAfter": {
+                                                        "Set_variable_conecentration_country": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_density",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['density']"
+                                                    }
+                                                },
+                                                "Set_variable_conecentration_geohash": {
+                                                    "runAfter": {
+                                                        "Set_variable_conecentration_density": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_geohash",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['geohash']"
+                                                    }
+                                                },
+                                                "Set_variable_conecentration_skew": {
+                                                    "runAfter": {
+                                                        "Set_variable_conecentration_geohash": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "geographic_concentration_skew",
+                                                        "value": "@body('Get_IP_Context')?['client']?['concentration']?['skew']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_4-check_types": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_concentration_city_to_empty": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_city",
+                                                            "value": "@null"
+                                                        }
+                                                    },
+                                                    "Set_variable_conecentration_state_to_empty": {
+                                                        "runAfter": {
+                                                            "Set_variable_concentration_city_to_empty": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_state",
+                                                            "value": "@null"
+                                                        }
+                                                    },
+                                                    "Set_variable_conecentration_country_to_empty": {
+                                                        "runAfter": {
+                                                            "Set_variable_conecentration_state_to_empty": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_country",
+                                                            "value": "@null"
+                                                        }
+                                                    },
+                                                    "Set_variable_conecentration_density_to_empty": {
+                                                        "runAfter": {
+                                                            "Set_variable_conecentration_country_to_empty": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_density",
+                                                            "value": "@float('0')"
+                                                        }
+                                                    },
+                                                    "Set_variable_conecentration_geohash_to_empty": {
+                                                        "runAfter": {
+                                                            "Set_variable_conecentration_density_to_empty": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_geohash",
+                                                            "value": "@null"
+                                                        }
+                                                    },
+                                                    "Set_variable_conecentration_skew_to_empty": {
+                                                        "runAfter": {
+                                                            "Set_variable_conecentration_geohash_to_empty": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "geographic_concentration_skew",
+                                                            "value": "@int('0')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Get_IP_Context')?['client']?['concentration'])",
+                                                            "@false"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "append_variable_spur_comment_client_information": {
+                                            "runAfter": {
+                                                "Create_HTML_table_Client": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:75%%;font-weight: bold;\">Client Information</span>@{body('Create_HTML_table_Client')}<br/>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_check_location": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['client'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_check_tunnel": {
+                                    "actions": {
+                                        "For_each_tunnel": {
+                                            "foreach": "@body('Get_IP_Context')?['tunnels']",
+                                            "actions": {
+                                                "Compose_Tunnel": {
+                                                    "runAfter": {
+                                                        "Set_variable_tunnel_type": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Anonymous_Tunnel": "@variables('anonymous_tunnel')",
+                                                        "Entry_Nodes": "@variables('entry_nodes')",
+                                                        "Tunnel_Operator": "@variables('tunnel_operator')",
+                                                        "Tunnel_Type": "@variables('tunnel_type')"
+                                                    }
+                                                },
+                                                "Append_to_array_variable": {
+                                                    "runAfter": {
+                                                        "Compose_Tunnel": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "anonyms_array",
+                                                        "value": "@outputs('Compose_Tunnel')"
+                                                    }
+                                                },
+                                                "Condition-check_anonymus": {
+                                                    "actions": {
+                                                        "Append_to_array_": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "anonymous_ips",
+                                                                "value": "@body('Parse_IP_Entity_')?['address']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@item()?['anonymous']",
+                                                                    "@true"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_variable_anonymous_tunnel": {
+                                                    "runAfter": {
+                                                        "Condition-check_anonymus": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "anonymous_tunnel",
+                                                        "value": "@{item()?['anonymous']}"
+                                                    }
+                                                },
+                                                "Set_variable_tunnel_operator": {
+                                                    "runAfter": {
+                                                        "Condition": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "tunnel_operator",
+                                                        "value": "@item()?['operator']"
+                                                    }
+                                                },
+                                                "Set_variable_tunnel_type": {
+                                                    "runAfter": {
+                                                        "Set_variable_tunnel_operator": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "tunnel_type",
+                                                        "value": "@item()?['type']"
+                                                    }
+                                                },
+                                                "Condition": {
+                                                    "actions": {
+                                                        "Set_variable_1-copy": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "entry_nodes",
+                                                                "value": "@null"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable_anonymous_tunnel": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable_entry_nodes": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "entry_nodes",
+                                                                    "value": "@join(item()?['entries'],',')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@item()?['entries']",
+                                                                    "@null"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Create_HTML_table_Tunnel": {
+                                            "runAfter": {
+                                                "For_each_tunnel": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "from": "@variables('anonyms_array')",
+                                                "format": "HTML"
+                                            }
+                                        },
+                                        "Append_Anonymus_Information_spur_comment": {
+                                            "runAfter": {
+                                                "Create_HTML_table_Tunnel": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:75%%;font-weight: bold;\">Tunnel Information</span>@{body('Create_HTML_table_Tunnel')}<br/>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_check_client": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Get_IP_Context')?['tunnels'])",
+                                                    "@false"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_variable_anonyms": {
+                                    "runAfter": {
+                                        "Comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "anonyms_array",
+                                        "value": []
+                                    }
+                                },
+                                "Condition_anonyms": {
+                                    "actions": {
+                                        "Set_not_anonyms": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "is_anonymous",
+                                                "value": false
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_anonyms": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "is_anonymous",
+                                                    "value": true
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@length(variables('anonymous_ips'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_if_anonyms": {
+                                    "actions": {
+                                        "Update_incident": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "@concat('Spur_Anonymous_IPs:',join(variables('anonymous_ips'),','))"
+                                                            }
+                                                        ]
+                                                    },
+                                                    "severity": "High",
+                                                    "status": "Active"
+                                                },
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_anonyms": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('is_anonymous')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_-_save_custome_table": {
+                                    "actions": {
+                                        "GetAccessTokenSpur": {
+                                            "runAfter": {
+                                                "Append_to_array_variable_1": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@variables('access_token_url')",
+                                                "method": "POST",
+                                                "headers": {
+                                                    "Content-Type": "application/x-www-form-urlencoded"
+                                                },
+                                                "body": "@variables('access_token_body')"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        },
+                                        "HTTP_-_Save_to_Custom_Table": {
+                                            "runAfter": {
+                                                "GetAccessTokenSpur": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@concat(parameters('DCE_Endpoint_URL'),'/dataCollectionRules/',parameters('DCR_Immutable_ID'),'/streams/Custom-','Spur_IP_Context_Details_CL','?api-version=2023-01-01')",
+                                                "method": "POST",
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('GetAccessTokenSpur')?['access_token']}",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "body": "@variables('custom_table_response_array')"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        },
+                                        "Compose_-_Custom_Table": {
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "IP_Address": "@body('Get_IP_Context')?['ip']",
+                                                "Organization": "@body('Get_IP_Context')?['organization']",
+                                                "Infrastructure_Type": "@body('Get_IP_Context')?['infrastructure']",
+                                                "Risk_Indicators": "@variables('risk_indicators')",
+                                                "Services": "@variables('services')",
+                                                "ASN_Number": "@body('Get_IP_Context')?['as']?['number']",
+                                                "ASN_Organization": "@body('Get_IP_Context')?['as']?['organization']",
+                                                "City": "@body('Get_IP_Context')?['location']?['city']",
+                                                "State": "@body('Get_IP_Context')?['location']?['state']",
+                                                "Country": "@body('Get_IP_Context')?['location']?['country']",
+                                                "Client_Behaviors": "@variables('client_behaviours')",
+                                                "Device_Count": "@body('Get_IP_Context')?['client']?['count']",
+                                                "Distinct_Countries": "@body('Get_IP_Context')?['client']?['countries']",
+                                                "Proxy_Types": "@variables('proxies')",
+                                                "Network_Spread": "@body('Get_IP_Context')?['client']?['spread']",
+                                                "Client_Types": "@variables('client_types')",
+                                                "Geographic_Concentration_City": "@variables('geographic_concentration_city')",
+                                                "Geographic_Concentration_State": "@variables('geographic_concentration_state')",
+                                                "Geographic_Concentration_Country": "@variables('geographic_concentration_country')",
+                                                "Density_Score": "@variables('geographic_concentration_density')",
+                                                "Geohash": "@variables('geographic_concentration_geohash')",
+                                                "Skew_Value": "@variables('geographic_concentration_skew')",
+                                                "Anonymous_Tunnel": "@variables('anonymous_tunnel')",
+                                                "Entry_Nodes": "@variables('entry_nodes')",
+                                                "Tunnel_Operator": "@variables('tunnel_operator')",
+                                                "Tunnel_Type": "@variables('tunnel_type')"
+                                            }
+                                        },
+                                        "Append_to_array_variable_1": {
+                                            "runAfter": {
+                                                "Compose_-_Custom_Table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "custom_table_response_array",
+                                                "value": "@outputs('Compose_-_Custom_Table')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_if_anonyms": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('Save_To_Custom_Table')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_variable_-_Custom_Table_Array": {
+                                    "runAfter": {
+                                        "Set_variable_anonyms": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "custom_table_response_array",
+                                        "value": []
+                                    }
+                                },
+                                "Set_General_Information_to_Spur_Comment": {
+                                    "runAfter": {
+                                        "Create_HTML_table_General": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Spur_Comment",
+                                        "value": "<span style=\"font-size:75%%;font-weight: bold;\">General Information</span>@{body('Create_HTML_table_General')}<br/>"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variables_Tunnel_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Variables_Section": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Spur_Comment",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "anonyms_array",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "risk_indicators",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "services",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "client_behaviours",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "proxies",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "client_types",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "tunnel_entries",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_city",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_state",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_country",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_density",
+                                        "type": "float"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_geohash",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "geographic_concentration_skew",
+                                        "type": "integer"
+                                    },
+                                    {
+                                        "name": "anonymous_ips",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "is_anonymous",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "custom_table_response_array",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "access_token_url",
+                                        "type": "string",
+                                        "value": "@{concat(concat('https://login.microsoftonline.com/',parameters('TenantID')),'/oauth2/v2.0/token')}"
+                                    },
+                                    {
+                                        "name": "access_token_body",
+                                        "type": "string",
+                                        "value": "@{concat(concat(concat(concat('grant_type=client_credentials&client_id=',parameters('ClientID')),'&client_secret='),parameters('ClientSecret')),'&scope=https://monitor.azure.com/.default')}"
+                                    },
+                                    {
+                                        "name": "anonymous_tunnel",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variables_entry_nodes": {
+                            "runAfter": {
+                                "Variables_Section": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entry_nodes",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variables_Tunnel_Operator": {
+                            "runAfter": {
+                                "Initialize_variables_entry_nodes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tunnel_operator",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variables_Tunnel_Type": {
+                            "runAfter": {
+                                "Initialize_variables_Tunnel_Operator": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tunnel_type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "ClientSecret": {},
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "spurconnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SpurConnectionName'))]",
+                                "connectionName": "[variables('SpurConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpurConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

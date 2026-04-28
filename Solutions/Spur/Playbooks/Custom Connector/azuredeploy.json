@@ -1,0 +1,871 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "SpurConnectorName": {
+            "defaultValue": "Spur-Context-Connector",
+            "type": "String"
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Azure region for deployment"
+            }
+        },
+        "subscriptionId": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "String",
+            "metadata": {
+                "description": "Azure subscription ID"
+            }
+        },
+        "resourceGroup": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "String",
+            "metadata": {
+                "description": "Resource group name"
+            }
+        },
+        "workspaceName": {
+            "defaultValue": "spur-log-workspace",
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics workspace name"
+            }
+        },
+        "DCRName": {
+            "defaultValue": "Spur-DCR",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule name"
+            }
+        },
+        "DCEName": {
+            "defaultValue": "Spur-DCE",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Endpoint name"
+            }
+        }
+    },
+    "variables": {
+        "tableName": "Spur_IP_Context_Details_CL",
+        "streamName": "[concat('Custom-', variables('tableName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2025-07-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('tableName'))]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('tableName')]",
+                    "tableType": "CustomLog",
+                    "columns": [
+                        {
+                            "name": "Anonymous_Tunnel",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "ASN_Number",
+                            "type": "int"
+                        },
+                        {
+                            "name": "ASN_Organization",
+                            "type": "string"
+                        },
+                        {
+                            "name": "City",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Client_Behaviors",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Client_Types",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Density_Score",
+                            "type": "real"
+                        },
+                        {
+                            "name": "Device_Count",
+                            "type": "int"
+                        },
+                        {
+                            "name": "Distinct_Countries",
+                            "type": "int"
+                        },
+                        {
+                            "name": "Entry_Nodes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Geographic_Concentration_City",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Geographic_Concentration_Country",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Geographic_Concentration_State",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Geohash",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Infrastructure_Type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "IP_Address",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Network_Spread",
+                            "type": "int"
+                        },
+                        {
+                            "name": "Organization",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Proxy_Types",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Risk_Indicators",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Services",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Skew_Value",
+                            "type": "int"
+                        },
+                        {
+                            "name": "State",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Tunnel_Operator",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Tunnel_Type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[parameters('DCEName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "configurationAccess": {
+                    "endpoint": "[concat('https://', parameters('DCEName'), '-eawp.', parameters('location'), '-1.handler.control.monitor.azure.com')]"
+                },
+                "logsIngestion": {
+                    "endpoint": "[concat('https://', parameters('DCEName'), '-eawp.', parameters('location'), '-1.ingest.monitor.azure.com')]"
+                },
+                "metricsIngestion": {
+                    "endpoint": "[concat('https://', parameters('DCEName'), '-eawp.', parameters('location'), '-1.metrics.ingest.monitor.azure.com')]"
+                },
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "[parameters('DCRName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[variables('tableName')]",
+                "[parameters('DCEName')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscriptionId'),'/resourceGroups/',parameters('resourceGroup'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('DCEName'))]",
+                "streamDeclarations": {
+                    "[variables('streamName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "IP_Address",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Organization",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Infrastructure_Type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Risk_Indicators",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Services",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ASN_Number",
+                                "type": "int"
+                            },
+                            {
+                                "name": "ASN_Organization",
+                                "type": "string"
+                            },
+                            {
+                                "name": "City",
+                                "type": "string"
+                            },
+                            {
+                                "name": "State",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Client_Behaviors",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Device_Count",
+                                "type": "int"
+                            },
+                            {
+                                "name": "Distinct_Countries",
+                                "type": "int"
+                            },
+                            {
+                                "name": "Proxy_Types",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Network_Spread",
+                                "type": "int"
+                            },
+                            {
+                                "name": "Client_Types",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Geographic_Concentration_City",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Geographic_Concentration_State",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Geographic_Concentration_Country",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Density_Score",
+                                "type": "real"
+                            },
+                            {
+                                "name": "Geohash",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Skew_Value",
+                                "type": "int"
+                            },
+                            {
+                                "name": "Anonymous_Tunnel",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "Tunnel_Operator",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Tunnel_Type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Entry_Nodes",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroup'), '/providers/microsoft.operationalinsights/workspaces/', parameters('workspaceName'))]",
+                            "name": "spv2ws1"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('streamName')]"
+                        ],
+                        "destinations": [
+                            "spv2ws1"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = now()\n",
+                        "outputStream": "[variables('streamName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Web/customApis",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('SpurConnectorName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "connectionParameters": {
+                    "api_key": {
+                        "type": "securestring",
+                        "uiDefinition": {
+                            "displayName": "API Key",
+                            "description": "The API Key for this api",
+                            "tooltip": "Provide your API Key",
+                            "constraints": {
+                                "tabIndex": 2,
+                                "clearText": false,
+                                "required": "true"
+                            }
+                        }
+                    }
+                },
+                "backendService": {
+                    "serviceUrl": "https://api.spur.us/"
+                },
+                "description": "Spur Context API provides hosted high-performance IP enrichment lookups of the highest-fidelity IP intelligence available. With pre-built integrations into the most common threat analysis platforms and services, Spur ensures that security teams can instantly leverage data to protect their environments from the latest evasion and obfuscation methods, such as VPNs, residential proxies, and bot automation.",
+                "displayName": "[parameters('SpurConnectorName')]",
+                "iconUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA88AAAM5CAYAAAA5QAPHAAAgAElEQVR4nOzdwXVcyZE27NCc2YuL3Ks+C5qyQJAFQ1owhAVNWADAAqItaMgC4bdAJQsEWaCafS4wFuhfIKVho1EFoFD3Rua9z3POd75pkM0bRw1UMSoj440AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABgXX6TXQAALFUp5UtEbCb643e11tuJ/mwAOjHRe8m/30NKKZuI+HLg997WWnev/YNLKV8j4sNLzx3Rf2YXAAAL9mNEfJzoz95GxO1EfzYA/fjviDg78Z+5jf97D9lExOWB37uLV77flFI+RMS3Vz53OP+RXQAALNhUjXPE6f8iBQDP+a83/N5Pk1XRAc0zAAAA+7ylIf7DZFV0wNg2AABAv/4UEX898Ot/iF9PI91GxP8c+Hd2bymglPKp1nr3it+66JNnzTMATKDd+5r8GbXWh6mfA0CelxZslVKu4tfN859qrdsTlvGHiDjYPJdSzmL/orBFMLYNANOY8r7znM8AYF3uI+KPT772mhPlp3ejr2Pg5WDP0TwDAADwLx/bqfX9d1/blFJe+sD2aYN9F4dHx4ejeQYAAOCp+yf/fLbvN7as6M33X6u13kfED6cuKpPmGQCmMce9r0XfLQMg1dMlZf994Pc+PXXetv9/Ue9TmmcAmIY7zwCMbPvknz8eWIb5NKLq0HbwYWmeAQAA+LdSysda6y5+HWn1q8VhraF++vWnI9+LoHkGAADge/86Yd4++frTE+aI5+9CP/33FkHzDADj+m12AQAs2tPx6+ciq55GVG1rrQ8T1ZNK8wwA03ju0/lTc+cZgCltn/zzh1LK2ZOvPf3nRd53jtA8AwAA8Ix273lvZFXLft48+fW7SYtKpHkGAABgn+2Tf/5+sursya89tHznRdI8A8C4FpWfCUCX/r8n/3z23f/99IrSYk+dIzTPADCVsxme4c4zAJOqtW6ffu27e89P34cWe985QvMMAADAYU9PlDct33nzwu9bFM0zAAAAhzw9Ud7Er0+d75caUfUvmmcAGFj75B8ApvT0RPkyIv7y5GvbeUrJo3kGgBNr0R1zce8ZgEm1yKrdC7/t6WKxxdE8A8DpOQ0GYGm2B37t4bnFYkujeQYAAOAlh06Wt3MVkUnzDAAAwEu2B35t8SPbEZpnAJjCZsZnnc34LABWqm3S3u755X1fX5TfZBcAAEtTSrmKx02kc7iutV7N9CwAWC0nzwAAAPACzTMAAAC8QPMMAKf32xmf9YcZnwUAq6V5BoDT+5hdAABwWppnAAAAeIHmGQAAAF6geQaAsRkRB4AZaJ4B4PTOZnzWhxmfBQCrpXkGAACAF2ieAQAA4AWaZwAYXCllk10DACyd5hkATqiUkrHAa5PwTABYFc0zAJyWBV4AsECaZwAAAHiB5hkAxue0GwAmpnkGgNPKaGQz7lkDwKpongHgtDSyALBAmmcAAAB4geYZAAAAXqB5BoDx/ZBdAAAsneYZAE4ro5G1bRsAJqZ5BoDT0sgCwAJpngEAAOAFmmcAGN8muwAAWDrNMwCcVsbY9ibhmQCwKppnADitj9kFAACnp3kGAACAF2ieAQAA4AWaZwBYgFLKWXYNALBkmmcAOJFSivvOALBQmmcAOJ2MTdsAwAw0zwAAAPACzTMALINTbwCYkOYZAJbBfWsAmJDmGQBO5yy7AABgGppnAAAAeIHmGQAAAF6geQaAZfghuwAAWDLNMwCczm8Tn23bNgBMSPMMAKdj4zUALJTmGQAAAF6geQYAAIAX/Gd2ATCaUsrVhH/8fa31bsI/H1ius+wCgOOVUj7FtFc/bmqtDxP++bB4mmd4ux8i4tNUf3gp5fe11vup/nxgUpvsAoDxlFI+RsTPMd3iv22t9WqiPxtWw9g2vN3FxH/+n0sptubCmDbZBQBDmrJxjpj+7y6wCppneKNa6y4irid8xCYivk345wMAnSilfItpx7VvTbTBaWie4Tg3ETHlvaEv7e4TwKuZWoGxlFLOIuLrhI94CKfOcDKaZzhCW7gx9ZvRz6WUzcTPAJZFzjQMon3Y9eeJH/OTJWFwOppnOFKt9TYiphyD+hCPd6CAAbSFPwCvNfU9550lYXBammd4n6lPn88mjsYCTsfINPAqpZSvMWFyR2NcG05M8wzvUGvdRsR24sdcOtECgGVo7+mXEz9mW2u9m/gZsDqaZ3i/8xmeIb4KeI1NdgHAi6Ye145w6gyT0DzDO7XoqpuJH7MJ8VXAyzbZBQD7zRBLFSGaCiajeYbTuI5po6sixFdB71yvAPaaIZYqQjQVTErzDCfQYiCuZ3iU+Crol6sVwLNmiqWKEE0Fk9I8w4nUWm8iYjfxY8RXAcB45rjnLJoKJqZ5htOaY3mY+Cpgn99lFwD80kyxVBHGtWFymmc4oZmiqyLEVwHP22QXAPyfmWKpIkRTwSw0z3B6c5w+R4ivgt78kF0A0J05xrUjnDrDLDTPcGIzRVdFiK+C3vgwC/i3mWKpIkRTwWw0zzCNOaKrIsRXAUB3ZoqlihBNBbPSPMMEWkzEXG9m4quAf9lkFwBrN2MsVYRoKpiV5hkmUmu9jYg5xqjEVwH/sskuAJjtnrNoKpiZ5hmmNdfps/gqyGcDPqzcjLFUEca1YXa/yS4Alq6U8ueY743095aGQI5Syj+za4iIqLV6b4cELZbqLzHPqfO21vrHGZ4DfMfJM0xvzk+GxVcBQI65xrUjnDpDCs0zTKxFV13P9LhNiK+CVbNAEOY3YyxVRMSNKTPIoXmGedzEPNFVEeKrYO022QXAmswYSxXx+HeJuT6QB57QPMMMZo6uihBfBbPy8wbrNHMsVUTEtWgqyKN5hpnMGF0VIb4K5rbJLgBIMec9512t9WamZwHP0DzDvOY8fRZfBQATmTmWKiLifMZnAc/QPMOMaq3biLib8ZGXLToDWA8b92Fi7b31csZHbtvfIYBEmmeY39zxEuKrYF18YAbTm3NcO8KpM3RB8wwzmzm6KkJ8FczBB1SwEjPHUkU8RlPtZnwesIfmGXLMGV0VIb4Kpua0F1Zg5liqCNFU0BXNMyRIiK6KEF8FAEdLiKWKEE0FXdE8Q5IWXbWd8ZHiqwDgeHPfcxZNBZ3RPEOuuUexxFfB8v2QXQAsTUIsVYQlYdAdzTMkarETtzM/VnwVLJvlZXBCCbFUERF3oqmgP5pnyHcd8y4PixBfBafmtBeWa+5x7Yj596IAr6B5hmQtfuKnmR+7CfFVcEo+jIIFSoilinhcErab+ZnAK2ieoQ83EbGb+ZniqwBgj4RYqojHSTRLwqBTmmfoQIuhyMhxFF8Fy7PJLgBGlxRLFRFxIZoK+qV5hk4kRFdFiK+CJdpkFwALkHHP+b79XQDolOYZ+pKxIER8FbyfO8+wEEmxVBGWhEH3NM/QkVrrfcwfXRUhvgrey88PLEBSLFWEaCoYguYZ+nMR80dXRYivAoCMce2HcOoMQ9A8Q2faopC5o6sixFcBsGJJsVQRET+JpoIx/Ca7AOB5pZR/RM7in8+11ruE58KwSin/zK7hiT8aAYXXa7FUf0l49C4ifm/DNozByTP0K2uES3wVAKuRGEsVEXGtcYZxaJ6hU+30d5vwaPFV8AaW7cHwMu45R0RsRVPBWDTP0LfzpOeKr4LXs2gPBpUYSxURcZ30XOBImmfoWFsgcpP0ePFVACxWYixVRMStvQQwHs0z9O86cqKrIsRXwaj83MLLssa1RVPBoDTP0Lm2SCRrtGsT4qtgRKZG4IDEWKqIx2gqS8JgQJpnGECt9SYe4ywyfCmlZN0HA4CTarFUX5Mev6u1XiU9G3gnzTOMI2t5WIT4KjjkLLsA4HWSY6kijGvD0DTPMIi2WOQu6fHiqwBYgqx7zhGP0VRZ7+PACWieYSyZn1iLrwJgWMmxVBG5E2TACWieYSAtuiozF1J8FYzhd9kFQE+SY6kiIm7aezgwMM0zjOcm8qKrIsRXwQg22QVAZzLHtTNTM4AT0jzDYFq8Reb49ibEV8H3fptdALBfcixVRMS1aCpYBs0zDKjWehsR28QSxFfB/3GVATqVHEsVEXHf4iaBBdA8w7iyR8DEVwHQrQ5iqSJEU8GiaJ5hUC266jaxBPFVAPQs855zRMRde68GFkLzDGO7iNzlYeKroE+b7AIgUwexVBFOnWFxNM8wsLaA5KfkMsRXQX822QVAlg5iqSIel4TtkmsATkzzDIOrtV5FxC65DPFVrJnvfehL9rj2Lh5jJYGF0TzDMmSPhm1CfBXrZfICOtFBLFWEaCpYLM0zLECt9S5yo6sixFcBkKiDWKqIiG2LkwQWSPMMy3GeXUCIrwIgQSexVBH5k2DAhDTPsBBtMUn2HSvxVdAJH2SxMtn3nCMibmut98k1ABPSPMOyXEdudFWE+CroxSa7AJhDJ7FUD+HUGRZP8wwL0haU9PDmLb4KgMl1EksVEfGTJWGwfJpnWJi2qKSHsTHxVSxeW1AE5OlhXHvXYiOBhdM8wzL1cPq8CfFVAEykk1iqiD4WdgIz0DzDAtVatxFxl11HiK8CYAKdxFJFPEZTbbOLAOaheYbluoj85WER4qsAOKGOYqkinDrDqmieYaFadNVP2XWE+CrIcpZdAEykh3vOERHX7b0WWAnNMyzbTUTssosI8VUAnEAnsVQRj5NdN9lFAPPSPMOCdRRdFSG+imXyPQ0z6SiWKiLiQjQVrI/mGRau1noXEdvsOhrxVSyN72eYTy/j2tsWCwmsjOYZ1qGX0+dNiK8C4I06iqWKiLjOLgDIoXmGFai13kc/d7PEVwHwah3FUkVE3IqmgvXSPMN6XEcf0VUR4qtgDj9kFwDv1VksVU97RIAEmmdYibbYpJdRM/FVML0e7obCe/Vyzzki4idLwmDdNM+wIrXWm4i4z66jEV/FEvw2uwBYqo5iqSIidrXWq+wigFyaZ1ifnkbOxFcxOt+/MIHOYqkiIs6zCwDyaZ5hZdqik7vsOr4jvgqAp3oa195aEgZEaJ5hrS6in+VhmxBfBUDTWSxVhFNnoNE8wwrVWncR8VN2Hd8RXwVAb7FUERHX7T0TQPMMK3YTEbvsIr4jvgpO6yy7AHiLzmKpIh4ntG6yiwD6oXmGlWpxGz0tDxNfBbBuPd1zjoi4EE0FfE/zDCtWa72LiG12Hd8RX8VoerqXCcPqLJYq4nFJ2G12EUBfNM9AT6fPEeKrGEtPp2QwpA5jqSIirrMLAPqjeYaVq7XeR393usRXAaxHb+Pat6KpgOdonoGIx0/Ye7rXtQnxVQCL12EsVW/7QICOaJ6BHpeHRYivAli0DmOpIh6jqXr6MBnoyG+yCwD6UUr5W/R3AvB7GZv0qpTyz+waXvBH46f0qF3N+Uf0Na69q7X+v+wigH45eQa+19vps/gqgGXq7Z5zRMR5dgFA3zTPwL+1E6rb5DKeEl9Fl2yFh+N0GEsVEXFnSgN4ieYZeKq35WER4qvoU2+nZtC9TmOpIvqbvAI6pHkGfqHdL/4pu45niK8CGF+P49rXdmsAr6F5Bn6l1noVEbvkMp7ahPgqgGF1GEsV8fhed5NdBDAGzTOwT4+LU8RXAQyo01iqiIgL0VTAa2megWe1xSnb5DKe83MpZZNdBAziLLsAaFdu/pxdxzO2tda77CKAcWiegUN6PH0WXwUwlh7vOUdYEga8keYZ2KstULnOruMZ4qvowSa7AOhdp7FUERE3tdb77CKAsWiegZfcRH/LwyLEV5Fvk10A9KzjWKqH6PODYaBzmmfgoLZIpde/ZIivAuhXt+PaloQBx9A8Ay+qtd5Gn8vDNiG+CqA7ncZSRUTct/c0gDfTPAOv1etiFfFVAB3pOJYqot/3MmAAmmfgVdpilZvsOvYQXwXP+112AaxLx7FUERG3LYYR4CiaZ+AtruNx0UpvxFfB8zbZBbA6vd5zfginzsA7aZ6BV2sLVnr9y4f4Kub22+wCoCcdx1JFRPxkSRjwXppn4E3aopVeszHFVzEn32vQdBxLFRGxq7VeZRcBjE/zDByj19PnCPFVABl6HdeOiDjPLgBYBs0z8GZt4cptchn7bEJ8FcBsOo6lioi4syQMOBXNM3Csi+hzeViE+CqAWXQeS9Xzng5gQJpn4Cht8cpP2XUcIL4KYEKdx1JFPC4J22UXASyH5hk4WlvAsksuYx/xVSCqimn1fM95FxE32UUAy6J5Bt6r50Us4qtYu012ASxT57FUEREXoqmAU9M8A+/SFrHcZddxgPgqprLJLgAydB5LFRGxrbX2/L4EDErzDJxCz8vDIsRXMY1NdgGQpOdx7Yi+J6KAgWmegXdrC1l6Xh62CfFVAO/WeSxVRMS1JWHAVH6TXQCwHKWUf0Tfp3GfjfJxKqWUf2bX8Bq1Vu/1nESLpfpLdh0H7CLi9+46A1Nx8gycUu95muKrAI4wQCxVxOOps8YZmIzmGTiZdqq7za7jAPFVAMfp/Z7zttZ6m10EsGyaZ+DUel/UIr6KVTFtwXsNEEsV0f/kE7AAmmfgpNqiluvsOl4gvoo12WQXwLgGiKWKiLiptd5nFwEsn+YZmMJNPC5u6Zn4Ko7me4cV6X1c+yH6/8AWWAjNM3BybWFL7yN0mxBfxfFMLrB4A8RSRURcWBIGzEXzDExigOVhERFfSim93+MDmF2LpfqaXccLLAkDZqV5BqbU+/KwCPFVAL8wSCxVRP8TTsDCaJ6ByQyyPEx8FcAv9X7POcKSMCCB5hmY2k08LnTpmfgqgBgmlsqSMCCF5hmY1CDLwyLEVwErN0gsVUTEtSVhQAbNMzC5ttBlm1zGa4ivYol8KMRrjTCufV9rvckuAlgnzTMwlxFOnzchvorl6b0ZogODxFJFjPFeAiyU5hmYRVvsMsJpgfgqXmOEJgNeZZBYqoiI21rrNrsIYL00z8CcrqP/5WER4qt4mdNcFmGgWKpR9mcAC6Z5BmYz0PIw8VXAWoxwzznCkjCgA5pnYFYDLQ8TXwUs2iCxVBGWhAGd0DwDGUY4fY4QXwUs1ECxVBHjvGcAC6d5BmY30PKwCPFVwDKNMq5tSRjQDc0zkGWU5WGbEF8FLMhAsVSj7MkAVkLzDKQYaHlYhPgqxvZDdgH0Y6BYqghLwoDOaJ6BNAMtD4sQX8W4RhjNZQYDxVJFWBIGdEjzDGQb5fRZfBXfc5rLiEa55xwxznsDsCKaZyDVYMvDxFfxL6M0IBARQ8VSRVgSBnRK8wz0YJTlYRHiq4DBDBZLNdI+DGBlNM9AusGWh0WIrwLGMtK4tiVhQLc0z0AXBlsetgnxVcAABoqlirAkDOic5hnoyUinz+KrgK4NFksVMdZ7ALBCmmegG4MtD4sQXwV0arBYqghLwoABaJ6B3oy0PEx8FdCrke45j7b3AlgpzTPQlQGXh4mvondn2QUwr8FiqSIsCQMGoXkGujPY8rAI8VVAJwaLpYqwJAwYiOYZ6NVIp88R4qvW5iy7ANhjpHHtiPFe64EV0zwDXRpwedgmxFcBiQaLpYqIuLEkDBiJ5hno2XVE7LKLeAPxVUCKAWOpHuLxNR5gGJpnoFsDLg+LEF8FzGzAWKqIiAtLwoDRaJ6BrtVa72Ks5WHiq4C5jXbPedsWQwIMRfMMjOA8u4A3El8FzGLAWKqI8SaKACJC8wwMoNa6i/HuxomvAiY1YCxVxOOSsPvsIgCOoXkGRnETYy0PixBfBUxrtHFtS8KAoWmegSEMujxsE+Kr6IAPcZZnwFiqiIhzS8KAkWmegWG05WF32XW8kfgqejBak8UBA8ZSRTwuCRvt9RvgFzTPwGgu4nH0byTiqxbEXXYyDRpLFTHe4keAX9E8A0Npy8N+yq7jjcRXLYsRaDKNds85IuK6vXYDDE3zDAyn1noV4y0PE18FvMugsVS7eFz4CDA8zTMwqhFHAMVXAUcZNJYqIuLCkjBgKTTPwJBqrdsYb3lYhPgq4DgjjmvfWRIGLInmGRjZeYy3PGwT4quANxg0lmrEeEGAgzTPwLDaKOB1dh1HEF8FvMqgsVQRET9ZEgYsjeYZGFqt9SYi7rPrOIL4KuCggWOpdm2xI8CiaJ6BJRhxeZj4KuAlI95zjhjzNRngRZpnYHi11vsYMwpFfBXwrEFjqSIibttCR4DF0TwDS3Ed4y0PixBfxTx8jw1k4FgqS8KARdM8A4vQloeNOioovmosI/63GrHmNRt1XPtapjOwZJpnYDFanug2u44jbEJ81Uic4jKZQWOpIiK2bYEjwGJpnoGlGfX0WXwVrNzAsVQRxrWBFdA8A4vSckVHzH6OEF8FqzVwLFVExE1b3AiwaJpnYHFavuguuYxjiK+C9Rr1nvMuxv3AEuBNNM/AUo06vi2+ClZm4FiqiIgLS8KAtdA8A4vUckbvsus4kvgqWImBY6kiIu7aokaAVdA8A0t2HmNmP0eIr4K1GHVcW6YzsDqaZ2Cx2ijhqHfxNiG+ChZt4FiqiMdM5112EQBz0jwDi9ZyR7fZdRxJfBUs1OCxVPcynYE10jwDazDyaKH4KliYwWOpIsZ+TQU4muYZWLyWPzrq+Lb4KlieUe85RzxmOm+ziwDIoHkG1uImxsx+jhBfxfv9kF0AjwaPpRp5jwTAu2megVVoy8NGzX6OEF/Vk99lF3CEUU85F2XwWKqIiHOZzsCaaZ6B1Rg8+zlCfFUvNtkFMKyRx7W3Mp2BtdM8A2szcvbzJsRXwZAGj6UafXIH4CQ0z8CqDJ79HCG+CoYzeCxVRMRPMp0BNM/ACg2e/RwhvgqGsYBYqvta61V2EQA90DwDazVyTqn4KhjHyPecI4xrA/yb5hlYpcGznyPEV0H3Bo+linjMdL7PLgKgF5pnYLXaKOIuuYz3EF8FnVpALNUuxv6AEeDkNM/A2o0+kii+Cvo0+rj2hUxngF/SPAOr1rKfb5PLeI9NiK+CrgweSxURcSfTGeDXNM8Aj8vDRj5hEV8FnVhALJVMZ4A9NM/A6rXRxNH/sii+CpItIJYqIuLauDbA8zTPABHRRhRHHlMUXwX5Rr/nvK213mQXAdArzTPA/xl9fFt8FSRZQCzVEiZwACaleQZoaq27GD+aRXwVz/E9MaEFxFJFRPzUXgMB2EPzDPCdNrK4za7jncRXTWvERtT3w7RGH9e+b7n3ABygeQb4tYvsAt5pE+KrpjRyk8SJLSCWKsK4NsCraJ4Bnqi13sf449viq2BiC4ilinjcrn2fXQTACH6TXQBAr0opf4uxT5QeIuL37jGeVinln9k1HKPW6j3/hNrViH/E2JMIu3h8jRh5USLAbJw8A+w3+iij+CqYzuj3nCMizjXOAK+neQbYYyHj2+Kr4MQWEEsVEXFTa91mFwEwEs0zwGE38TjaODLxVXAiC4ml2sX4HwwCzE7zDHBAG2kcfXw7QnwVnIpxbYCV0jwDvKCNNt5k1/FOmxBfBe+ykFiqW+PaAMfRPAO8znWMP74tvgqOtJBYqocYP8ceII3mGeAVFjS+/XMpZZNdBIykXXn4c3YdJ2BcG+AdNM8Ar7SQ8W3xVfB2S7jnfFdrvcsuAmBkmmeAt1nC+Lb4KnilhcRSLWVyBiCV5hngDRY0vi2+Cl6wkFiqCOPaACeheQZ4o4WMb0eIr4KXGNcG4N80zwDHWcL49ibEV8GzFhJLtYtlTMoAdEHzDHCEBY1vi6+CJxYSSxVhXBvgpDTPAEda0Pi2+CpoFhRLddNeowA4Ec0zwDvUWi8i4j67jncSX/VKI3/IYEHcqy3hnvMuHq+WAHBCmmeA91vC+Lb4qtfZZBfwDqM3hJNbSCxVhHFtgElongHeqdZ6H8s45RFfxWotKJbq2rg2wDQ0zwAnUGu9iohtchmnIL6KtVrCuPZ9ey0CYAKaZ4DTOY+I0UclNyG+ipVZSCzVUhIAALqleQY4kVrrLiIusus4AfFVrMaCYqmu2xUSACaieQY4oVrrbUTcJpdxCuKrWLwFxVLd1VqXEJsH0DXNM8DpXcRjVMzIxFexBku457wL49oAs9A8A5xYi4j5nF3HCYivYrHEUgHwVppngAm0u4dLuP8svorFEUsFwDE0zwATaXcQ77LrOAHxVSzNEsa1t2KpAOaleQaY1nlEjL4BdxPiq1iIhcRS7WIZV0MAhqJ5BphQu4u4hPxn8VUMbyGxVA8R8dk9Z4D5aZ4BJtbuPy9hG674Koa1oFiqC3nOADk0zwAzqLXeRcR1dh3vJL6KkS3hnvNNy5IHIIHmGWAmbbnPbXIZ7yW+iuEsJJbqtta6hA3+AMPSPAPMqNZ6HuM30OKrGMZCYqnu2msHAIk0zwDz+1N2AScgvopRLGFc+6fsAgDQPANwnE2Ir6JzC4mlAqATmmcAjiW+im4tJJYKgI5ongF4D/FVdGdBsVQAdETzDMB7iK+iR0u45wxAZzTPALyX+Cq6sZBYKgA6pHkG4BTEV5GuXSEYPZYKgE5pngE4Fdu3yWZcG4DJaJ4BOJWzNjILsyulfImIs+QyAFgwzTMAp3TZNh3DbNr3nMkHACaleQbglDQxZLgM49oATEzzDMCpfSmlnGUXMRFL0TrTloS5LgDA5DTPAExhqRuPnW72R844ALPQPAMwhbMFnz6P6iy7gFNr32NnyWUAsBKaZwCm4kSQqS11wgGADmmeAZjKpsUHwck5dQZgbppnAKbkZJw9pJ4AACAASURBVJCp+N4CYFb/mV0AQLZX3M39GC8vivptvH4T85qWTm1KKWe11m12ISzHCk+dv5VSHl75e+8j4n9f+D0P7fcd/HNqra99JsAqaJ6BbrzQxB5qYH8XEZsD/+6hP5fpXUbENrsIFuXH7AJm9paItLNTPbSUcuiXtwd+bRcR/7Pn1w427j5oA3qmeQb2avmpmz2/fKiZ/cOBP/bs+IoY1FkpZVNr3WUXwvja69Kn7DqY5rX8HQ37X/d8/VCzvvO6BLyF5hkGVErZ17h+iP0nFD8c8e/AqfwYERfZRbAIX7ILIM3Zkb+214Fm/T4eG++nHiLi73v+nV37f7/iRB2WQfMMJ3TgpFZTy9p9Cc0zp/Hf2QWwCofef988+XCgSd/F8w33oSZ9X2PvJB0mpnlmNQ6c1m7i+Yb30AKos5MUBevxoZTyqdZ6l10I4yqlfIrD+w1gNJvY/z19yiZ9u+fr+xbM7cIpOvyK5pkuaGxhFf4rIjTPvMd/ZRcAgzp749f3OmLU/a0N+kOt9aVt8JBC88yLSin7xocPjRXvWxh1doqagCF9iojz7CIYmkVh0K+THWoccYK+b2Hc3oZeFBvH0DwvwIFT231f3xfrs9nzdYBTMLrN0VqU3Zoy0oFfO3vj1/fa06Dv4vnT8F08H7+2b5u70/OF0jzP4Ijmdt8CqUPRQAAj+EMY3eY4RraBqW3iRAdJe5rzvc12PL8gTnPeGc1zaG4BZnSWXQDDOssuAOCdPsT+17I3XUt5Y3Me8fxou+b8jYZong/E/+z7uuYWoE8fSykf3DXjCKL7AA471Jzv+/qzJj45HzZWbYjmOR7zQS+ziwDgJD7G/qUv8CvtvjMAuU51cn4dEVfvLSbDf2QXAMDqnGUXwHCcOgOQTvMMwNx+l10Aw/E9A0A6zTMAc9tkF8BwnDwDkE7zDMDcNEK81Sa7AADQPAMwN6kHvNUmuwAA0DwDAADACzTPAMyulGJ0GwAYiuYZgAxGtwGAoWieAQAA4AWaZwAyPGQXAADwFppnAGZXa73PrgEA4C00zwAAAPACzTMA0LtddgEAoHkGYG7b7AIYzi67AADQPAMwN8vCeKtddgEAoHkGYG5/zy6A4fieASCd5hmAuW2zC2A4trMDkE7zDMDcNEK8Sa11m10DAGieAZjTfa3VnWeOsc0uAIB10zwDMKdtdgEM66/ZBQCwbppnAOakAeJYd9kFALBummcA5vJQa9UAcZRa632IrAIg0X9mF/BK2yf//LuI2Dzz+zZ7vg5APo0z73UXEV+ziwDgWbt4/kPOXUT8z3f/vJ2+lGkM0Ty3LZvbY//9Usom3tZs/xARH575+sc9XwfgZX/KLoDh/Sk0zwDHeojnEy8eIuLvb/j9u1rr7oR1DWOI5vm92n/c3VR/fillX1O97+uac2BtduKGeK9a630pZRemzIBlOlVz+9CuunBiq2iep3bgm3N7ij//iJNzY+1Ab5w6cyo/RcS37CKAVdrF68aSX/r9mttBaZ4HMMPJ+Yd4PPV+at/Xf7vn6xERZycqC1iWm+wCWIzbiLgMk1rAr233fP0+Iv53z9cfnvt6rfW5r7NymmeivThs9/zySRb8HDHavu/0fF9DD/Tr1l9COJVa60Mp5TbcfYbR7GtUd/H8qa2RZLqjeWYWU4+2R0SUUs72/JIGHXJdZxfA4vwUmmc4pVM1tmG/BUumeWYxDrxY7/v6mx1o0DfxfCN+aMTdgjjW4HatGzmZTq11106fvySXAlPb26TG/lHkXey57qexhffRPMMbzPGmc2BBXMT+O+X7TtEjNOnkcurMVK5D80yeQ03tLp4/rY3Y/4H+aqN/YCSaZ+jMCwvitqd6zoFFcRGHN7P/4cAfe3Z8RSyQU2cm4/SZPbZ7vr4v6ifiwEltWBwFfEfzDCv1wqK4k3qhUT/0a4fG3iM06z17CKfOTO8iIj6F6ZpeHTqdjYj464Ff23cHN0JDCyTRPAOTe0WjfpKt7t97Yfw94uVx9kOj8P/y0jPW7Cenzkytbd7+KR6jq/i1Qw3ov+xi/4hxxMsNsHFjYDU0z8AivSIffTtLIc9oi+f+kvX8GexCrjMzqbVelVL+O5b9QdYfLXoCyPcf2QUAsDgXRiqZ2Xl2AQAsn+YZgFPa1lpPPoYPh7RTWd93AExK8wzAqTyEE0DyXMTL93sB4GiaZwBOxZKwvu2yC5hS+96z4R2AyWieATiF+1rrVXYRHLTLLmBqtdabSFwGCMCyaZ4BeK81jWsfiuyhD+dhfBuACWieAXiv61rrWppKTVnn2vj2RXYdACyP5hmA99i2UVnoRq31NmzfBuDENM8AHOshIj5nFwF7GN8G4KQ0zwAc67zWqjmhS+1704c7AJyM5hmAY9zWWo3F0rVa6zYiXCsA4CQ0zwC81S4sZGIc17GCmC4Apqd5BuCtjGszDOPbAJyK5hmAt7huo7AwjBaldp1dBwBj0zwD8Fr3tdar7CLgGO17dy155ABMQPMMwGudZxcA7/Q5xFcBcCTNM8D8/iu7gCNctNFXGFatdRdjjm9/zC4AAM0zwGxKKR9LKX+LiK/ZtbzRttYq7odFaN/Lo8WsfSulfMkuAmDtNM8AMyilfIyIv8R4J0gPYVyb5TmP8ca3fy6lnGUXAbBmmmeAibUTo79FxIfkUo5x3kZdYTFafNWIHwr9uX0QB0ACzTPAhFrj/HN2HUe6q7WONt4Kr9K+t0e7jvAhHk+gR/wgDmB4mmeAibQTom/ZdRxpF2OezMFbXMfj9/pIPsa4H8gBDE3zDDCB7+44j3pCdN5GW2GxBh7f/lRKucouAmBtNM8AJ9ZGKkdunG9qrdvsImAO7Xt9xPiqSwvEAOaleQY4oQU0zve11ovsImBOtdariBgxx/zP7j8DzEfzDHBa32K8OKrvjTjCCqcwYnzVh4j4c3YRAGuheQY4kXYH8UtyGe9xXWsd8fQN3q197484vn1WSvmaXQTAGmieAU6glPIpIi6z63iHbRtdhdWqtd5ExDa7jiN8k/8MMD3NM8A7lVI2MXZ0zKgbh2EKn2O88e0I+c8Ak9M8A7xD+8vqn2PcBWERERe11l12EdCDgeOrPsbY0y8A3dM8A7zP6AvC7mqtt9lFQE9qrXcRcZtdxxG+tiskAExA8wxwpFLKlxh7QdioJ2wwh4uI2GUXcQTj2wAT0TwDHKHdc/6WXcc7fW4jqsATA49vf4ixdzAAdEvzDHCc0e8539Rat9lFjGbk/81Grj1L+9/sJruOI3xqkzEAnJDmGeCNSimj33MeNc8WZldrvYjHn5nRfGsTMgCciOYZ4A1KKWcR8TW7jnc6N64Nb2J8GwDNM8BrfRdLNbLrWuuIp2iQpv3MXGTXcYSzUsroH/YBdEPzDPB6P8fY95zva61X2UXAiGqtNxGxza7jCJfGtwFOQ/MM8Art9Gbk/NSHiPicXQQM7jwef5ZGYnwb4EQ0zwAvaKc2l9l1vNN1rXWXXQSMrP0MjXj/2fg2wAlongFeNnos1V0bOQXeqdZ6FxF32XUcwfg2wDtpngEOKKVcxdixVA8x5kkZ9Ow8InbZRbyR8W2Ad9I8A+xRSvkY449ri6WCE2s/UyN+KGV8G+AdNM8Az2ixVKOf0ty0EVPgxGqt24gY8TqE8W2AI2meAZ53GWOPa+8i4jq7CFi464gYLTd9CR8MAqTQPAM8UUo5i4jRRxs/G9eGaQ0+vv0luwiA0WieAb6zkHHt61rraKdhMKT2szbilMe39noHwCtpngF+6TIiNtlFvMN9rfUquwhYk/Yzt00u462W8EEhwKw0zwDNAsa1Rx0hhSU4j8efwZF8KqV8yi4CYBSaZ4Awrg28T611FxEX2XUc4Wfj2wCvo3kGeDT6uPa21jpibA4sRq31NiJGi4f7EBHfsosAGIHmGVi9hYxrf84uYkWc7nPIiOPbX9rrIAAHaJ6BVVvIuPa5WKpZjfi/9Ta7gLVoP4sjfphlfBvgBZpnYO2+xtjj2re11tHGRGHRaq3biBjtGsUmxp7AAZic5hlYrVLKx3i86zyqXYy5oAjW4Doef0ZHctleFwF4huYZWDPj2sAkRh7fzi4AoFeaZ2CVSilXETHyCct1Gw0FOtWi466z63ijj6UU49sAz9A8A6uzgHHt+1rrVXYRwMvaz+poG9ovSymb7CIAeqN5BtZo9EzT8+wCgDf5HGNtaV9CCgHAyWmegVVp44hn2XW8w0UbBQUGUWvdxXjj22ellE/ZRQD0RPMMrEYbQxx5XHtbax0t/gaIiPazO1qsnOxngO9onoE1+RaP44gjegjj2jC68xhvfHv0ay4AJ6N5BlahjR+OPIJ43kY/gUG1+KrRPgT7Uko5yy4CoAeaZ2Dx2tjhyMtv7mqto417As9oP8ujXb8Y+fUT4GQ0z8AaXMa449q7GO+kCjjsOh5/tkexKaVcZRcBkE3zDCxaGzf8ml3HO5y3UU9gIQYd35b9DKye5hlYupHHDW9qrdvsIviVv2YXwPjaz/Zo8VUjv54CvJvmGVisNma4SS7jWPe11ovsIlgMDX+Haq1XETFSbvtZKeVLdhEAWTTPwCItINN5tJFO4DijxVd9k/0MrJXmGViqkccLr2utI51GAUdqP+sjjW/LfgZWS/MMLE4bKzxLLuNY2zbKCaxErfUmIrbZdbyB7GdglTTPwKK0ccJRT0VG3MALnMbnGGt8e+TpHoCjaJ6BpfkW42Y6X9Rad9lFAPMbML5K9jOwOppnYDHaGOGX5DKOdVdrvc0uAshTa72LiNvsOt5A9jOwKppnYElGHSMc7cQJmM5FROyyi3iDUV93Ad5M8wwswuCZzp/byCawcgOOb5+VUj5lFwEwB80zMLw2Nvhjdh1Huqm1brOLAPrRXhNusut4g59lPwNroHkGluDnGHNJ2Gj5rsBMaq0X8fgaMYIPEXGZXQTA1DTPwNDauOBZdh1HOjeuPST/zZjLSOPbX0spH7OLAJiS5hkY1uCZzte11lFOlfgl/92YRXuNuMiu4w0sDwMWTfMMjOwyxlwSdl9rvcouglXZZhfAcWqtNzHOf7+PpZSv2UUATEXzDAypjQeO+Je0h4j4nF0EMJTzGOe6wKXlYcBSaZ6BUY08rr3LLgIYR3vNGOX+84cwvg0slOYZGE4p5UuMuSTsro1gArxJrfUuIu6y63ilT6WUs+wiAE5N8wwMZeAlYQ8xzskR0KfziNhlF/FKTp+BxdE8A6P5FmNmOoulAt6lvYaM8iHcppRylV0EwClpnoFhtDHAL8llHOOmjVwCvEutdRsRo1z/uCylbLKLADgVzTMwkhHHtXcRcZ1dBLAo1zFO3rjxbWAxNM/AEFp26MfsOo7w2bg2cEqDjW+flVI+ZRcBcAqaZ6B7bUnYZXYdR7iutY5yOgQMpL22jDLV8k32M7AEmmdgBCMuCbuvtV5lF8EkfCBCF9przDa5jNfYRMTX7CIA3kvzDHRt0CVhI41U8kaDjuGPWDOvcx5j/Pe9LKWMePUG4N80z0DvRlwSZlybrvh+XK5a6y4iLrLreKURX88B/k3zDHRr0CVh21rrKDEywALUWm8jYoQ4vLNSypfsIgCOpXkGujTokrCHiPicXQSwSqOMb1seBgxL8wz0asQlYeeD3ocFBtdee0b48G7ED0YBIkLzDHRo0CVht7XWEcYmgYWqtW4jYoRrI18tDwNGpHkGejTaUpldjLOwB1i263h8TerdaK/zAJpnoC+DLgkzrg10YaDx7bP2eg8wDM0z0I1Bl4Rdt1FJgC60aLLr7Dpe4dLyMGAkmmegJ6MtCbuvtV5lF0GKXXYBcEh7beo93/tDGN8GBqJ5Brow6JKw8+wCSLPLLgBe4XP0H1/1pb3+A3RP8wz0YrTTh4s2Ggm98326UrXWXYwxvj3a6z+wUppnIN2AS8K2tdYR4mAgov+TRybUXqt6j9H7aHkYMALNM5BqwCVhD2FcGxjLefT/IYrlYUD3NM9AttGWhJ23UUiAIbT4qt4/9LM8DOie5hlIM+CSsLtaa+/jjwC/0l67er9uYnkY0DXNM5BppHHtXfR/cgNwyHX0vyne6TPQLc0zkKKU8iUizpLLeIvzNvoIMKRBxrctDwO6pXkGZteWwox0unBTa91mFwHwXu21rPf4KsvDgC5pnoEMlzHOkrD7WutFdhF0R3Yyw6q1XkXf38OjfcAKrITmGZhVKWUTESON5PU+4kiO/80uAN6p9/gqy8OA7miegbn9nF3AG1zXWns+nYHX+Gt2AfSnvbb1Pr7t9BnoiuYZmE0p5VOMsyRs20YbARap1noTEdvsOg6wPAzoiuYZmMVgS8JG2EgLcAqfo+/xbcvDgG5onoG5fI2ITXYRr3RRa91lFwEwtQHiq0b64BVYOM0zMLm2JOzH7Dpe6a7WeptdBMBcaq13EXGbXccBlocBXdA8A3P4FmNEU/V+AgMwlYuI2GUXcYDTZyCd5hmYVDst+JRdxyt9biOMAKsywPi25WFAOs0zMLVRoqluaq3b7CIYhggzFqe9Bt5k13GA5WFAKs0zMJl2SrDJruMVRsg7pS8mFFikWutF9PvhkOVhQCrNMzCJdjpwmV3HK50b12bBttkFMJyex7ctDwPSaJ6BqYyyJOy61trrKQvA7Npr4kV2HQc4fQZSaJ6BkyulfIyIL9l1vMJ9rfUquwiA3tRab6LfqYWPpZQv2UUA66N5BqYwwqnAQ0R8zi4CoGPn0e/9/m+WhwFz0zwDJ9VOA86Sy3iN61rrLrsIgF6118he7z+PtFcDWAjNM3AyAy0Ju2sjiQAcUGu9i4i77Dr2+NquCQHMQvMMnNII0VQP0e9JCuPodZQVpnAeEbvsIvYY4ZoQsBCaZ+AkSimbiPgxu45XEEvFu9nQzpq018xeP3Q8szwMmIvmGTiVEaKpbtoIIqyJD4t4t1rrNiJ6ve5ieRgwC80z8G6llLOI+JRdxwt2EXGdXQTMzSk5J3QdET1+P42ybwMYnOYZOIUR7px9Nq4NcLzOx7ctDwMmp3kG3qXdNev9LyzXTt8A3q+9lvY6xTPCB7nAwH6TXQAwrnbH7B/R913n+1rr77OLYHlKKf/MruE1aq3e6zm5UspfIuIsu45nfLbbApiKk2fgPS6j78a55xFDgJGdR5/L6CwPAyajeQaO0qKpvmbX8QLj2kypx8YBZlFr3UXERXYdz9hE/+9NwKA0z8Cxfs4u4AXbWmuvsSosgw9mWLVa621E9Dgifdk+4AU4Kc0z8GYtmuosuYxDHiLic3YR0AGn40yt1/Ht3j/gBQakeQaO0ftfSs7FUkFEOB1nYu21tscPK89KKZ+yiwCWRfMMvEkp5Ws83inr1a1NqwDzqbVuI6LHazKiq4CT0jwDr9Y2mF5m13HALvpcYAOwdNfR36TDppRylV0EsByaZ+AtvkXf0VTGtQEStNfeHqMBf7Q8DDgVzTPwKqWUjxHxJbuOA67b6CAACVo04HV2HU98COPbwIlonoHX6vkvH/e11qvsIlidXXYB0Jv2Wtzb+PanlhIB8C6aZ+BFbWPpWXYde/Q6Ksjy/U92AdCpz9FffFXvKRHAADTPwGv0fOp83UYFgV/rrYFhBWqtu+hvfHvT0iIAjqZ5Bg5qm0o3yWXss6219hiPAr34e3YBrFN7be4tNvCypUYAHEXzDOzV/pLxY3YdexjXBujbefQ1/WB5GPAummfgkJ6jqc7baCAAHeo0vuqL5WHAsTTPwLM6j6a6q7X2Ng4IwBPttbq36zWX2QUAY9I8A/v0Otq2i/5OMgDY7zr6inY7K6V8yS4CGI/mGfiVzqOpztsoIGTbZhcAI2iv2Z+z63jim+VhwFtpnoHn9HrqfFNr3WYXAcDbtEjBnuKrPoTxbeCNNM/AL3QcTXVfa73ILgIGIwOdbtRar6Kv78mvpZRNdhHAODTPwL91Hk3lnjO8nSsO9Ka3+KqfswsAxqF5Br7XazTVRRv5A2BgHY5vn7U9HwAv0jwDEdF1NNW21tpbzAkAR2qv6dvsOr5jeRjwKppn4F96XBL2EMa1AZboc/Qzvr2JiK/ZRQD90zwDPUdTXdRad9lFwB6uEsCRWnxVTx+O/mh5GPASzTMQ0eep812t9Ta7CNhH3ji8T631LiJus+toPkSf74VARzTPsHKllK/RXzRVbycSMCqn4/TuIiJ22UU0n0opZ9lFAP3SPMOKtQUpl9l1POOzUz14Pz9H9K7D8W2nz8BemmdYt8voL5rqpta6zS4CgHm01/xe4qs+toksgF/5TXYBQI62GOUf2XU8cR8Rf3RaxihKKf/MruGQWqv3eYZRSvlbRHzMriMerw79P+9FwFNOnmG9fs4u4Bnn/rICsFq9jG9bHgY8S/MMK9QWopwll/HUda3VciNGs80uAJaivQdcZNfRfCml9HAKDnRE8wzr1Nup87bWepVdBAC5aq030c+HUk6fgV/QPMPKlFK+RF/RVL1tWoWlMMnBqM7j8b0h21l7zwSICM0zrEqLpurtk/TrWusuuwhYoB6aD3iz9p7Qy4eql+29E0DzDCvzNfqKprprI3oA8G+11ruIuMuuIx4ntURXARGheYbVaNFUl9l1fMe4NgCHnEfELruIeDx93mQXAeTTPMN69DauLZaKJfA9DBNp7xG9fMja23sokEDzDCvQoqk+ZdfxnZs2kgej+3t2AbBktdZtRPRwvedTey8FVkzzDOvQ07j2LiKus4sAYAy11ovoY3t8bzGPwMw0z7BwLWbjLLmM7302rg2z+Gt2AXBCPYxvb0oplofBimmeYcFavEZPp87XtdYeTg8AGEh77+hhakl0FayY5hmW7Ws8xmz04L7WepVdBABjau8h2+QyPoTlYbBammdYqPbJ+I/ZdTQPEfE5uwgAhnce+Vvuv5RSPibXACTQPMNyfYvHT8h7cF1r3WUXARNwDQFm1N5LLrLrCKfPsEqaZ1ig9on4l+w6mm2ttYeYEZhC9gkYrE6t9TYisuMOz9pCTmBFNM+wTL18Im5cG/I4FWfJehjftjwMVkbzDAtTSjmLfqKpzsVSQRo/eyxWe2/J/nB2E4+LOYGV0DzD8vycXUBzW2vNHqsDYKFqrduIyL4WdFlK2STXAMxE8wwL0u5fbZLLiIjYRR8LXQBYtuvIv6LQy1UpYGKaZ1iIdu+qlzdw49qsxS67AFiz9l5znlzGp3ZlClg4zTMsx9foI5rquo3SweKJYIN8tdb7eDyBztTLlSlgQppnWIB23+oyu46IuK+1XmUXAUSEhWGsSHvvyRzf3pRSLA+DhdM8wzL00Dj3MDoHNO00Dtbkc+R+aCS6ChZO8wyDa/esviSXEfE4ru0v6wCkaNcoMse3P0QfH2YDE9E8w/h6eKPe1lqz40IAWLn2XpQZk/i1lPIx8fnAhDTPMLBSyqeIOEsuw7g2a+duMfTlPHJ/LntJvgBOTPMMY+vhDfrcxmFWznUF6EgH8VVn7cNtYGE0zzCottVzk1zGXa01czwOeJ7TcFatvTdlXif6ZnkYLI/mGQbU3pCz7zrvwrg29MppODwuD9slPXsTEaKrYGE0zzCmy3jc6pnpvI3GAUB32nvU58QSfiylbBKfD5yY5hkG096Isz/Nvqm1bpNrAICDWoRiVnxVD1NiwAlpnmE82UvC7mutF8k1QE922QUA+9VaryLvKsOXUspZ0rOBE9M8w0DaG3D2Bk/3nOGX/ie7AOBFmfFV2R96AyeieYaxZI9/XbQROKBv9hHAd5LHtz+WUr4kPRs4Ic0zDKK98Z4llrCttWbGfgCv9/fsAqA37T1sm/R40VWwAJpnGEfmqfNDGNcGYHyfI2cy40PkL/sE3knzDAMopVzFY2Zklota6y7x+QDwbi2+KuvD4EvRVTA2zTN0ro15/ZhYwl2t9Tbx+dC7XXYBwOvVWu8i4jbp8T8nPRc4Ac0z9O8yHse9MhjXhpftsgsA3uwicn52z0RXwbg0z9CxNt6VeUfqcxtxA8ayyy4AepY8vu30GQaleYa+ZWZD3tRat4nPB463yy4Aetfe4zLiqzalFMvDYECaZ+hUG+v6lPT4zDxMAJhFrfUqHt/z5nYpugrGo3mGfmVGU50b1wZgJTLGtz9E7vs8cATNM3SolPIlIs6SHn9da834FB5G5ecFBtbe8y4SHv21lPIx4bnAkTTP0KesT6O3bYQNeCVTGjC+WutNRGwTHp252wR4I80zdKaUchURm4RHi6WC5XAaDm93Ho/vhXM6K6Vk7TcB3kjzDB1py0N+THr8da11l/Rs4ISchsPbtffAjA+RnT7DIDTP0Jev8bhEZG53bWQNAFar1noXEXczP3bTps6AzmmeoROllE3k3HU2rg3v56QXluM85s9K/1F0FfRP8wz9yFoSJpYK3s8dY1iI9p4494fKH8L4NnRP8wwdKKWcRcSXhEfftBE1YDl8GAbvVGvdRsTc15m+tL8PAJ3SPEMfMk6ddxFxnfBcYFpOweEEaq0XMf/PU9YUGvAKmmdI1iIqzhIe/dm4NgAcNPf49lkp5cvMzwReSfMM+TLuOF3XWp1OAcAB7b1y7imtS8vDoE+aZ0jUPl3ezPzY+1rr1czPhKXzYRQsVHvP3M74yE08RlcCndE8Q5L2qfLcp84PEfF55mfCGvxvdgHApM5j3mV8P7YIS6AjmmfI8zUeoynmdF1r3c38TGBeTsHhxNp758WMj/wQlodBdzTPkKB9mvzjzI/d1lrnjt0A5ucUHCZQa72NiDnjHUVXQWc0z5DjMuY9dTauDQDvN/f4dsZSUWAPzTPMrJ06f5n5sediqWBSu+wCgOm199I5P4z+KLoK+qF5hvn9PPPzbmutc46ZwRrtsgsA5lFr3UbEnNegvomugj5onmFG7e7S2YyP3MW8C06AfLvsAmAF/v/27qc6jiOIA3D7vQDwYQAIgsLAECIGFgJbCCwhsBnEXN63uQAABvNJREFUDCIG2TBYM5jc62AjcA6ag5OXZPSnq3p35vsAqPrW+m3XVN21uuF8r5vVVXAShGeoVf3tknZt2J959AFg65a79bqw5Aerq2A84RmKLN8sXRaWvFtaywCAziLi2B5eoKsYHgaDCc9Qp3Jf4zEibgvrwd7p8IAdWu7aqvbtX6yugrGEZygwTdNta+2iqFx1Kxns3vICBezTVav7Ac3rMwwkPEOyZULmu8KSd/6Rh13zCg6FImJude3bVlfBQMIz5HvfHiZlVjhEROX6DODE+PEM6i13b9VaSKurYBDhGRItkzGrvnXWrg0A41y3ms4Pq6tgEOEZclUOCbteWscAgGLF66usroIBhGdIskzEfFtU7j4iqtrFgH93GH0AYKzlLq76fMrwMCgmPEOeqlfnuWnXBh4YFgbj3bWHuzmb1VVQTHiGBMtl9qao3PXSKgZgWBgMttzJV0Xlfi2qAzThGbJUXWafIuJQVAsAeIRl6n3F+qqLaZoMD4MiwjN0tuxfvCgodYyIm4I6AMATRcRtq+kG+WB1FdQQnqGj5fKq+tbZd85wWv4YfQDg5FSsr6r83wN2TXiGvt63mlfnm6UlDOBH5h/ACSls335vdRXkE56hk+XV+V1BqUNEVK3BAM7Ll9EHAP5uubMPBaUMD4NkwjP086E9tE5l+tq0awPAublq+Z0hb6yuglzCM3SwtEpVTLu8iYi5oA4A0Mmyvqrix2+vz5BIeIY+KgZ13EfE54I6wPMcRh8AOF0Rcd9a+5xcxuoqSCQ8wwtN03TZWnubXEa7NvAYBobBabtprc3JNayugiTCM7zcx4IaV0vLF8D/MYUfTlhR+7bVVZBEeIYXWAZzvEku8ykiDsk1AIACy52evb7K6ipIIDzDy2S/OlfthwQAikTEbcvvFDE8DDoTnuGZpml621q7TC5zrV0bzoMOEeCJstu3ra6CzoRneL7s74nuIsL3i8BTzKMPADzOcsffJJepmMsCuyE8wzNM03TbWrtILHFYWroAHs0eeDgvEfGp5a65u1w65YAOhGd4omX9w7vEEtZSAcB+XLfcNXMfra6CPoRneLr37WENRJY7r0cAsA/LnZ/5o/nr9vC/C/BCr0YfAM7NNE2/tbzwfIyI7O+fgCTTNP3e8tfX/aeIcK/DmZqm6WPLHUR6ZQgpvIxLFgA6GRyejxHx86DaALB52rYBYBu8KAFAIuEZAAAAVgjPANCP118A2CjhGQD6+TL6AABADuEZALbhj9EHAIAtE54BAABghfAMAAAAK4RnAOjnOPoAAEAO4RkA+hk5bdukbwBIJDwDwDZ49QaARMIzAAAArBCeAQAAYIXwDACdRMRh9BkAgBzCMwBsg2+eASCR8AwAGxARpm0DQCLhGQAAAFYIzwDQ1zz6AABAf8IzAPQ1D6ipZRsAkgnPAHD+DAsDgGTCMwAAAKwQngEAAGCF8AwAfWmhBoANEp4BoK9vA2oK7ACQTHgGgPM3IrADwK4IzwAAALBCeAaAvubRBwAA+hOeAaCveSc1AWBXhGcAOH/z6AMAwNYJzwAAALBCeAYAAIAVwjMAdBQRhwFlvw6oCQC7IjwDwJmLiOPoMwDA1gnPAAAAsEJ4BgAAgBXCMwD0p40aADZGeAaA/ioHeB0KawHAbgnPAAAAsEJ4BgAAgBXCMwD0Z+8yAGyM8AwA/X0prGU4GQAUEJ4B4Lx9G30AANgD4RkAAABWCM8AAACwQngGgP4OhbXmwloAsFvCMwCct3n0AQBgD4RnAAAAWCE8AwAAwArhGQD6q9y9PBfWAoDdejX6AACwRdM0fa+oExHucgAo4OUZAAAAVgjPAAAAsEJ4BoAcFd89zwU1AIAmPANAlq8FNeaCGgBAE54BAABglfAMAAAAK4RnAMgxb6QGANCEZwDI8udGagAATXgGAACAVcIzAAAArBCeASDHvJEaAEATngEgy7yRGgBAE54BAABglfAMAAAAK4RnAMgxb6QGANBaezX6AACwVdM0fc/8+xHhHgeAIl6eAQAAYIXwDAAAACuEZwDIM5/p3wYA/uGn0QcAgA27b61dJv3tY9LfBQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4wV93SmwtXBOoQwAAAABJRU5ErkJggg==",
+                "swagger": {
+                    "swagger": "2.0",
+                    "info": {
+                        "title": "Spur Context API",
+                        "description": "Spur Context API provides IP intelligence including proxy detection, infrastructure details, risks, services and metadata.",
+                        "version": "2.0",
+                        "contact": {
+                            "name": "Spur Context API",
+                            "url": "https://app.spur.us/"
+                        }
+                    },
+                    "host": "api.spur.us",
+                    "basePath": "/",
+                    "schemes": [
+                        "https"
+                    ],
+                    "consumes": [
+                        "application/json"
+                    ],
+                    "produces": [
+                        "application/json"
+                    ],
+                    "securityDefinitions": {
+                        "api_key": {
+                            "type": "apiKey",
+                            "in": "header",
+                            "name": "Token"
+                        }
+                    },
+                    "security": [
+                        {
+                            "api_key": []
+                        }
+                    ],
+                    "paths": {
+                        "/v2/context/{ip}": {
+                            "get": {
+                                "summary": "Get IP Context",
+                                "description": "Returns intelligence and risk context for a given IP address.",
+                                "parameters": [
+                                    {
+                                        "$ref": "#/parameters/ip"
+                                    },
+                                    {
+                                        "$ref": "#/parameters/dt"
+                                    }
+                                ],
+                                "responses": {
+                                    "200": {
+                                        "description": "Successful response",
+                                        "schema": {
+                                            "$ref": "#/definitions/ContextResponse"
+                                        }
+                                    },
+                                    "401": {
+                                        "description": "Unauthorized",
+                                        "schema": {
+                                            "$ref": "#/definitions/ErrorResponse"
+                                        }
+                                    }
+                                },
+                                "operationId": "SPUR_IP"
+                            }
+                        },
+                        "/v2/metadata/tags/{tag}": {
+                            "get": {
+                                "summary": "Get Tag Metadata",
+                                "description": "Returns metadata information for a provider or service tag.",
+                                "parameters": [
+                                    {
+                                        "$ref": "#/parameters/tag"
+                                    }
+                                ],
+                                "responses": {
+                                    "200": {
+                                        "description": "Successful response",
+                                        "schema": {
+                                            "$ref": "#/definitions/TagMetadataResponse"
+                                        }
+                                    },
+                                    "401": {
+                                        "description": "Unauthorized",
+                                        "schema": {
+                                            "$ref": "#/definitions/ErrorResponse"
+                                        }
+                                    }
+                                },
+                                "operationId": "SPUR_TAG"
+                            }
+                        },
+                        "/status": {
+                            "get": {
+                                "summary": "Check API Token Status",
+                                "description": "Retrieves the status of your API token, the number of queries remaining for the billing period, and service tier.",
+                                "responses": {
+                                    "200": {
+                                        "description": "Successful response",
+                                        "schema": {
+                                            "$ref": "#/definitions/TokenStatusResponse"
+                                        }
+                                    },
+                                    "401": {
+                                        "description": "Unauthorized",
+                                        "schema": {
+                                            "$ref": "#/definitions/ErrorResponse"
+                                        }
+                                    }
+                                },
+                                "operationId": "SPUR_STATUS"
+                            }
+                        }
+                    },
+                    "parameters": {
+                        "ip": {
+                            "name": "ip",
+                            "in": "path",
+                            "required": true,
+                            "type": "string",
+                            "description": "IPv4 or IPv6 address associated with the connection"
+                        },
+                        "dt": {
+                            "name": "dt",
+                            "in": "query",
+                            "required": false,
+                            "type": "string",
+                            "description": "A datetime in the format YYYYmmdd. This argument is only valid for subscriptions with access to historical records."
+                        },
+                        "tag": {
+                            "name": "tag",
+                            "in": "path",
+                            "required": true,
+                            "type": "string",
+                            "description": "The Tag Metadata Object includes analysis, statistics, and metrics for a service tag."
+                        }
+                    },
+                    "definitions": {
+                        "ContextResponse": {
+                            "type": "object",
+                            "title": "Context Response",
+                            "properties": {
+                                "ip": {
+                                    "type": "string",
+                                    "title": "IP Address",
+                                    "description": "IPv4 address associated with the connection."
+                                },
+                                "organization": {
+                                    "type": "string",
+                                    "title": "Organization",
+                                    "description": "The organization currently assigned to use the specific IP address, such as a customer, hosting provider, or service operator."
+                                },
+                                "infrastructure": {
+                                    "type": "string",
+                                    "title": "Infrastructure Type",
+                                    "description": "Infrastructure type."
+                                },
+                                "risks": {
+                                    "type": "array",
+                                    "title": "Risk Indicators",
+                                    "description": "List of identified risk factors or behaviors.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Risk"
+                                    }
+                                },
+                                "services": {
+                                    "type": "array",
+                                    "title": "Services",
+                                    "description": "List of services or protocols in use.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Service"
+                                    }
+                                },
+                                "as": {
+                                    "type": "object",
+                                    "title": "Autonomous System Information",
+                                    "description": "Spur IP GeoBGP autonomous system information.",
+                                    "properties": {
+                                        "number": {
+                                            "type": "integer",
+                                            "title": "ASN Number"
+                                        },
+                                        "organization": {
+                                            "description": "The organization currently assigned to use the specific IP address, such as a customer, hosting provider, or service operator.",
+                                            "type": "string",
+                                            "title": "ASN Organization"
+                                        }
+                                    }
+                                },
+                                "location": {
+                                    "type": "object",
+                                    "title": "Location Information",
+                                    "description": "Spur IP Geo location information of the IP.",
+                                    "properties": {
+                                        "city": {
+                                            "type": "string",
+                                            "title": "City"
+                                        },
+                                        "state": {
+                                            "type": "string",
+                                            "title": "State"
+                                        },
+                                        "country": {
+                                            "type": "string",
+                                            "title": "Country"
+                                        }
+                                    }
+                                },
+                                "client": {
+                                    "type": "object",
+                                    "title": "Client Information",
+                                    "description": "Descriptive data about the connecting client.",
+                                    "properties": {
+                                        "behaviors": {
+                                            "type": "array",
+                                            "title": "Client Behaviors",
+                                            "items": {
+                                                "type": "string",
+                                                "title": "Behavior"
+                                            }
+                                        },
+                                        "count": {
+                                            "type": "integer",
+                                            "title": "Device Count"
+                                        },
+                                        "countries": {
+                                            "type": "integer",
+                                            "title": "Distinct Countries"
+                                        },
+                                        "proxies": {
+                                            "type": "array",
+                                            "title": "Proxy Types",
+                                            "items": {
+                                                "type": "string",
+                                                "title": "Proxy"
+                                            }
+                                        },
+                                        "spread": {
+                                            "type": "integer",
+                                            "title": "Network Spread"
+                                        },
+                                        "types": {
+                                            "type": "array",
+                                            "title": "Client Types",
+                                            "items": {
+                                                "type": "string",
+                                                "title": "Type"
+                                            }
+                                        },
+                                        "concentration": {
+                                            "type": "object",
+                                            "title": "Geographic Concentration",
+                                            "properties": {
+                                                "city": {
+                                                    "type": "string",
+                                                    "title": "Concentration City"
+                                                },
+                                                "state": {
+                                                    "type": "string",
+                                                    "title": "Concentration State"
+                                                },
+                                                "country": {
+                                                    "type": "string",
+                                                    "title": "Concentration Country"
+                                                },
+                                                "density": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "title": "Density Score"
+                                                },
+                                                "geohash": {
+                                                    "type": "string",
+                                                    "title": "Geohash"
+                                                },
+                                                "skew": {
+                                                    "type": "integer",
+                                                    "title": "Skew Value"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "tunnels": {
+                                    "type": "array",
+                                    "title": "Tunnel Information",
+                                    "description": "Descriptive data about the connecting client.",
+                                    "items": {
+                                        "type": "object",
+                                        "title": "Tunnel",
+                                        "properties": {
+                                            "anonymous": {
+                                                "type": "boolean",
+                                                "title": "Anonymous Tunnel"
+                                            },
+                                            "entries": {
+                                                "type": "array",
+                                                "title": "Entry Nodes",
+                                                "items": {
+                                                    "type": "string",
+                                                    "title": "Entry"
+                                                }
+                                            },
+                                            "operator": {
+                                                "type": "string",
+                                                "title": "Tunnel Operator"
+                                            },
+                                            "type": {
+                                                "type": "string",
+                                                "title": "Tunnel Type"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "TagMetadataResponse": {
+                            "type": "object",
+                            "title": "Tag Metadata Response",
+                            "properties": {
+                                "tag": {
+                                    "type": "string",
+                                    "title": "Tag Identifier",
+                                    "description": "Unique identifier or tag for this service or entity."
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "title": "Service Name",
+                                    "description": "Human-readable name of the service or entity."
+                                },
+                                "website": {
+                                    "type": "string",
+                                    "title": "Website URL",
+                                    "description": "Primary website or homepage for the service."
+                                },
+                                "categories": {
+                                    "type": "array",
+                                    "title": "Service Categories",
+                                    "description": "Product categories for bandwidth reselling and routing.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Category"
+                                    }
+                                },
+                                "platforms": {
+                                    "type": "array",
+                                    "title": "Supported Platforms",
+                                    "description": "Operating systems and environments supported by this service.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Platform"
+                                    }
+                                },
+                                "protocols": {
+                                    "type": "array",
+                                    "title": "Supported Protocols",
+                                    "description": "Protocols or services used for network traffic.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Protocol"
+                                    }
+                                },
+                                "targetingTypes": {
+                                    "type": "array",
+                                    "title": "Targeting Types",
+                                    "description": "Possible granularities for configuring a service exit or route.",
+                                    "items": {
+                                        "type": "string",
+                                        "title": "Targeting Type"
+                                    }
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "title": "Service Description",
+                                    "description": "A free-text description of the service or entity."
+                                },
+                                "allowsCrypto": {
+                                    "type": "boolean",
+                                    "title": "Supports Crypto Payments",
+                                    "description": "Whether the service supports or facilitates crypto-based payments or platforms."
+                                },
+                                "allowsFreeAccess": {
+                                    "type": "boolean",
+                                    "description": "Whether the service is available for free usage.",
+                                    "title": "Allows Free Access"
+                                },
+                                "allowsMultihop": {
+                                    "type": "boolean",
+                                    "title": "Supports Multihop",
+                                    "description": "Whether the service offers multi-hop or chaining functionalities."
+                                },
+                                "allowsTorrents": {
+                                    "type": "boolean",
+                                    "title": "Allows Torrents",
+                                    "description": "Whether the service permits torrent or P2P file-sharing traffic."
+                                },
+                                "allowsWhiteLabel": {
+                                    "type": "boolean",
+                                    "title": "Supports White Label",
+                                    "description": "Indicates whether white-label or rebranded versions of the service exist."
+                                },
+                                "isAnonymous": {
+                                    "type": "boolean",
+                                    "title": "Anonymous Service",
+                                    "description": "Whether the service or infrastructure primarily aims to anonymize user traffic."
+                                },
+                                "isCallbackProxy": {
+                                    "type": "boolean",
+                                    "title": "Callback Proxy Enabled",
+                                    "description": "Whether the service includes callback or reverse-proxy functionalities."
+                                },
+                                "isEnterprise": {
+                                    "type": "boolean",
+                                    "title": "Enterprise Oriented",
+                                    "description": "Whether the service or platform is oriented toward enterprise usage."
+                                },
+                                "isNoLog": {
+                                    "type": "boolean",
+                                    "title": "No Logging Policy",
+                                    "description": "Whether the service claims a \\'no logging\\' policy."
+                                },
+                                "isInactive": {
+                                    "type": "boolean",
+                                    "title": "Service Inactive",
+                                    "description": "Whether the service is currently inactive or defunct."
+                                },
+                                "metrics": {
+                                    "type": "object",
+                                    "title": "Service Metrics",
+                                    "properties": {
+                                        "averageDeviceCount": {
+                                            "type": "number",
+                                            "title": "Average Device Count"
+                                        },
+                                        "churnRate": {
+                                            "type": "number",
+                                            "title": "Churn Rate"
+                                        },
+                                        "distinctASNs": {
+                                            "type": "integer",
+                                            "title": "Distinct ASNs"
+                                        },
+                                        "distinctCountries": {
+                                            "type": "integer",
+                                            "title": "Distinct Countries"
+                                        },
+                                        "distinctIPs": {
+                                            "type": "integer",
+                                            "title": "Distinct IPs"
+                                        },
+                                        "distinctISPs": {
+                                            "type": "integer",
+                                            "title": "Distinct ISPs"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "TokenStatusResponse": {
+                            "type": "object",
+                            "title": "Token Status Response",
+                            "properties": {
+                                "active": {
+                                    "type": "boolean",
+                                    "title": "Token Active"
+                                },
+                                "queriesRemaining": {
+                                    "type": "integer",
+                                    "title": "Queries Remaining"
+                                },
+                                "serviceTier": {
+                                    "type": "string",
+                                    "title": "Service Tier"
+                                }
+                            }
+                        },
+                        "ErrorResponse": {
+                            "type": "object",
+                            "title": "Error Response",
+                            "properties": {
+                                "code": {
+                                    "type": "integer",
+                                    "title": "Error Code"
+                                },
+                                "message": {
+                                    "type": "string",
+                                    "title": "Error Message"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
