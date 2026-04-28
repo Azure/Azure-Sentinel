@@ -1,5 +1,5 @@
 {
-    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "FunctionName": {
@@ -8,72 +8,213 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "LoganalyticsWorkspaceName": {
+            "type": "string"
+        },
+        "LoganalyticsWorkspaceLocation": {
             "type": "string",
-            "defaultValue": "<workspaceID>"
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Must be same as Region Name e.g. eastus, centralus"
+            }
         },
-        "WorkspaceKey": {
-            "type": "securestring",
-            "defaultValue": "<workspaceKey>"
-        },
-        "CyberArkEPMUsername": {
-            "type": "string",
-            "defaultValue": "<CyberArkEPMUsername>"
-        },
-        "CyberArkEPMPassword": {
-            "type": "securestring",
-            "defaultValue": "<CyberArkEPMPassword>"
-        },
-        "CyberArkEPMServerURL": {
-            "type": "string",
-            "defaultValue": "https://<EPM_Server>"
-        },
-        "UseSAMLAuth": {
-            "type": "bool",
-            "defaultValue": false
-        },
-        "IdentityTenantURL": {
-            "type": "string",
-            "defaultValue": "https://<IdentityTenantURL>"
-        },
-        "IdentityTenantID": {
-            "type": "string",
-            "defaultValue": "<IdentityTenantID>"
-        },
-        "IdentityAppKey": {
-            "type": "string",
-            "defaultValue": "<IdentityAppKey>"
-        },
-        "AppInsightsWorkspaceResourceID": {
+        "OauthUsername": {
             "type": "string",
             "metadata": {
-                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+                "description": "OAuth2 service user client ID"
+            }
+        },
+        "OauthPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "OAuth2 service user client secret"
+            }
+        },
+        "IdentityEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "CyberArk Identity endpoint URL (e.g. https://abc1234.id.cyberark.cloud)"
+            }
+        },
+        "EPMRegionHost": {
+            "type": "string",
+            "metadata": {
+                "description": "EPM region dispatcher URL (e.g. https://api-na.epm.cyberark.cloud)"
+            }
+        },
+        "WebAppID": {
+            "type": "string",
+            "metadata": {
+                "description": "OAuth2 web application ID"
+            }
+        },
+        "TriggeringSchedule": {
+            "type": "string",
+            "defaultValue": "0 */10 * * * *",
+            "metadata": {
+                "description": "Cron expression for trigger schedule"
+            }
+        },
+        "FetchInterval": {
+            "type": "string",
+            "defaultValue": "60",
+            "metadata": {
+                "description": "Lookback window in minutes for the initial fetch"
             }
         }
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "loganalyticsworkspace": "[parameters('LoganalyticsWorkspaceName')]",
+        "dce-name": "[concat('sentinel-dce-', variables('FunctionName'))]",
+        "dcr-name": "[concat('sentinel-dcr-', variables('FunctionName'))]",
+        "table-name": "CyberArkEPM_Events_CL",
+        "stream-name": "[concat('Custom-', variables('table-name'))]",
+        "epm-storage-container": "epm-query-storage",
+        "deployment-container": "deployment-packages",
+        "hostingPlanName": "[concat('ASP-', variables('FunctionName'))]",
+        "location": "[parameters('LoganalyticsWorkspaceLocation')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "EPMTablesTemplate",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'), '/', variables('table-name'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('table-name')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated", "type": "DateTime" },
+                                        { "name": "EventType", "type": "string" },
+                                        { "name": "SetId", "type": "string" },
+                                        { "name": "SetName", "type": "string" },
+                                        { "name": "EpmAgentId", "type": "string" },
+                                        { "name": "ComputerName", "type": "string" },
+                                        { "name": "UserName", "type": "string" },
+                                        { "name": "PolicyName", "type": "string" },
+                                        { "name": "PolicyAction", "type": "string" },
+                                        { "name": "CyberArkEventType", "type": "string" },
+                                        { "name": "FileName", "type": "string" },
+                                        { "name": "FilePath", "type": "string" },
+                                        { "name": "Hash", "type": "string" },
+                                        { "name": "Publisher", "type": "string" },
+                                        { "name": "SourceType", "type": "string" },
+                                        { "name": "SourceName", "type": "string" },
+                                        { "name": "FirstEventDate", "type": "DateTime" },
+                                        { "name": "LastEventDate", "type": "DateTime" },
+                                        { "name": "ArrivalTime", "type": "DateTime" },
+                                        { "name": "TotalEvents", "type": "int" },
+                                        { "name": "AffectedComputers", "type": "int" },
+                                        { "name": "AffectedUsers", "type": "int" },
+                                        { "name": "AggregatedBy", "type": "string" },
+                                        { "name": "FileQualifier", "type": "string" },
+                                        { "name": "Skipped", "type": "boolean" },
+                                        { "name": "SkippedCount", "type": "int" },
+                                        { "name": "AdditionalFields", "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "parameters": {}
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[resourceGroup().name]"
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
             "name": "[variables('FunctionName')]",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "kind": "web",
             "properties": {
                 "Application_Type": "web",
-                "ApplicationId": "[variables('FunctionName')]",
-                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "accessPolicies": "[createArray()]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(variables('FunctionName'), '/OAuthUsername')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('OauthUsername')]",
+                "contentType": "string",
+                "attributes": { "enabled": true }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(variables('FunctionName'), '/OAuthPassword')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('OauthPassword')]",
+                "contentType": "string",
+                "attributes": { "enabled": true }
+            }
+        },
+        {
+            "name": "[concat(variables('FunctionName'), '/add')]",
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2022-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2022-03-01', 'full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [ "get" ]
+                        }
+                    }
+                ]
             }
         },
         {
             "type": "Microsoft.Storage/storageAccounts",
-            "apiVersion": "2019-06-01",
+            "apiVersion": "2022-09-01",
             "name": "[tolower(variables('FunctionName'))]",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "sku": {
                 "name": "Standard_LRS",
                 "tier": "Standard"
@@ -82,21 +223,13 @@
             "properties": {
                 "networkAcls": {
                     "bypass": "AzureServices",
-                    "virtualNetworkRules": [],
-                    "ipRules": [],
                     "defaultAction": "Allow"
                 },
                 "supportsHttpsTrafficOnly": true,
                 "encryption": {
                     "services": {
-                        "file": {
-                            "keyType": "Account",
-                            "enabled": true
-                        },
-                        "blob": {
-                            "keyType": "Account",
-                            "enabled": true
-                        }
+                        "file": { "keyType": "Account", "enabled": true },
+                        "blob": { "keyType": "Account", "enabled": true }
                     },
                     "keySource": "Microsoft.Storage"
                 }
@@ -104,49 +237,143 @@
         },
         {
             "type": "Microsoft.Storage/storageAccounts/blobServices",
-            "apiVersion": "2019-06-01",
+            "apiVersion": "2022-09-01",
             "name": "[concat(variables('FunctionName'), '/default')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
             ],
-            "sku": {
-                "name": "Standard_LRS",
-                "tier": "Standard"
-            },
+            "sku": { "name": "Standard_LRS", "tier": "Standard" },
             "properties": {
-                "cors": {
-                    "corsRules": []
-                },
-                "deleteRetentionPolicy": {
-                    "enabled": false
-                }
+                "deleteRetentionPolicy": { "enabled": false }
             }
         },
         {
-            "type": "Microsoft.Storage/storageAccounts/fileServices",
-            "apiVersion": "2019-06-01",
-            "name": "[concat(variables('FunctionName'), '/default')]",
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
             ],
+            "properties": { "publicAccess": "None" }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default/', variables('epm-storage-container'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": { "publicAccess": "None" }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default/', variables('deployment-container'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": { "publicAccess": "None" }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[variables('location')]",
             "sku": {
-                "name": "Standard_LRS",
-                "tier": "Standard"
+                "name": "FC1",
+                "tier": "FlexConsumption"
             },
+            "kind": "functionapp",
             "properties": {
-                "cors": {
-                    "corsRules": []
-                }
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dce-name')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "networkAcls": { "publicNetworkAccess": "Enabled" }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dcr-name')]",
+            "location": "[variables('location')]",
+            "tags": { "createdBy": "Sentinel" },
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                "[resourceId('Microsoft.Resources/deployments', 'EPMTablesTemplate')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                "streamDeclarations": {
+                    "[variables('stream-name')]": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "EventType", "type": "string" },
+                            { "name": "SetId", "type": "string" },
+                            { "name": "SetName", "type": "string" },
+                            { "name": "EpmAgentId", "type": "string" },
+                            { "name": "ComputerName", "type": "string" },
+                            { "name": "UserName", "type": "string" },
+                            { "name": "PolicyName", "type": "string" },
+                            { "name": "PolicyAction", "type": "string" },
+                            { "name": "CyberArkEventType", "type": "string" },
+                            { "name": "FileName", "type": "string" },
+                            { "name": "FilePath", "type": "string" },
+                            { "name": "Hash", "type": "string" },
+                            { "name": "Publisher", "type": "string" },
+                            { "name": "SourceType", "type": "string" },
+                            { "name": "SourceName", "type": "string" },
+                            { "name": "FirstEventDate", "type": "datetime" },
+                            { "name": "LastEventDate", "type": "datetime" },
+                            { "name": "ArrivalTime", "type": "datetime" },
+                            { "name": "TotalEvents", "type": "int" },
+                            { "name": "AffectedComputers", "type": "int" },
+                            { "name": "AffectedUsers", "type": "int" },
+                            { "name": "AggregatedBy", "type": "string" },
+                            { "name": "FileQualifier", "type": "string" },
+                            { "name": "Skipped", "type": "boolean" },
+                            { "name": "SkippedCount", "type": "int" },
+                            { "name": "AdditionalFields", "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "name": "loganalyticsworkspacename",
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "[variables('stream-name')]" ],
+                        "destinations": [ "loganalyticsworkspacename" ],
+                        "transformKql": "source\n| extend TimeGenerated = now()\n",
+                        "outputStream": "[variables('stream-name')]"
+                    }
+                ]
             }
         },
         {
             "type": "Microsoft.Web/sites",
-            "apiVersion": "2018-11-01",
+            "apiVersion": "2023-01-01",
             "name": "[variables('FunctionName')]",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]",
-                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('FunctionName'), 'default', variables('deployment-container'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
             ],
             "kind": "functionapp,linux",
             "identity": {
@@ -155,78 +382,60 @@
             "properties": {
                 "name": "[variables('FunctionName')]",
                 "httpsOnly": true,
-                "clientAffinityEnabled": true,
-                "alwaysOn": true,
-                "reserved": true,
-                "siteConfig": {
-                    "linuxFxVersion": "python|3.10"
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "functionAppConfig": {
+                    "deployment": {
+                        "storage": {
+                            "type": "blobContainer",
+                            "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2022-09-01').primaryEndpoints.blob, variables('deployment-container'))]",
+                            "authentication": {
+                                "type": "StorageAccountConnectionString",
+                                "storageAccountConnectionStringName": "DEPLOYMENT_STORAGE_CONNECTION_STRING"
+                            }
+                        }
+                    },
+                    "scaleAndConcurrency": {
+                        "maximumInstanceCount": 100,
+                        "instanceMemoryMB": 2048
+                    },
+                    "runtime": {
+                        "name": "python",
+                        "version": "3.12"
+                    }
                 }
             },
             "resources": [
                 {
-                    "apiVersion": "2018-11-01",
+                    "apiVersion": "2023-01-01",
                     "type": "config",
                     "name": "appsettings",
                     "dependsOn": [
-                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                        "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]",
+                        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcr-name'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthUsername')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthPassword')]"
                     ],
                     "properties": {
-                        "FUNCTIONS_EXTENSION_VERSION": "~4",
-                        "FUNCTIONS_WORKER_RUNTIME": "python",
-                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
-                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
-                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
-                        "CyberArkEPMUsername": "[parameters('CyberArkEPMUsername')]",
-                        "CyberArkEPMPassword": "[parameters('CyberArkEPMPassword')]",
-                        "CyberArkEPMServerURL": "[parameters('CyberArkEPMServerURL')]",
-                        "UseSAMLAuth": "[parameters('UseSAMLAuth')]",
-                        "IdentityTenantURL": "[parameters('IdentityTenantURL')]",
-                        "IdentityTenantID": "[parameters('IdentityTenantID')]",
-                        "IdentityAppKey": "[parameters('IdentityAppKey')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-CyberArkEPMAPI-functionapp"
-                        
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=', toLower(variables('StorageSuffix')))]",
+                        "DEPLOYMENT_STORAGE_CONNECTION_STRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=', toLower(variables('StorageSuffix')))]",
+                        "DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name')), '2022-06-01').logsIngestion.endpoint]",
+                        "EPMRegionHost": "[parameters('EPMRegionHost')]",
+                        "FetchInterval": "[parameters('FetchInterval')]",
+                        "IdentityEndpoint": "[parameters('IdentityEndpoint')]",
+                        "LOGS_DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcr-name')), '2022-06-01').immutableId]",
+                        "LOGS_DCR_STREAM_NAME": "[variables('stream-name')]",
+                        "OAuthUsername": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthUsername')).SecretUriWithVersion, ')')]",
+                        "OAuthPassword": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthPassword')).SecretUriWithVersion, ')')]",
+                        "StorageContainer": "[variables('epm-storage-container')]",
+                        "TriggerSchedule": "[parameters('TriggeringSchedule')]",
+                        "WebAppID": "[parameters('WebAppID')]",
+                        "FUNCTIONS_EXTENSION_VERSION": "~4"
                     }
                 }
             ]
-        },  
-        {
-            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-            "apiVersion": "2019-06-01",
-            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
-            ],
-            "properties": {
-                "publicAccess": "None"
-            }
-        },
-        {
-            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
-            "apiVersion": "2019-06-01",
-            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
-            ],
-            "properties": {
-                "publicAccess": "None"
-            }
-        },
-        {
-            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-            "apiVersion": "2019-06-01",
-            "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
-            ],
-            "properties": {
-                "shareQuota": 5120
-            }
         }
     ]
 }

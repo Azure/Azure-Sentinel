@@ -8,6 +8,7 @@ def _build_bearer_headers(bearer_token):
     return {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + bearer_token,
+        'x-cybr-telemetry': 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
     }
 
 
@@ -51,7 +52,6 @@ def get_sets_list(epm_server, epm_token, version=None):
 
     # build the header
     hdr = _build_bearer_headers(epm_token)
-    hdr['x-cybr-telemetry'] = 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
 
     # make the Rest API call
     return _request('GET', target_url, headers=hdr)
