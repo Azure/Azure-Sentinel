@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
 |-------------|--------------------------------|-------------------------------------------------------------|
-| 3.0.5       | 11-06-2025                     | Correct name shown on **Data Types** to match query used..  |
+| 3.0.5       | 22-01-2026                     | Correct name shown on **Data Types** to match query used & Updated the Cisco Meraki Custom Connector Default Service End-point.  |
 | 3.0.4       | 23-07-2025                     | **Workbook** updated with new ThreatIntelIndicators table.  |
 | 3.0.3       | 02012-2024                     | Removed Deprecated **Data Connectors**                      |
 | 3.0.2       | 12-08-2024                     | Deprecating data connector                                  |

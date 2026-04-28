@@ -1,5 +1,10 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+|3.0.17       | 02-04-2026                     |  Updated **TI map Domain entity to SecurityAlert** analytic rule with deduplication and filters   |
+| 3.0.16      | 25-03-2026                     | Optimized **TI map Domain entity to EmailUrlInfo** analytic rule with deduplication and filters |
+| 3.0.15      | 09-03-2026                     | Update **IPEntity_DuoSecurity Analytic Rule**                |
+| 3.0.14      | 16-02-2026                     | Added **Analytic Rule** for URL IOC                  |
+| 3.0.13      | 27-01-2026                     | Updated package to include latest query changes.                  |
 | 3.0.12      | 23-12-2025                     | Replaces the 'AlertPriority' field with 'Severity' in the IPEntity_AppServiceHTTPLogs analytic rule and updates all related references.            |
 | 3.0.11      | 02-12-2025                     | Update Threat Intelligence package and release notes 	 |
 | 3.0.10      | 20-11-2025                     | Update Syntax for IPEntity_CloudAppEvents_Updated.yaml Rule		 |

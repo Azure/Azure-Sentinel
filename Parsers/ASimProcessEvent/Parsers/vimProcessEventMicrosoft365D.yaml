@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create Event ASIM parser for Microsoft 365 Defender for endpoint
-  Version: '0.3.0'
-  LastUpdated: Jan 08, 2026
+  Version: '0.4.0'
+  LastUpdated: Mar 10, 2026
 Product:
   Name: Microsoft 365 Defender for endpoint
 Normalization:
@@ -79,8 +79,8 @@ ParserQuery: |
     DeviceProcessEvents 
     // -- pre-filtering
     | where
-      (isnull(starttime)   or Timestamp >= starttime )
-      and (isnull(endtime) or Timestamp <= endtime )
+      (isnull(starttime)   or TimeGenerated >= starttime )
+      and (isnull(endtime) or TimeGenerated <= endtime )
       and not(disabled)
       and (array_length(dvcipaddr_has_any_prefix)==0)
       and (array_length(commandline_has_all)==0 or ProcessCommandLine has_all (commandline_has_all)) 
@@ -105,6 +105,7 @@ ParserQuery: |
         EventEndTime = todatetime(Timestamp),
         EventResult = 'Success'
     | extend
+        EventUid = EventOriginalUid,
         ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
         TargetUsername = iff (AccountDomain == '', AccountName, strcat(AccountDomain, '\\', AccountName)),
         TargetUsernameType = iff(AccountDomain == '','Simple', 'Windows'),
@@ -117,8 +118,9 @@ ParserQuery: |
         TargetProcessId = tostring(ProcessId),
         ActingProcessId = tostring(InitiatingProcessId),
         ParentProcessId = tostring(InitiatingProcessParentId),
-        DvcOs = iff (AdditionalFields has "ProcessPosixProcessGroupId", "Linux", "Windows")
-    | project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName, AccountDomain, AccountName, ProcessId, InitiatingProcessId, InitiatingProcessParentId, LogonId, InitiatingProcessLogonId, ReportId
+        DvcOs = iff (AdditionalFields has "ProcessPosixProcessGroupId", "Linux", "Windows"),
+        TargetProcessFileSize = iif(FileSize != 0, FileSize, dynamic(null)),
+        ActingProcessFileSize = iif(InitiatingProcessFileSize != 0, InitiatingProcessFileSize, dynamic(null))
     | extend
          HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(SHA256, SHA1, MD5),Hash)])
     | invoke _ASIM_ResolveDvcFQDN('DeviceName')
@@ -133,6 +135,12 @@ ParserQuery: |
         TargetUserUpn = AccountUpn,
         ParentProcessName = InitiatingProcessParentFileName,
         TargetProcessFilename = FileName,
+        TargetProcessFileCompany = ProcessVersionInfoCompanyName,
+        TargetProcessFileDescription = ProcessVersionInfoFileDescription,
+        TargetProcessFileProduct = ProcessVersionInfoProductName,
+        TargetProcessFileVersion = ProcessVersionInfoProductVersion,
+        TargetProcessFileInternalName = ProcessVersionInfoInternalFileName,
+        TargetProcessFileOriginalName = ProcessVersionInfoOriginalFileName,
         ParentProcessCreationTime = InitiatingProcessParentCreationTime,
         TargetProcessName = FolderPath,
         TargetProcessCommandLine = ProcessCommandLine,
@@ -144,6 +152,12 @@ ParserQuery: |
         TargetProcessCreationTime = ProcessCreationTime,
         ActingProcessName = InitiatingProcessFolderPath, 
         ActingProcessFilename = InitiatingProcessFileName,
+        ActingProcessFileCompany = InitiatingProcessVersionInfoCompanyName,
+        ActingProcessFileDescription = InitiatingProcessVersionInfoFileDescription,
+        ActingProcessFileProduct = InitiatingProcessVersionInfoProductName,
+        ActingProcessFileVersion = InitiatingProcessVersionInfoProductVersion,
+        ActingProcessFileInternalName = InitiatingProcessVersionInfoInternalFileName,
+        ActingProcessFileOriginalName = InitiatingProcessVersionInfoOriginalFileName,
         ActingProcessCommandLine = InitiatingProcessCommandLine, 
         ActingProcessMD5 = InitiatingProcessMD5, 
         ActingProcessSHA1 = InitiatingProcessSHA1, 
@@ -162,6 +176,7 @@ ParserQuery: |
     | project
         TimeGenerated,
         Type,
+        EventUid,
         EventOriginalUid,
         EventCount,
         EventProduct,
@@ -185,6 +200,9 @@ ParserQuery: |
         DvcOs,
         HashType,
         DvcId,
+        DvcHostname,
+        DvcDomain,
+        DvcDomainType,
         EventType,
         ActorUserId,
         ActorUserAadId,
@@ -203,6 +221,13 @@ ParserQuery: |
         TargetProcessIntegrityLevel,
         TargetProcessTokenElevation,
         TargetProcessCreationTime,
+        TargetProcessFileCompany,
+        TargetProcessFileDescription,
+        TargetProcessFileProduct,
+        TargetProcessFileVersion,
+        TargetProcessFileInternalName,
+        TargetProcessFileOriginalName,
+        TargetProcessFileSize,
         ActingProcessName,
         ActingProcessFilename,
         ActingProcessCommandLine,
@@ -212,10 +237,18 @@ ParserQuery: |
         ActingProcessIntegrityLevel,
         ActingProcessTokenElevation,
         ActingProcessCreationTime,
+        ActingProcessFileCompany,
+        ActingProcessFileDescription,
+        ActingProcessFileProduct,
+        ActingProcessFileVersion,
+        ActingProcessFileInternalName,
+        ActingProcessFileOriginalName,
+        ActingProcessFileSize,
         User,
         CommandLine,
         Process,
-        Dvc
+        Dvc,
+        AdditionalFields
     };
     parser (
       starttime=starttime, 

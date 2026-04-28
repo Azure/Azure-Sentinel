@@ -1,0 +1,63 @@
+id: 54262ad1-f346-4246-a13f-9557595ff7bd
+name: Vaikora - Agent policy violation
+description: |
+  Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VaikoraSentinel
+    dataTypes:
+      - Vaikora_AgentSignals_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1562
+query: |
+  Vaikora_AgentSignals_CL
+  | where TimeGenerated > ago(1h)
+  | where policy_decision_s == "block"
+  | summarize
+      ViolationCount = count(),
+      PolicyIds = make_set(policy_id_s),
+      ActionTypes = make_set(action_type_s),
+      ResourceTypes = make_set(resource_type_s),
+      MaxAnomalyScore = max(anomaly_score_d),
+      Severities = make_set(severity_s),
+      LogHashes = make_set(log_hash_s)
+    by AgentId = agent_id_s
+  | extend
+      PolicyList = strcat_array(PolicyIds, ", "),
+      ActionList = strcat_array(ActionTypes, ", "),
+      ResourceList = strcat_array(ResourceTypes, ", ")
+  | where ViolationCount >= 1
+suppressionDuration: 15m
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  ViolationCount: ViolationCount
+  PolicyIds: PolicyList
+  ActionTypes: ActionList
+  MaxAnomalyScore: MaxAnomalyScore
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AgentId
+version: 1.0.0
+kind: Scheduled

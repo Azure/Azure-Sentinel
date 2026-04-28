@@ -1,17 +1,22 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains seven complementary tools for analyzing Microsoft Sentinel Solutions:
 
-1. **[`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md)** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
-2. **[`collect_table_info.py`](script-docs/collect_table_info.md)** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
-3. **[`generate_connector_docs.py`](script-docs/generate_connector_docs.md)** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
-4. **[`solution_analyzer_upload_to_kusto.py`](script-docs/upload_to_kusto.md)** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
+| Script | Purpose | Key Output |
+|--------|---------|------------|
+| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv`, `la_table_schemas.csv` |
+| [`collect_asim_fields.py`](script-docs/collect_asim_fields.md) | Collect ASIM field definitions from docs, tester, and physical tables | `asim_fields.csv`, `asim_entity_fields.csv`, `asim_logical_types.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv`, `solution_dependencies.csv`, `table_schemas.csv` |
+| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown and HTML documentation | Markdown docs directory + `index.html`, HTML entity pages |
+| [`generate_interactive_docs.py`](script-docs/generate_interactive_docs.md) | Generate interactive HTML index and HTML entity pages | `index.html`, `css/`, `js/`, HTML entity pages |
+| [`generate_asim_browser.py`](script-docs/generate_asim_browser.md) | Generate interactive ASIM Schema Browser | `asim-browser.html` |
+| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
 
 ## Prerequisites
 
 ### Clone the Azure-Sentinel Repository
 
-The main analysis script (`map_solutions_connectors_tables.py`) and documentation generator require the [Azure-Sentinel GitHub repository](https://github.com/Azure/Azure-Sentinel) to be cloned locally:
+The mapper and documentation generator scripts require the [Azure-Sentinel GitHub repository](https://github.com/Azure/Azure-Sentinel) to be cloned locally:
 
 ```bash
 # Clone the repository
@@ -31,43 +36,60 @@ git pull origin master
 
 **Quick install for all scripts:**
 ```bash
-pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
+pip install requests json5 pyyaml
+```
+
+**Additional packages for Kusto upload:**
+```bash
+pip install azure-kusto-data azure-kusto-ingest azure-identity
 ```
 
 ## Quick Start
 
-**Pre-generated files are already available in this directory:**
-- [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Main mapping of connectors to tables with full metadata
-- [`connectors.csv`](connectors.csv) - All connectors with collection method analysis
-- [`solutions.csv`](solutions.csv) - All solutions with metadata
-- [`tables.csv`](tables.csv) - All tables with solution/connector references
-- [`content_tables_mapping.csv`](content_tables_mapping.csv) - **NEW:** Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
-- [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
-- [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
-- [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
+**Pre-generated CSV files are already available in this directory:**
+- The information:
+  - [`connectors.csv`](connectors.csv) - All connectors with metadata
+  - [`solutions.csv`](solutions.csv) - All solutions with metadata
+  - [`tables.csv`](tables.csv) - All tables with solution/connector references
+  - [`content_items.csv`](content_items.csv) - All content items (analytics rules, hunting queries, playbooks, etc.) with metadata
+  - [`parsers.csv`](parsers.csv) - All non-ASIM parsers with source tables, solution references, and discovered status
+  - [`asim_parsers.csv`](asim_parsers.csv) - ASIM parsers with metadata, source tables, selection criteria, and sub-parser references
+  - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor and Sentinel documentation
+- ASIM fields:
+  - [`asim_fields.csv`](asim_fields.csv) - ASIM schema field definitions merged from documentation, tester, and physical table schemas
+  - [`asim_entity_fields.csv`](asim_entity_fields.csv) - ASIM entity (User, Device, Application) field definitions
+  - [`asim_logical_types.csv`](asim_logical_types.csv) - ASIM logical type definitions with allowed values
+  - [`asim_vendors_products.csv`](asim_vendors_products.csv) - Allowed EventVendor and EventProduct values
+- Relationships:
+  - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+  - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and optional ASIM-based)
+  - [`table_schemas.csv`](table_schemas.csv) - Table column schemas from DCR definition files, Azure Monitor documentation, and KQL validation tables
+  - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
+- The rest:
+  - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
+  - [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Mapping of connectors to tables to solutions with full metadata. Generated for backward compatibility.
 
-**📍 Connector Reference Documentation (External Repository):**
+
+**Pre-generated Reference Documentation (External Repository):**
 
 > **Note:** The generated documentation has been moved to a separate repository to reduce the size of the Azure-Sentinel repo.
 > 
-> 🔗 **Full documentation:** [https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs](https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs)
+> 🔗 **Interactive index (GitHub Pages):** [https://oshezaf.github.io/sentinelninja/](https://oshezaf.github.io/sentinelninja/)
+>
+> 🔗 **Markdown source:** [https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/README.md](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/README.md)
 
-| Documentation | Direct Link |
-|:--------------|:------------|
-| **Solutions Index** | [View Solutions](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/solutions-index.md) |
-| **Connectors Index** | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
-| **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
-| **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content-index.md) |
-
-The documentation includes:
-- **485 Solutions** with connector and content item details
-- **524 Connectors** with collection methods and table mappings
-- **1,927 Tables** with schema from Azure Monitor documentation
-- **4,930+ Content Items** (analytic rules, hunting queries, playbooks, workbooks, parsers, watchlists)
-
-You can also generate documentation locally using the `--output-dir` parameter (see below).
-
-The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
+| Documentation | GitHub Pages (HTML) | GitHub (Markdown) |
+|:--------------|:--------------------|:------------------|
+| **Interactive Index** | [Browse All](https://oshezaf.github.io/sentinelninja/) | — |
+| **Solutions Index** | [View Solutions](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/solutions-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/solutions-index.md) |
+| **Connectors Index** | [View Connectors](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
+| **Tables Index** | [View Tables](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/tables-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
+| **Content Index** | [View Content Items](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/content/content-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content/content-index.md) |
+| **Parsers Index** | [View Parsers](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/parsers/parsers-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/parsers/parsers-index.md) |
+| **ASIM Parsers Index** | [View ASIM Parsers](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/asim/asim-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-index.md) |
+| **ASIM Products Index** | [View ASIM supported products](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/asim/asim-products-index.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-products-index.md) |
+| **Statistics** | [View Statistics](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/statistics.html) | [Markdown](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/statistics.md) |
+| **ASIM Schema Browser** | [Browse ASIM Schemas](https://oshezaf.github.io/sentinelninja/asim-browser.html) | — |
 
 ## Running the Scripts
 
@@ -82,101 +104,606 @@ python collect_table_info.py
 # 2. Generate connector/solution/table mappings (uses tables_reference.csv)
 python map_solutions_connectors_tables.py
 
-# 3. Generate documentation to a specific location
+# 3. Generate documentation (markdown + interactive HTML + HTML entity pages)
+python generate_connector_docs.py --skip-input-generation \
+    --output-dir "path/to/docs" \
+    --html-output-dir "path/to/site-root" \
+    --html-docs-path "Solutions Docs/" \
+    --html-index-url "https://your-site.github.io/repo/index.html"
+```
+
+Or let the documentation generator handle everything (runs steps 1-2 automatically):
+
+```bash
+python generate_connector_docs.py \
+    --output-dir "path/to/docs" \
+    --html-output-dir "path/to/site-root" \
+    --html-docs-path "Solutions Docs/" \
+    --html-index-url "https://your-site.github.io/repo/index.html"
+```
+
+For markdown-only output (no HTML):
+
+```bash
 python generate_connector_docs.py --skip-input-generation --output-dir "path/to/output"
 ```
 
-Or let the documentation generator handle everything:
+To refresh and publish ASIM field data and the ASIM Schema Browser:
 
 ```bash
-# This automatically runs steps 1-2 before generating docs
-python generate_connector_docs.py --output-dir "path/to/output"
+# Collect/refresh ASIM field definitions (depends on tables_reference.csv and table_schemas.csv)
+python collect_asim_fields.py --refresh-cache
+
+# Generate the interactive ASIM Schema Browser (asim-browser.html)
+python generate_asim_browser.py --output-dir "path/to/site-root"
 ```
 
-### Command Line Options for generate_connector_docs.py
-
-| Option | Description |
-|:-------|:------------|
-| `--output-dir <path>` | Output directory for generated documentation (default: connector-docs/) |
-| `--skip-input-generation` | Skip running input CSV generation scripts |
-| `--solutions <name1> <name2>` | Generate docs only for specific solutions |
-| `--solutions-dir <path>` | Path to Solutions directory for reading additional markdown |
-
-### Quick Reference
-
-| Script | Purpose | Key Output |
-|--------|---------|------------|
-| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_tables_mapping.csv` |
-| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory |
-| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSVs to Kusto | Kusto tables |
+Alternatively, `python map_solutions_connectors_tables.py --force-refresh asim` will automatically re-run `collect_asim_fields.py` with `--refresh-cache`.
 
 ## Data Flow
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Azure Monitor Documentation                      │
-│   (tables-category, tables-feature-support, Defender XDR schema)    │
-└─────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────┐
-                    │   collect_table_info.py  │
-                    └──────────────────────────┘
-                                   │
-                                   ▼
-                      ┌────────────────────────┐
-                      │  tables_reference.csv  │
-                      └────────────────────────┘
-                                   │
-┌─────────────────────────────┐    │
-│   Azure-Sentinel Solutions  │    │
-│   (Solutions/ directory)    │    │
-└─────────────────────────────┘    │
-              │                    │
-              ▼                    ▼
-   ┌───────────────────────────────────────┐
-   │   map_solutions_connectors_tables.py  │
-   └───────────────────────────────────────┘
-              │
-              ▼
-   ┌─────────────────────────────────────┐
-   │  connectors.csv, tables.csv,        │
-   │  solutions.csv, mapping CSVs        │
-   └─────────────────────────────────────┘
-              │
-              ▼
-   ┌───────────────────────────────────────┐
-   │      generate_connector_docs.py       │
-   └───────────────────────────────────────┘
-              │
-              ▼
-   ┌───────────────────────────────────────┐
-   │   connector-docs/ (Markdown docs)     │
-   └───────────────────────────────────────┘
-```
+![Solutions Analyzer Data Flow](graphics/data-flow-diagram.svg)
+
+The diagram shows how data flows through the Solutions Analyzer:
+
+1. **Online Sources** (blue) - External documentation and APIs:
+   - Azure Monitor docs provide table metadata (categories, transformation support, basic logs eligibility)
+   - Microsoft Sentinel docs provide lake-only ingestion and DCR support status
+   - Azure Marketplace API checks solution publication status
+
+2. **Local Sources** (green) - Azure-Sentinel repository:
+   - `Solutions/` folder with connectors, content items, and parsers
+   - `Parsers/` folder with legacy (pre-Solutions) parsers
+   - `Parsers/ASim*/` folders with ASIM normalization parsers
+   - Top-level standalone content directories
+
+3. **Scripts** (orange) - Python processing:
+   - `collect_table_info.py` fetches and caches online table metadata
+   - `collect_asim_fields.py` collects ASIM field definitions from documentation, tester, and physical table schemas
+   - `map_solutions_connectors_tables.py` analyzes local sources and generates CSVs
+   - `generate_connector_docs.py` produces markdown documentation
+   - `generate_interactive_docs.py` produces interactive HTML index (`index.html`) and converts markdown pages to styled HTML entity pages
+   - `generate_asim_browser.py` produces the interactive ASIM Schema Browser (`asim-browser.html`)
+
+4. **Outputs** (purple) - Generated artifacts:
+   - CSV files with structured data for analysis
+   - Markdown documentation for browsing
+   - Interactive HTML index with filterable, sortable DataTables.js tables
+   - ASIM Schema Browser with per-schema field and parser tables
+   - HTML entity pages served via GitHub Pages (also works locally via `file://`)
 
 ## Override System
 
-Both `map_solutions_connectors_tables.py` and `collect_table_info.py` support an override system that allows you to modify field values in the output based on pattern matching. The override file (`solution_analyzer_overrides.csv`) uses regex patterns to match entities and set field values.
+All three scripts support an override system that allows you to modify field values based on pattern matching. The override file (`solution_analyzer_overrides.csv`) uses regex patterns to match entities and set field values.
 
-Example use cases:
+**Data-related overrides** (used by `map_solutions_connectors_tables.py` and `collect_table_info.py`):
 - Set `collection_method` to AMA for specific tables (e.g., Syslog, CommonSecurityLog)
 - Assign `category` to tables based on naming patterns (e.g., all AWS* tables → AWS)
 - Set `support_tier` for tables based on their associated solutions
 
-See [Override System documentation](script-docs/map_solutions_connectors_tables.md#override-system) for details.
+**Synthetic connector overrides** (used by `map_solutions_connectors_tables.py`):
+- Define connectors that have no discoverable definition files in the repository (e.g., SAP Docker agent)
+- See [Synthetic Connector Overrides](script-docs/map_solutions_connectors_tables.md#synthetic-connector-overrides) for details
 
-## Documentation
+**Documentation-related overrides** (used by `generate_connector_docs.py`):
+- Add `additional_information` sections with curated documentation links to table, connector, or solution pages
 
-- **[Solution Connector Tables Analyzer](script-docs/map_solutions_connectors_tables.md)** - Full documentation for the main mapping script
-- **[Table Reference Collector](script-docs/collect_table_info.md)** - Documentation for the Azure Monitor metadata collector
-- **[Connector Documentation Generator](script-docs/generate_connector_docs.md)** - Documentation for the markdown generator
-- **[Kusto Upload Script](script-docs/upload_to_kusto.md)** - Documentation for uploading to Azure Data Explorer
+See the script documentation for details:
+- [Override System - data fields](script-docs/map_solutions_connectors_tables.md#override-system) (canonical reference)
+- [Override System - table info](script-docs/collect_table_info.md#override-system)
+- [Documentation Overrides - additional_information](script-docs/generate_connector_docs.md#documentation-overrides-and-additional-information)
 
 ---
 
 ## Version History
+
+### v9.6 - ASIM Field Collection & Schema Browser
+
+**ASIM Field Collection:**
+- New `collect_asim_fields.py` script collecting ASIM field definitions from three sources: Microsoft Learn documentation, ASimTester.csv, and physical table schemas (`table_schemas.csv`)
+- Merges fields by `(schema, field_name)` key with deduplication — tester/physical columns only populated when values differ from documentation
+- New output CSVs: `asim_fields.csv` (2445 fields across 13 schemas), `asim_entity_fields.csv`, `asim_logical_types.csv`, `asim_vendors_products.csv`
+- `--force-refresh=asim` (or `all`) now automatically re-runs `collect_asim_fields.py` with `--refresh-cache`, mirroring the existing `tables` → `collect_table_info.py` pattern
+
+**ASIM Schema Browser:**
+- New `generate_asim_browser.py` script producing an interactive ASIM Schema Browser (`asim-browser.html`)
+- Browser has primary tabs for each ASIM schema, with sub-tabs for Fields (interactive DataTable) and Parsers
+- Visual style matches the main `index.html` interactive index, with links to entity documentation pages
+
+### v9.5 - Extended Marketplace Data & Content Count Split
+
+**Extended Marketplace Data Collection:**
+- Expanded Azure Marketplace API integration from 2 fields (`is_published`, `marketplace_url`) to 19 `mp_*` fields in `solutions.csv`
+- New fields include: display name, summary, publisher name, preview/stop-sell status, creation/modification dates, categories, keywords, popularity score, user ratings, pricing model, and Microsoft product flag
+- Cache format changed from CSV (`marketplace_availability.csv`) to JSON (`marketplace_data.json`) with automatic migration of old cache
+- Added marketplace URL row to solution documentation pages
+- Combined marketplace row in connector and solution property tables uses "Rating:" and "Popularity:" labels for clarity
+
+**Content Item Count Splitting:**
+- Solution pages, statistics page, and interactive index now show separate counts for "in solution" vs "discovered" content items
+- CLv1 identification footnote includes accuracy caveat (CLv1 prefixes are allowed for CLv2)
+- Standardized discovered connector footnote format across all pages
+
+### v9.4 - Interactive HTML Index
+
+**Interactive HTML Index:**
+- New `index.html` with DataTables.js providing filterable, sortable, searchable tables
+- Six tabs: Solutions, Connectors, Tables, Content, Parsers, ASIM Parsers
+- Per-column dropdown filters, click-to-filter, global search, and "Clear All Filters" notification bar
+- Summary cards showing active/total counts for each entity type
+- Entity names link to their individual documentation pages
+- Collection method names link to method index pages
+- Solution logos displayed in Solutions and Connectors tabs
+- Navigation bar with links to static docs and statistics page
+- Status badges (Active/Deprecated/Unpublished), icons for CLv1 (🔶), schema (📖), discovered (🔍)
+- Content source indicators: 📦 Solution, 📄 Standalone, 🔗 GitHub Only
+- Standalone content sources show solution name as plain text (not linked), matching static indexes
+- Connectors tab includes all connectors (in-solution + discovered), matching connectors-index.md
+- Per-tab icon legends explaining all visual indicators
+- Can be run standalone or as part of `generate_connector_docs.py`
+- Supports `--html-output-dir` and `--html-docs-path` for placing index.html separately from docs (e.g. repo root for GitHub Pages)
+- Static markdown navigation bar (`write_browse_section`) automatically adjusts 🔍 Interactive link based on `--html-docs-path` or `--html-index-url`
+- Generates `.nojekyll` alongside `index.html` to prevent GitHub Pages from running Jekyll (which breaks on `{{` in Azure deployment templates)
+
+**HTML Entity Pages:**
+- When `--html-output-dir` is set with a relative `--html-docs-path`, the generator converts every markdown entity page to a styled HTML page alongside the `.md` file
+- Uses Python `markdown` library with tables, fenced code, sane lists, and toc extensions
+- The `toc` extension automatically generates `id` attributes on all headings, enabling in-page anchor links (e.g. `statistics.html#connectors`)
+- HTML pages share a consistent visual style (navbar, typography, responsive layout) via a shared `page.css` stylesheet
+- Internal `.md` links within pages are automatically rewritten to `.html`
+- Each HTML page includes a navbar linking back to the interactive index using relative paths (works both locally via `file://` and on GitHub Pages)
+- Browse-bar links to static index pages (e.g. `solutions-index.html`) are rewritten to `index.html#tab` links
+- `index.html` links automatically use `.html` extension when HTML entity pages are generated
+- Eliminates dependency on GitHub blob view for reading entity pages — everything is served from GitHub Pages
+
+### v9.3 - Solution Deprecation & Deprecation Dates
+
+**Solution-Level Deprecation Detection:**
+- New `is_deprecated` column in `solutions.csv` detecting solution-level deprecation from the Solution JSON `Description` field
+- Detection patterns: "this integration/solution is (considered) deprecated", "this integration/solution has been deprecated"
+- Deprecated solutions shown with 🚫 icon on solution pages and solutions index, with deprecation footnote
+- Currently detects 4 deprecated Mimecast legacy solutions (MimecastAudit, MimecastSEG, MimecastTIRegional, MimecastTTP), all replaced by the unified Mimecast solution
+
+**Deprecation Dates:**
+- New `deprecation_date` column in both `connectors.csv` and `solutions.csv`
+- Dates extracted from artifact descriptions near deprecation/retirement keywords (supports "Aug 31, 2024", "2024-08-31", markdown bold `**date**` formats)
+- Deprecation date shown in connector and solution property tables in generated docs
+- Both fields are overridable via the override CSV for artifacts without publicly-extractable dates
+
+**Enhanced Connector Deprecation Detection:**
+- Connector `is_deprecated` now also checks `availability.status` in the connector JSON definition (status 0 = deprecated), in addition to the existing `[DEPRECATED]` title check
+- Connectors belonging to deprecated solutions now inherit the solution's deprecated status
+
+
+### v9.2 - Ingestion API & Custom Log V1 Detection
+
+**Ingestion API Detection:**
+- New `ingestion_api` and `ingestion_api_reason` columns in `connectors.csv` identifying whether API-based connectors use the Log Ingestion API or HTTP Data Collector API
+- Detection rules:
+  1. CCF Push connectors → always Log Ingestion API (DCR-based, solution code pushes data)
+  2. Azure Function connectors → Python code scanning for API-specific patterns (e.g., `LogsIngestionClient` vs `SharedKey`/`build_signature`)
+  3. REST API / Custom Log connectors → JSON definition scanning for workspace key patterns (`sharedKeys`, `WorkspaceId`, `PrimaryKey`)
+  4. Fallback → table column suffix heuristic (>40% type-suffix columns `_s`/`_d`/`_b` indicates HTTP Data Collector API)
+  - CCF and CCF (Legacy) are excluded — their ingestion is platform-managed (Sentinel PaaS), not configurable by the connector author
+- Doc generator:
+  - Connector properties table includes "Ingestion API" row with link to API page
+  - New "Ingestion API by Collection Method" table on methods-index.md
+  - New per-API index pages (Log Ingestion API, HTTP Data Collector API, Undetermined) under methods/ with description, documentation links, statistics, and connector listings
+  - New "Ingestion API" subsection on statistics page with summary and by-collection-method breakdown
+
+**Custom Log V1 (CLv1) Detection:**
+- New `is_clv1` column in both `tables.csv` and `connectors.csv` identifying tables using the legacy Custom Log V1 schema format
+- Two detection rules:
+  1. Column suffix heuristic — tables where >40% of non-standard columns end with type suffixes (`_s`, `_d`, `_b`, `_t`, `_g`)
+  2. Connector-based inference — `_CL` tables from connectors using HTTP Data Collector API
+- A connector is marked CLv1 if any of its tables are CLv1
+- Doc generator:
+  - 🔶 icon shown next to CLv1 tables and connectors in all index pages, solution pages, and method pages
+  - CLv1 attribute shown in table and connector properties pages
+  - Footnote legend explaining the CLv1 icon added to relevant pages
+
+**Connector Association Improvements:**
+- Added `Resource` filter field for AzureDiagnostics/AzureMetrics/AzureActivity tables (identifies specific Azure resource instances, similar to `ResourceProvider`)
+- Added cross-field override: `CATEGORY_TO_RESOURCE_TYPE` mapping for AzureDiagnostics, allowing Category-only parsers to match ResourceType-filtered connectors (e.g., `ASimNetworkSessionAzureFirewall` now correctly associates with Azure Firewall)
+- Fixed `Table(Qualifier)` pattern in `dataTypes.name` extraction: connectors with names like `Event(ThreatIntelligenceIndicator)` now correctly extract the inner qualifier as the table name when no query is available
+
+**Table Detection Improvements:**
+- Added `project-keep` and `project-reorder` to pipe block commands, preventing false table detections from wildcard field patterns like `Event*` in `project-keep` statements
+
+### v9.1 - Connector Discovery
+
+**Connector Discovery - mainTemplate Fallback and Synthetic Connectors:**
+- New mainTemplate.json fallback: discovers connectors defined only as ARM `dataConnectorDefinitions` resources (not as standalone JSON files), resolving ARM variable references in ID/publisher fields
+- New synthetic connector override system: allows manually defining connectors with no discoverable definition files (e.g., SAP Docker agent) via `synthetic_connector` entries in the override CSV
+- Title-based deduplication prevents duplicates when the same connector appears in both Data Connectors files and mainTemplate.json
+- Both mainTemplate and synthetic connectors are classified as "In Solutions" (not "Discovered"), since they are formally part of their solution's package
+- Discovers 4 new connectors: Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin Activity (from mainTemplate), and Microsoft Sentinel for SAP (synthetic override)
+
+### v9.0 - Discovery Source Prioritization and Table Schema Discovery
+
+**Tables Index - Single Discovery Source:**
+- "Discovered Via" column now shows a single primary discovery source per table instead of all sources
+- Priority order: Connector > Content > Docs > Schema
+- "Docs" combines all documentation-based sources (Azure Monitor, Defender XDR, Sentinel Tables Doc, Feature Support Doc, Ingestion API Doc)
+- Tables index includes an explanation of the discovery sources and their priority hierarchy
+- Tables from standalone content items (e.g., GitHub-only playbooks without a solution) now correctly discovered as "Content"
+- Tables discovered only via `table_schemas.csv` now included in the index with "Schema" as discovery source
+- 📖 icon on tables index for tables with schema information
+
+**Table Pages - Documentation References:**
+- Table pages now show all applicable documentation references with specific names and links:
+  - Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+- Replaces the previous generic "Azure Monitor Docs" / "Defender XDR Docs" labels
+- Tables discovered via docs-only sources (e.g., Feature Support) now show the relevant doc link
+
+**Statistics Page - Detailed Discovery Breakdowns:**
+- Tables section with unified Discovery Sources table:
+  - **Discovered Via** column: single primary discovery source per table by priority (Connector > Content > per-doc-source > Schema)
+  - **Total** column: how many tables have each source regardless of priority, since a table can appear in multiple sources
+  - Doc sources shown individually with links: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+  - **Schema Sources** subsection: breakdown by origin (Azure Monitor docs, DCR, connector definitions, KQL validation)
+
+### v8.0 - Solution Dependencies, CCF Legacy, Capabilities Statistics, and Table Schemas
+
+**Table Schemas from DCR Definitions, ARM Table Definitions, and Azure Monitor Documentation:**
+- New `table_schemas.csv` output file combining column schemas from four sources:
+  - **DCR files** (`*_DCR.json`): stream declarations for CCP/CCF connectors with column name, type, stream name, transform KQL, connector ID, solution name. Only passthrough streams (no transform, or trivial `source` transform) emit schema rows so vendor-specific input columns are not attributed to ASIM output tables.
+  - **Azure Monitor docs**: column schemas from rendered learn.microsoft.com table reference pages with column name, type, description
+  - **ARM table definition files** in `Solutions/*/Data Connectors/` directories (`type: Microsoft.OperationalInsights/workspaces/tables`): extracts `properties.schema.columns` (name, type, description). Source labeled as "Connector definition" with GitHub URL.
+  - **KQL validation tables** (`.script/tests/KqlvalidationsTests/CustomTables/`): table schemas used for CI query validation, only for `_CL` custom log tables not already covered by the other sources
+- New `la_table_schemas.csv` intermediate file generated by `collect_table_info.py` containing documentation-sourced column schemas
+- New `source` and `description` columns in `table_schemas.csv` to distinguish data origin
+- New `source_url` column in `table_schemas.csv` with link to the source file (GitHub for DCR/KQL validation, learn.microsoft.com for docs)
+- Doc generator: new **Schema** section on table pages showing column definitions (name, type, description, source) from `table_schemas.csv`
+- Doc generator: schema source attribution with clickable links shown at top of Schema section
+- Doc generator: table names in tables index no longer wrapped in backticks for cleaner display
+- Doc generator: tables that exist only in `table_schemas.csv` now get their own documentation pages with schema information
+
+**Solution Dependencies:**
+- New `solution_dependencies.csv` mapping file tracking both explicit and ASIM-based dependencies between solutions
+- Explicit dependencies extracted from `dependentDomainSolutionIds` in solution definitions
+- ASIM-based dependencies (optional): solutions using ASIM parsers list all solutions whose connectors can feed those parsers as potential dependencies
+- Doc generator: new **Dependencies** section on solution pages listing dependency solutions with type and details
+- Doc generator: dependency connectors appended to the connectors list with "(dependency on solution X)" suffix
+- Doc generator: dependency tables included in the tables section with "(dependency)" suffix on connector names
+- Uploader: new CSV included in `--solution-analyzer` mode
+
+**CCF (Legacy) Collection Method:**
+- New `CCF (Legacy)` collection method for connectors with embedded `pollingConfig` in their primary ARM template and no separate CCF config file
+- Capabilities (auth type, paging, POST) extracted from embedded `pollingConfig` for legacy CCF connectors
+- Improved `find_ccf_config_file()` detection: now finds `connectors.json` (Bitwarden-style) and searches sibling `*_ccp/` subdirectories (GCP-style)
+
+**CCF Capabilities Statistics:**
+- New **CCF Capabilities** subsection on the statistics page with breakdown of connector kind, authentication methods, and request features across all CCF/CCF Push/CCF Legacy connectors
+- New `Nested` capability: detects `stepType: Nested` in CCF config files
+- Improved `MvExpand` detection: now uses `nestedTransformName` containing `MvExpandTransformer` instead of text-based search
+
+**Custom Log Table Rules (collect_table_info.py):**
+- All `_CL` tables now correctly marked as supporting Ingestion API
+- `_CL` tables with lake-only support now also marked as supporting transformations
+
+**Bug Fixes:**
+- Fixed empty Product column in ASIM union parser pages (e.g., `imDns`): sub-parsers listed with `_Im_` prefix now correctly resolve product names and page links from `_ASim_` source parser data
+- Excluded empty parsers (e.g., `_Im_Dns_Empty`, `_Im_AlertEvent_Empty`) from the Products table on union parser pages
+- Fixed broken links to sub-parser pages on union parser pages: `_Im_` prefixed sub-parsers now correctly link to their `_ASim_` parser page files
+
+### v7.9.1 - CCF Push and CCF Capabilities
+
+**CCF Push Collection Method:**
+- New collection method `CCF Push` for connectors using CCF in push mode (partner pushes data via DCR/DCE)
+- `DeployPushConnectorButton` + `HasDataConnectors` pattern now classified as "CCF Push" instead of "CCF"
+- Separate documentation page and metadata for CCF Push in generated docs
+
+**CCF Configuration and Capabilities:**
+- New `ccf_config_file` column in `connectors.csv`: GitHub URL to the CCF configuration file (polling/poller/push config)
+- New `ccf_capabilities` column in `connectors.csv`: semicolon-separated capabilities extracted from the config JSON
+- Capabilities include: connector kind (GCP, Push, etc.), auth type (APIKey, OAuth2, Basic, JwtToken), Paging, POST, MvExpand
+- Connector detail pages in generated docs now display **CCF Configuration** link and **CCF Capabilities** for CCF/CCF Push connectors
+
+### v7.9 - Kusto Uploader
+
+**New Tool: `upload_to_kusto.py`**
+- Upload CSV files to Azure Data Explorer (Kusto) clusters
+- **Solution Analyzer mode** (`--solution-analyzer`): uploads all 12 Solution Analyzer CSVs with predefined table names
+- **Custom CSV mode**: upload any CSV files with automatic schema detection
+- **Local source directory** (`--source-dir`): read Solution Analyzer CSVs from a local folder instead of downloading from GitHub
+- **Dry run mode** (`--dry-run`): preview operations before executing
+- Uses Azure CLI authentication and Kusto queued ingestion
+- All columns created as `string` type with automatic CSV mapping
+
+### v7.8 - Lake-Only Ingestion, Collection Methods Index, and Enhanced Documentation
+
+**Lake-Only Ingestion Support:**
+- New data source: [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) provides lake-only ingestion status for ~474 tables
+- New `lake_only_supported` field in `tables_reference.csv` and `tables.csv`
+- New `source_sentinel_tables` field tracks data source for each table
+- **Tables Ingested** sections on connector pages now include **Lake-Only** column
+- Individual table pages display **Lake-Only Ingestion** property in attributes table
+
+**Transformation Support Enrichment:**
+- `supports_transformations` is now enriched from Sentinel reference when feature-support page has no data
+- Mismatch validation generates `transformation_support_mismatch_report.md` when sources disagree
+- Removed redundant `supports_dcr` field (consolidated into `supports_transformations`)
+
+**Collection Methods Index:**
+- New `methods-index.md` page with all collection methods organized by category
+- Individual method pages with descriptions, documentation links, and connector lists
+- Collection method column in connector indexes now links to method detail pages
+- Method metadata includes official Microsoft documentation references
+
+**Connector Documentation Overrides:**
+- Connector pages now support `additional_information` overrides (previously only tables)
+- Added 20+ curated documentation links for major vendors (Palo Alto, Fortinet, Cisco, Zscaler, AWS, F5, etc.)
+- Solution pages also support `additional_information` overrides
+
+**Device Configuration Overrides:**
+- Added 19 new device configuration overrides for Custom Logs via AMA products
+- Covers Apache, Tomcat, Cisco Meraki, JBoss, Juniper, MarkLogic, MongoDB, NGINX, Oracle WebLogic, PostgreSQL, SecurityBridge, Squid Proxy, Ubiquiti, VMware vCenter, Zscaler Private Access
+
+**Cache and Performance:**
+- New `--force-refresh` parameter for mapper script with selective refresh by analysis type
+- Supported types: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`
+- Use `all` for full refresh or `all-offline` for offline-only types
+- Logging added in `.logs/` folder
+
+**Documentation Improvements:**
+- Script docs updated with Data Source column showing where each field is derived
+- Updated examples and command-line options documentation
+- Added `content_items.csv` to pre-generated files list in README
+
+### v7.7 - Connector Association for ASIM Parsers and Standalone Content
+
+**Connector Association:**
+- ASIM parsers and standalone/GitHub Only content items are now associated with connectors based on:
+  1. **Shared tables**: The connector and parser/content must use the same table(s)
+  2. **Filter field matching**: Connector filter values must be a subset of (or equal to) the parser/content filter values
+
+**New CSV Fields:**
+- `asim_parsers.csv`: Added `associated_connectors`, `associated_solutions` - Connectors providing data for each parser
+- `content_items.csv`: Added `associated_connectors`, `associated_solutions` - Connectors for standalone/GitHub Only items
+
+**Documentation Enhancements:**
+- **ASIM Parser Pages**: New "Associated Connectors" section showing connectors that provide relevant data
+- **Standalone Content Pages**: New "Associated Connectors" section for items not part of a solution
+- Links to connector pages and related solution pages for easy navigation
+
+
+### v7.6 - Extended Filter Fields
+
+**New Filter Fields Added:**
+- `EventType` (ASIM tables) - ASIM normalized event type
+- `ResourceProvider` (AzureActivity) - Azure resource provider
+- `ActionType` (DeviceEvents, DeviceFileEvents, DeviceProcessEvents, etc.) - Microsoft Defender XDR action type
+- `OperationName` (AuditLogs, AzureActivity, OfficeActivity, SigninLogs) - Azure/M365 operation name
+- `OfficeWorkload` (OfficeActivity) - Office 365 workload type (Exchange, SharePoint, etc.)
+- `RecordType` (OfficeActivity) - Office 365 record type (numeric)
+
+- **RecordType** supports numeric matching like EventID (equality and in operators only)
+- **ActionType** covers MDE/XDR tables for Defender content detection
+- **OperationName** captures Azure Activity, Audit Logs, and Office Activity operations
+- Total supported filter fields increased from 15 to 22
+
+### v7.5 - Statistics Page and Filter Fields Enhancements
+
+**Unified Statistics Page:**
+- New `statistics.md` page consolidates statistics from all index pages
+- Accessible via 📊 icon in navigation bar on all pages
+- Detailed breakdowns by content type, solution, and source
+
+**Filter Fields Detection:**
+- Analyzes KQL queries to extract filter field conditions that identify data sources
+- Generates `filter_fields` column in CSV outputs with structured format: `Table.Field operator "value"`
+
+*Supported Filter Fields:*
+- `DeviceVendor` (CommonSecurityLog) - CEF vendor identifier
+- `DeviceProduct` (CommonSecurityLog) - CEF product identifier
+- `DeviceEventClassID` (CommonSecurityLog) - CEF event class
+- `EventVendor` (ASIM tables) - Normalized vendor field
+- `EventProduct` (ASIM tables) - Normalized product field
+- `EventType` (ASIM tables) - Normalized event type
+- `ResourceType` (AzureDiagnostics) - Azure resource type
+- `Category` (AzureDiagnostics) - Diagnostic category
+- `ResourceProvider` (AzureActivity) - Azure resource provider
+- `EventID` (WindowsEvent/SecurityEvent/Event) - Windows event ID
+- `Source` (Event) - Windows Event Log source
+- `Provider` (WindowsEvent) - Windows event provider
+- `Facility` (Syslog) - Syslog facility
+- `ProcessName` (Syslog) - Syslog process name
+- `ProcessID` (Syslog) - Syslog process ID
+- `SyslogMessage` (Syslog) - Syslog message content
+- `EventName` (AWSCloudTrail) - AWS API event name
+- `ActionType` (DeviceEvents/DeviceFileEvents/etc.) - MDE/XDR action type
+- `OperationName` (AuditLogs/AzureActivity/OfficeActivity/SigninLogs) - Operation name
+- `OfficeWorkload` (OfficeActivity) - Office 365 workload
+- `RecordType` (OfficeActivity) - Office 365 record type
+
+*Supported Operators:*
+- **Equality**: `==`, `=~` (case-insensitive), `!=`
+- **In operators**: `in`, `in~` (case-insensitive), `!in`
+- **String operators**: `has`, `has_any`, `has_all`, `contains`, `startswith`, `endswith`
+- **Negative string operators**: `!has`, `!contains`, `!startswith`, `!endswith`
+- **Case-sensitive variants**: `has_cs`, `contains_cs`, `startswith_cs`, `endswith_cs`
+
+*Detection Features:*
+- Table-aware field mapping (e.g., `EventID` mapped to WindowsEvent/SecurityEvent based on query context)
+- Skips fields in `extend`/`project` statements (computed values, not filters)
+- Variable resolution for `let` statement lists (e.g., `let EventList = dynamic([...])`)
+- Operator folding: multiple `==` values combined into single `in` operator
+- Case-sensitivity deduplication: `=~` subsumes `==` for same value
+
+*CSV Fields Generated:*
+- `connectors.csv`: `filter_fields`, `event_vendor`, `event_product`, `event_vendor_product_by_table`
+- `content_items.csv`: `content_filter_fields`, `content_event_vendor`, `content_event_product`
+- `parsers.csv` / `asim_parsers.csv`: `filter_fields`
+
+**Field-Specific Selection Criteria Tables:**
+- Added breakdown tables in the Selection Criteria Summary section for each filter field
+- Splits compound criteria (e.g., `field in ("a","b")`) into individual values for accurate counting
+- Paired field tables for commonly used together fields:
+  - **DeviceProduct / DeviceVendor**: Shows product-vendor combinations
+  - **EventProduct / EventVendor**: Shows event product-vendor combinations
+  - **Facility / ProcessName**: Shows facility-process combinations
+- Individual field tables for all other fields (e.g., DeviceEventClassID, SyslogMessage, EventID)
+- Displays just the value for `==` operators, operator + value for others (e.g., `has RPZ`, `!= health`)
+
+**Selection Criteria Display Improvements:**
+- Smart content items section: when all items share the same selection criteria, displayed in header instead of column
+- Parser filter fields merged into content page tables for complete context
+- Operator normalization in display: case-insensitive operators (`=~`, `in~`) consolidated with case-sensitive equivalents
+
+### v7.4 - Field Standardization
+
+**solution_folder Field Standardization:**
+- `solution_folder` now consistently contains just the folder name (e.g., `1Password`) across all CSV files
+- New `solution_github_url` field contains the full GitHub URL (e.g., `https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password`)
+- This change ensures consistent cross-referencing between CSV files and enables reliable path construction in scripts
+
+**Affected CSV Files:**
+- `solutions_connectors_tables_mapping.csv` - Added `solution_github_url` field
+- `solutions.csv` - Added `solution_github_url` field
+- `content_items.csv` - Added `solution_github_url` field
+- `content_tables_mapping.csv` - Added `solution_github_url` field
+- `parsers.csv` - Added `solution_github_url` field
+- Issues report - Added `solution_github_url` field
+
+**Bug Fixes:**
+- Fixed false positive table extraction from KQL string literals (e.g., `"USAGE"`, `"alert"` inside quoted strings are no longer extracted as tables)
+
+### v7.3 - Standalone Content Items
+
+
+**Standalone Content Collection:**
+- Collects content items from top-level repository directories (not part of Solutions):
+  - `Detections/` - Analytic rules (YAML)
+  - `Hunting Queries/` - Hunting queries (YAML)
+  - `Workbooks/` - Workbooks (JSON)
+  - `Playbooks/` - Playbooks (folders with azuredeploy.json)
+  - `Summary rules/` - Summary rules (YAML)
+  - `Watchlists/` - Watchlists (folders with watchlist.json)
+- Added 1,709 standalone content items to documentation
+
+**Content Source Classification:**
+- New `content_source` column classifies content items by origin:
+  - **Solution**: Content from Solutions/ folder (74% of items)
+  - **Standalone**: Top-level content with YAML metadata section (6.6% of items)
+  - **GitHub Only**: Top-level content without metadata (19.3% of items)
+- Statistics output now includes Content Source Distribution breakdown
+
+**YAML Metadata Extraction:**
+- Extracts `metadata` section from YAML files to determine Standalone vs GitHub Only classification
+- New columns: `metadata_source_kind`, `metadata_author`, `metadata_support_tier`, `metadata_categories`
+- `content_github_url`: Direct GitHub URL for standalone content items
+
+**Stub File Detection:**
+- Automatically skips stub files (content that has been moved to Solutions)
+- Detects patterns like "moved to new location", "content migration", "file has been moved"
+
+### v7.2 - Parser Documentation and Table Integration
+
+**New Parser Documentation:**
+- **Parser Index Page** (`parsers/parsers-index.md`): Browse all 570 parsers organized by solution with quick statistics
+- **Individual Parser Pages**: Dedicated documentation pages for each parser with:
+  - Source tables extracted from parser queries
+  - GitHub source file links
+  - Solution references and product information
+  - Parser type (ASIM vs non-ASIM)
+- **ASIM Products Index** (`asim/asim-products-index.md`): View ASIM parsers organized by product/vendor
+- **Parsers CSV** (`parsers.csv`): Complete parser catalog with 570 entries including solution parsers and 35 legacy parsers
+- Parsers marked as "discovered" when found in solution folders but not listed in Solution JSON
+
+**Parser-Table Integration:**
+- Table pages now include **Parsers** section showing all parsers using that table
+- Both ASIM and non-ASIM parsers are listed on table pages
+- Fixed GitHub URL encoding for paths containing spaces
+
+**Improved Parser-to-Table Resolution:**
+- Fixed table extraction from solution-specific parsers (not just ASIM parsers)
+- Added support for legacy parsers in the top-level `/Parsers/*` directories (pre-Solutions parsers)
+- Parser expansion now works for union parsers that reference sub-parsers
+- Fixed parser name normalization to handle file extensions (.kql, .yaml, etc.)
+- Added support for both "Parsers" and "Parser" folder naming conventions in solutions
+
+**Coverage Improvements:**
+- Analytic rules with detected tables: 99.7% (up from ~65%)
+- Hunting queries with detected tables: 98.5%
+- Content-table mappings nearly doubled through proper parser expansion
+
+### v7.1 - Azure Marketplace Availability
+
+**Marketplace Publication Status:**
+- Added Azure Marketplace availability checking for all solutions
+- Solutions not yet published on Azure Marketplace are marked with ⚠️ (unpublished) icon
+- Deprecated connectors are marked with 🚫 icon
+- Statistics now show published/unpublished breakdown
+- Marketplace results are cached locally in `.cache/marketplace_availability.csv` for fast subsequent runs
+
+**New CSV Fields:**
+- `is_published`: Boolean indicating if solution is available on Azure Marketplace (in all CSVs)
+- `marketplace_url`: Direct URL to Azure Marketplace listing (in solutions.csv)
+
+**New/Changed Command Line Arguments for map_solutions_connectors_tables.py:**
+- Marketplace checking is now **enabled by default** (uses cached results for speed)
+- `--skip-marketplace`: Skip marketplace availability checking
+- `--refresh-marketplace`: Force refresh of marketplace cache, ignoring cached results
+
+**Documentation Improvements:**
+- Unpublished solutions show ⚠️ icon in titles and table cells with explanatory footnote
+- Deprecated connectors show 🚫 icon in titles and table cells with explanatory footnote
+- Quick Statistics table now shows published/unpublished counts separately
+
+### v7.0 - ASIM Parser Documentation
+
+**New ASIM Parser Analysis and Documentation:**
+- Added comprehensive ASIM parser extraction from `/Parsers/ASim*/Parsers` directories
+- New `asim_parsers.csv` file containing all parser metadata:
+  - Parser name, equivalent built-in name, schema, version
+  - Parser type (union, source, empty), product name, description
+  - Source tables extracted from parser queries
+  - Sub-parser references for union parsers
+  - Parser parameters, references, and source file links
+
+**ASIM Documentation Generation:**
+- New **ASIM Index** page (`asim/asim-index.md`) grouped by schema (Dns, NetworkSession, Authentication, etc.)
+- Individual parser documentation pages with:
+  - Parser metadata (name, built-in alias, schema, version)
+  - Parser type indicators (📦 Union, 🔌 Source, ⬜ Empty)
+  - Source tables with links to table documentation
+  - Sub-parser references with navigation links
+  - Parameter documentation
+  - GitHub source file links
+
+**New Command Line Arguments:**
+- `--asim-parsers-csv` for map_solutions_connectors_tables.py
+- `--asim-parsers-csv` for generate_connector_docs.py
+
+### v6.0 - Solution Logos, Descriptions, and Enhanced Metadata
+
+**The solution documentation now includes information from the `Data/Solution_*.json` files in addition to `SolutionMetadata.json`:**
+- **Solution logos** now appear on solution pages and in the solutions index for visual identification
+- **Solution descriptions**, **Dependencies** and **Author Information** are included in each solution page.
+- **Official solution names** from Solution JSON are used (may differ from folder names)
+- **Summary rules** now supported as a new content type
+
+Items found by scanning but not listed in Solution JSON are marked with ⚠️ in documentation
+
+**New CSV Fields in solutions.csv:**
+- `solution_logo_url`: URL to the solution's logo image
+- `solution_description`: Full solution description
+- `solution_version`: Version from Solution JSON
+- `solution_author_name`: Author name from Solution JSON
+- `solution_dependencies`: Semicolon-separated list of dependent solution IDs 
+
+**Bug Fixes:**
+- Content item filenames use hash-based uniqueness to prevent collisions
+- Fixed Solution JSON key variant handling (e.g., `AnalyticsRules` vs `Analytic Rules`)
+- Excluded Images, Templates, and Training folders from content scanning
+
+### v5.2 - Bug Fixes and Improvements
+
+- Fixed `sanitize_filename()` to handle Windows-invalid characters (`: * ? " < > |`), enabling ~20 previously-missing content files
+- Fixed content item filename collisions by including solution name and adding collision detection
+- Fixed table page case-insensitive filename collisions on Windows
+- Improved index page statistics with accurate table counts and content item metrics
 
 ### v5.1 - Documentation Overrides and Additional Information
 
@@ -217,11 +744,6 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 
 ### v4.2
 
-- Added `solution_analyzer_upload_to_kusto.py` script to upload CSV files to Azure Data Explorer (Kusto)
-  - Uses managed streaming ingestion for fast uploads (same method as ADX "Get Data" UI)
-  - Creates 6 lookup tables: table reference, connectors, tables, solutions, mapping, and full mapping
-  - Supports Azure CLI authentication via DefaultAzureCredential
-  - Includes dry-run mode for previewing changes
 - Added **override system** for customizing output field values
   - Override file uses CSV format with Entity, Pattern, Field, Value columns
   - Supports regex pattern matching (case insensitive, full match) including negative lookbehind
