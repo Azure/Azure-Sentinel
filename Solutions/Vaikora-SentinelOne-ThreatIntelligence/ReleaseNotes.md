@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
-| 3.0.0 | 02-04-2026 | Initial release. Polls Vaikora AI Agent Security API every 6 hours for high-severity and anomaly actions, pushes IOCs to SentinelOne Threat Intelligence API. SHA256 IOC type from log_hash, risk score severity mapping (0-100 to SentinelOne 2-7), STAR rule auto-creation, Content Hub ready. |
+| 3.0.0 | 28-04-2026 | Initial release. Polls Vaikora AI Agent Security API every 6 hours for high-severity and anomaly actions, pushes IOCs to SentinelOne Threat Intelligence API. SHA256 IOC type from log_hash, risk score severity mapping (0-100 to SentinelOne 2-7), STAR rule auto-creation, Content Hub ready. Added top-level metadata block to standalone playbook, renamed logicAppName parameter to PlaybookName, set playbookVersion1 to "1.0.0" to match hidden-SentinelTemplateVersion tag, per Cyren-SentinelOne reference pattern. |
