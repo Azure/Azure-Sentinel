@@ -282,8 +282,8 @@ def get_utc_time() -> str:
         e.g., '2025-06-26T14:03:12.123Z'.
     """
     current_time = datetime.now(timezone.utc)
-    formatted_time = (
-        current_time.strftime(UTC_DATE_FORMAT)
+    formatted_time = current_time.isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
     )
     return formatted_time
 
