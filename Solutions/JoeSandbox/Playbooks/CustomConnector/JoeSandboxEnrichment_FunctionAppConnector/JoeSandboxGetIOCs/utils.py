@@ -14,7 +14,6 @@ from os import environ
 JOE_SANDBOX_BASE_URL= environ["JoeSandboxBaseURL"]
 IOC_LIST = ["domains", "ips", "urls", "files"]
 CONFIDENCE = {"malicious": "100", "suspicious": "75"}
-INDICATOR_LIST = []
 HASH_TYPE_LIST = [
     ("MD5", "md5"),
     ("SHA-1", "sha1"),
