@@ -18,23 +18,15 @@ from .pyepm import (
 from .storage import AzureBlobStorage, LocalStorage
 
 
-def _get_env(*names: str, default=None):
-    for name in names:
-        value = os.environ.get(name)
-        if value is not None and value != '':
-            return value
-    return default
+client_id = os.environ.get('OAuthUsername')
+client_secret = os.environ.get('OAuthPassword')
+identity_endpoint = os.environ.get('IdentityEndpoint')
+epm_host = os.environ.get('EPMRegionHost')
+webapp_id = os.environ.get('WebAppID')
 
+fetch_interval_minutes = int(os.environ.get('FetchInterval', '60'))
 
-client_id = _get_env('OAUTH_USERNAME', 'OAuthUsername')
-client_secret = _get_env('OAUTH_PASSWORD', 'OAuthPassword')
-identity_endpoint = _get_env('IDENTITY_ENDPOINT', 'IdentityEndpoint')
-epm_host = _get_env('EPM_HOST', 'EPMHost')
-webapp_id = _get_env('WEBAPP_ID', 'WebAppID')
-
-fetch_interval_minutes = int(_get_env('FETCH_INTERVAL', 'FetchInterval', default='60'))
-
-storage = LocalStorage() if _get_env('STORAGE', 'Storage') == 'LocalStorage' else AzureBlobStorage()
+storage = LocalStorage() if os.environ.get('STORAGE', 'Storage') == 'LocalStorage' else AzureBlobStorage()
 
 TOKEN_FILE_NAME = 'token.json'
 EPM_TENANT_URL_FILE_NAME = 'epm_tenant_url.json'
