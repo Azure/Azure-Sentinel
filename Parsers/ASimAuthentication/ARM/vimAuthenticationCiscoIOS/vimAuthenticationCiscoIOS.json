@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAuthenticationCiscoIOS')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM filtering parser for Cisco IOS Syslog Message",
+        "category": "ASIM",
+        "FunctionAlias": "vimAuthenticationCiscoIOS",
+        "query": "let parser = (starttime: datetime=datetime(null), \n  endtime: datetime=datetime(null), \n  username_has_any: dynamic = dynamic([]),\n  targetappname_has_any: dynamic = dynamic([]),\n  srcipaddr_has_any_prefix: dynamic = dynamic([]),\n  srchostname_has_any: dynamic = dynamic([]),\n  eventtype_in: dynamic = dynamic([]),\n  eventresultdetails_in: dynamic = dynamic([]),\n  eventresult: string = '*',\n  disabled: bool = false) {\n  let EventResultDetailsLookup = datatable(EventOriginalResultDetails: string, EventResultDetails: string)\n  [\n      \"Login Authentication Failed - BadUser\", \"No such user or password\",\n      \"Login Authentication Failed\", \"Incorrect password\"\n  ];\n  let LoginSuccessIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SEC_LOGIN-5-LOGIN_SUCCESS\"\n      | parse SyslogMessage with * \"%SEC_LOGIN-5-LOGIN_SUCCESS: Login Success [user:\" TargetUsername: string \"] [Source:\" SrcIpAddr: string \"] [localport: \" SrcPortNumber: string \"]\" *\n      | extend EventType = \"Logon\", EventResult = \"Success\"\n  };\n  let LoginFailureIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SEC_LOGIN-4-LOGIN_FAILED\"\n      | parse SyslogMessage with * \"%SEC_LOGIN-4-LOGIN_FAILED: Login failed [user:\" TargetUsername: string \"] [Source:\" SrcIpAddr: string \"] [localport: \" SrcPortNumber: string \"] [Reason: \" EventOriginalResultDetails: string \"]\" *\n      | extend EventType = \"Logon\", EventResult = \"Failure\"\n  };\n  let LogoutIOS = (T: (SyslogMessage: string)) {\n      T\n      | where SyslogMessage has \"%SYS-6-LOGOUT\"\n      | parse SyslogMessage with * \"%SYS-6-LOGOUT: User \" TargetUsername: string \" \" * \"(\" SrcIpAddr: string \")\"\n      | extend EventType = \"Logoff\", EventResult = \"Success\"\n  };\n  let SyslogLogs = Syslog\n  | where not(disabled);\n  union\n      LoginSuccessIOS(SyslogLogs),\n      LoginFailureIOS(SyslogLogs),\n      LogoutIOS(SyslogLogs)\n  | extend\n      EventSchema = \"Authentication\",\n      EventSchemaVersion = \"0.1.4\",\n      EventVendor = \"Cisco\",\n      EventProduct = \"IOS\",\n      EventCount = int(1),\n      EventStartTime = EventTime,\n      EventEndTime = EventTime,\n      Type = \"Syslog\"\n  | project-rename\n      DvcIpAddr = HostIP,\n      EventOriginalSeverity = SeverityLevel,\n      EventMessage = SyslogMessage\n  | lookup EventResultDetailsLookup on EventOriginalResultDetails\n  | extend\n      EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),\n      SrcPortNumber = toint(SrcPortNumber),\n      TargetUsernameType = iff(isnotempty(TargetUsername), \"Simple\", \"\"),\n      TargetIpAddr = iff(ipv4_is_in_range(HostName, \"0.0.0.0/0\"), HostName, \"\")\n  | extend\n      Dvc = DvcIpAddr,\n      Src = SrcIpAddr,\n      IpAddr = SrcIpAddr,\n      User = TargetUsername\n  | project\n      TimeGenerated,\n      Type,\n      EventType,\n      EventResult,\n      EventSchema,\n      EventSchemaVersion,\n      EventVendor,\n      EventProduct,\n      EventCount,\n      EventStartTime,\n      EventEndTime,\n      DvcIpAddr,\n      EventOriginalSeverity,\n      EventSeverity,\n      EventOriginalResultDetails,\n      EventResultDetails,\n      TargetUsername,\n      TargetUsernameType,\n      SrcIpAddr,\n      SrcPortNumber,\n      TargetIpAddr,\n      Dvc,\n      Src,\n      IpAddr,\n      User\n};\nparser(starttime=starttime,\n    endtime=endtime,\n    username_has_any=username_has_any,\n    targetappname_has_any=targetappname_has_any,\n    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,\n    srchostname_has_any=srchostname_has_any,\n    eventtype_in=eventtype_in,\n    eventresultdetails_in=eventresultdetails_in,\n    eventresult=eventresult,\n    disabled=disabled)",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),username_has_any:dynamic=dynamic([]),targetappname_has_any:dynamic=dynamic([]),srcipaddr_has_any_prefix:dynamic=dynamic([]),srchostname_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+      }
+    }
+  ]
+}

@@ -1,3 +1,12 @@
+## 2.1.0
+- Fixed event normalization.
+
+## 2.0.0
+- Refactored the plugin from Ruby to Java.
+- Added ManagedIdentity authentication.
+- Moved codebase from GitHub to Azure DevOps.
+- Closed codebase.
+
 ## 1.2.0
 - Adds managed identity authentication support for Azure VMs/VMSS (system-assigned and user-assigned via IMDS).
 - Adds AKS workload identity support via OIDC token exchange.

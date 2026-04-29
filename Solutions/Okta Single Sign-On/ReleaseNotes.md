@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |
+| 3.1.6       | 14-04-2026                     | Deprecate Okta Single Sign-On (using Azure Function) |
+| 3.1.5       | 02-04-2026                     | Rename CCF solution to Okta Single Sign-On (via Codeless Connector Framework).<br> Add SessionId variable and reference in template. |
 | 3.1.4       | 13-01-2026                     | Updated non-functional link from MFA Fatigue (OKTA) **Analytic rule** |
 | 3.1.3       | 05-02-2025                     | Version Update |
 | 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
