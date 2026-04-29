@@ -48,19 +48,23 @@ Installation
 
 **3\. Create KeyVault Secrets:**
 
-*   Azure Portal -> KeyVault -> Secrets -> Generate/Import -> Manual:
-    *   Name: access-token, Value: (Your Commvault/Metallic access token), Enabled: Yes -> Create.
-    *   Name: refresh-token, Value: (Your Commvault/Metallic refresh token), Enabled: Yes -> Create.
-    *   Name: environment-endpoint-url, Value: (Your Commvault/Metallic endpoint's URL), Enabled: Yes -> Create.
+*   Go to Azure Portal -> KeyVault -> Secrets
+*   Create following secrets each by clicking on Generate/Import -> Manual:
+
+| Name | Value | Enabled | Action |
+|---|---|---|---|
+| `"access-token"` | (Your Commvault/Metallic access token) | Yes | Create |
+| `"refresh-token"` | (Your Commvault/Metallic refresh token) | Yes | Create |
+| `"environment-endpoint-url"` | (Your Commvault/Metallic endpoint's URL) | Yes | Create |
 
 **4\. Install Commvault Cloud Solution:**
 
-*   Sentinel -> Content hub -> Search "Commvault Cloud" -> Install.
+*   Sentinel -> [Your Workspace] -> Content hub -> Search "Commvault Cloud" -> Install.
 
 **5\. Configure Data Connector:**
 
 *   Commvault Cloud -> CommvaultSecurityIQ (using Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
-*   For a detailed step-by-step guide, refer to [DataConnector.md](./DataConnector.md).
+*   For a detailed step-by-step guide and post-deployment steps, refer to [DataConnector.md](./DataConnector.md).
 *   The deployment creates the following resources:
     - Azure Function App with System-Assigned Managed Identity
     - Data Collection Endpoint (DCE)

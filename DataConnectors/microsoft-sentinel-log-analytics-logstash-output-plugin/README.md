@@ -3,10 +3,10 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.2.1
-Released on: 2026-03-06
+Plugin version: v2.1.0  
+Released on: 2026-04-14
 
-This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
+This plugin is currently in development and is free to use. We request and appreciate feedback from users.
 
 ## Installation Instructions
 1) Install the plugin
@@ -20,7 +20,7 @@ This plugin is currently in development and is free to use. We welcome contribut
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.
 
-The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.1.0-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
 
 If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 

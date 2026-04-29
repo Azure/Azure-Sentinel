@@ -1,5 +1,13 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.11
+
+- (2026-04-29) Add parser Cisco DNAC events from Syslog - [PR #14135](https://github.com/Azure/Azure-Sentinel/pull/14135)
+
+## Version 0.3.10
+
+- (2026-04-09) Add parser Cisco ISE administrator events from Syslog - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
+
 ## Version 0.3.9
 
 - (2026-04-08) Add initial filtering parser for Palo Alto PAN-OS GlobalProtect authentication logs from CommonSecurityLog - [PR #14012](https://github.com/Azure/Azure-Sentinel/pull/14012)
