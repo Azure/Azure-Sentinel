@@ -1,61 +1,387 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "metadata": {
-        "title": "Cyren to Defender TI - Playbook",
-        "description": "This playbook polls the Cyren CCF threat intelligence feed and pushes STIX indicators to Microsoft Sentinel's ThreatIntelligenceIndicator table via the Sentinel TI createIndicator API.",
-        "prerequisites": [
-            "Cyren CCF API JWT Bearer token",
-            "Microsoft Sentinel workspace with Sentinel enabled",
-            "Logic App managed identity must have Microsoft Sentinel Contributor role on the workspace",
-            "Logic App managed identity must have Storage Blob Data Contributor role on the storage account"
-        ],
-        "postDeployment": [
-            "1. Verify the Logic App recurrence is 6 hours (NOT 15 minutes)",
-            "2. Verify count=1000 and queryWindowInMin=360 in the Cyren API URL",
-            "3. Verify PersistentToken pagination (NOT Offset)",
-            "4. Check RBAC role assignments for the Logic App managed identity",
-            "5. Enable the Logic App (it deploys in Disabled state)",
-            "6. Run one manual trigger and check the run history",
-            "7. Monitor for runaway polling in the first 24 hours"
-        ],
-        "lastUpdateTime": "2026-03-25T00:00:00.000Z",
-        "tags": [
-            "Cyren",
-            "Threat Intelligence",
-            "Defender",
-            "STIX",
-            "Automation"
-        ],
-        "support": {
-            "tier": "Partner"
-        },
-        "author": {
-            "name": "Data443 Risk Mitigation, Inc."
-        },
-        "entities": [],
-        "releaseNotes": [
-            {
-                "version": "1.0.0",
-                "title": "CyrenToDefenderTI_Playbook",
-                "notes": [
-                    "Initial version of Cyren to Microsoft Defender TI playbook with dual-feed support"
-                ]
-            }
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Cyren to Defender TI - Playbook",
+    "description": "Polls the Cyren CCF threat intelligence feed and pushes STIX indicators to Microsoft Sentinel via the createIndicator API.",
+    "prerequisites": [
+      "Cyren CCF API JWT Bearer token",
+      "Microsoft Sentinel workspace with Sentinel enabled",
+      "Logic App managed identity must have Microsoft Sentinel Contributor role on the workspace"
+    ],
+    "postDeployment": [
+      "1. Verify the Logic App recurrence is 6 hours.",
+      "2. Verify count=1000 and queryWindowInMin=360 in the Cyren API URL.",
+      "3. Verify PersistentToken pagination (NOT Offset).",
+      "4. Confirm RBAC role assignments for the Logic App managed identity.",
+      "5. Enable the Logic App if it deploys disabled and run one manual trigger."
+    ],
+    "lastUpdateTime": "2026-04-30T00:00:00.000Z",
+    "tags": [
+      "Cyren",
+      "Threat Intelligence",
+      "Defender",
+      "STIX",
+      "Automation"
+    ],
+    "support": {
+      "tier": "Partner"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    },
+    "entities": [],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "CyrenToDefenderTI_Playbook",
+        "notes": [
+          "Initial Cyren to Microsoft Defender TI playbook with dual-feed support."
         ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "pb-cyren-to-defender-ti"
     },
-    "parameters": {
-        "PlaybookName": {
-            "defaultValue": "CyrenToDefenderTI",
-            "type": "string",
-            "metadata": {
-                "description": "Name of the Logic App/Playbook"
+    "location": {
+      "type": "string",
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+    },
+    "Cyren_JwtToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. JWT Bearer Token for the Cyren CCF feed. Leave empty if not purchased. Get a trial: IP Reputation \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-ip-reputation-feed?tab=Overview | Malware URL \u2192 https://marketplace.microsoft.com/en-us/product/data443riskmitigationinc1761580347231.cyren-malware-urls-feed?tab=Overview"
+      },
+      "minLength": 0
+    },
+    "Cyren_FeedId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Required. Enter exactly 'ip_reputation' if you purchased the IP Reputation feed, or 'malware_urls' if you purchased the Malware URL feed. Must match your Cyren subscription."
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name (scopes the hidden-SentinelWorkspaceId tag)."
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Disabled",
+        "parameters": {
+          "CyrenJwtToken": {
+            "value": "[parameters('Cyren_JwtToken')]"
+          },
+          "CyrenFeedId": {
+            "value": "[parameters('Cyren_FeedId')]"
+          },
+          "WorkspaceResourceId": {
+            "value": "[variables('workspaceResourceId')]"
+          },
+          "ManagementBaseUrl": {
+            "value": "[environment().resourceManager]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "Cyren_BaseUrl": {
+              "type": "string",
+              "defaultValue": "https://api-feeds.cyren.com/v1/feed/data"
+            },
+            "CyrenJwtToken": {
+              "type": "securestring",
+              "defaultValue": "[variables('blanks')]"
+            },
+            "CyrenFeedId": {
+              "type": "string",
+              "defaultValue": "ip_reputation"
+            },
+            "WorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": "[variables('blanks')]"
+            },
+            "ManagementBaseUrl": {
+              "type": "string",
+              "defaultValue": "[variables('blanks')]"
             }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Hour",
+                "interval": 6,
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_PersistentToken": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "persistentToken",
+                    "type": "string",
+                    "value": "[variables('blanks')]"
+                  }
+                ]
+              }
+            },
+            "Initialize_ContinuePolling": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "continuePolling",
+                    "type": "boolean",
+                    "value": true
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_PersistentToken": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Poll_Cyren_Feed": {
+              "type": "Until",
+              "expression": "@equals(variables('continuePolling'), false)",
+              "limit": {
+                "count": 10,
+                "timeout": "PT1H"
+              },
+              "runAfter": {
+                "Initialize_ContinuePolling": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Build_Cyren_Api_Url": {
+                  "type": "Compose",
+                  "inputs": "@{concat(parameters('Cyren_BaseUrl'), '?feedId=', parameters('CyrenFeedId'), '&count=1000&queryWindowInMin=360', if(equals(variables('persistentToken'), ''), '', concat('&token=', variables('persistentToken'))))}"
+                },
+                "Get_Cyren_Indicators": {
+                  "type": "Http",
+                  "runAfter": {
+                    "Build_Cyren_Api_Url": [
+                      "Succeeded"
+                    ]
+                  },
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{outputs('Build_Cyren_Api_Url')}",
+                    "headers": {
+                      "Authorization": "@{concat('Bearer ', parameters('CyrenJwtToken'))}",
+                      "Accept": "application/json"
+                    }
+                  }
+                },
+                "Split_NDJSON_Lines": {
+                  "type": "Compose",
+                  "inputs": "@split(trim(string(body('Get_Cyren_Indicators'))), decodeUriComponent('%0A'))",
+                  "runAfter": {
+                    "Get_Cyren_Indicators": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Filter_Empty_Lines": {
+                  "type": "Query",
+                  "inputs": {
+                    "from": "@outputs('Split_NDJSON_Lines')",
+                    "where": "@not(equals(trim(item()), ''))"
+                  },
+                  "runAfter": {
+                    "Split_NDJSON_Lines": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Check_Response_Has_Data": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@length(body('Filter_Empty_Lines'))",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Filter_Empty_Lines": [
+                      "Succeeded"
+                    ]
+                  },
+                  "actions": {
+                    "For_Each_Indicator": {
+                      "type": "Foreach",
+                      "foreach": "@body('Filter_Empty_Lines')",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      },
+                      "actions": {
+                        "Parse_Record": {
+                          "type": "Compose",
+                          "inputs": "@json(item())"
+                        },
+                        "Check_Has_Identifier": {
+                          "type": "If",
+                          "runAfter": {
+                            "Parse_Record": [
+                              "Succeeded"
+                            ]
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@{if(equals(parameters('CyrenFeedId'), 'malware_urls'), coalesce(outputs('Parse_Record')?['payload']?['url'], outputs('Parse_Record')?['payload']?['identifier']), outputs('Parse_Record')?['payload']?['identifier'])}",
+                                    ""
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "actions": {
+                            "Post_Indicator_to_Sentinel": {
+                              "type": "Http",
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@{concat(parameters('ManagementBaseUrl'), substring(parameters('WorkspaceResourceId'), 1), '/providers/Microsoft.SecurityInsights/threatIntelligence/main/createIndicator?api-version=2024-03-01')}",
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                },
+                                "authentication": {
+                                  "type": "ManagedServiceIdentity",
+                                  "audience": "@{parameters('ManagementBaseUrl')}"
+                                },
+                                "body": {
+                                  "kind": "indicator",
+                                  "properties": {
+                                    "source": "Cyren Threat Intelligence",
+                                    "displayName": "@{concat('Cyren ', parameters('CyrenFeedId'), ' - ', if(equals(parameters('CyrenFeedId'), 'malware_urls'), coalesce(outputs('Parse_Record')?['payload']?['url'], outputs('Parse_Record')?['payload']?['identifier']), outputs('Parse_Record')?['payload']?['identifier']))}",
+                                    "description": "@{concat('Cyren ', parameters('CyrenFeedId'), ' indicator | Risk: ', coalesce(outputs('Parse_Record')?['payload']?['detection']?['risk'], 'N/A'), ' | Category: ', coalesce(first(outputs('Parse_Record')?['payload']?['detection']?['category']), 'N/A'), ' | Last Seen: ', coalesce(outputs('Parse_Record')?['payload']?['last_seen'], 'N/A'))}",
+                                    "pattern": "@{if(equals(parameters('CyrenFeedId'), 'malware_urls'), concat('[url:value = ''', coalesce(outputs('Parse_Record')?['payload']?['url'], outputs('Parse_Record')?['payload']?['identifier']), ''']'), concat('[ipv4-addr:value = ''', outputs('Parse_Record')?['payload']?['identifier'], ''']'))}",
+                                    "patternType": "@{if(equals(parameters('CyrenFeedId'), 'malware_urls'), 'url', 'ipv4-addr')}",
+                                    "validFrom": "@{utcNow()}",
+                                    "validUntil": "@{addDays(utcNow(), 30)}",
+                                    "threatTypes": [
+                                      "malicious-activity"
+                                    ],
+                                    "confidence": "@coalesce(outputs('Parse_Record')?['payload']?['detection']?['risk'], 50)",
+                                    "labels": [
+                                      "cyren",
+                                      "@{parameters('CyrenFeedId')}"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "No_Data_Stop_Polling": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "continuePolling",
+                          "value": false
+                        }
+                      }
+                    }
+                  }
+                },
+                "Check_Pagination_Token": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "less": [
+                          "@length(body('Filter_Empty_Lines'))",
+                          1000
+                        ]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Check_Response_Has_Data": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "actions": {
+                    "Extract_Last_Offset": {
+                      "type": "Compose",
+                      "inputs": "@string(json(last(body('Filter_Empty_Lines')))?['offset'])"
+                    },
+                    "Update_PersistentToken": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "persistentToken",
+                        "value": "@{outputs('Extract_Last_Offset')}"
+                      },
+                      "runAfter": {
+                        "Extract_Last_Offset": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Stop_Polling": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "continuePolling",
+                          "value": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
-    },
-    "variables": {
-        "comment": "The actual Logic App is deployed as part of the main template (Package/mainTemplate.json). This file serves as metadata for the Sentinel Content Hub solution packaging."
-    },
-    "resources": [],
-    "outputs": {}
+      },
+      "tags": {
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-SentinelTemplateName": "CyrenToDefenderTI",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "condition": "[not(empty(parameters('Cyren_JwtToken')))]"
+    }
+  ],
+  "outputs": {}
 }
