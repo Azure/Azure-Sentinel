@@ -10,6 +10,7 @@
 - [Running the Script](#running-the-script)
 - [Command Line Options](#command-line-options)
 - [Output Structure](#output-structure)
+- [Interactive HTML Index](#interactive-html-index)
 - [AI-Rendered Setup Instructions and Permissions](#ai-rendered-setup-instructions-and-permissions)
 - [Additional Documentation Sources](#additional-documentation-sources)
 - [Documentation Overrides and Additional Information](#documentation-overrides-and-additional-information)
@@ -28,13 +29,16 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - All tables ingested by connectors
    - All tables referenced by content items
    - **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution.
-   - "Discovered Via" column showing discovery sources (Connector, Content, Azure Monitor, Defender XDR, Sentinel API, Schema)
+   - "Discovered Via" column showing the **single primary** discovery source per table, chosen by priority order: **Connector > Content > Docs > Schema**. "Docs" combines all documentation-based sources (Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API).
+   - The Tables Index includes an inline explanation of the discovery sources and their priority hierarchy.
    - 📖 icon for tables with schema information
+   - 🔶 icon for Custom Log V1 (CLv1) tables with type-suffixed columns
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
 - **[Parsers Index](../connector-docs/parsers/parsers-index.md)** - All non-ASIM parsers organized by solution
 - **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
 - **[Collection Methods Index](../connector-docs/collection-methods/collection-methods-index.md)** - Connectors grouped by data collection method
 - **[Statistics](../connector-docs/statistics.md)** - Comprehensive statistics and metrics
+- **[Interactive Index](../connector-docs/index.html)** - HTML page with DataTables.js for filtering, sorting, and searching across all entity types
 - **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](../connector-docs/solutions/) directory)
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](../connector-docs/connectors/) directory)
 - **Individual Table Pages** - Detailed pages for each table with metadata (in [`tables/`](../connector-docs/tables/) directory)
@@ -111,6 +115,9 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
 | `--table-schemas-csv` | `table_schemas.csv` | Path to table schemas CSV file with column definitions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
+| `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/. When set with a relative `--html-docs-path`, also generates HTML entity pages alongside the markdown docs. |
+| `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. When relative and `--html-output-dir` is set, HTML entity pages are generated and index.html links use `.html` extension. |
+| `--html-index-url` | `''` (empty) | Absolute URL for index.html used in HTML entity page navbars and static markdown navigation bars (e.g. `https://oshezaf.github.io/sentinelninja/index.html`). Falls back to a relative path from the entity page if not provided. |
 
 ## Output Structure
 
@@ -133,7 +140,10 @@ connector-docs/
 │   ├── azure-function.md       # Azure Function-based connectors
 │   ├── native.md                # Native Microsoft integrations
 │   ├── rest-api.md              # REST API/webhook connectors
-│   └── unknown.md               # Connectors with unknown method
+│   ├── unknown.md               # Connectors with unknown method
+│   ├── log-ingestion-api.md     # Connectors using Log Ingestion API
+│   ├── http-data-collector-api.md # Connectors using HTTP Data Collector API
+│   └── undetermined.md             # Connectors with undetermined API (mixed signals)
 ├── content/                     # Content item documentation
 │   ├── content-index.md         # Main content index with type summary table
 │   ├── analytic-rules.md        # Analytics rules main index
@@ -161,18 +171,26 @@ connector-docs/
 │   ├── 1passwordeventreporter.md
 │   ├── awscloudfront.md
 │   └── ...
-└── tables/                      # Individual table pages
-    ├── securityevent.md
-    ├── syslog.md
-    └── ...
+├── tables/                      # Individual table pages
+│   ├── securityevent.md
+│   ├── syslog.md
+│   └── ...
+├── index.html                   # Interactive HTML index (DataTables.js)
+├── css/
+│   └── style.css                # Custom styles for interactive index
+└── js/
+    └── app.js                   # DataTables initialization and tab logic
 ```
 
 ### Generated Content
 
 **Solution Pages** include:
+- Solution title with ASIM badge, deprecated icon (🚫), and/or unpublished icon (⚠️)
 - **Solution logo** from Solution JSON (displayed at top of page)
 - **Rich description** extracted from `createUiDefinition.json`
-- **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, dependencies)
+- **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, deprecation date if applicable, dependencies)
+- **Azure Marketplace** row (combined): when the solution is published to the marketplace, the property table includes a combined row with the marketplace URL and uses **"Rating:"** and **"Popularity:"** labels for the rating average/count and popularity score (sourced from the `mp_*` columns of `solutions.csv`)
+- **Content item counts** are split between **"in solution"** (listed in the Solution JSON) and **"discovered"** (found in the solution folder but not in the Solution JSON), shown both in the solution properties and on the statistics page
 - **Additional Information** section (from overrides, if configured)
 - **Dependencies** section listing explicit (required) and ASIM-based (optional) dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
@@ -185,7 +203,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors)
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, deprecation date (for deprecated connectors), and a combined **Azure Marketplace** row using **"Rating:"** and **"Popularity:"** labels (from the `mp_*` columns) when the parent solution is published
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
@@ -195,7 +213,8 @@ connector-docs/
 
 **Table Pages** include:
 - **Table description** from Azure Monitor documentation
-- **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, and documentation links
+- **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, Custom Log V1 (CLv1) indicator, and documentation links
+- **Documentation References** are listed individually with specific names and links per applicable source: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API. Tables discovered via docs-only sources show the relevant doc link.
 - **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
@@ -238,12 +257,25 @@ connector-docs/
 - **Statistics** with connector and solution counts
 - **Connectors Using This Method** table with connector title, solution, and support tier
 
+**Ingestion API Pages** (under `methods/` directory) include:
+- API name and description (Log Ingestion API, HTTP Data Collector API, Both)
+- **Documentation** links to Microsoft Learn
+- **Statistics** with total/active/deprecated/unpublished counts
+- **By Collection Method** breakdown showing which collection methods use this API
+- **Connectors Using This API** table with connector title, collection method, publisher, tables, and solution
+
 **Statistics Page** includes:
 - **Terminology** section with definitions for key concepts (Published, Deprecated, Discovered, Standalone, GitHub Only, etc.)
 - **Solutions** section with statistics by publication status, support tier, and content
 - **Connectors** section with statistics by collection method, deprecation status, and support tier cross-tabulation
+- **Ingestion API** subsection with API summary and by-collection-method breakdown for API-based connectors
 - **CCF Capabilities** subsection with connector kind distribution, authentication methods, and request features for CCF/CCF Push/CCF Legacy connectors
-- **Tables** section with statistics by source, category, and usage
+- **Tables** section with a unified **Discovery Sources** table:
+  - **Discovered Via** column showing the count of tables whose single primary source is each value (priority: Connector > Content > per-doc-source > Schema)
+  - **Total** column showing how many tables have each source regardless of priority (a table can appear in multiple sources)
+  - Documentation sources listed individually with links: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API
+  - **Schema Sources** subsection: breakdown of `table_schemas.csv` rows by origin (DCR, Azure Monitor docs, connector definitions, KQL validation)
+  - Additional breakdowns by category and usage
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type
 - **Non-ASIM Parsers** section with statistics by location
@@ -254,7 +286,94 @@ connector-docs/
 - Alphabetical navigation with letter sub-pages for large indexes
 - Quick statistics (counts, percentages)
 - Deprecated connectors section (in connectors index)
+- Deprecated solutions marked with 🚫 icon (in solutions index)
 - Cross-references between solutions, connectors, tables, content, and parsers
+
+## Interactive HTML Index
+
+**Script:** `generate_interactive_docs.py`
+
+The documentation generator also produces an interactive HTML index page (`index.html`) that provides filterable, sortable tables for all entity types using [DataTables.js](https://datatables.net/). This page is generated automatically as part of `generate_connector_docs.py` and can also be run standalone.
+
+The interactive index is implemented in a separate module (`generate_interactive_docs.py`) that is called by the main documentation generator.
+
+### Tabs
+
+The interactive index has six tabs, each with per-column dropdown filters, global search, click-to-filter, and a "Clear All Filters" notification bar:
+
+| Tab | Columns | Summary Card |
+|-----|---------|-------------|
+| **Solutions** | Logo, Solution, Status, Publisher, Support Tier, Connectors, Tables, Content Items | Active Solutions count |
+| **Connectors** | Logo, Connector, Status, Publisher, Collection Method, Ingestion API, Solution, Tables | Active Connectors count |
+| **Tables** | Table, Discovered Via, Category, Solutions, Connectors, Azure Monitor, Defender XDR | Total Tables count |
+| **Content** | Name, Type, Source, Solution, Description | Total Content Items count |
+| **Parsers** | Parser, Source, Solution, Tables | Total Parsers count |
+| **ASIM** | Parser, Schema, Type, Product, Version, Solutions | Total ASIM Parsers count |
+
+### Icons and Legends
+
+Each tab includes a legend explaining the icons used:
+
+- **Status badges**: Active (green), Deprecated (red), Unpublished (orange)
+- 🔶 Custom Logs v1 (classic) — tables/connectors using the legacy CLv1 schema
+- 📖 Table schema available
+- 🔍 Discovered (not listed in solution JSON)
+- 📦 In solution package / 📄 Standalone / 🔗 GitHub only — content source indicators
+
+### Features
+
+- **Per-column filters**: Dropdown filters on each column (except logo/count columns)
+- **Click-to-filter**: Click any cell value to filter that column
+- **Global search**: Full-text search across all columns
+- **Clear All Filters**: Yellow notification bar appears when filters are active
+- **Entity links**: All entity names link to their individual markdown documentation pages
+- **Collection method links**: Method names link to their method index pages
+- **Solution logos**: Displayed in Solutions and Connectors tabs
+- **Navigation bar**: Links to 📖 Docs (static markdown index) and 📊 Statistics page
+- **Tab hash linking**: URL hash fragments (e.g. `index.html#connectors`) activate the corresponding tab on page load, hash change, and back/forward navigation (bfcache)
+- **Heading anchors**: HTML entity pages have `id` attributes on all headings, enabling in-page anchor links (e.g. `statistics.html#connectors`)
+
+### Standalone Usage
+
+```bash
+python generate_interactive_docs.py \
+    --output-dir <docs-directory> \
+    --input solutions_connectors_tables_mapping.csv \
+    --connectors-csv connectors.csv \
+    --solutions-csv solutions.csv \
+    --content-items-csv content_items.csv \
+    --tables-csv tables_reference.csv \
+    --tables-overrides-csv tables.csv \
+    --content-tables-csv content_tables_mapping.csv \
+    --table-schemas-csv table_schemas.csv \
+    --parsers-csv parsers.csv \
+    --asim-parsers-csv asim_parsers.csv
+```
+
+To place `index.html` at a different location from the docs (e.g. for GitHub Pages which publishes from root):
+
+```bash
+python generate_interactive_docs.py \
+    --output-dir <docs-directory> \
+    --html-output-dir <repo-root> \
+    --html-docs-path "Solutions Docs/" \
+    --html-index-url "https://<user>.github.io/<repo>/index.html" \
+    ...
+```
+
+This writes `index.html`, `css/`, `js/`, and `.nojekyll` to `<repo-root>`. Because `--html-docs-path` is a relative path (not an absolute URL), the generator also converts every `.md` file under the docs directory to a styled `.html` page and updates `index.html` links to point to the `.html` versions. A `page.css` stylesheet is written to `<repo-root>/css/` for the entity pages. Each HTML entity page includes a navbar linking back to `index.html` (using `--html-index-url` when provided). Links from static markdown pages back to index.html also use `--html-index-url`.
+
+> **Note:** The `.nojekyll` file disables Jekyll processing on GitHub Pages. This is required because generated connector docs contain `{{` sequences from Azure deployment template URIs, which Jekyll's Liquid engine misinterprets as template variables. Without `.nojekyll`, the GitHub Pages build will fail with Liquid syntax errors.
+
+### Synchronization with Static Indexes
+
+The interactive HTML index and static markdown indexes (solutions-index.md, connectors-index.md, tables-index.md, content-index.md, parsers-index.md, asim-index.md) should present the same data with the same filtering rules. When modifying either, ensure the following stay in sync:
+
+- Data filtering/inclusion rules (which entities to show, discovered vs. in-solution)
+- Status classification logic (Active/Deprecated/Unpublished)
+- Icon usage and legend entries
+- Link generation (entity links, collection method links, content source)
+- Special-case handling (placeholder names, "GitHub Only" non-clickable, Standalone non-linked)
 
 ## AI-Rendered Setup Instructions and Permissions
 

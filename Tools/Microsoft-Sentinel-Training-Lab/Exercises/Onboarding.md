@@ -56,7 +56,7 @@ Make sure you have completed the **Custom Detection Rules Setup** from the [READ
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FTools%2FMicrosoft-Sentinel-Training-Lab%2FPackage%2FmainTemplate.json)
 
-1. Select the **Subscription**, **Resource Group**, and **Workspace** from the previous steps.
+1. Select the **Subscription**, **Resource Group**, and **Workspace** from the previous steps. Make sure the **Region** matches the region of your existing workspace.
 2. Under **Detection Rules Identity Resource Id**, paste the full resource ID of your UAMI (or leave empty to skip detection rules deployment).
 3. Select **Review + create**, then **Create**.
 
