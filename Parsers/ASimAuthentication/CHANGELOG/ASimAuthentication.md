@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.14
+
+- (2026-04-29) Add parser Cisco DNAC events from Syslog - [PR #14135](https://github.com/Azure/Azure-Sentinel/pull/14135)
+
 ## Version 0.2.13
 
 - (2026-04-09) Add parser Cisco ISE administrator events from Syslog by AMA - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)
