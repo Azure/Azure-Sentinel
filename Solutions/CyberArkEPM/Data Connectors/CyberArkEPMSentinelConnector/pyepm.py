@@ -1,7 +1,13 @@
+import logging
+import time
 import requests, urllib3
 
 
 urllib3.disable_warnings()
+
+RETRY_STATUSES = {403, 429}
+MAX_RETRIES = 3
+RETRY_BACKOFF = [15, 30, 60]
 
 
 def _build_bearer_headers(bearer_token):
@@ -11,13 +17,23 @@ def _build_bearer_headers(bearer_token):
         'x-cybr-telemetry': 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
     }
 
-
 def _request(method, url, headers=None, data=None, params=None):
-    if method == 'GET':
-        return requests.get(url, headers=headers, params=params)
-    if method == 'POST':
-        return requests.post(url, headers=headers, data=data, params=params)
-    raise ValueError('Unsupported method')
+    for attempt in range(MAX_RETRIES):
+        if method == 'GET':
+            response = requests.get(url, headers=headers, params=params)
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, data=data, params=params)
+        else:
+            raise ValueError('Unsupported method')
+
+        if response.status_code not in RETRY_STATUSES or attempt == MAX_RETRIES - 1:
+            return response
+
+        wait = int(response.headers.get('Retry-After', RETRY_BACKOFF[attempt]))
+        logging.warning(f'Request to {url} returned {response.status_code}, retrying in {wait}s (attempt {attempt + 1}/{MAX_RETRIES})')
+        time.sleep(wait)
+
+    return response
 
 
 def _build_auth_headers(epm_token, auth_type=None):
