@@ -51,9 +51,7 @@ class ApiClientBase(ABC):
         """
         headers = headers or self.headers(self.get_request_string(endpoint, params))
         res = requests.request(method, f'https://{self.host}/{self.get_path(endpoint)}', headers=headers,
-                               params=params, json=body)
-        from pprint import pprint
-        pprint(res.headers)
+                               params=params, json=body, timeout=60)
         try:
             res.raise_for_status()
 
@@ -84,10 +82,6 @@ class ApiClientBase(ABC):
         :return: List of scopes as <farm>:<customer>
         """
         return self.call_api('get', 'scopes')
-
-    def get_exceptions2(self):
-        return self.call_api('get', 'sectool-exceptions/avanan_dlp/exceptions/sender_email/test@e.com')
-        return self.call_api('get', 'sectool-exceptions/avanan_dlp/exceptions/sender_email')
 
     def get_event(self, event_id: str):
         """
@@ -451,7 +445,6 @@ class CloudInfraApiClient(ApiClientBase):
             self.token = data.get('token')
             self.token_expiry = timestamp + float(data.get('expiresIn'))
 
-        print(self.token)
         return self.token
 
     def headers(self, request_string: str = None, auth: bool = False) -> dict:

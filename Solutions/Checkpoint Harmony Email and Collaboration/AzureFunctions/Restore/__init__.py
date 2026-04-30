@@ -25,10 +25,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f'Brand {brand} is not one of supported {SUPPORTED_BRANDS}',
                                  status_code=400)
     elif action not in SUPPORTED_ACTIONS:
-        return func.HttpResponse(f'Action {action} is not one of support actionS {SUPPORTED_ACTIONS}',
+        return func.HttpResponse(f'Action {action} is not one of support actions {SUPPORTED_ACTIONS}',
                              status_code=400)
 
     client = get_brand_client(brand, host, client_id, client_secret)
+    if not client:
+        return func.HttpResponse('Unable to create client for the provided brand/credentials',
+                                 status_code=400)
 
     if action == 'entityRestore':
         if not entity_type:
