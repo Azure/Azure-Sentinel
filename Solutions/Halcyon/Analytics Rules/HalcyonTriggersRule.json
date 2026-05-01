@@ -22,7 +22,7 @@
                 "description": "Creates one Sentinel incident per new Halcyon alert. Deduplicates using a self-join on Halcyon_Commands_CL and an anti-join on SecurityAlert to skip already-processed alerts.",
                 "severity": "High",
                 "enabled": true,
-                "query": "Halcyon_Commands_CL\n| where TimeGenerated > ago(1m)\n| summarize arg_max(TimeGenerated, *) by HalcyonAlertId\n| join kind=leftanti (\n    Halcyon_Commands_CL\n    | where TimeGenerated between (ago(20m) .. ago(1m))\n    | summarize by HalcyonAlertId\n) on HalcyonAlertId\n| join kind=leftanti (\n    SecurityAlert\n    | where TimeGenerated > ago(14d)\n    | where AlertName has \"Halcyon\"\n    | extend HalcyonAlertId = tostring(ExtendedProperties[\"HalcyonAlertId\"])\n    | where isnotempty(HalcyonAlertId)\n    | project HalcyonAlertId\n) on HalcyonAlertId\n| extend DeviceName = tostring(device.hostname)\n| extend AlertKind = tostring(finding_info.title)",
+                "query": "Halcyon_Commands_CL\n| where TimeGenerated > ago(1m)\n| summarize arg_max(TimeGenerated, *) by HalcyonAlertId\n| join kind=leftanti (\n    Halcyon_Commands_CL\n    | where TimeGenerated between (ago(20m) .. ago(1m))\n    | summarize by HalcyonAlertId\n) on HalcyonAlertId\n| join kind=leftanti (\n    SecurityAlert\n    | where TimeGenerated > ago(14d)\n    | where AlertName has \"Halcyon\"\n    | extend HalcyonAlertId = tostring(parse_json(tostring(ExtendedProperties))[\"HalcyonAlertId\"])\n    | where isnotempty(HalcyonAlertId)\n    | project HalcyonAlertId\n) on HalcyonAlertId\n| extend DeviceName = tostring(device[\"hostname\"])\n| extend AlertKind = tostring(finding_info[\"title\"])",
                 "suppressionDuration": "PT1H",
                 "suppressionEnabled": false,
                 "startTimeUtc": null,
@@ -77,8 +77,7 @@
                         ]
                     }
                 ],
-                "sentinelEntitiesMappings": null,
-                "templateVersion": "1.0.0"
+                "sentinelEntitiesMappings": null
             }
         },
         {
@@ -112,7 +111,7 @@
                 "actions": [
                     {
                         "order": 1,
-                        "actionType": "AddLabels",
+                        "actionType": "ModifyProperties",
                         "actionConfiguration": {
                             "labels": [
                                 {
