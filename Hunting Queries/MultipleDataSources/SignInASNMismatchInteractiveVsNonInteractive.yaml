@@ -1,0 +1,112 @@
+id: 868599d4-84f7-4c31-ba00-d2a2c87efaab
+name: Short-window sign-in mismatch between interactive and non-interactive activity
+description: |
+  Hypothesis-driven Microsoft Sentinel hunting query that surfaces short-window mismatches
+  between successful interactive sign-ins (SigninLogs) and successful non-interactive sign-ins
+  (AADNonInteractiveUserSignInLogs) for the same user, where the originating Autonomous System
+  Number (ASN) and IP address differ within a 10-minute window. This pattern can correspond to
+  a possible post-compromise session misuse scenario in which previously issued authentication
+  material is being used from a different network origin shortly after an interactive sign-in.
+  This query does not observe credential or session theft itself, and it does not claim
+  definitive adversary-in-the-middle behavior. Analysts must validate every result.
+  Expect benign matches in scenarios such as VPN connect/disconnect, user roaming between
+  networks, mobile application background token refresh, multi-device usage, and corporate
+  proxies or egress points that change the public ASN as traffic shifts between services.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/concept-all-sign-ins
+  - https://attack.mitre.org/techniques/T1550/001/
+  - https://attack.mitre.org/techniques/T1539/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1550.001
+  - T1539
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let window = 10m;
+  let interactive =
+      SigninLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where ResultType == 0
+      | project
+          InteractiveTime = TimeGenerated,
+          UserPrincipalName = tolower(UserPrincipalName),
+          InteractiveIP = IPAddress,
+          InteractiveASN = AutonomousSystemNumber,
+          InteractiveDeviceId = tostring(DeviceDetail.deviceId),
+          InteractiveAppDisplayName = AppDisplayName,
+          InteractiveCorrelationId = CorrelationId;
+  let nonInteractive =
+      AADNonInteractiveUserSignInLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where ResultType == 0
+      | project
+          NonInteractiveTime = TimeGenerated,
+          UserPrincipalName = tolower(UserPrincipalName),
+          NonInteractiveIP = IPAddress,
+          NonInteractiveASN = AutonomousSystemNumber,
+          NonInteractiveDeviceId = tostring(DeviceDetail.deviceId),
+          NonInteractiveAppDisplayName = AppDisplayName,
+          NonInteractiveCorrelationId = CorrelationId;
+  interactive
+  | join kind=inner nonInteractive on UserPrincipalName
+  | where NonInteractiveTime between (InteractiveTime .. (InteractiveTime + window))
+  | where isnotempty(InteractiveASN) and isnotempty(NonInteractiveASN)
+  | where InteractiveASN != NonInteractiveASN
+  | where InteractiveIP != NonInteractiveIP
+  | extend DeviceIdMismatch = iff(
+        isnotempty(InteractiveDeviceId) and isnotempty(NonInteractiveDeviceId)
+            and InteractiveDeviceId != NonInteractiveDeviceId,
+        true, false)
+  | extend TimeDeltaSeconds = datetime_diff('second', NonInteractiveTime, InteractiveTime)
+  | extend AccountName = tostring(split(UserPrincipalName, "@")[0]),
+           AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | project
+      InteractiveTime,
+      NonInteractiveTime,
+      TimeDeltaSeconds,
+      UserPrincipalName,
+      AccountName,
+      AccountUPNSuffix,
+      InteractiveIP,
+      NonInteractiveIP,
+      InteractiveASN,
+      NonInteractiveASN,
+      InteractiveDeviceId,
+      NonInteractiveDeviceId,
+      DeviceIdMismatch,
+      InteractiveAppDisplayName,
+      NonInteractiveAppDisplayName,
+      InteractiveCorrelationId,
+      NonInteractiveCorrelationId
+  | sort by InteractiveTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NonInteractiveIP
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
