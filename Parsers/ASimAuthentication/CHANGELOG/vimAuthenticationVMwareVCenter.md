@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-05-01) Fix typing of DvcId from dynamic to string - [PR #12345]()
+- (2026-05-01) Fix typing of DvcId from dynamic to string - [PR #14182](https://github.com/Azure/Azure-Sentinel/pull/14182)
 
 ## Version 0.1.1
 
