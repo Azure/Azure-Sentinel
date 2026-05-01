@@ -2,7 +2,7 @@
 
 ## Version 0.4.1
 
-- (2026-05-01) Fix bug where TargetUserSessionId was not projected - [PR #12345]()
+- (2026-05-01) Fix bug where TargetUserSessionId was not projected - [PR #14183](https://github.com/Azure/Azure-Sentinel/pull/14183)
 
 ## Version 0.4.0
 
