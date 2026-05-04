@@ -1,0 +1,812 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Nord Security Inc.",
+    "comments": "Solution template for NordStellar"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "NordStellar",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "nordsecurityinc.azure-sentinel-solution-nordstellar",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "NordStellarPush",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "NordStellarPushConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "NordStellar (Push)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "NordStellarPush",
+                  "title": "NordStellar (Push)",
+                  "publisher": "Nord Security Inc.",
+                  "descriptionMarkdown": "The [NordStellar](https://nordstellar.com) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types (NordStellar `EventTypeV2`):**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
+                  "graphQueries": [
+                    {
+                      "metricName": "NordStellar events",
+                      "legend": "NordStellar_CL",
+                      "baseQuery": "NordStellar_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Critical and High severity events (last 24h)",
+                      "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Event volume by event type (last 7d)",
+                      "query": "NordStellar_CL\n| where TimeGenerated > ago(7d)\n| summarize count() by EventType\n| order by count_ desc"
+                    },
+                    {
+                      "description": "Attack surface vulnerabilities with CVSS3 >= 7",
+                      "query": "NordStellar_CL\n| where EventType startswith \"ATTACK_SURFACE_\"\n| extend Cvss3 = todouble(Details.cvss3_score), Cve = tostring(Details.cve_id), Title = tostring(Details['title'])\n| where Cvss3 >= 7\n| project TimeGenerated, EventType, RiskLevel, AssetValue, Title, Cve, Cvss3\n| order by Cvss3 desc"
+                    },
+                    {
+                      "description": "Malware infections by stealer family",
+                      "query": "NordStellar_CL\n| where EventType == \"MALWARE_INFECTION\"\n| extend Stealer = tostring(Details.stealer_name)\n| summarize count() by Stealer\n| order by count_ desc"
+                    },
+                    {
+                      "description": "Domain permutations (typosquatting)",
+                      "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "NordStellar_CL",
+                      "lastDataReceivedQuery": "NordStellar_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "NordStellar_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+                      },
+                      {
+                        "name": "NordStellar",
+                        "description": "Active NordStellar tenant with permission to configure outbound webhooks for the integration."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Deploy connector resources",
+                      "description": "This connector enables NordStellar to push real-time threat intelligence and exposure events directly to Microsoft Sentinel via the Azure Monitor Ingestion API.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Automated configuration\nClicking **Deploy** will create:\n- A custom Log Analytics table `NordStellar_CL`\n- A Data Collection Rule (DCR) with a single stream `Custom-NordStellar` and a KQL transform that promotes common fields and preserves the type-specific payload in `Details`\n- The Data Collection Endpoint (DCE) used for ingestion\n- A Microsoft Entra application with OAuth 2.0 client credentials\n- The required `Monitoring Metrics Publisher` role assignment on the DCR\n\nThe credentials returned below are then configured in the NordStellar portal so events can be pushed securely."
+                          }
+                        },
+                        {
+                          "type": "DeployPushConnectorButton",
+                          "parameters": {
+                            "label": "Deploy NordStellar Push connector resources",
+                            "applicationDisplayName": "NordStellar Sentinel Push Connector Application"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Configure NordStellar",
+                      "description": "Use the following parameters to configure the Microsoft Sentinel integration in the NordStellar portal.",
+                      "instructions": [
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Tenant ID (Directory ID)",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Application (Client) ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy push connector to get the Application ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Client Secret",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy push connector to get the Client Secret"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Endpoint URI",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy push connector to get the DCE Endpoint"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Rule Immutable ID",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy push connector to get the DCR Immutable ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Stream Name",
+                            "value": "Custom-NordStellar"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, `tags`, and the appropriate timestamp (`date_added` for leaked-data/dark-web/domain-permutation, `detected_at` for attack-surface) into typed columns. Everything else is preserved in the dynamic `Details` column."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "3. Verify data ingestion",
+                      "description": "Confirm events are flowing from NordStellar to Sentinel.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Wait 5-10 minutes after enabling the integration, then run this KQL query in your Microsoft Sentinel workspace:\n\n```kql\nNordStellar_CL\n| where TimeGenerated > ago(1h)\n| summarize count() by EventType, Module\n| order by count_ desc\n```\n\nIf no data appears after 15 minutes, verify the credentials in the NordStellar portal and check Azure Monitor for ingestion errors on the DCR."
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Nord Security Inc."
+                },
+                "support": {
+                  "name": "NordStellar",
+                  "tier": "Partner",
+                  "link": "https://nordstellar.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "NordStellarPushDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[resourceId(parameters('subscription'), parameters('resourceGroupName'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('workspace'))]",
+                "streamDeclarations": {
+                  "Custom-NordStellar": {
+                    "columns": [
+                      {
+                        "name": "time",
+                        "type": "string"
+                      },
+                      {
+                        "name": "event",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-NordStellar"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend EventId = tostring(event.id), EventType = tostring(event['type']), Module = tostring(event.module), RiskLevel = tostring(event.risk_level), AssetType = case(isnotempty(tostring(event.asset['type'])), tostring(event.asset['type']), isnotempty(tostring(event.source_type)), tostring(event.source_type), ''), AssetValue = case(isnotempty(tostring(event.asset['value'])), tostring(event.asset['value']), isnotempty(tostring(event.asset_value)), tostring(event.asset_value), ''), Tags = event['tags'], TimeGenerated = iif(isnotempty(tostring(event.date_added)), todatetime(event.date_added), iif(isnotempty(tostring(event.detected_at)), todatetime(event.detected_at), iif(isnotempty(['time']), todatetime(['time']), now()))), Details = event | project TimeGenerated, EventId, EventType, Module, RiskLevel, AssetType, AssetValue, Tags, Details",
+                    "outputStream": "Custom-NordStellar_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "NordStellar_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "NordStellar_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Timestamp when the event was ingested into Microsoft Sentinel. Derived from event.date_added (leaked-data, dark-web, domain-permutation), event.detected_at (attack-surface), or the envelope time field as fallback."
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "Unique NordStellar event identifier (GUID)."
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "NordStellar EventTypeV2 value, e.g. DATA_BREACH, COMBO_LIST, MALWARE_INFECTION, DARK_WEB_FORUM_POST, DARK_WEB_TELEGRAM_POST, DARK_WEB_RANSOMWARE_POST, DARK_WEB_MARKETPLACE_POST, DOMAIN_PERMUTATION, ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY, ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY, ATTACK_SURFACE_DNS_VULNERABILITY."
+                    },
+                    {
+                      "name": "Module",
+                      "type": "string",
+                      "description": "NordStellar source module: LEAKED_DATA, DARK_WEB_MONITORING, DOMAIN_SQUATTING, or ATTACK_SURFACE."
+                    },
+                    {
+                      "name": "RiskLevel",
+                      "type": "string",
+                      "description": "NordStellar risk level: CRITICAL, HIGH, MEDIUM, LOW, or INFORMATIONAL."
+                    },
+                    {
+                      "name": "AssetType",
+                      "type": "string",
+                      "description": "Asset type for leaked-data events (asset.type, e.g. EMAIL/DOMAIN/IP/PHONE) or asset source kind for attack-surface events (source_type, e.g. WEB_APPLICATION/NETWORK_SERVICE/DNS). Empty for dark-web and domain-permutation events whose target lives in type-specific fields inside Details."
+                    },
+                    {
+                      "name": "AssetValue",
+                      "type": "string",
+                      "description": "Asset value: nested asset.value (leaked-data) or root-level asset_value (attack-surface). Empty for dark-web and domain-permutation events."
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic",
+                      "description": "Tags attached to the event."
+                    },
+                    {
+                      "name": "Details",
+                      "type": "dynamic",
+                      "description": "Full NordStellar event payload as received in the webhook envelope's `event` field. Contains every type-specific field (queryable as `Details.<field>` or `Details['<field>']`) and, for convenience and forward compatibility, also includes the source values for the promoted columns above."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "NordStellarPush",
+          "title": "NordStellar (Push)",
+          "publisher": "Nord Security Inc.",
+          "descriptionMarkdown": "The [NordStellar](https://nordstellar.com) connector pushes real-time threat intelligence and exposure events from the NordStellar platform into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All event types are routed to a single unified `NordStellar_CL` table with common columns (`EventId`, `EventType`, `Module`, `RiskLevel`, `AssetType`, `AssetValue`, `Tags`) extracted by the DCR's KQL transform, while type-specific payload is preserved in a dynamic `Details` column.\n\n**Supported event types (NordStellar `EventTypeV2`):**\n\n- **Leaked Data** (`module: LEAKED_DATA`): `DATA_BREACH`, `COMBO_LIST`, `MALWARE_INFECTION`\n- **Dark Web Monitoring** (`module: DARK_WEB_MONITORING`): `DARK_WEB_FORUM_POST`, `DARK_WEB_TELEGRAM_POST`, `DARK_WEB_RANSOMWARE_POST`, `DARK_WEB_MARKETPLACE_POST`\n- **Domain Squatting** (`module: DOMAIN_SQUATTING`): `DOMAIN_PERMUTATION`\n- **Attack Surface** (`module: ATTACK_SURFACE`): `ATTACK_SURFACE_WEB_APPLICATION_VULNERABILITY`, `ATTACK_SURFACE_NETWORK_SERVICE_VULNERABILITY`, `ATTACK_SURFACE_DNS_VULNERABILITY`",
+          "graphQueries": [
+            {
+              "metricName": "NordStellar events",
+              "legend": "NordStellar_CL",
+              "baseQuery": "NordStellar_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Critical and High severity events (last 24h)",
+              "query": "NordStellar_CL\n| where TimeGenerated > ago(24h)\n| where RiskLevel in (\"CRITICAL\", \"HIGH\")\n| project TimeGenerated, EventType, RiskLevel, AssetType, AssetValue\n| order by TimeGenerated desc"
+            },
+            {
+              "description": "Event volume by event type (last 7d)",
+              "query": "NordStellar_CL\n| where TimeGenerated > ago(7d)\n| summarize count() by EventType\n| order by count_ desc"
+            },
+            {
+              "description": "Attack surface vulnerabilities with CVSS3 >= 7",
+              "query": "NordStellar_CL\n| where EventType startswith \"ATTACK_SURFACE_\"\n| extend Cvss3 = todouble(Details.cvss3_score), Cve = tostring(Details.cve_id), Title = tostring(Details['title'])\n| where Cvss3 >= 7\n| project TimeGenerated, EventType, RiskLevel, AssetValue, Title, Cve, Cvss3\n| order by Cvss3 desc"
+            },
+            {
+              "description": "Malware infections by stealer family",
+              "query": "NordStellar_CL\n| where EventType == \"MALWARE_INFECTION\"\n| extend Stealer = tostring(Details.stealer_name)\n| summarize count() by Stealer\n| order by count_ desc"
+            },
+            {
+              "description": "Domain permutations (typosquatting)",
+              "query": "NordStellar_CL\n| where EventType == \"DOMAIN_PERMUTATION\"\n| project TimeGenerated, RiskLevel, OriginalDomain = tostring(Details.original_domain), PermutedDomain = tostring(Details.domain), PermutationType = tostring(Details.permutation_type)\n| order by TimeGenerated desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "NordStellar_CL",
+              "lastDataReceivedQuery": "NordStellar_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "NordStellar_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra",
+                "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+              },
+              {
+                "name": "Microsoft Azure",
+                "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+              },
+              {
+                "name": "NordStellar",
+                "description": "Active NordStellar tenant with permission to configure outbound webhooks for the integration."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Deploy connector resources",
+              "description": "This connector enables NordStellar to push real-time threat intelligence and exposure events directly to Microsoft Sentinel via the Azure Monitor Ingestion API.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Automated configuration\nClicking **Deploy** will create:\n- A custom Log Analytics table `NordStellar_CL`\n- A Data Collection Rule (DCR) with a single stream `Custom-NordStellar` and a KQL transform that promotes common fields and preserves the type-specific payload in `Details`\n- The Data Collection Endpoint (DCE) used for ingestion\n- A Microsoft Entra application with OAuth 2.0 client credentials\n- The required `Monitoring Metrics Publisher` role assignment on the DCR\n\nThe credentials returned below are then configured in the NordStellar portal so events can be pushed securely."
+                  }
+                },
+                {
+                  "type": "DeployPushConnectorButton",
+                  "parameters": {
+                    "label": "Deploy NordStellar Push connector resources",
+                    "applicationDisplayName": "NordStellar Sentinel Push Connector Application"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Configure NordStellar",
+              "description": "Use the following parameters to configure the Microsoft Sentinel integration in the NordStellar portal.",
+              "instructions": [
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Tenant ID (Directory ID)",
+                    "fillWith": [
+                      "TenantId"
+                    ]
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Application (Client) ID",
+                    "fillWith": [
+                      "ApplicationId"
+                    ],
+                    "placeholder": "Deploy push connector to get the Application ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Client Secret",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy push connector to get the Client Secret"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Endpoint URI",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy push connector to get the DCE Endpoint"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Rule Immutable ID",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy push connector to get the DCR Immutable ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Stream Name",
+                    "value": "Custom-NordStellar"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### On-the-wire envelope\nNordStellar must POST a JSON array to `{DCE URI}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-NordStellar?api-version=2023-01-01` with an OAuth bearer token for the scope `https://monitor.azure.com//.default`.\n\nEach element wraps the original webhook event in a thin envelope:\n\n```json\n[\n  {\n    \"time\": \"2026-04-27T10:30:00Z\",\n    \"event\": {\n      \"id\": \"...\",\n      \"type\": \"DATA_BREACH\",\n      \"module\": \"LEAKED_DATA\",\n      \"risk_level\": \"HIGH\",\n      \"date_added\": \"...\",\n      \"tags\": [],\n      \"asset\": { \"type\": \"EMAIL\", \"value\": \"user@company.com\" }\n    }\n  }\n]\n```\n\nThe DCR's KQL transform promotes `id`, `type`, `module`, `risk_level`, `asset.type`/`source_type`, `asset.value`/`asset_value`, `tags`, and the appropriate timestamp (`date_added` for leaked-data/dark-web/domain-permutation, `detected_at` for attack-surface) into typed columns. Everything else is preserved in the dynamic `Details` column."
+                  }
+                }
+              ]
+            },
+            {
+              "title": "3. Verify data ingestion",
+              "description": "Confirm events are flowing from NordStellar to Sentinel.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Wait 5-10 minutes after enabling the integration, then run this KQL query in your Microsoft Sentinel workspace:\n\n```kql\nNordStellar_CL\n| where TimeGenerated > ago(1h)\n| summarize count() by EventType, Module\n| order by count_ desc\n```\n\nIf no data appears after 15 minutes, verify the credentials in the NordStellar portal and check Azure Monitor for ingestion errors on the DCR."
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Nord Security Inc."
+        },
+        "support": {
+          "name": "NordStellar",
+          "tier": "Partner",
+          "link": "https://nordstellar.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "NordStellar (Push)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "NordStellar (Push)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Nord Security Inc."
+                },
+                "support": {
+                  "name": "NordStellar",
+                  "tier": "Partner",
+                  "link": "https://nordstellar.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'NordStellarPushConnector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "NordStellarPush",
+                "dcrConfig": {
+                  "streamName": "Custom-NordStellar",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "Push",
+                  "AppId": "[[parameters('auth').appId]",
+                  "ServicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "NordStellar",
+        "publisherDisplayName": "NordStellar",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/NordStellar/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://nordstellar.com\">NordStellar</a> solution for Microsoft Sentinel provides the capability to push real-time threat intelligence and exposure events from the NordStellar platform directly into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. Events from the Leaked Data, Dark Web Monitoring, Domain Squatting, and Attack Surface modules are ingested into a single unified <code>NordStellar_CL</code> table, with common header fields promoted by a Data Collection Rule transform.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/entra/identity-platform/quickstart-register-app\">Microsoft Entra application registrations</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/NordStellar.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "NordStellar",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Nord Security Inc."
+        },
+        "support": {
+          "name": "NordStellar",
+          "tier": "Partner",
+          "link": "https://nordstellar.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-04-27",
+        "lastPublishDate": "2026-04-27",
+        "providers": [
+          "NordStellar"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
