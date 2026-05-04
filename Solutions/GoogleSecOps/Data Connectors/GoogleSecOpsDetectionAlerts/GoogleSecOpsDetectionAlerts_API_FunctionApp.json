@@ -1,0 +1,136 @@
+{
+    "id": "GSDetectionAlerts",
+    "title": "Google SecOps Detection Alerts",
+    "publisher": "Google",
+    "descriptionMarkdown": "The [Google SecOps](https://cloud.google.com/security/products/security-operations) (formerly Chronicle) data connector provides the capability to ingest detection alerts from Google SecOps into Microsoft Sentinel using the [legacyStreamDetectionAlerts](https://cloud.google.com/chronicle/docs/reference/rest/v1alpha/projects.locations.instances.legacy/legacyStreamDetectionAlerts) API. Refer to [API documentation](https://cloud.google.com/chronicle/docs/reference/rest) for more information. The connector provides the ability to get detection alert data which helps to examine potential security threats, investigate rule-based detections, and respond to incidents identified by Google SecOps.",
+    "graphQueries": [
+        {
+            "metricName": "Total detection alerts received",
+            "legend": "Google SecOps Detection Alerts",
+            "baseQuery": "DetectionAlerts_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All detection alerts (latest first)",
+            "query": "DetectionAlerts_CL\n | sort by detection_time desc\n | take 10"
+        },
+        {
+            "description": "Detection alerts by severity",
+            "query": "DetectionAlerts_CL\n | summarize Count=count() by severity\n | sort by Count desc"
+        },
+        {
+            "description": "Active alerts by rule name",
+            "query": "DetectionAlerts_CL\n | where alert_state == 'ALERTING'\n | summarize Count=count() by rule_name\n | sort by Count desc\n | take 10"
+        },
+        {
+            "description": "Detection trends by hour",
+            "query": "DetectionAlerts_CL\n | extend Hour = bin(detection_time, 1h)\n | summarize Count=count() by Hour, severity\n | render columnchart"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "DetectionAlerts_CL",
+            "lastDataReceivedQuery": "DetectionAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "DetectionAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.Insights/dataCollectionRules",
+                "permissionsDisplayText": "Write permissions to Data Collection Rules are required.",
+                "providerDisplayName": "Data Collection Rules",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true
+                }
+            },
+            {
+                "provider": "Microsoft.Insights/dataCollectionEndpoints",
+                "permissionsDisplayText": "Write permissions to Data Collection Endpoints are required.",
+                "providerDisplayName": "Data Collection Endpoints",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "Microsoft.Storage/storageAccounts permissions",
+                "description": "Read and write permissions to Azure Storage Account for File Share operations are required."
+            },
+            {
+                "name": "Microsoft Entra ID App Registration",
+                "description": "An app registration with API permissions for Azure Monitor Ingestion is required for posting data to Sentinel."
+            },
+            {
+                "name": "Google Cloud Service Account",
+                "description": "A Google Cloud service account with SecOps API access is required. The service account JSON key must be provided during deployment. [See the documentation to learn more about Google SecOps API access](https://cloud.google.com/chronicle/docs/reference/rest)."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses two Azure Functions to connect to the Google SecOps API:\n- **GoogleSecOpsToStorage**: Polls the Google SecOps API on a configurable schedule and saves raw detection batches to Azure File Share.\n- **AzureStorageToSentinel**: Monitors the file share and ingests saved detections into Microsoft Sentinel via the Logs Ingestion API (DCR).\n\n>**NOTE:** This connector uses Azure Functions and Azure Storage, which may result in additional data ingestion and operational costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Storage pricing page](https://azure.microsoft.com/pricing/details/storage/blobs/) for details."
+        },
+        {
+            "title": "",
+            "description": "**STEP 1 - Configuration steps for Google SecOps Service Account**\n\n1. Sign in to the [Google Cloud Console](https://console.cloud.google.com/) and select the **project** associated with your Google SecOps instance.\n2. From the project selector at the top, note the **Project ID** — this is the **GoogleSecopsProjectId** parameter.\n3. Navigate to **IAM & Admin > Service Accounts** and click **Create Service Account**.\n4. Enter a name (e.g., `secops-sentinel-sa`) and click **Create and Continue**.\n5. Assign a role that includes the permission: `chronicle.legacies.legacyStreamDetectionAlerts`.\n6. Click **Done**, then click the newly created service account from the list.\n7. Go to the **Keys** tab, click **Add Key > Create new key**, select **JSON**, and click **Create**. Save the downloaded file.\n8. The full text content of the downloaded JSON file is the **GoogleSecopsServiceAccountJson** parameter.\n\n> To find **GoogleSecopsRegion** and **GoogleSecopsInstanceId**: sign in to the [Google SecOps console](https://chronicle.security), go to **Settings > SIEM Settings**, and note the **Region** and **Instance ID** values displayed there."
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - App Registration steps for the Application in Microsoft Entra ID**\n\nThis integration requires an App registration in the Azure portal. Follow the steps below to create a new application in Microsoft Entra ID:\n1. Sign in to the [Azure portal](https://portal.azure.com/).\n2. Search for and select **Microsoft Entra ID**.\n3. Under **Manage**, select **App registrations > New registration**.\n4. Enter a display **Name** for your application (e.g., `gcs-detection-alerts-app`).\n5. Select **Register** to complete the initial app registration.\n6. When registration finishes, the Azure portal displays the app registration's **Overview** pane. Note the **Application (client) ID** — this is the **AzureClientId** parameter. Note the **Directory (tenant) ID** — this is the **TenantId** parameter.\n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 3 - Add a client secret for the application in Microsoft Entra ID**\n\nSometimes called an application password, a client secret is a string value required by this data connector. Follow the steps below to create a new Client Secret:\n1. In the Azure portal, in **App registrations**, select your application.\n2. Select **Certificates & secrets > Client secrets > New client secret**.\n3. Add a description for your client secret.\n4. Select an expiration for the secret or specify a custom lifetime. Limit is 24 months.\n5. Select **Add**.\n6. *Record the secret's **Value** for use as the **AzureClientSecret** parameter. This secret value is never displayed again after you leave this page.*\n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 4 - Get Object ID of your application in Microsoft Entra ID**\n\nAfter creating your app registration, follow the steps below to get the Object ID required for the DCR role assignment:\n1. Go to **Microsoft Entra ID**.\n2. Select **Enterprise applications** from the left menu.\n3. Search for and click your newly created application.\n4. On the **Overview** page, copy the **Object ID** — this is the **AzureEntraObjectID** parameter."
+        },
+        {
+            "title": "",
+            "description": "**STEP 5 - Get Log Analytics Workspace details**\n\n1. In the Azure portal, navigate to your **Log Analytics workspace**.\n2. On the **Overview** page, copy the **Name** of the workspace — this is the **WorkspaceName** parameter.\n3. From the left menu, go to **Settings > Properties**.\n4. Copy the **Resource ID** value — this is the **AppInsightsWorkspaceResourceID** parameter. It follows the format:\n   `/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}`"
+        },
+        {
+            "title": "Azure Resource Manager (ARM) Template",
+            "description": "Use this method for automated deployment of the Google SecOps Detection Alerts connector.\n\n1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdevendra-chavda%2FGoogleSecOps%2Frefs%2Fheads%2Fmain%2FData%2520Connectors%2FGoogleSecOpsDetectionAlerts%2Fazuredeploy_Connector_GoogleSecOpsDetectionAlerts_API_AzureFunction.json)\n\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n\n3. Enter the below information in the deployment form:\n\n\t a. **DetectionAlertsTableName** - Custom Log Analytics table name to store detection alerts. Default: `DetectionAlerts`. (_Note: `_CL` suffix is appended automatically._)\n\n\t b. **GoogleSecopsProjectId** - Google Cloud project ID hosting the Google SecOps instance. Obtained in Step 1.\n\n\t c. **GoogleSecopsRegion** - Google SecOps instance region. Select from the dropdown list of supported regions. Obtained in Step 1.\n\n\t d. **GoogleSecopsInstanceId** - Google SecOps instance ID. Obtained in Step 1.\n\n\t e. **GoogleSecopsServiceAccountJson** - Full JSON content of the downloaded Google Cloud service account key file. Obtained in Step 1.\n\n\t f. **GoogleOAuthScope** - Google OAuth scope for service account authentication. Default: `https://www.googleapis.com/auth/cloud-platform`. Keep the default unless your organization requires a different scope.\n\n\t g. **FunctionName** - Prefix for the Azure Function App name (1-11 characters). Default: `GSDAlerts`.\n\n\t h. **LookbackDays** - Number of days to look back for the initial data pull (range: 1-7, default: 1). Subsequent runs automatically resume from the saved checkpoint.\n\n\t i. **FetchSchedule** - CRON expression controlling how often the connector polls the Google SecOps API. Default: `0 */10 * * * *` (every 10 minutes).\n\n\t j. **IngestSchedule** - CRON expression controlling how often saved detections are ingested into Sentinel. Default: `0 2/10 * * * *` (every 10 minutes, offset by 2 minutes).\n\n\t k. **LogLevel** - Application log verbosity. Allowed values: `DEBUG`, `INFO`, `WARNING`, `ERROR`. Default: `INFO`.\n\n\t l. **TenantId** - Directory (tenant) ID of your Microsoft Entra ID. Obtained in Step 2.\n\n\t m. **AzureClientId** - Application (client) ID of the registered app. Obtained in Step 2.\n\n\t n. **AzureClientSecret** - Client secret value of the registered app. Obtained in Step 3.\n\n\t o. **AzureEntraObjectID** - Object ID of the registered app from Enterprise Applications. Obtained in Step 4.\n\n\t p. **WorkspaceName** - Name of your Log Analytics workspace. Obtained in Step 5.\n\n\t q. **AppInsightsWorkspaceResourceID** - Full resource ID of your Log Analytics workspace. Obtained in Step 5.\n\n\t r. **Location** - Azure region for deploying data collection rules and endpoints. Defaults to the resource group location.\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n\n5. Click **Review + Create** and then **Create** to deploy."
+        },
+        {
+            "title": "",
+            "description": "**STEP 7 - Verify Data Ingestion**\n\n1. After deployment completes (10-20 minutes), navigate to your Log Analytics workspace.\n2. Run the following query to verify data is arriving:\n\n\t```kusto\n\tDetectionAlerts_CL\n\t| where TimeGenerated > ago(1h)\n\t| summarize Count=count()\n\t```"
+        }
+    ]
+}   
