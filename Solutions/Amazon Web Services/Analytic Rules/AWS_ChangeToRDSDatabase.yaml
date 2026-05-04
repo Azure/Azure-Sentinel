@@ -1,10 +1,10 @@
 id: 8c2ef238-67a0-497d-b1dd-5c8a0f533e25
 name: Changes to internet facing AWS RDS Database instances
 description: |
-  'Amazon Relational Database Service (RDS) is scalable relational database in the cloud.
-  If your organization have one or more AWS RDS Databases running, monitoring changes to especially internet facing AWS RDS (Relational Database Service)
-  Once alerts triggered, validate if changes observed are authorized and adhere to change control policy.
-  RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html'
+  Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database
+  security group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether
+  the change was authorized and consistent with change control policy.
+  RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html
 severity: Low
 status: Available
 requiredDataConnectors:
@@ -20,8 +20,11 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
 relevantTechniques:
-  - T1098
+  - T1098.001
+  - T1562.007
 query: |
   let EventNameList = dynamic(["AuthorizeDBSecurityGroupIngress","CreateDBSecurityGroup","DeleteDBSecurityGroup","RevokeDBSecurityGroupIngress"]);
   AWSCloudTrail
@@ -32,7 +35,6 @@ query: |
   | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
     AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
-  | extend timestamp = StartTimeUtc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -46,5 +48,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.4
+customDetails:
+  AWSRegion: AWSRegion
+  UserAgent: UserAgent
+  EventName: EventName
+  EventSource: EventSource
+  EventType: EventTypeName
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS RDS database security change by {{AccountName}} in {{AWSRegion}}'
+  alertDescriptionFormat: 'Event {{EventName}} change in RDS security settings by {{AccountName}} from {{SourceIpAddress}}.'
+version: 1.0.5
 kind: Scheduled

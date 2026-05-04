@@ -1,7 +1,9 @@
 id: 22115d3c-e87c-485a-9130-33797d619124
 name: Creation of CRUD Lambda policy and then privilege escalation
 description: |
-  'Detected creation of new CRUD Lambda policy and usage of the attach policy events (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'
+  Identifies creation of IAM policies that grant broad AWS Lambda CRUD permissions and subsequent policy attachment
+  activity to a principal. This behavior may indicate an attempt to add capabilities that support privilege
+  escalation or unauthorized execution pathways.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -13,9 +15,12 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
+  - DefenseEvasion
   - PrivilegeEscalation
+  - Persistence
 relevantTechniques:
   - T1484
+  - T1098.003
 query: |
   let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
   let createPolicy =  dynamic(["CreatePolicy", "CreatePolicyVersion"]);
@@ -39,10 +44,10 @@ query: |
   | mvexpand Statement
   | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
   | extend Action = tostring(Action)
-  | where Effect =~ "Allow" and (Action contains "lambda:Create" and Action contains "lambda:Get" and Action contains "lambda:Update" and Action contains "kms:Delete") and Resource == "*" and Condition == ""
+  | where Effect =~ "Allow" and (Action contains "lambda:Create" and Action contains "lambda:Get" and Action contains "lambda:Update" and Action contains "lambda:Delete") and Resource == "*" and Condition == ""
   | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, RecipientAccountId, AccountName, AccountUPNSuffix
   | project-rename StartTime = TimeGenerated  );
-  let PolicyAttach = materialize(  EventInfo
+  let PolicyAttach = materialize(EventInfo
   | where TimeGenerated >= ago(timeframe)
   | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
   | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
@@ -59,7 +64,6 @@ query: |
   )
   on PolicyName
   | project-away PolicyName1
-  | extend timestamp = StartTime
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -73,5 +77,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.3
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  RecipientAccountId: RecipientAccountId
+  UserIdentityArn: UserIdentityArn
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS Lambda privilege escalation policy activity: {{PolicyName}} by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} for policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.4
 kind: Scheduled
