@@ -1,0 +1,120 @@
+id: abed6064-9406-4171-a961-5fd38de5f79a
+name: Guest or external account added to a privileged Entra ID role
+description: |
+  Hunting query that identifies guest or external accounts being added to privileged
+  Entra ID directory roles. External accounts are identified by the presence of #EXT#
+  in the UserPrincipalName, which is the standard suffix assigned by Entra ID to all
+  guest and B2B invited users. Privileged roles covered include Global Administrator,
+  Privileged Role Administrator, Security Administrator, Exchange Administrator,
+  SharePoint Administrator, Application Administrator, Cloud Application Administrator,
+  Authentication Administrator, Conditional Access Administrator, Helpdesk Administrator,
+  and User Administrator.
+  Adding an external identity to a privileged role is an unusual operation in most
+  tenants and can indicate account compromise, insider threat, or a misconfigured
+  administrative workflow. Analysts must validate every result. Benign matches include
+  authorized partner or consultant access with documented approval.
+  This query uses AuditLogs only and does not require Microsoft Defender XDR or
+  Entra ID P2 licensing.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/roles/permissions-reference
+  - https://learn.microsoft.com/azure/active-directory/external-identities/user-properties
+  - https://attack.mitre.org/techniques/T1098/003/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.003
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let privilegedRoles = dynamic([
+      "Global Administrator",
+      "Privileged Role Administrator",
+      "Security Administrator",
+      "Exchange Administrator",
+      "SharePoint Administrator",
+      "Application Administrator",
+      "Cloud Application Administrator",
+      "Authentication Administrator",
+      "Conditional Access Administrator",
+      "Helpdesk Administrator",
+      "User Administrator"
+  ]);
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Add member to role."
+  | where Result =~ "success"
+  // Extract actor
+  | extend ActorUpn = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  // Expand target resources to find both the user and the role entries
+  | mv-expand TargetResource = TargetResources
+  | extend ResourceType = tostring(TargetResource.type)
+  | extend ResourceUPN  = tostring(TargetResource.userPrincipalName)
+  | extend ResourceName = tostring(TargetResource.displayName)
+  // Identify the target user (guest/external) by #EXT# marker
+  | where ResourceType =~ "User" and ResourceUPN has "#EXT#"
+  | extend GuestUPN = ResourceUPN
+  | extend GuestId  = tostring(TargetResource.id)
+  // Join back to find the role name in the same event
+  | join kind=inner (
+      AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where OperationName =~ "Add member to role."
+      | where Result =~ "success"
+      | mv-expand TargetResource = TargetResources
+      | where tostring(TargetResource.type) =~ "Role"
+      | extend RoleName = tostring(TargetResource.displayName)
+      | project CorrelationId, RoleName
+  ) on CorrelationId
+  // Keep only privileged roles
+  | where RoleName in~ (privilegedRoles)
+  | extend AccountName      = tostring(split(GuestUPN, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(GuestUPN, "@")[1])
+  | extend ActorName        = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend ActorUPNSuffix   = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      GuestUPN,
+      AccountName,
+      AccountUPNSuffix,
+      GuestId,
+      RoleName,
+      Actor,
+      ActorName,
+      ActorUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: GuestUPN
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
