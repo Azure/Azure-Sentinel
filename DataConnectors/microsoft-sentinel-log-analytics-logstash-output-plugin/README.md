@@ -19,7 +19,7 @@ This plugin is currently in development and is free to use. We request and appre
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.  
 
-The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.1.2-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.2.0-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
 
 If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 
@@ -232,5 +232,5 @@ To resolve it, use the following commands to install the *netbase* package withi
     ```
     USER root
     RUN apt install netbase -y
-    ```
+    ```  
 For more information, see [JNR regression in Logstash 7.17.0 (Docker)](https://github.com/elastic/logstash/issues/13703).  
