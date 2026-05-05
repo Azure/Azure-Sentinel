@@ -6,9 +6,9 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 597 | 198 | 33.2% |
-| Content Items | 6518 | 2461 | 37.8% |
-| ASIM Parsers | 209 | 118 | 56.5% |
+| Connectors | 613 | 198 | 32.3% |
+| Content Items | 6531 | 2463 | 37.7% |
+| ASIM Parsers | 210 | 119 | 56.7% |
 
 ## Filter Field Patterns Found
 
@@ -23,7 +23,7 @@ The following table.field combinations were detected in queries:
 | CommonSecurityLog.DeviceEventClassID | 180 |
 | CloudAppEvents.ActionType | 172 |
 | AWSCloudTrail.EventName | 165 |
-| Syslog.SyslogMessage | 134 |
+| Syslog.SyslogMessage | 136 |
 | SecurityRecommendation.RecommendationDisplayName | 129 |
 | SecurityEvent.EventID | 127 |
 | _Computed.RecommendationName | 97 |
@@ -48,8 +48,8 @@ The following table.field combinations were detected in queries:
 | DeviceNetworkEvents.InitiatingProcessVersionInfoCompanyName | 51 |
 | _Computed.AccountName | 50 |
 | SecurityEvent.CommandLine | 49 |
+| Syslog.ProcessName | 49 |
 | DeviceProcessEvents.ProcessVersionInfoCompanyName | 48 |
-| Syslog.ProcessName | 48 |
 | _Computed.SubmissionContentType | 47 |
 | _Computed.SubmissionType | 47 |
 | DeviceProcessEvents.ProcessVersionInfoProductName | 46 |
@@ -125,6 +125,7 @@ The following table.field combinations were detected in queries:
 | AuditLogs.LoggedByService | 15 |
 | EmailEvents.OrgLevelAction | 15 |
 | EmailEvents.UserLevelAction | 15 |
+| ThreatIntelIndicators.SourceSystem | 15 |
 | _Computed.AuthMethod | 15 |
 | _Computed.EventResult | 15 |
 | _Computed.Operation | 15 |
@@ -134,7 +135,6 @@ The following table.field combinations were detected in queries:
 | DeviceRegistryEvents.ActionType | 14 |
 | MessageEvents.SenderDisplayName | 14 |
 | MessageEvents.ThreatTypes | 14 |
-| ThreatIntelligenceIndicator.SourceSystem | 14 |
 | _Computed.Effect | 14 |
 | AzureActivity.CategoryValue | 13 |
 | GCPAuditLogs.ServiceName | 13 |
@@ -144,12 +144,12 @@ The following table.field combinations were detected in queries:
 | EmailEvents.SenderFromAddress | 12 |
 | MessageEvents.RecipientDetails | 12 |
 | SecurityAlert.AlertType | 12 |
-| ThreatIntelIndicators.SourceSystem | 12 |
 | _Computed.DstIpAddr | 12 |
 | _Computed.UserName | 12 |
 | AWSSecurityHubFindings.ComplianceStatus | 11 |
 | AWSSecurityHubFindings.RecordState | 11 |
 | SecurityBaseline.AnalyzeResult | 11 |
+| ThreatIntelligenceIndicator.SourceSystem | 11 |
 | W3CIISLog.csUriQuery | 11 |
 | _Computed.Statement | 11 |
 | _Computed.Type | 11 |
@@ -294,6 +294,7 @@ The following table.field combinations were detected in queries:
 | _Computed.resourceSource | 5 |
 | _Computed.service | 5 |
 | _Computed.severity | 5 |
+| AlertEvidence.ActionType | 4 |
 | AzureActivity.Caller | 4 |
 | AzureActivity.Level | 4 |
 | CommonSecurityLog.CommunicationDirection | 4 |
@@ -457,7 +458,6 @@ The following table.field combinations were detected in queries:
 | AWSCloudTrail.RequestParameters | 2 |
 | AWSCloudTrail.SessionIssuerUserName | 2 |
 | AWSVPCFlow.Action | 2 |
-| AlertEvidence.ActionType | 2 |
 | AlertEvidence.DeviceId | 2 |
 | AlertInfo.ActionType | 2 |
 | AuditLogs.ResultReason | 2 |
@@ -1258,7 +1258,7 @@ Total: 198 connectors
 | CrowdStrikeFalconAdversaryIntelligence | CrowdStrike Falcon Adversary Intelligence  | ThreatIntelIndicators.SourceSystem == "CrowdStrike Falcon Adversary Intelligence" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdStrikeFalconAdversaryIntelligence/CrowdStrikeFalconAdversaryIntelligence_FunctionApp.json) |
 | CrowdStrikeFalconEndpointProtection | [Deprecated] CrowdStrike Falcon Endpoint Protection via Lega | CommonSecurityLog.DeviceProduct == "FalconHost"  \|  CommonSecurityLog.DeviceVendor == "CrowdStrike"  \|  _Computed.DeviceCustomDate1Label in "DNS Request Time,DocAccessTimestamp,Document Accessed Timestamp,ExeWrittenTimestamp,Network Access Timestamp"  \|  _Computed.DeviceCustomDate2Label in "HashSpreadingEventTime,HashSpreadingSensorEventTime"  \|  _Computed.DeviceCustomNumber2Label == "ProcessId"  \|  _Computed.DeviceCustomNumber3Label == "Offset"  \|  _Computed.DeviceCustomString2Label in "AccessedDocFileName,QuarantineFileSHA256,ScanResultEngine,WrittenExeFileName"  \|  _Computed.DeviceCustomString3Label in "AccessedDocFilePath,QuarantineFilePath,WrittenExeFilePath"  \|  _Computed.DeviceCustomString4Label == "ScanResultVersion"  \|  _Computed.DeviceCustomString5Label == "CommandLine"  \|  _Computed.DeviceCustomString6Label == "FalconHostLink"  \|  _Computed.LogSeverity in "1,2,3,4,5" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/Connector_Syslog_CrowdStrikeFalconEndpointProtection.json) |
 | CrowdStrikeFalconEndpointProtectionAma | [Deprecated] CrowdStrike Falcon Endpoint Protection via AMA | CommonSecurityLog.DeviceProduct =~ "FalconHost"  \|  CommonSecurityLog.DeviceVendor =~ "CrowdStrike"  \|  _Computed.DeviceCustomDate1Label in "DNS Request Time,DocAccessTimestamp,Document Accessed Timestamp,ExeWrittenTimestamp,Network Access Timestamp"  \|  _Computed.DeviceCustomDate2Label in "HashSpreadingEventTime,HashSpreadingSensorEventTime"  \|  _Computed.DeviceCustomNumber2Label == "ProcessId"  \|  _Computed.DeviceCustomNumber3Label == "Offset"  \|  _Computed.DeviceCustomString2Label in "AccessedDocFileName,QuarantineFileSHA256,ScanResultEngine,WrittenExeFileName"  \|  _Computed.DeviceCustomString3Label in "AccessedDocFilePath,QuarantineFilePath,WrittenExeFilePath"  \|  _Computed.DeviceCustomString4Label == "ScanResultVersion"  \|  _Computed.DeviceCustomString5Label == "CommandLine"  \|  _Computed.DeviceCustomString6Label == "FalconHostLink"  \|  _Computed.LogSeverity in "1,2,3,4,5" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/template_CrowdStrikeFalconEndpointProtectionAma.json) |
-| CrowdstrikeReplicatorv2 | [DEPRECATED] CrowdStrike Falcon Data Replicator (CrowdStrike | ASimUserManagementLogs_CL.EventProduct == "Falcon Data Replicator"  \|  ASimUserManagementLogs_CL.EventVendor == "CrowdStrike" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdstrikeReplicatorCLv2/CrowdstrikeReplicatorV2_ConnectorUI.json) |
+| CrowdstrikeReplicatorv2 | CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS- | ASimUserManagementLogs_CL.EventProduct == "Falcon Data Replicator"  \|  ASimUserManagementLogs_CL.EventVendor == "CrowdStrike" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdstrikeReplicatorCLv2/CrowdstrikeReplicatorV2_ConnectorUI.json) |
 | CyberArk | [Deprecated] CyberArk Enterprise Password Vault (EPV) Events | CommonSecurityLog.DeviceProduct == "Vault"  \|  CommonSecurityLog.DeviceVendor == "Cyber-Ark"  \|  CommonSecurityLog.LogSeverity in "10,7" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArk%20Enterprise%20Password%20Vault%20%28EPV%29%20Events/Data%20Connectors/CyberArk%20Data%20Connector.json) |
 | CyberArkAma | [Deprecated] CyberArk Privilege Access Manager (PAM) Events  | CommonSecurityLog.DeviceProduct =~ "Vault"  \|  CommonSecurityLog.DeviceVendor =~ "Cyber-Ark"  \|  CommonSecurityLog.LogSeverity in "10,7" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArk%20Enterprise%20Password%20Vault%20%28EPV%29%20Events/Data%20Connectors/template_CyberArkAMA.json) |
 | CyberArkEPM | CyberArkEPM | _Computed.event_type_s == "raw_event" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkEPM/Data%20Connectors/CyberArkEPM_API_FunctionApp.json) |
@@ -1294,7 +1294,7 @@ Total: 198 connectors
 | FortinetFortiWeb | [Deprecated] Fortinet FortiWeb Web Application Firewall via  | CommonSecurityLog.DeviceProduct == "Fortiweb"  \|  CommonSecurityLog.DeviceProduct has "Fortiweb"  \|  CommonSecurityLog.DeviceVendor =~ "Fortinet"  \|  _Computed.DeviceCustomNumber2Label =~ "length"  \|  _Computed.DeviceCustomNumber3Label =~ "signatureID"  \|  _Computed.DeviceCustomString1Label =~ "appName"  \|  _Computed.DeviceCustomString2Label =~ "srcCountry"  \|  _Computed.DeviceCustomString3Label =~ "mainType"  \|  _Computed.DeviceCustomString4Label =~ "subType"  \|  _Computed.DeviceCustomString5Label =~ "threatLevel"  \|  _Computed.DeviceCustomString6Label =~ "owaspTop10" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiWeb%20Cloud%20WAF-as-a-Service%20connector%20for%20Microsoft%20Sentinel/Data%20Connectors/Fortiweb.json) |
 | FortinetFortiWebAma | Fortinet FortiWeb Web Application Firewall via AMA | CommonSecurityLog.Computer contains "Fortiweb"  \|  CommonSecurityLog.DeviceProduct contains "Fortiweb"  \|  CommonSecurityLog.DeviceProduct has "Fortiweb"  \|  CommonSecurityLog.DeviceVendor =~ "Fortinet"  \|  CommonSecurityLog.DeviceVendor contains "Fortinet"  \|  _Computed.DeviceCustomNumber2Label =~ "length"  \|  _Computed.DeviceCustomNumber3Label =~ "signatureID"  \|  _Computed.DeviceCustomString1Label =~ "appName"  \|  _Computed.DeviceCustomString2Label =~ "srcCountry"  \|  _Computed.DeviceCustomString3Label =~ "mainType"  \|  _Computed.DeviceCustomString4Label =~ "subType"  \|  _Computed.DeviceCustomString5Label =~ "threatLevel"  \|  _Computed.DeviceCustomString6Label =~ "owaspTop10" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiWeb%20Cloud%20WAF-as-a-Service%20connector%20for%20Microsoft%20Sentinel/Data%20Connectors/template_FortiwebAma.json) |
 | GitLab | [Deprecated] GitLab | Syslog.Facility == "local7"  \|  Syslog.ProcessName in "GitLab-Access-Logs,GitLab-Application-Logs,GitLab-Audit-Logs"  \|  Syslog.SyslogMessage contains "HTTP"  \|  Syslog.SyslogMessage has_any "DELETE,GET,PATCH,POST,PUT"  \|  _Computed.parsedMessage matchesregex ".*impersonating.*" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitLab/Data%20Connectors/Connector_Syslog_GitLab.json) |
-| GreyNoise2SentinelAPI | GreyNoise Threat Intelligence | ThreatIntelligenceIndicator.SourceSystem == "GreyNoise" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Data%20Connectors/GreyNoiseConnector_UploadIndicatorsAPI.json) |
+| GreyNoise2SentinelAPI | GreyNoise Threat Intelligence | ThreatIntelIndicators.SourceSystem == "GreyNoise" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Data%20Connectors/GreyNoiseConnector_UploadIndicatorsAPI.json) |
 | ISCBind | [Deprecated] ISC Bind | Syslog.SyslogMessage !has "response:"  \|  Syslog.SyslogMessage has_all "client" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ISC%20Bind/Data%20Connectors/Connector_Syslog_ISCBind.json) |
 | IllumioCore | [Deprecated] Illumio Core via Legacy Agent | CommonSecurityLog.DeviceCustomString1Label in~ "dst_vulns,event_href"  \|  CommonSecurityLog.DeviceCustomString2Label in~ "resource_changes,state"  \|  CommonSecurityLog.DeviceCustomString4Label in~ "dst_labels,notifications"  \|  CommonSecurityLog.DeviceCustomString6Label =~ "dst_href"  \|  CommonSecurityLog.DeviceVendor =~ "Illumio" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/Connector_IllumioCore_CEF.json) |
 | IllumioCoreAma | [Deprecated] Illumio Core via AMA | CommonSecurityLog.DeviceCustomString1Label in~ "dst_vulns,event_href"  \|  CommonSecurityLog.DeviceCustomString2Label in~ "resource_changes,state"  \|  CommonSecurityLog.DeviceCustomString4Label in~ "dst_labels,notifications"  \|  CommonSecurityLog.DeviceCustomString6Label =~ "dst_href"  \|  CommonSecurityLog.DeviceVendor =~ "Illumio" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/template_IllumioCoreAMA.json) |
@@ -1312,7 +1312,7 @@ Total: 198 connectors
 | JuniperSRX | [Deprecated] Juniper SRX | Syslog.ProcessName == "RT_FLOW"  \|  Syslog.ProcessName in~ "RT_IDS,sshd"  \|  Syslog.ProcessName !in "sshd,RT_IDS,RT_FLOW" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Juniper%20SRX/Data%20Connectors/Connector_Syslog_JuniperSRX.json) |
 | LumenThreatFeedConnectorV2 | Lumen Defender Threat Feed Data Connector V2 | ThreatIntelIndicators.ObservableKey in "domain-name:value,ipv4-addr:value"  \|  ThreatIntelIndicators.SourceSystem == "Lumen" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lumen%20Defender%20Threat%20Feed/Data%20Connectors/LumenThreatFeedv2/LumenThreatFeedConnectorV2_ConnectorUI.json) |
 | LumenThreatFeedConnectorV2PrivateNetworking | Lumen Defender Threat Feed Data Connector V2 (using Azure Fu | ThreatIntelIndicators.ObservableKey in "domain-name:value,ipv4-addr:value"  \|  ThreatIntelIndicators.SourceSystem == "Lumen" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lumen%20Defender%20Threat%20Feed/Data%20Connectors/LumenThreatFeedv2/LumenThreatFeedConnectorV2_PrivateNetworking_ConnectorUI.json) |
-| MISP2SentinelConnector | MISP2Sentinel | ThreatIntelligenceIndicator.SourceSystem == "MISP" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MISP2Sentinel/Data%20Connectors/MISP2SentinelConnector_UploadIndicatorsAPI.json) |
+| MISP2SentinelConnector | MISP2Sentinel | ThreatIntelIndicators.SourceSystem == "MISP" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MISP2Sentinel/Data%20Connectors/MISP2SentinelConnector_UploadIndicatorsAPI.json) |
 | McAfeeNSP | [Deprecated] McAfee Network Security Platform | Syslog.ProcessName == "SyslogAlertForwarderNSP" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20Network%20Security%20Platform/Data%20Connectors/McAfeeNSP.json) |
 | McAfeeePO | [Deprecated] McAfee ePolicy Orchestrator (ePO) | Syslog.ProcessName contains "EPOEvents"  \|  Syslog.SyslogMessage contains "<EPOevent>"  \|  Syslog.SyslogMessage contains "<UpdateEvents>" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Data%20Connectors/Connector_McAfee_ePO.json) |
 | MicrosoftAzurePurview | Microsoft Purview | PurviewDataSensitivityLogs.Classification has "Social Security Number" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Purview/Data%20Connectors/MicrosoftPurview.json) |
@@ -1386,7 +1386,7 @@ Total: 198 connectors
 
 ## Content Items with Filter Fields
 
-Total: 2461 content items
+Total: 2463 content items
 
 ### 
 
@@ -1580,6 +1580,7 @@ Total: 2461 content items
 | hunting_query | HostExportingMailboxAndRemovingExport[Solarigate] | DeviceProcessEvents.ProcessCommandLine contains "New-MailboxExportRequest"  \|  DeviceProcessEvents.ProcessCommandLine contains "Remove-MailboxExportRequest" | Microsoft 365 Defender/Collection/HostExportingMailboxAndRemovingExport[Solarigate].yaml |
 | hunting_query | Hunt for Admin email access | CloudAppEvents.ActionType == "AdminMailAccess" | Microsoft 365 Defender/Email and Collaboration Queries/General/Hunt for Admin email access.yaml |
 | hunting_query | Hunt for TABL changes | CloudAppEvents.ActionType contains "TenantAllowBlockListItems" | Microsoft 365 Defender/Email and Collaboration Queries/General/Hunt for TABL changes.yaml |
+| hunting_query | Hunt for alerts correlated with Teams messages | AlertEvidence.ActionType == "ChatCreated" | Microsoft 365 Defender/Email and Collaboration Queries/Microsoft Teams protection/Hunt for alerts correlated with Teams messages.yaml |
 | hunting_query | Hunt for email bombing attacks | EmailEvents.EmailDirection == "Inbound" | Microsoft 365 Defender/Email and Collaboration Queries/Hunting/Hunt for email bombing attacks.yaml |
 | hunting_query | Hunt for email conversation take over attempts | EmailEvents.DeliveryLocation != "Quarantine"  \|  EmailEvents.EmailDirection == "Inbound"  \|  EmailEvents.OrgLevelAction != "Block"  \|  EmailEvents.UserLevelAction != "Block" | Microsoft 365 Defender/Email and Collaboration Queries/Hunting/Hunt for email conversation take over attempts.yaml |
 | hunting_query | Hunting for user signals-clusters | EmailEvents.EmailDirection == "Inbound" | Microsoft 365 Defender/Email and Collaboration Queries/QR code/Hunting for user signals-clusters.yaml |
@@ -3206,7 +3207,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | analytic_rule | GreyNoise TI Map IP Entity to DnsEvents | DnsEvents.SubType =~ "LookupQuery" | [GreyNoise_IPEntity_DnsEvents.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Analytic%20Rules/GreyNoise_IPEntity_DnsEvents.yaml) |
-| workbook | GreyNoiseOverview | ThreatIntelligenceIndicator.SourceSystem == "GreyNoise" | [GreyNoiseOverview.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Workbooks/GreyNoiseOverview.json) |
+| workbook | GreyNoiseOverview | ThreatIntelIndicators.SourceSystem == "GreyNoise" | [GreyNoiseOverview.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Workbooks/GreyNoiseOverview.json) |
 
 ### HIPAA Compliance
 
@@ -3540,6 +3541,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | hunting_query | High Confidence Phish Released | EmailEvents.ActionType == "QuarantineReleaseMessage" | [Email and Collaboration Queries/Quarantine/High Confidence Phish Released.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/Quarantine/High%20Confidence%20Phish%20Released.yaml) |
 | hunting_query | Hunt for Admin email access | CloudAppEvents.ActionType == "AdminMailAccess" | [Email and Collaboration Queries/General/Hunt for Admin email access.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/General/Hunt%20for%20Admin%20email%20access.yaml) |
 | hunting_query | Hunt for TABL changes | CloudAppEvents.ActionType contains "TenantAllowBlockListItems" | [Email and Collaboration Queries/General/Hunt for TABL changes.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/General/Hunt%20for%20TABL%20changes.yaml) |
+| hunting_query | Hunt for alerts correlated with Teams messages | AlertEvidence.ActionType == "ChatCreated" | [Email and Collaboration Queries/Microsoft Teams protection/Hunt for alerts correlated with Teams messages.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/Microsoft%20Teams%20protection/Hunt%20for%20alerts%20correlated%20with%20Teams%20messages.yaml) |
 | hunting_query | Hunt for email bombing attacks | EmailEvents.EmailDirection == "Inbound" | [Email and Collaboration Queries/Hunting/Hunt for email bombing attacks.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/Hunting/Hunt%20for%20email%20bombing%20attacks.yaml) |
 | hunting_query | Hunt for email conversation take over attempts | EmailEvents.DeliveryLocation != "Quarantine"  \|  EmailEvents.EmailDirection == "Inbound"  \|  EmailEvents.OrgLevelAction != "Block"  \|  EmailEvents.UserLevelAction != "Block" | [Email and Collaboration Queries/Hunting/Hunt for email conversation take over attempts.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/Hunting/Hunt%20for%20email%20conversation%20take%20over%20attempts.yaml) |
 | hunting_query | Hunting for user signals-clusters | EmailEvents.EmailDirection == "Inbound" | [Email and Collaboration Queries/QR code/Hunting for user signals-clusters.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Hunting%20Queries/Email%20and%20Collaboration%20Queries/QR%20code/Hunting%20for%20user%20signals-clusters.yaml) |
@@ -3739,7 +3741,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 | analytic_rule | Admin promotion after Role Management Application  | AuditLogs.AADOperationType =~ "Assign"  \|  AuditLogs.LoggedByService =~ "Core Directory"  \|  AuditLogs.OperationName =~ "Add app role assignment to service principal"  \|  _Computed.PermissionGrant has "RoleManagement.ReadWrite.Directory"  \|  _Computed.RoleAssignment contains "Admin" | [AdminPromoAfterRoleMgmtAppPermissionGrant.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/AdminPromoAfterRoleMgmtAppPermissionGrant.yaml) |
 | analytic_rule | Azure Portal sign in from another Azure Tenant | SigninLogs.AppDisplayName =~ "Azure Portal"  \|  SigninLogs.ResultType == "0" | [AzurePortalSigninfromanotherAzureTenant.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/AzurePortalSigninfromanotherAzureTenant.yaml) |
 | analytic_rule | Azure RBAC (Elevate Access) | AuditLogs.ActivityDisplayName =~ "User has elevated their access to User Access Administrator for their Azure Resources" | [AzureRBAC.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/AzureRBAC.yaml) |
-| analytic_rule | Brute force attack against a Cloud PC | SigninLogs.AppDisplayName =~ "Windows Sign In" | [BruteForceCloudPC.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/BruteForceCloudPC.yaml) |
+| analytic_rule | Brute force attack against an Entra-authenticated  | SigninLogs.AppDisplayName =~ "Windows Sign In" | [BruteForceAgainstanEntraAuthenticatedWindowsDevice.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/BruteForceAgainstanEntraAuthenticatedWindowsDevice.yaml) |
 | analytic_rule | Conditional Access - A Conditional Access Device p | AuditLogs.OperationName == "Update conditional access policy" | [Conditional Access - A Conditional Access Device platforms condition has changed (the Device platforms condition can be spoofed).yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/Conditional%20Access%20-%20A%20Conditional%20Access%20Device%20platforms%20condition%20has%20changed%20%28the%20Device%20platforms%20condition%20can%20be%20spoofed%29.yaml) |
 | analytic_rule | Conditional Access - A Conditional Access app excl | AuditLogs.OperationName == "Update conditional access policy" | [Conditional Access - A Conditional Access app exclusion has changed.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/Conditional%20Access%20-%20A%20Conditional%20Access%20app%20exclusion%20has%20changed.yaml) |
 | analytic_rule | Conditional Access - A Conditional Access policy w | AuditLogs.OperationName == "Delete conditional access policy" | [Conditional Access - A Conditional Access policy was deleted.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/Conditional%20Access%20-%20A%20Conditional%20Access%20policy%20was%20deleted.yaml) |
@@ -4703,7 +4705,7 @@ etsetupsvc.dll"  \|  SecurityEvent.NewProcessName has "SolarWinds"  \|  Security
 
 ## ASIM Parsers with Filter Fields
 
-Total: 118 parsers
+Total: 119 parsers
 
 ### AuditEvent Schema
 
@@ -4730,6 +4732,7 @@ Total: 118 parsers
 | ASimAuthenticationAWSCloudTrail | AWS | AWSCloudTrail.EventName == "ConsoleLogin" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationAWSCloudTrail.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationAWSCloudTrail.yaml) |
 | ASimAuthenticationBarracudaWAF | Barracuda WAF | CommonSecurityLog.DeviceProduct in "WAAS,WAF"  \|  CommonSecurityLog.DeviceVendor startswith "Barracuda" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationBarracudaWAF.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationBarracudaWAF.yaml) |
 | ASimAuthenticationCiscoASA | Cisco Adaptive Security Applia | CommonSecurityLog.DeviceProduct == "ASA"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco"  \|  _Computed.TargetUsername == "*****" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoASA.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoASA.yaml) |
+| ASimAuthenticationCiscoDNAC | Cisco DNAC | Syslog.ProcessName == "DNAC"  \|  Syslog.SyslogMessage has "LOGIN_USER_EVENT"  \|  Syslog.SyslogMessage has "LOGOFF_USER_EVENT" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoDNAC.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoDNAC.yaml) |
 | ASimAuthenticationCiscoIOS | Cisco IOS | Syslog.SyslogMessage has "%SEC_LOGIN-4-LOGIN_FAILED"  \|  Syslog.SyslogMessage has "%SEC_LOGIN-5-LOGIN_SUCCESS"  \|  Syslog.SyslogMessage has "%SYS-6-LOGOUT" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoIOS.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoIOS.yaml) |
 | ASimAuthenticationCiscoISE | Cisco ISE | Syslog.ProcessName has_any "CISE,CSCO" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoISE.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoISE.yaml) |
 | ASimAuthenticationCiscoISEAdministrator | Cisco ISE Administrator | Syslog.ProcessName has "CISE_Administrative_and_Operational_Audit"  \|  Syslog.SyslogMessage has "Administrator-Login" | [Parsers\ASimAuthentication\Parsers\ASimAuthenticationCiscoISEAdministrator.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/Parsers/ASimAuthenticationCiscoISEAdministrator.yaml) |
