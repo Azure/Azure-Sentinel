@@ -7,7 +7,7 @@ The Recorded Future Sandbox integration requires an API key for `Recorded Future
 
 If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 > [!IMPORTANT]
-> ## Microsoft Defender Migration - Breaking Changes (v4.0)
+> ## Microsoft Defender Migration - Breaking Changes (v3.2.20)
 >
 > Starting with version 4.0, **direct incident creation via Logic Apps has been removed** from the `RecordedFuture-Sandbox_Outlook_Attachment` and `RecordedFuture-Sandbox_StorageAccount` playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender portal.
 >
@@ -19,7 +19,7 @@ If you use the Enterprise Sandbox, you need to provide an additional key `Enterp
 
 The Recorded Future Sandbox integration requires an API key for `Recorded Future Sandbox for Microsoft Sentinel`. **Note**: this is different from the one used in the `Recorded Future for Microsoft Sentinel` integration.
 
-If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Sandbox API token`.
+If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 
 Refer to [Recorded Future API Key](../readme.md#recorded-future-api-key) for guidance on obtaining and using the necessary API keys.
 

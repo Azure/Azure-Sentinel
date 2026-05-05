@@ -9,7 +9,7 @@
 > ### Incident Creation via Logic Apps No Longer Supported
 > Incidents created using the Azure Sentinel Logic Apps connector (`/azuresentinel`) **will not appear** in the unified Microsoft Defender incident queue. This affects:
 >
-> | Playbook | Previous Behavior | New Behavior (v4.0) |
+> | Playbook | Previous Behavior | New Behavior (v3.2.20) |
 > |----------|-------------------|---------------------|
 > | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePortalAlerts_CL` log only |
 > | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
@@ -257,23 +257,21 @@ Following changes made by Microsoft, removing the possibility to create incident
 
 There is a general limitation of ***3*** fields in the alert description. More information is available in Log Analytics Workspace.
 
-|Use Case|Analytic Rule|Custom Log Name
+|Use Case|Analytic Rule|Custom Log Name|
 |-|-|-|
-|Alerts|RecordedFutureAlerts|RecordedFuturePortalAlerts_CL
-|Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_CL
-|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_CL
-|Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_CL
+|Alerts|RecordedFutureAlerts|RecordedFuturePortalAlerts_CL|
+|Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_CL|
+|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_CL|
+|Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_CL|
 
-These analytic are be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
-
-There are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
+These analytic are available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
 
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.
 
 ### From version 3.2
-Microsoft is unifying their security portals, moving Microsoft Sentinel into the Microsoft Defender portal, this changes how incidents are created. Incidents created by Logic Apps are not visible in the Microsoft Defender portal. With the release of version 4.0 we are re-hauling how incidents are created. Now we'll rely on saving logs to _custom logs_ and use _analytic rules_ to create incidents. We provide updated Logic Apps and analytic rules for incident creation.
+Microsoft is unifying their security portals, moving Microsoft Sentinel into the Microsoft Defender portal, this changes how incidents are created. Incidents created by Logic Apps are not visible in the Microsoft Defender portal. With the release of version 3.2.20 we are re-hauling how incidents are created. Now we'll rely on saving logs to _custom logs_ and use _analytic rules_ to create incidents. We provide updated Logic Apps and analytic rules for incident creation.
 
 ### From version 2.4
 We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting.
