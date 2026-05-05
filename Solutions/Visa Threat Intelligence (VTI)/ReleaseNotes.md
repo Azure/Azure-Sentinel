@@ -19,6 +19,7 @@
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
+| 3.0.5 | 05-05-2026 | Updated description in **createUiDefinition** |
 | 3.0.4 | 29-04-2026 | Fixed **mainTemplate** to use `uri` instead of `concat` for VTI URL variables |
 | 3.0.3 | 04/21/2026 | Updated **createUiDefinition** to include connector information|
 | 3.0.2 | 04/21/2026 | Fixed issue with the zip file|
