@@ -63,11 +63,11 @@ Once the connector is enabled, verify that indicators are flowing into your work
 
 ```kusto
 ThreatIntelIndicators
-| summarize IndicatorCount = count() by IndicatorType
+| summarize IndicatorCount = count() by ObservableKey
 | sort by IndicatorCount desc
 ```
 
-You should see indicators of type `ipv4-addr`, `domain-name`, `url`, and `file` (with hash sub-types).
+You should see observable types like `ipv4-addr`, `domain-name`, `url`, and file hash patterns.
 
 Explore the most recent indicators:
 
@@ -76,35 +76,33 @@ ThreatIntelIndicators
 | where TimeGenerated > ago(24h)
 | project
     TimeGenerated,
-    IndicatorType,
-    IndicatorValue = coalesce(NetworkIP, DomainName, Url, FileHashValue),
+    ObservableKey,
+    ObservableValue,
     Confidence,
-    ThreatType,
-    Description,
-    Source
+    IsActive,
+    ValidFrom,
+    ValidUntil
 | sort by TimeGenerated desc
 | take 20
 ```
 
 #### Step 3 — Understand the ThreatIntelIndicators Schema
 
-The `ThreatIntelIndicators` table has a rich schema designed for correlation:
+The `ThreatIntelIndicators` table stores STIX-formatted threat intelligence indicators:
 
 | Column | Description | Example |
 |---|---|---|
-| `IndicatorType` | Type of IOC | `ipv4-addr`, `domain-name`, `file` |
-| `NetworkIP` | Malicious IP address | `198.51.100.42` |
-| `DomainName` | Malicious domain | `evil-c2-server.xyz` |
-| `Url` | Malicious URL | `https://phishing-site.com/login` |
-| `FileHashValue` | Malicious file hash | `e3b0c44298fc1c14...` |
-| `FileHashType` | Hash algorithm | `SHA256`, `SHA1`, `MD5` |
+| `ObservableKey` | Type of IOC (from the STIX pattern) | `ipv4-addr`, `domain-name`, `file:hashes.'SHA-256'` |
+| `ObservableValue` | The actual IOC value | `198.51.100.42`, `evil-c2-server.xyz` |
+| `Pattern` | Full STIX detection pattern | `[ipv4-addr:value = '198.51.100.42']` |
 | `Confidence` | Indicator confidence (0-100) | `85` |
-| `ThreatType` | Threat classification | `C2`, `Botnet`, `Phishing` |
-| `Description` | Human-readable description | `Known APT28 C2 infrastructure` |
-| `Source` | Intelligence provider | `Microsoft Threat Intelligence` |
+| `Data` | Full STIX object as dynamic JSON (contains additional context like threat type, description, labels) | `{"type":"indicator",...}` |
 | `ValidFrom` / `ValidUntil` | Indicator validity time window | Datetime values |
-| `Action` | Recommended action | `alert`, `block` |
 | `IsActive` | Whether the indicator is currently active | `true` |
+| `Created` / `Modified` | When the indicator was created/updated | Datetime values |
+| `Tags` | Sentinel-defined tags | Labels and categories |
+
+> **Tip:** Use the `Data` column to extract additional context like threat type and description: `| extend ThreatType = tostring(Data.indicator_types[0])`
 
 #### Step 4 — Match Indicators Against Your Telemetry
 
@@ -113,21 +111,18 @@ The real power of TI is correlating indicators against your environment's data. 
 ```kusto
 let ti_ips = ThreatIntelIndicators
 | where IsActive == true
-| where IndicatorType == "ipv4-addr"
+| where ObservableKey == "ipv4-addr"
 | where Confidence > 50
-| project NetworkIP, Confidence, ThreatType, Description, Source;
+| project ObservableValue, Confidence;
 CommonSecurityLog
 | where DeviceVendor == "Palo Alto Networks"
-| join kind=inner ti_ips on $left.DestinationIP == $right.NetworkIP
+| join kind=inner ti_ips on $left.DestinationIP == $right.ObservableValue
 | project
     TimeGenerated,
     SourceIP,
     DestinationIP,
     DeviceAction,
-    TI_Confidence = Confidence,
-    TI_ThreatType = ThreatType,
-    TI_Description = Description,
-    TI_Source = Source
+    TI_Confidence = Confidence
 | sort by TimeGenerated desc
 ```
 
@@ -136,20 +131,24 @@ Try the same for AWS CloudTrail:
 ```kusto
 let ti_ips = ThreatIntelIndicators
 | where IsActive == true
-| where IndicatorType == "ipv4-addr"
+| where ObservableKey == "ipv4-addr"
 | where Confidence > 50
-| project NetworkIP, Confidence, ThreatType;
+| project ObservableValue, Confidence;
 AWSCloudTrail
-| join kind=inner ti_ips on $left.SourceIpAddress == $right.NetworkIP
+| join kind=inner ti_ips on $left.SourceIpAddress == $right.ObservableValue
 | project
     TimeGenerated,
     UserIdentityUserName,
     EventName,
     SourceIpAddress,
-    TI_Confidence = Confidence,
-    TI_ThreatType = ThreatType
+    TI_Confidence = Confidence
 | sort by TimeGenerated desc
 ```
+
+
+> **Note:** These queries may return **empty results** in the lab environment -- this is expected. The lab's pre-ingested telemetry uses synthetic IP addresses that are unlikely to appear in Microsoft's real-world threat intelligence feed. In a production environment with live traffic, these joins are how you detect connections to known-malicious infrastructure.
+>
+> **What to take away:** The query *pattern* is what matters -- `join kind=inner` between a TI indicator table and your telemetry. You can apply this same pattern to any data source (firewall logs, cloud trails, identity events) in your production workspace where real traffic will match real indicators.
 
 #### Step 5 — Explore Indicator Statistics
 
@@ -160,9 +159,8 @@ ThreatIntelIndicators
 | where IsActive == true
 | summarize
     TotalIndicators = count(),
-    AvgConfidence = avg(Confidence),
-    Sources = make_set(Source)
-    by IndicatorType
+    AvgConfidence = avg(Confidence)
+    by ObservableKey
 | sort by TotalIndicators desc
 ```
 
