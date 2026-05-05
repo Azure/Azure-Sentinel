@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.4       | 30-04-2026                     | remove deprecated tag. CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) is not deprecated |
 | 3.3.3       | 13-04-2026                     | Deprecate CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) (using Azure Function) |
 | 3.3.2       | 16-03-2026                     | Update *CrowdStrike API Data Connector* to GA with adding rate limits to inner steps for Alerts and Detections data types |
 | 3.3.1       | 05-03-2026                     | Update *CrowdStrike API Data Connector* to fix Alerts and Detections data types |
