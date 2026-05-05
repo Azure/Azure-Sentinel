@@ -7536,7 +7536,14 @@ def generate_statistics_page(
         
         # ===================== CONNECTORS STATISTICS =====================
         f.write("## Connectors\n\n")
-        
+
+        f.write(
+            "> **Note:** The connector count Microsoft reports publicly is the number of "
+            "**active connectors published in solutions**, plus 41 connectors (at the time of writing) "
+            "that are not managed through this GitHub repository — including Logic App connectors and "
+            "Sentinel data lake-only connectors.\n\n"
+        )
+
         # Separate deprecated and active connectors
         deprecated_connectors = {}
         active_connectors = {}

@@ -96,6 +96,111 @@ EQUALITY_ONLY_FIELDS = {'EventID', 'RecordType'}  # Numeric fields restricted to
 # All string-based filter fields support these operators
 STRING_OPERATOR_FIELDS = set(FILTER_FIELDS.keys()) - {'EventID', 'ProcessID', 'RecordType'}
 
+# ---------------------------------------------------------------------------
+# Schema-driven filter field extraction
+#
+# In addition to the curated FILTER_FIELDS whitelist above, we also recognize
+# any documented column of any known table as a candidate filter field. This
+# captures selection criteria like `RecordState == "ACTIVE"` (a real
+# AwsSecurityHubFindings column) or ASIM normalized fields such as
+# `DvcAction =~ "block"`. Three module-level structures support this:
+#   * VALID_COLUMN_TO_TABLES : column_name -> set of tables that have it
+#   * ASIM_FIELD_NAMES       : flat set of ASIM normalized field names
+#   * Loaded once on first call to extract_filter_fields_from_query() from
+#     `la_table_schemas.csv` + `asim_fields.csv` (both produced by the
+#     companion collect_*.py scripts and committed alongside this script).
+# ---------------------------------------------------------------------------
+VALID_COLUMN_TO_TABLES: Dict[str, Set[str]] = {}
+ASIM_FIELD_NAMES: Set[str] = set()
+_VALID_COLUMNS_LOADED: bool = False
+
+# Reserved KQL words / built-ins that must NEVER be treated as a filter field
+# (these can appear on the LHS of an operator inside a `where` clause through
+# user-defined functions, parens, etc., and would otherwise produce noise).
+_KQL_RESERVED_NAMES: Set[str] = {
+    'and', 'or', 'not', 'true', 'false', 'null', 'by', 'on', 'asc', 'desc',
+    'let', 'where', 'extend', 'project', 'summarize', 'join', 'kind', 'union',
+    'print', 'range', 'datatable', 'in', 'has', 'contains', 'startswith',
+    'endswith', 'between', 'has_any', 'has_all', 'todatetime', 'tolong',
+    'tostring', 'toint', 'toreal', 'iff', 'case', 'isnotempty', 'isempty',
+    'isnotnull', 'isnull', 'ago', 'now', 'bin', 'tolower', 'toupper', 'split',
+    'strcat', 'extract', 'parse_json', 'parse_url', 'parse_csv', 'if',
+}
+
+
+def _load_valid_columns() -> None:
+    """Populate VALID_COLUMN_TO_TABLES and ASIM_FIELD_NAMES from companion CSVs.
+
+    Reads `la_table_schemas.csv` (Azure Monitor / Defender XDR documented
+    columns) and `asim_fields.csv` (ASIM normalized field names). Both files
+    are produced by collect_table_info.py and collect_asim_fields.py and
+    expected to live next to this script. If either file is missing, the
+    schema-driven pass simply has less coverage.
+    """
+    global _VALID_COLUMNS_LOADED
+    if _VALID_COLUMNS_LOADED:
+        return
+    _VALID_COLUMNS_LOADED = True
+    here = Path(__file__).resolve().parent
+    la_csv = here / "la_table_schemas.csv"
+    if la_csv.exists():
+        try:
+            with la_csv.open("r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    t = (row.get("table_name") or "").strip()
+                    c = (row.get("column_name") or "").strip()
+                    if t and c:
+                        VALID_COLUMN_TO_TABLES.setdefault(c, set()).add(t)
+        except OSError:
+            pass
+    asim_csv = here / "asim_fields.csv"
+    if asim_csv.exists():
+        try:
+            with asim_csv.open("r", encoding="utf-8-sig", newline="") as f:
+                for row in csv.DictReader(f):
+                    n = (row.get("field_name") or "").strip()
+                    if n:
+                        ASIM_FIELD_NAMES.add(n)
+        except OSError:
+            pass
+
+
+# Strip `let X = ... ;` statements before predicate matching so their RHS
+# literals (e.g. `let StatusOk = "OK";`) don't masquerade as where-predicates.
+_LET_STMT_PATTERN = re.compile(
+    r"\blet\s+[A-Za-z_]\w*\s*=\s*[^;]*;",
+    re.DOTALL,
+)
+
+# `| extend Name1 = expr, Name2 = expr` : capture LHS names so we can tag any
+# subsequent predicate against those names as a *computed* selection criterion.
+_EXTEND_BLOCK_PATTERN = re.compile(r"\|\s*extend\b([^|]+)", re.IGNORECASE)
+_EXTEND_LHS_PATTERN = re.compile(r"([A-Za-z_]\w*)\s*=")
+
+# Generic predicate pattern: any identifier <op> "literal" or any identifier in (...)
+# Excludes the bare single `=` (which is assignment in `let`, not comparison).
+_GENERIC_OPS_STR = (
+    r"(?:==|=~|!=|!~|has_all|has_any|has_cs|has|contains_cs|contains|"
+    r"startswith_cs|startswith|endswith_cs|endswith|matches\s+regex|"
+    r"!has|!contains|!startswith|!endswith)"
+)
+_GENERIC_PRED_STR_PATTERN = re.compile(
+    r"\b([A-Za-z_]\w*)\s+(" + _GENERIC_OPS_STR + r")\s+[\(\s]*[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+_GENERIC_PRED_NUM_PATTERN = re.compile(
+    r"\b([A-Za-z_]\w*)\s*(==|!=)\s*(\d+)\b",
+)
+_GENERIC_PRED_IN_PATTERN = re.compile(
+    r"\b([A-Za-z_]\w*)\s+(!?in~?)\s*\(([^)]*)\)",
+    re.IGNORECASE,
+)
+
+# Sentinel "table" used to record predicates on fields defined via `extend`.
+# Surfaces in formatted output as `_Computed.FieldName` so consumers can
+# distinguish derived-field selection from raw-column selection.
+COMPUTED_FIELD_TABLE = "_Computed"
+
 # Pattern to extract simple equality comparisons: field == "value", field =~ "value", field = "value"
 # Also handles negative: field != "value"
 # Captures the operator used
@@ -978,7 +1083,112 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
         if values:
             # Use the operator with all values comma-separated
             add_filter_value(field_name, operator, ','.join(values))
-    
+
+    # ------------------------------------------------------------------
+    # Generic, schema-driven extraction pass
+    #
+    # The whitelist passes above only catch predicates on a curated set of
+    # ~25 field names. Real selection criteria also use raw table columns
+    # (e.g. `RecordState == "ACTIVE"` on AwsSecurityHubFindings) and ASIM
+    # normalized fields. This pass complements the whitelist by:
+    #   * Stripping `let X = ...;` blocks so their RHS literals don't leak in
+    #   * Tracking `extend` LHS names so predicates on derived fields are
+    #     recorded under the synthetic table `_Computed`
+    #   * Looking up any other identifier in VALID_COLUMN_TO_TABLES (built
+    #     from `la_table_schemas.csv` + `asim_fields.csv`) and attributing
+    #     it to a referenced table only when ownership is unambiguous
+    # ------------------------------------------------------------------
+    _load_valid_columns()
+    if VALID_COLUMN_TO_TABLES or ASIM_FIELD_NAMES:
+        scrubbed = _LET_STMT_PATTERN.sub(" ", effective_query)
+        # Collect extend LHS names so predicates on them become _Computed.<name>
+        extends_in_query: Set[str] = set()
+        for ex_match in _EXTEND_BLOCK_PATTERN.finditer(scrubbed):
+            for lhs in _EXTEND_LHS_PATTERN.finditer(ex_match.group(1)):
+                extends_in_query.add(lhs.group(1))
+        extends_lower = {e.lower(): e for e in extends_in_query}
+        # Whitelist fields are handled by the loops above; skip them here
+        whitelist_lower = {f.lower() for f in FILTER_FIELDS}
+        # Case-insensitive index for column lookups
+        col_to_tables_lower: Dict[str, Tuple[str, Set[str]]] = {
+            c.lower(): (c, ts) for c, ts in VALID_COLUMN_TO_TABLES.items()
+        }
+        asim_lower = {f.lower(): f for f in ASIM_FIELD_NAMES}
+        # Tables referenced anywhere in this query (case-insensitive)
+        ref_tables: Set[str] = set(tables_in_query or set()) | local_tables
+        ref_lower = {t.lower(): t for t in ref_tables}
+
+        def attribute_field(field_name: str) -> Optional[Tuple[str, str]]:
+            """Resolve (table, canonical_field) for a generic predicate field."""
+            f_lower = field_name.lower()
+            if f_lower in extends_lower:
+                return (COMPUTED_FIELD_TABLE, extends_lower[f_lower])
+            info = col_to_tables_lower.get(f_lower)
+            if info:
+                canonical_field, owning = info
+                owners_in_query = [
+                    ref_lower[t.lower()]
+                    for t in owning
+                    if t.lower() in ref_lower
+                ]
+                if len(owners_in_query) == 1:
+                    return (owners_in_query[0], canonical_field)
+                if len(owners_in_query) > 1:
+                    return None  # ambiguous, skip
+            if f_lower in asim_lower:
+                for t in ref_tables:
+                    if t.lower().startswith(ASIM_TABLE_PREFIXES):
+                        return (t, asim_lower[f_lower])
+                return None
+            return None
+
+        def add_generic(field_name: str, operator: str, value: str, match_pos: int) -> None:
+            f_lower = field_name.lower()
+            if f_lower in whitelist_lower:
+                return  # already handled by the whitelist passes
+            if f_lower in _KQL_RESERVED_NAMES:
+                return
+            if is_in_extend_or_project(scrubbed, match_pos):
+                return
+            v = (value or '').strip()
+            if not v:
+                return
+            if v.startswith('{') and v.endswith('}'):
+                return  # workbook parameter placeholder
+            attr = attribute_field(field_name)
+            if not attr:
+                return
+            table_name, canonical_field = attr
+            op_normalized = operator.lower().replace(' ', '')
+            if table_name not in result:
+                result[table_name] = {}
+            if canonical_field not in result[table_name]:
+                result[table_name][canonical_field] = []
+            entry = (op_normalized, v)
+            if entry not in result[table_name][canonical_field]:
+                result[table_name][canonical_field].append(entry)
+
+        # 1. Generic string/equality predicates
+        for m in _GENERIC_PRED_STR_PATTERN.finditer(scrubbed):
+            add_generic(m.group(1), m.group(2), m.group(3), m.start())
+        # 2. Generic numeric equality (skip whitelist numerics handled above)
+        for m in _GENERIC_PRED_NUM_PATTERN.finditer(scrubbed):
+            add_generic(m.group(1), m.group(2), m.group(3), m.start())
+        # 3. Generic `in (...)` predicates - only when the parens contain literals
+        for m in _GENERIC_PRED_IN_PATTERN.finditer(scrubbed):
+            field_name = m.group(1)
+            operator = m.group(2)
+            values_str = m.group(3)
+            if '"' in values_str or "'" in values_str:
+                vals = parse_literal_values(values_str)
+                if vals:
+                    add_generic(field_name, operator, ','.join(vals), m.start())
+            else:
+                # Numeric in-list e.g. `EventClass in (1, 2, 3)`
+                nums = parse_numeric_values(values_str)
+                if nums:
+                    add_generic(field_name, operator, ','.join(nums), m.start())
+
     return result
 
 
@@ -1238,51 +1448,79 @@ def get_filter_fields_by_table(queries: List[str], tables_in_queries: Optional[S
 def extract_all_queries_from_connector(data: Any) -> List[str]:
     """
     Extract all query strings from a connector JSON structure.
-    Looks in graphQueries, sampleQueries, dataTypes, and connectivityCriterias.
-    
+    Looks in graphQueries, sampleQueries, dataTypes, and connectivityCriteria(s).
+
+    Handles three connector envelope shapes:
+      - Legacy: query-bearing fields are at the top level of the JSON.
+      - CCF v3 connectorDefinition: fields live under ``properties.connectorUiConfig``.
+      - CCF ARM template: fields live under ``resources[*].properties.connectorUiConfig``.
+
+    Both ``connectivityCriteria`` (CCF v3, singular) and ``connectivityCriterias``
+    (legacy, plural) are accepted.
+
     Args:
         data: The parsed connector JSON data
-    
+
     Returns:
         List of query strings found in the connector definition
     """
     queries: List[str] = []
-    
+
     if not isinstance(data, dict):
         return queries
-    
-    # graphQueries - contains baseQuery
-    for gq in data.get('graphQueries', []):
-        if isinstance(gq, dict):
-            base_query = gq.get('baseQuery', '')
-            if base_query:
-                queries.append(base_query)
-    
-    # sampleQueries - contains query
-    for sq in data.get('sampleQueries', []):
-        if isinstance(sq, dict):
-            query = sq.get('query', '')
-            if query:
-                queries.append(query)
-    
-    # dataTypes - contains lastDataReceivedQuery or query
-    for dt in data.get('dataTypes', []):
-        if isinstance(dt, dict):
-            query = dt.get('lastDataReceivedQuery', '') or dt.get('query', '')
-            if query:
-                queries.append(query)
-    
-    # connectivityCriterias - contains value which can be a list of queries
-    for cc in data.get('connectivityCriterias', []):
-        if isinstance(cc, dict):
-            value = cc.get('value', [])
-            if isinstance(value, list):
-                for v in value:
-                    if isinstance(v, str) and v.strip():
-                        queries.append(v)
-            elif isinstance(value, str) and value.strip():
-                queries.append(value)
-    
+
+    def _collect_from_container(container: Any) -> None:
+        if not isinstance(container, dict):
+            return
+
+        # graphQueries - contains baseQuery
+        for gq in container.get('graphQueries', []) or []:
+            if isinstance(gq, dict):
+                base_query = gq.get('baseQuery', '')
+                if base_query:
+                    queries.append(base_query)
+
+        # sampleQueries - contains query
+        for sq in container.get('sampleQueries', []) or []:
+            if isinstance(sq, dict):
+                query = sq.get('query', '')
+                if query:
+                    queries.append(query)
+
+        # dataTypes - contains lastDataReceivedQuery or query
+        for dt in container.get('dataTypes', []) or []:
+            if isinstance(dt, dict):
+                query = dt.get('lastDataReceivedQuery', '') or dt.get('query', '')
+                if query:
+                    queries.append(query)
+
+        # connectivityCriteria (CCF v3 singular) and connectivityCriterias (legacy plural)
+        for key in ('connectivityCriteria', 'connectivityCriterias'):
+            for cc in container.get(key, []) or []:
+                if isinstance(cc, dict):
+                    value = cc.get('value', [])
+                    if isinstance(value, list):
+                        for v in value:
+                            if isinstance(v, str) and v.strip():
+                                queries.append(v)
+                    elif isinstance(value, str) and value.strip():
+                        queries.append(value)
+
+    # Top-level (legacy)
+    _collect_from_container(data)
+
+    # CCF v3 connectorDefinition: properties.connectorUiConfig
+    props = data.get('properties')
+    if isinstance(props, dict):
+        _collect_from_container(props.get('connectorUiConfig'))
+
+    # CCF ARM template: resources[*].properties.connectorUiConfig
+    for resource in data.get('resources', []) or []:
+        if isinstance(resource, dict):
+            r_props = resource.get('properties')
+            if isinstance(r_props, dict):
+                _collect_from_container(r_props.get('connectorUiConfig'))
+
     return queries
 
 
@@ -1348,7 +1586,8 @@ def get_connector_vendor_product_by_table(data: Any) -> Dict[str, Dict[str, Set[
     return result
 
 
-def get_connector_filter_fields(data: Any, known_tables: Optional[Set[str]] = None) -> Dict[str, Dict[str, Set[str]]]:
+def get_connector_filter_fields(data: Any, known_tables: Optional[Set[str]] = None,
+                                 parser_filter_map: Optional[Dict[str, str]] = None) -> Dict[str, Dict[str, Set[str]]]:
     """
     Extract all filter fields from a connector's queries.
     
@@ -1362,6 +1601,11 @@ def get_connector_filter_fields(data: Any, known_tables: Optional[Set[str]] = No
         data: The parsed connector JSON data
         known_tables: Optional set of tables the connector is known to use (e.g., from table mappings).
                       This helps when queries use parser functions instead of direct table references.
+        parser_filter_map: Optional mapping ``parser_name_lower -> filter_fields_str``. When a connector
+                      query's leading identifier is a known parser function (e.g. ``ClarotyEvent``),
+                      that parser's filter predicates are merged into the connector's extracted filters
+                      against the parser's own tables. Without this, parser-function-only queries
+                      yield no predicates and the connector appears unfiltered.
     
     Returns:
         Aggregated filter data: Dict[table_name][field_name] = set of values
@@ -1383,7 +1627,42 @@ def get_connector_filter_fields(data: Any, known_tables: Optional[Set[str]] = No
         all_tables.update(known_tables)
     
     # Second pass: extract filter fields with table context
-    return get_filter_fields_by_table(queries, all_tables)
+    result = get_filter_fields_by_table(queries, all_tables)
+
+    # Third pass: when a query's leading token is a known parser function, merge in
+    # that parser's own filter predicates. This recovers selection-criteria for
+    # connectors whose baseQuery is just a vendor parser call (e.g. "ClarotyEvent").
+    if parser_filter_map:
+        leading_pattern = re.compile(r'^\s*(\w+)')
+        # Pattern matching one predicate from a filter_fields_str: "Table.Field <op> "value""
+        predicate_pattern = re.compile(r'^([\w]+)\.([\w]+)\s+(\S+)\s+"([^"]*)"\s*$')
+        for query in queries:
+            m = leading_pattern.search(query or '')
+            if not m:
+                continue
+            token = m.group(1)
+            if token.lower() in ('let', 'union', 'print', 'range', 'datatable'):
+                continue
+            ff_str = parser_filter_map.get(token.lower())
+            if not ff_str:
+                continue
+            for part in ff_str.split(' | '):
+                pm = predicate_pattern.match(part.strip())
+                if not pm:
+                    continue
+                table_name, field_name, operator, value_str = pm.group(1), pm.group(2), pm.group(3), pm.group(4)
+                # Each predicate's value field may itself be a comma-separated list
+                # (e.g. for `in (...)`); preserve as a single entry to mirror the
+                # behaviour of extract_filter_fields_from_query.
+                entry = (operator, value_str)
+                if table_name not in result:
+                    result[table_name] = {}
+                if field_name not in result[table_name]:
+                    result[table_name][field_name] = []
+                if entry not in result[table_name][field_name]:
+                    result[table_name][field_name].append(entry)
+
+    return result
 
 
 def parse_filter_fields_string(filter_fields_str: str) -> Dict[str, Dict[str, Set[str]]]:
@@ -1577,11 +1856,7 @@ def find_matching_connectors(target_tables: Set[str],
         connector_id = connector.get('connector_id', '')
         connector_title = connector.get('connector_title', '')
         solution_name = connector.get('solution_name', '')
-        
-        # Skip deprecated connectors
-        if connector.get('is_deprecated', '').lower() == 'true':
-            continue
-        
+
         # Skip content-only connectors (they use data from other connectors, not ingest it)
         if connector_id.lower() in CONTENT_ONLY_CONNECTORS:
             continue
@@ -7349,6 +7624,27 @@ def main() -> None:
     log_print("Loading non-ASIM parsers from /Parsers/*/ and Solutions/*/Parsers/...")
     all_parser_records, all_parser_names, all_parser_table_map = collect_all_parsers_detailed(repo_root, solutions_dir)
     log_print(f"  Loaded {len(all_parser_records)} parser records, {len(all_parser_names)} parser names, {len(all_parser_table_map)} parser mappings")
+
+    # Build parser_name (lowercase) -> filter_fields_str map. Used by
+    # get_connector_filter_fields so a connector whose baseQuery is just a
+    # vendor parser call (e.g. "ClarotyEvent") still surfaces the parser's
+    # selection-criteria predicates.
+    parser_filter_map: Dict[str, str] = {}
+    for rec in all_parser_records:
+        pname = (rec.get('parser_name') or '').strip()
+        ff = (rec.get('filter_fields') or '').strip()
+        if pname and ff:
+            parser_filter_map[pname.lower()] = ff
+    for rec in asim_parser_records:
+        pname = (rec.get('parser_name') or '').strip()
+        ff = (rec.get('filter_fields') or '').strip()
+        if pname and ff:
+            parser_filter_map.setdefault(pname.lower(), ff)
+        # Also map the parser's equivalent_builtin alias (e.g. "ASimDns" -> imDns) where present
+        eq = (rec.get('equivalent_builtin') or '').strip()
+        if eq and ff:
+            parser_filter_map.setdefault(eq.lower(), ff)
+    log_print(f"  Built parser_filter_map with {len(parser_filter_map)} entries (parser-function predicates)")
     
     # For backwards compatibility, also load legacy parsers the old way
     legacy_parsers_dir = repo_root / "Parsers"
@@ -8338,7 +8634,7 @@ def main() -> None:
                             # Extract comprehensive filter fields (new)
                             # Pass the connector's known tables for context (helps when queries use parser functions)
                             known_tables = set(connector_tables_map.get(conn_id, []))
-                            ff = get_connector_filter_fields(data, known_tables)
+                            ff = get_connector_filter_fields(data, known_tables, parser_filter_map)
                             if ff:
                                 if conn_id not in connector_filter_fields:
                                     connector_filter_fields[conn_id] = {}

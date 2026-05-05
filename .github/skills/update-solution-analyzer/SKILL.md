@@ -7,14 +7,15 @@ description: "Guidelines for modifying Solutions Analyzer scripts. Use when: edi
 
 ## Before Modifying a Script
 
-Always review the relevant script documentation in `Tools/Solutions Analyzer/script-docs/` first.
+Always review the relevant script documentation in `Tools/Solutions Analyzer/script-docs/` first. For changes to a CSV output file's columns or semantics, also review the corresponding per-CSV reference page in `Tools/Solutions Analyzer/script-docs/csv/` (one file per CSV).
 
 ## Script Documentation Updates
 
 When updating a script, update the corresponding doc in `script-docs/` to reflect:
 - Script parameters added or changed
-- Output file changes (new/renamed/removed CSV columns)
+- Output file changes — for new/renamed/removed CSV columns, **edit the per-CSV page in `script-docs/csv/<csv-name>.md`** (the script doc only lists CSVs as a summary table with links; it does not duplicate column tables)
 - Changes to analysis methods or logic
+- New CSV output: create a new page under `script-docs/csv/`, add a row to the summary table in the script doc, and add the new CSV to `script-docs/csv/README.md` (both the "By generating script" and "By role" sections)
 
 ## README Changelog
 

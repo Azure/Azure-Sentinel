@@ -1,6 +1,6 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains seven complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains eight complementary tools for analyzing Microsoft Sentinel Solutions:
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
@@ -11,6 +11,7 @@ This directory contains seven complementary tools for analyzing Microsoft Sentin
 | [`generate_interactive_docs.py`](script-docs/generate_interactive_docs.md) | Generate interactive HTML index and HTML entity pages | `index.html`, `css/`, `js/`, HTML entity pages |
 | [`generate_asim_browser.py`](script-docs/generate_asim_browser.md) | Generate interactive ASIM Schema Browser | `asim-browser.html` |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
+| [`compare_runs.py`](script-docs/compare_runs.md) | Diff two Solutions Analyzer runs (rename-aware for connectors) | Markdown summary of added/removed/renamed rows |
 
 ## Prerequisites
 
@@ -196,6 +197,36 @@ See the script documentation for details:
 ---
 
 ## Version History
+
+### v9.8 - Per-CSV Reference Documentation
+
+**Documentation Restructuring:**
+- New `script-docs/csv/` folder with one reference page per CSV file (21 CSVs total) — see [`script-docs/csv/README.md`](script-docs/csv/README.md) for the index.
+- Each CSV doc covers what the file contains, how it's produced, **use cases** for working with the data, full column reference, and links to related CSVs.
+- Pages cover all mapper outputs (`connectors.csv`, `solutions.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`, `content_items.csv`, the mapping/edge files, `table_schemas.csv`, the issues report, `asim_parsers_unmatched_report.csv`, the legacy denormalized mapping CSV), all `collect_table_info.py` outputs (`tables_reference.csv`, `la_table_schemas.csv`), all `collect_asim_fields.py` outputs (`asim_fields.csv`, `asim_entity_fields.csv`, `asim_logical_types.csv`, `asim_vendors_products.csv`, `asim_extraction_failures.csv`), and the hand-edited `solution_analyzer_overrides.csv` input.
+- Replaced large per-CSV column tables in `map_solutions_connectors_tables.md`, `collect_table_info.md`, and `collect_asim_fields.md` with concise summary tables and links to the corresponding `csv/` reference pages.
+
+**Schema-Driven Filter Field Extraction:**
+- The `filter_fields` / `content_filter_fields` columns now capture selection criteria far beyond the original 25-name whitelist. After the existing whitelist pass, a generic schema-driven pass extracts any where-predicate whose field is either (a) a documented column of a table the query references — looked up in `la_table_schemas.csv` (Azure Monitor / Defender XDR docs) and `asim_fields.csv` (ASIM normalized fields), attributed only when ownership is unambiguous — or (b) defined earlier in the same query via `| extend Name = ...`, in which case the predicate is recorded under the synthetic table name `_Computed` (e.g. `_Computed.AccountName == "x"`).
+- `let X = ...;` blocks are stripped before predicate matching so their RHS literals don't masquerade as where-predicates; KQL reserved words are excluded.
+- Applies uniformly to connectors, parsers, ASIM parsers, and content items. Measured impact on a full mapper run: connectors `109 → 134` rows with predicates (`+101` total predicates), parsers `94 → 110` (`+112`), ASIM parsers `90 → 118` (`+204`), content items `842 → 2057` (`+3369`).
+
+**Connector Filter Inheritance from Parser Functions:**
+- When a connector's `baseQuery` (or other extracted query) is just a vendor parser-function call — e.g. `ClarotyEvent`, `CiscoSEGEvent`, `IllumioCoreEvent`, `OSSECEvent`, `NetwrixAuditor`, `PingFederateEvent` — `get_connector_filter_fields` now resolves the leading identifier against the parser CSVs and inherits the parser's selection-criteria predicates onto the connector's `filter_fields`. Without this, those connectors had empty `filter_fields` and the "unfiltered connector matches every target on the shared table" rule produced hundreds of spurious connector ↔ ASIM-parser / content-item associations on `CommonSecurityLog`.
+- Lookup map (`parser_filter_map`) is built from `parsers.csv` and `asim_parsers.csv` (also keyed by ASIM `equivalent_builtin` aliases) before connector JSONs are processed.
+- Measured impact on a full run: `Claroty`, `CiscoSEG`, `IllumioCore`, `OSSEC`, `Netwrix`, `Barracuda`, `FireEyeNX` (and similar vendors) now publish proper `filter_fields`. ASIM-parser `associated_connectors` deltas vs. HEAD shrank from `+520/-11` to `+74/-28`; content-item deltas shrank from `+608/-293` to `+33/-285`.
+
+**CCF v3 Connector Query Extraction:**
+- `extract_all_queries_from_connector` now also reads queries from `properties.connectorUiConfig` (CCF v3 `connectorDefinition` envelopes) and `resources[*].properties.connectorUiConfig` (CCF ARM templates), and accepts both `connectivityCriteria` (singular, CCF v3) and `connectivityCriterias` (plural, legacy). Previously only top-level fields were scanned, so CCF v3 connectors yielded no `filter_fields`.
+
+**Deprecated Connectors No Longer Skipped During Association:**
+- `associate_connectors_to_items` no longer drops connectors with `is_deprecated=true` before computing matches. Deprecated connectors are still flagged in their own row but now correctly appear in `associated_connectors` of any parser / content item whose selection criteria they satisfy (e.g. `SentinelOne` ↔ `ASimAuthenticationSentinelOne`).
+
+### v9.7 - Run Comparison Tool
+
+- New `compare_runs.py` script that diffs two Solutions Analyzer CSV directories.
+- For `connectors.csv`, detects **renames** by matching strictly-removed and strictly-added rows that share the same primary `connector_files` path. This avoids treating a connector whose JSON `id` field changed as one addition + one removal.
+- Compares `solutions.csv`, `connectors.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`, `content_items.csv`. Files missing on either side are skipped silently so partial snapshots can be diffed.
 
 ### v9.6 - ASIM Field Collection & Schema Browser
 
