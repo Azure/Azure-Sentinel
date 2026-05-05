@@ -1,7 +1,8 @@
 id: 874a1762-3fd7-4489-b411-6d4a9e9e8a59
 name: Policy version set to default
 description: |
-  'An attacker with SetDefaultPolicyVersion permissions could escalate privileges through existing policy versions that are not currently in use. More about this API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_SetDefaultPolicyVersion.html '
+  Detects SetDefaultPolicyVersion activity that makes a different IAM policy version active.
+  Attackers can use this to activate previously created permissive versions and escalate access.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -13,9 +14,9 @@ queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - InitialAccess    
+  - PrivilegeEscalation    
 relevantTechniques:
-  - T1078
+  - T1098.003
 query: |
     AWSCloudTrail
     | where EventName == "SetDefaultPolicyVersion" and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -24,7 +25,6 @@ query: |
     | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
     | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
       AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
-    | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -38,5 +38,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  EventName: EventName
+  EventSource: EventSource
+  AWSRegion: AWSRegion
+  UserIdentityArn: UserIdentityArn
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS IAM default policy version changed by {{AccountName}}'
+  alertDescriptionFormat: 'Detected SetDefaultPolicyVersion from {{SourceIpAddress}} in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

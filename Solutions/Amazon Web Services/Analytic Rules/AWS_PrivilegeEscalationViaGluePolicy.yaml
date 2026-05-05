@@ -1,7 +1,9 @@
 id: 370f0e5e-da1d-4a14-8ced-d1d7ab66a8d7
 name: Privilege escalation via Glue policy
 description: |
-  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on Glue policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'
+  Detects inline IAM policy updates that grant broad AWS Glue permissions or Glue actions paired with IAM
+  privileges such as iam:PassRole. This pattern can enable elevated execution paths and indicates potential
+  privilege escalation through expanded cloud role capabilities.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -15,7 +17,7 @@ triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
-  - T1484
+  - T1098.003
 query: |
     AWSCloudTrail
       | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -31,7 +33,6 @@ query: |
       | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
         AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
       | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
-      | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -45,5 +46,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  UserIdentityArn: UserIdentityArn
+  RecipientAccountId: RecipientAccountId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS Glue privilege escalation policy update by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} Event, updating inline Glue escalation policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

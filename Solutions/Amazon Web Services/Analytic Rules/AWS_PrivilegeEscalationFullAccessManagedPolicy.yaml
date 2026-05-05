@@ -1,7 +1,9 @@
 id: afb4191b-a142-4065-a0da-f721ee3d006c
 name: Privilege escalation with FullAccess managed policy
 description: |
-  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on FullAccess managed policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'
+  Detects successful attachment of AWS managed policies containing FullAccess permissions to users, roles, or
+  groups, excluding admin-named policies. This action can rapidly expand privilege scope and should be reviewed
+  as potential cloud privilege escalation.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -14,8 +16,9 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
+  - Persistence
 relevantTechniques:
-  - T1484
+  - T1098.003
 query: |
   AWSCloudTrail
   | where  EventName in ("AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -26,7 +29,6 @@ query: |
   | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
     AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements
-  | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -40,5 +42,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  EventName: EventName
+  EventSource: EventSource
+  AWSRegion: AWSRegion
+  UserIdentityArn: UserIdentityArn
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS FullAccess managed policy attachment by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} from {{SourceIpAddress}} attaching FullAccess managed policy in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

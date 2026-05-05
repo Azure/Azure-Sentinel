@@ -1,7 +1,8 @@
 id: b9be2aa6-911d-4131-8658-d2a537ed49f4
 name: Privilege escalation via CRUD DynamoDB policy
 description: |
-  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD DynamoDB Policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'
+  Detects creation of inline IAM policies that grant broad DynamoDB create, read, update, and delete permissions.
+  Attackers may use this access expansion to manipulate data stores and escalate influence across cloud workloads.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -15,7 +16,7 @@ triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
-  - T1484
+  - T1098.003
 query: |
   AWSCloudTrail
   | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -31,7 +32,6 @@ query: |
   | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
     AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
-  | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -45,5 +45,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  UserIdentityArn: UserIdentityArn
+  RecipientAccountId: RecipientAccountId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS DynamoDB privilege escalation policy update by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} Event, updating inline DynamoDB escalation policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

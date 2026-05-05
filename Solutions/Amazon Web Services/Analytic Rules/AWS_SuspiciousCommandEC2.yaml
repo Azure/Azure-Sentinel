@@ -1,7 +1,7 @@
 id: 21702832-aff3-4bd6-a8e1-663b6818503d
 name: Suspicious command sent to EC2
 description: |
-  'An attacker with the necessary permissions could be executing code remotely on a machine and saving the output to his own S3 bucket. Verify this action with the user identity.'
+  An attacker with the necessary AWS permissions could be executing code remotely on an EC2 instance via SSM and saving the output to their own S3 bucket. Verify this action with the user identity and confirm it was authorized.
 severity: High
 status: Available
 requiredDataConnectors:
@@ -15,7 +15,7 @@ triggerThreshold: 0
 tactics:
   - Execution
 relevantTechniques:
-  - T1204
+  - T1651
 query: |
     let command_executed = AWSCloudTrail
     | where EventName in ("SendCommand","CreateAssociation") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -27,8 +27,7 @@ query: |
     | extend associationId = tostring(parse_json(ResponseElements).associationDescription.associationId)
     | extend executionId = iff(isnotempty(commandId), commandId, associationId)
     | extend s3bucket = iff(isnotempty(s3bucketCommand), s3bucketCommand, s3bucketAssociation)
-    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated;
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]));
     AWSCloudTrail
     | where EventName == "PutObject" and isempty(ErrorCode) and isempty(ErrorMessage)
     | extend s3bucket = tostring(parse_json(RequestParameters).bucketName)
@@ -54,5 +53,12 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  S3Bucket: s3bucket
+  ExecutionId: executionId
+  AWSRegion: AWSRegion
+alertDetailsOverride:
+  alertDisplayNameFormat: Suspicious EC2 command execution by {{AccountName}} with output to S3 {{s3bucket}}
+  alertDescriptionFormat: User {{AccountName}} sent a remote command to EC2 (execution ID {{executionId}}) with output directed to external S3 bucket {{s3bucket}}.
+version: 1.0.2
 kind: Scheduled
