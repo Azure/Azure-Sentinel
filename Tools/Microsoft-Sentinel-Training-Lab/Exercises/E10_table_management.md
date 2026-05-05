@@ -118,8 +118,8 @@ In this step, you will extend the analytics retention for a custom table.
 
 1. On the **Tables** screen, find `OktaV2_CL`
 2. Select the table to open the details panel
-3. Select **Manage table**
-4. On the **Manage table** screen, you will see the current retention configuration
+3. Select **Data retention settings**
+4. On the **Data retention settings** screen, you will see the current retention configuration
 5. Change the **Analytics retention** to **180 days**
 6. Note that the **Total retention** automatically adjusts — by default it matches the analytics retention
 7. Optionally, set the **Total retention** to **1 year** to keep data in the data lake for an additional 185 days beyond the analytics retention
@@ -147,7 +147,7 @@ Moving a table to the data lake tier is useful for tables with high ingestion vo
 > Only move tables that you are certain don't need real-time analytics.
 
 1. On the **Tables** screen, find `OfficeActivity_CL`
-2. Select the table, then select **Manage table**
+2. Select the table, then select **Data retention settings**
 3. Under **Tier**, change from **Analytics** to **Data lake**
 4. Set the **Retention** (30 days to 12 years)
 5. Review the warning message about features that will stop working
@@ -165,7 +165,7 @@ Moving a table to the data lake tier is useful for tables with high ingestion vo
 Now reverse the change to restore real-time capabilities:
 
 1. On the **Tables** screen, find `OfficeActivity_CL` (it should now show as Data lake tier)
-2. Select the table, then select **Manage table**
+2. Select the table, then select **Data retention settings**
 3. Under **Tier**, change from **Data lake** back to **Analytics**
 4. Set the **Analytics retention** and **Total retention** as desired
 5. Select **Save**
