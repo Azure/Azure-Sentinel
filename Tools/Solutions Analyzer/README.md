@@ -198,6 +198,25 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.9 - Logic Apps Connector Pages and Built-in Action Telemetry
+
+**Logic Apps Connector / Built-in Action Index:**
+- New top-level Logic Apps section in the docs (`logic-apps/logic-apps-index.md` plus per-connector pages) listing every managed connector, custom connector, and built-in action type referenced by playbooks across all solutions, with playbook count, solution count, and a link to the corresponding Microsoft Learn page when one exists.
+- Each per-connector page lists every playbook using the connector and the solution it belongs to, with direct links to the playbook content page and solution page.
+- New "🔌 Logic Apps" entry added to the markdown navigation strip and the interactive `index.html` navbar.
+- The "Top managed connectors by playbook usage" and "Built-in actions by playbook usage" tables on the Statistics page now link each connector / action name to its Logic Apps page.
+
+**Microsoft Learn URL Resolution (Cached):**
+- New `resolve_connector_learn_url(api_name, api_kind)` helper resolves a connector's Microsoft Learn page dynamically — managed connectors are probed at `https://learn.microsoft.com/en-us/connectors/<name>/`, built-in actions (`Http`, `Function`, `Workflow`, `ApiManagement`) use a hardcoded mapping to their `connectors-native-*` Learn pages, custom connectors return no link.
+- Results (URL or "no page") are persisted to `.cache/connector_learn_urls.json` and reused on subsequent runs, matching the file-based caching pattern used by all other internet-access checks (marketplace availability, table reference docs).
+
+**Built-in Action Extraction (Phase 1, originally landed in v9.8 commit `46fb39009c`, documented here):**
+- The mapper now walks `properties.definition.actions` of each playbook and records `Http`, `Function`, `Workflow`, and `ApiManagement` actions as `api_kind=builtin` rows in `playbook_connectors.csv`, alongside the existing managed/custom rows derived from `Microsoft.Web/connections` resources.
+- New `parameters` column on `playbook_connectors.csv` captures the JSON-encoded parameter block of each action (method, uri, body, path, headers, queries — whichever apply) so per-connector pages and downstream tooling can inspect concrete usage.
+
+**Documentation Layout Fix:**
+- The interactive `index.html` is now generated at the configured HTML output root (e.g. the GitHub Pages site root) with `--html-docs-path` pointing to the `Solutions Docs/` subfolder. Earlier accidental layouts that wrote the HTML inside the docs folder while keeping the docs path prefix produced double-prefixed (`Solutions Docs/Solutions Docs/...`) hrefs and 404s on `index.html#content`. The canonical command is documented in `script-docs/generate_connector_docs.md`.
+
 ### v9.8 - Per-CSV Reference Documentation
 
 **Documentation Restructuring:**
