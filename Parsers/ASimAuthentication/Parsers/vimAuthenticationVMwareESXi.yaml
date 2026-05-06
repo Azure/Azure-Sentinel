@@ -55,7 +55,7 @@ ParserQuery: |
         starttime: datetime=datetime(null),
         endtime: datetime=datetime(null),
         username_has_any: dynamic=dynamic([]),
-        targetusername_has_any: dynamic=dynamic([]),
+        targetappname_has_any: dynamic=dynamic([]),
         srcipaddr_has_any_prefix: dynamic=dynamic([]),
         srchostname_has_any: dynamic=dynamic([]),
         eventtype_in: dynamic=dynamic([]),
@@ -70,12 +70,12 @@ ParserQuery: |
             | where not(disabled)
             | where (array_length(srcipaddr_has_any_prefix) == 0) // DCUI has no source IP; exclude if IP filter is set
             | where (array_length(srchostname_has_any) == 0) // DCUI has no source hostname; exclude if hostname filter is set
+            | where (array_length(targetappname_has_any) == 0 // TargetApp* fields are not set
             | where (isnull(starttime) or TimeGenerated >= starttime)
                 and (isnull(endtime) or TimeGenerated <= endtime)
             | where ProcessName == "DCUI"
-            // Pre-filtering username & targetusername
+            // Pre-filtering username
             | where (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))
-            | where (array_length(targetusername_has_any) == 0 or SyslogMessage has_any (targetusername_has_any))
             | where SyslogMessage has_any ("logged in", "logged out") or SyslogMessage has_all ("Authentication of user", "failed")
             | extend
                 TargetUsername = extract(@"[Uu]ser (\S+)", 1, SyslogMessage),
@@ -90,7 +90,6 @@ ParserQuery: |
                 LogonMethod = "Username & Password"
             | where isnotempty(TargetUsername)
             | where (array_length(username_has_any) == 0 or TargetUsername has_any (username_has_any))
-            | where (array_length(targetusername_has_any) == 0 or TargetUsername has_any (targetusername_has_any))
             | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
             | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
             | where (eventresult == "*" or EventResult =~ eventresult)
@@ -99,6 +98,7 @@ ParserQuery: |
             union kind=inner (
                 Syslog
                 | where not(disabled)
+                | where (array_length(targetappname_has_any) == 0 // TargetApp* fields are not set
                 | where (array_length(srchostname_has_any) == 0) // Hostd has no source hostname field
                 | where (isnull(starttime) or TimeGenerated >= starttime)
                     and (isnull(endtime) or TimeGenerated <= endtime)
@@ -107,6 +107,7 @@ ParserQuery: |
             ), (
                 union kind=inner AVSSyslog, AVSEsxiSyslog
                 | where not(disabled)
+                | where (array_length(targetappname_has_any) == 0 // TargetApp* fields are not set
                 | where (array_length(srchostname_has_any) == 0) // Hostd has no source hostname field
                 | where (isnull(starttime) or TimeGenerated >= starttime)
                     and (isnull(endtime) or TimeGenerated <= endtime)
@@ -115,7 +116,6 @@ ParserQuery: |
             )
             | where SyslogMessage has_any ("Accepted password", "Rejected password", "Cannot login")
             | where (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))
-            | where (array_length(targetusername_has_any) == 0 or SyslogMessage has_any (targetusername_has_any))
             | where (array_length(srcipaddr_has_any_prefix) == 0 or SyslogMessage has_any (srcipaddr_has_any_prefix))
             | extend
                 TargetUsername = coalesce(
@@ -141,7 +141,6 @@ ParserQuery: |
                 SessionIdShort = extract(@"sid=([a-f0-9]+)", 1, SyslogMessage)
             | where isnotempty(TargetUsername)
             | where (array_length(username_has_any) == 0 or TargetUsername has_any (username_has_any))
-            | where (array_length(targetusername_has_any) == 0 or TargetUsername has_any (targetusername_has_any))
             | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
             | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
             | where (eventresult == "*" or EventResult =~ eventresult)
