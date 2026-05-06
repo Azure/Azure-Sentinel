@@ -16,9 +16,20 @@ Both steps are combined in a single script. **Always run validation after packag
 
 ### Before Running the Script
 
+**Always confirm the version bump with the user BEFORE running the script.** If the user did not explicitly specify `patch`, `minor`, or `major`, ask them:
+
+> What type of version bump should this be?
+> - **patch** — bug fixes, minor text changes, no new content
+> - **minor** — new content added (rules, connectors, playbooks, etc.) or significant updates
+> - **major** — breaking changes, major restructuring, or initial release
+>
+> (Default is `patch` if you're unsure.)
+
+Only proceed once you have a clear answer (or the user explicitly says to use the default). Use the confirmed value for the `-VersionBump` parameter.
+
 **Always tell the user what's about to happen BEFORE you run the script:**
 
-> 🔄 Running full build & validation suite for **{SolutionName}**. This typically takes **3-5 minutes** — it runs 21 validators including .NET tests (34K+ files for Non-ASCII), ARM-TTK (30 template checks), and hyperlink validation. I'll present the complete report when it finishes.
+> 🔄 Running full build & validation suite for **{SolutionName}** with a **{VersionBump}** version bump. This typically takes **3-5 minutes** — it runs 21 validators including .NET tests (34K+ files for Non-ASCII), ARM-TTK (30 template checks), and hyperlink validation. I'll present the complete report when it finishes.
 
 This message MUST appear in your chat response BEFORE you execute the script. The user needs to know the agent is working, not frozen.
 
