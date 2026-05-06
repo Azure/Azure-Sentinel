@@ -68,11 +68,6 @@ ParserQuery: |
         disabled: bool = false,
         pack: bool = false
     ){
-        let SalesforceServiceCloud_CL_Stub = datatable(
-            delegated_user_id_s: string,
-            delegated_user_name_s: string,
-            platform_type_s: string
-        )[];
         let EventResultLookup = datatable (
             LoginStatus: string,
             DvcAction: string,
@@ -202,7 +197,7 @@ ParserQuery: |
         ];
         let SalesforceEventType = dynamic(['Login', 'LoginAs', 'Logout']);
         let DvcOsLookup = datatable(
-            platform_type_s: string,
+            PlatformType: string,
             DvcOs: string,
             DvcOsVersion: string
         )[
@@ -296,13 +291,27 @@ ParserQuery: |
         ];
         union isfuzzy=true
             (
-                SalesforceServiceCloudV2_CL
+                SalesforceServiceCloudV3_CL
+                | where EventType in~ (SalesforceEventType)
                 // remove schema-duplicated, unused fields
                 | project-away DvcAction, EventResult
             ),
-            SalesforceServiceCloud_CL_Stub,
+            (
+                SalesforceServiceCloudV2_CL
+                | where EventType in~ (SalesforceEventType)
+                // remove schema-duplicated, unused fields
+                | project-away DvcAction, EventResult
+                // stub fields that are missing in some versions of the v2 table
+                | extend
+                    LoginType = column_ifexists("LoginType", "")
+                    , LoginSubType = column_ifexists("LoginSubType", "")
+                    , UserName = column_ifexists("UserName", "")
+                    , DelegatedUserName = column_ifexists("DelegatedUserName", "")
+                    , DelegatedUserId = column_ifexists("DelegatedUserId", "")
+            ),
             (
                 SalesforceServiceCloud_CL
+                | where event_type_s in~ (SalesforceEventType)
                 | project-rename
                     Timestamp = timestamp_s
                     , EventType = event_type_s
@@ -329,15 +338,12 @@ ParserQuery: |
                     , LoginType = login_type_s
                     , LoginSubType = login_sub_type_s
                     , SessionKey = session_key_s
-                    , ActorUsername = delegated_user_name_s
-                    , ActorUserId = delegated_user_id_s
-                | lookup LogonMethodLookup on LoginType
-                | lookup LogonProtocolLookup on LoginSubType
-                | lookup DvcOsLookup on platform_type_s
+                    , DelegatedUserName = delegated_user_name_s
+                    , DelegatedUserId = delegated_user_id_s
+                    , PlatformType = platform_type_s
+                | extend TimeGenerated = todatetime(tostring(split(Timestamp, '.', 0)[0]))
             )
         | where not(disabled)
-        | where EventType in~ (SalesforceEventType)
-        | extend TimeGenerated = todatetime(tostring(split(Timestamp, '.', 0)[0]))
         //  -- Pre filtering
         | where 
             (isnull(starttime) or TimeGenerated >= starttime) 
@@ -350,6 +356,9 @@ ParserQuery: |
             // eventresultdetails_in filtering done later in the parser
             // eventresult filtering done later in the parser
         //  -- end pre-filtering
+        | lookup LogonMethodLookup on LoginType
+        | lookup LogonProtocolLookup on LoginSubType
+        | lookup DvcOsLookup on PlatformType
         | lookup EventResultLookup on LoginStatus
         | lookup TempEventResultLookup on RequestStatus
         | lookup UserTypeLookup on UserType
@@ -363,7 +372,8 @@ ParserQuery: |
             TargetUserScopeId = OrganizationId,
             TargetUrl = Uri,
             TargetOriginalUserType = UserType,
-            TargetUsername = UserEmail
+            ActorUsername = DelegatedUserName,
+            ActorUserId = DelegatedUserId
         | extend
             EventVendor = 'Salesforce',
             EventProduct = 'Service Cloud',
@@ -375,9 +385,8 @@ ParserQuery: |
             EventUid = _ItemId,
             EventOriginalType = EventType,
             SrcIpAddr = coalesce(column_ifexists("SrcIpAddr", ""), SourceIp, ClientIp),
-            HttpUserAgent = coalesce(BrowserType, column_ifexists("HttpUserAgent", "")),
-            ActorUserId = column_ifexists("ActorUserId", ""),
-            ActorUsername = column_ifexists("ActorUsername", "")
+            TargetUsername = coalesce(UserEmail, UserName),
+            HttpUserAgent = coalesce(BrowserType, column_ifexists("HttpUserAgent", ""))
         | extend
             EventType = case(
                 EventType == "Login", "Logon",
@@ -388,9 +397,9 @@ ParserQuery: |
             TargetSessionId = coalesce(SessionKey, LoginKey),
             TargetUserScope = "Salesforce Organization",
             TargetUserIdType = iff(isnotempty(TargetUserId), "SalesforceId", ""),
-            ActorUserIdType = iff(isnotempty(column_ifexists("ActorUserId", "")), "SalesforceId", ""),
+            ActorUserIdType = iff(isnotempty(ActorUserId), "SalesforceId", ""),
             TargetUsernameType = iff(isnotempty(TargetUsername), "UPN", ""),
-            ActorUsernameType = iff(isnotempty(column_ifexists("ActorUsername", "")), "UPN", ""),
+            ActorUsernameType = iff(isnotempty(ActorUsername), "UPN", ""),
             LogonMethod = column_ifexists("LogonMethod", ""),
             LogonProtocol = column_ifexists("LogonProtocol", ""),
             User = coalesce(TargetUsername, TargetUserId),
