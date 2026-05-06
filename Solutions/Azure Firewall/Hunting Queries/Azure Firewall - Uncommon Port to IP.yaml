@@ -1,7 +1,10 @@
 id: 3d93fa57-53e5-4d5e-96d4-ad734a8df3a4
 name: Uncommon Port to IP
 description: |
-  'Identifies abnormal ports used by machines to connect to a destination IP based on learning period activity. This can indicate exfiltration attack or C2 control from machines in the organization by using new a port that has never been used.'
+  Identifies abnormal ports used by machines to connect to a destination IP based on learning period activity. This can indicate exfiltration attack or C2 control from machines in the organization by using a new port.
+description_detailed: |
+  Identifies abnormal ports used by machines to connect to a destination IP based on learning period activity. This can indicate exfiltration attack or C2 control from machines in the organization by using a new port that has never been used.
+  Adjust AllowedCommonPorts with ports commonly used in your organization to reduce false positives.
 requiredDataConnectors:
   - connectorId: AzureFirewall
     dataTypes: 
@@ -11,30 +14,42 @@ requiredDataConnectors:
 tactics:
   - Exfiltration
   - CommandAndControl
-relevantTechniques: []
+relevantTechniques:
+  - T1571
+  - T1048
 query: |
-  let LearningPeriod = 7d; 
-  let RunTime = 1d; 
-  let StartLearningPeriod = LearningPeriod + RunTime; 
-  let EndRunTime = RunTime - 1d; 
-  let AllowedCommonPorts = dynamic([80, 443]); 
-  let TrafficLogs = (union isfuzzy=true
-  (AzureDiagnostics
-  | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
-  | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
-  | where isnotempty(SourceIp)),
-  (AZFWNetworkRule
-  | extend Fqdn = DestinationIp
-  | where isnotempty(Fqdn) and isnotempty(SourceIp)),
-  (AZFWApplicationRule
-  | where isnotempty(Fqdn) and isnotempty(SourceIp))); 
-  let LearningSrcIp = (TrafficLogs 
-  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime)) 
-  | distinct SourceIp ,DestinationPort); 
-  let AlertTimeSrcIpToPort = (TrafficLogs 
-  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime)) 
-  | distinct SourceIp ,DestinationPort, Fqdn); 
-  AlertTimeSrcIpToPort 
-  | join kind=leftantisemi (LearningSrcIp) on SourceIp ,DestinationPort
-  | where DestinationPort  !in (AllowedCommonPorts)
-  | extend IPCustomEntity = SourceIp, URLCustomEntity = Fqdn
+    let LearningPeriod = 7d; 
+    let RunTime = 1d; 
+    let StartLearningPeriod = LearningPeriod + RunTime; 
+    let EndRunTime = RunTime - 1d;
+    // Add commonly used ports in your organization to reduce false positives.
+    let AllowedCommonPorts = dynamic([80, 443]); 
+    let TrafficLogs = (union isfuzzy=true
+    (AzureDiagnostics
+    | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
+    | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
+    | where isnotempty(SourceIp)),
+    (AZFWNetworkRule
+    | extend Fqdn = DestinationIp
+    | where isnotempty(Fqdn) and isnotempty(SourceIp)),
+    (AZFWApplicationRule
+    | where isnotempty(Fqdn) and isnotempty(SourceIp))); 
+    let LearningSrcIp = (TrafficLogs 
+    | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime)) 
+    | distinct SourceIp ,DestinationPort); 
+    let AlertTimeSrcIpToPort = (TrafficLogs 
+    | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime)) 
+    | distinct SourceIp ,DestinationPort, Fqdn); 
+    AlertTimeSrcIpToPort 
+    | join kind=leftantisemi (LearningSrcIp) on SourceIp ,DestinationPort
+    | where DestinationPort  !in (AllowedCommonPorts)
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Fqdn
+version: 1.0.0
