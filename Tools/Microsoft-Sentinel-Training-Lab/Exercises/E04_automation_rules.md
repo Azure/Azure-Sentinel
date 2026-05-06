@@ -42,10 +42,12 @@ Look for incidents created by the lab's detection rules. You should see incident
 
 For this exercise, we will create automation rules targeting two scenarios:
 
-1. **Port scan alerts** — tag with "reconnaissance" and "network"
-2. **Okta account takeover alerts** — tag with "identity-compromise" and escalate severity to Critical
+1. **AWS suspicious activity** — tag with "cloud-threat" and "aws"
+2. **Security event log cleared** — escalate severity to Critical and tag with "defense-evasion"
 
-#### Step 2 — Create Automation Rule: Tag Port Scan Incidents
+> **Note:** The lab deploys both **custom detection rules** (via the Graph API) and **Sentinel analytics rules**. Automation rules with the "Analytic rule name" condition work with analytics rules. The analytics rules deployed by the lab include: `AWS Config Service Resource Deletion Attempts`, `Suspicious AWS CLI Command Execution`, `NRT Security Event log cleared`, and `Scheduled Task Hide`.
+
+#### Step 2 — Create Automation Rule: Tag AWS Threats
 
 1. Navigate to **Microsoft Sentinel** → **Configuration** → **Automation**
 2. Click **+ Create** → **Automation rule**
@@ -56,62 +58,58 @@ For this exercise, we will create automation rules targeting two scenarios:
 
    | Field | Value |
    | --- | --- |
-   | **Name** | `Tag port scan incidents` |
+   | **Name** | `Tag AWS threat incidents` |
+   | **Rule type** | Standard rule |
    | **Trigger** | When incident is created |
    | **Conditions** | |
 
 4. Under **Conditions**, configure:
 
-   - Click **+ Add condition** → **Analytics rule name**
-   - Select **Contains** → enter `port scan`
+   - Click **+ Add condition** → **Analytic rule name**
+   - Select **Contains** → enter `AWS`
 
-   This matches any incident created by a rule whose name contains "port scan" — covering both `Lab Stage 3.5 - Internal Port Scan Detected (Palo Alto)` and `Lab Stage E2 - Port Scan Detection (Palo Alto)`.
+   This matches any incident created by an analytics rule whose name contains "AWS" — covering both `AWS Config Service Resource Deletion Attempts` and `Suspicious AWS CLI Command Execution`.
 
 5. Under **Actions**, add two actions:
 
    **Action 1:**
    - Select **Add tags**
-   - Enter tag: `reconnaissance`
+   - Enter tag: `cloud-threat`
 
    **Action 2:**
    - Select **Add tags**
-   - Enter tag: `network`
+   - Enter tag: `aws`
 
 6. Leave **Order** as the default (e.g., `1`)
 7. Set **Status** to **Enabled**
 8. Click **Apply**
 
-#### Step 3 — Create Automation Rule: Escalate Okta Account Takeover
+#### Step 3 — Create Automation Rule: Escalate Log Cleared Events
 
-Create a second automation rule for the Okta account takeover scenario:
+Create a second automation rule for the security event log cleared scenario:
 
 1. Click **+ Create** → **Automation rule**
 2. Fill in the details:
 
    | Field | Value |
    | --- | --- |
-   | **Name** | `Escalate Okta account takeover` |
+   | **Name** | `Escalate log cleared events` |
+   | **Rule type** | Standard rule |
    | **Trigger** | When incident is created |
 
-3. Under **Conditions**, add two conditions:
+3. Under **Conditions**, configure:
 
-   **Condition 1:**
-   - **Analytics rule name** → **Contains** → `Account Takeover`
-
-   **Condition 2:** (click **+ Add condition**)
-   - **Entity** → **Account** → **Name** → **Contains** → `attacker`
-
-   > **Note:** The value `attacker` matches the `ActorUsername` from the Okta telemetry data. In a real environment, you would use a more targeted condition like a specific user or domain.
+   - **Analytic rule name** → **Contains** → `Security Event log cleared`
 
 4. Under **Actions**, add three actions:
 
    **Action 1:**
    - Select **Add tags**
-   - Enter tag: `identity-compromise`
+   - Enter tag: `defense-evasion`
 
    **Action 2:**
    - Select **Add tags**
-   - Enter tag: `okta`
+   - Enter tag: `log-tampering`
 
    **Action 3:**
    - Select **Change severity**
@@ -129,8 +127,8 @@ Review the automation rules list:
 
 | Order | Name | Trigger | Conditions | Actions |
 | --- | --- | --- | --- | --- |
-| 1 | Tag port scan incidents | Incident created | Rule name contains "port scan" | Add tags: reconnaissance, network |
-| 2 | Escalate Okta account takeover | Incident created | Rule name contains "Account Takeover" AND entity Account contains "attacker" | Add tags: identity-compromise, okta; Change severity → Critical |
+| 1 | Tag AWS threat incidents | Incident created | Analytic rule name contains "AWS" | Add tags: cloud-threat, aws |
+| 2 | Escalate log cleared events | Incident created | Analytic rule name contains "Security Event log cleared" | Add tags: defense-evasion, log-tampering; Change severity → Critical |
 
 > **Key insight:** Conditions can use **AND** logic (all conditions must match) or **OR** logic (any condition matches). The default is **AND**. For the Okta rule, both the rule name _and_ the entity condition must be true.
 
