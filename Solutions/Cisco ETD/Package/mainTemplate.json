@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "author": "Cisco",
+    "author": "Cisco - etd-sentinel@cisco.com",
     "comments": "Solution template for Cisco ETD"
   },
   "parameters": {
@@ -35,22 +35,29 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
+    "email": "etd-sentinel@cisco.com",
+    "_email": "[variables('email')]",
     "_solutionName": "Cisco ETD",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.1",
     "solutionId": "cisco.cisco-etd-sentinel",
     "_solutionId": "[variables('solutionId')]",
-    "uiConfigId1": "CiscoETD",
-    "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "CiscoETD",
-    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
-    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-    "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
-    "dataConnectorVersion1": "1.0.0",
-    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "workbookVersion1": "1.0",
     "workbookContentId1": "CiscoETDWorkbook",
     "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
@@ -58,332 +65,16 @@
     "_workbookContentId1": "[variables('workbookContentId1')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
     "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "dataConnectorCCPVersion": "3.0.1",
+    "_dataConnectorContentIdConnectorDefinition1": "CiscoETDConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CiscoETDConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[variables('dataConnectorTemplateSpecName1')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
-      ],
-      "properties": {
-        "description": "Cisco ETD data connector with template version 3.0.0",
-        "mainTemplate": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('dataConnectorVersion1')]",
-          "parameters": {},
-          "variables": {},
-          "resources": [
-            {
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
-              "apiVersion": "2021-03-01-preview",
-              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-              "location": "[parameters('workspace-location')]",
-              "kind": "GenericUI",
-              "properties": {
-                "connectorUiConfig": {
-                  "id": "[variables('_uiConfigId1')]",
-                  "title": "Cisco ETD (using Azure Functions)",
-                  "publisher": "Cisco",
-                  "descriptionMarkdown": "The connector fetches data from ETD api for threat analysis",
-                  "graphQueries": [
-                    {
-                      "metricName": "Total data received",
-                      "legend": "CiscoETD_CL",
-                      "baseQuery": "CiscoETD_CL"
-                    }
-                  ],
-                  "sampleQueries": [
-                    {
-                      "description": "Incidents aggregated over a period on verdict type",
-                      "query": "CiscoETD_CL | summarize ThreatCount = count() by verdict_category_s, TimeBin = bin(TimeGenerated, 1h) | project TimeBin, verdict_category_s, ThreatCount | render columnchart"
-                    }
-                  ],
-                  "dataTypes": [
-                    {
-                      "name": "CiscoETD_CL",
-                      "lastDataReceivedQuery": "CiscoETD_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-                    }
-                  ],
-                  "connectivityCriterias": [
-                    {
-                      "type": "IsConnectedQuery",
-                      "value": [
-                        "CiscoETD_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-                      ]
-                    }
-                  ],
-                  "availability": {
-                    "status": 1,
-                    "isPreview": false
-                  },
-                  "permissions": {
-                    "resourceProvider": [
-                      {
-                        "provider": "Microsoft.OperationalInsights/workspaces",
-                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
-                        "providerDisplayName": "Workspace",
-                        "scope": "Workspace",
-                        "requiredPermissions": {
-                          "write": true,
-                          "read": true,
-                          "delete": true
-                        }
-                      },
-                      {
-                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                        "providerDisplayName": "Keys",
-                        "scope": "Workspace",
-                        "requiredPermissions": {
-                          "action": true
-                        }
-                      }
-                    ],
-                    "customs": [
-                      {
-                        "name": "Microsoft.Web/sites permissions",
-                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
-                      },
-                      {
-                        "name": "Email Threat Defense API, API key, Client ID and Secret",
-                        "description": "Ensure you have the API key, Client ID and Secret key."
-                      }
-                    ]
-                  },
-                  "instructionSteps": [
-                    {
-                      "description": ">**NOTE:** This connector uses Azure Functions to connect to the ETD API to pull its logs into Microsoft Sentinel."
-                    },
-                    {
-                      "description": "**Follow the deployment steps to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the ETD data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).\n",
-                      "instructions": [
-                        {
-                          "parameters": {
-                            "fillWith": [
-                              "WorkspaceId"
-                            ],
-                            "label": "Workspace ID"
-                          },
-                          "type": "CopyableLabel"
-                        },
-                        {
-                          "parameters": {
-                            "fillWith": [
-                              "PrimaryKey"
-                            ],
-                            "label": "Primary Key"
-                          },
-                          "type": "CopyableLabel"
-                        }
-                      ]
-                    },
-                    {
-                      "description": "Use this method for automated deployment of the Cisco ETD data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CiscoETD-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Region**. \n3. Enter the **WorkspaceID**, **SharedKey**, **ClientID**, **ClientSecret**, **ApiKey**, **Verdicts**, **ETD Region**\n4. Click **Create** to deploy.",
-                      "title": "Azure Resource Manager (ARM) Template"
-                    }
-                  ],
-                  "metadata": {
-                    "id": "CiscoETD_connector",
-                    "version": "1.0.0",
-                    "kind": "dataConnector",
-                    "source": {
-                      "kind": "ETD API",
-                      "name": "ETD API"
-                    },
-                    "author": {
-                      "name": "Cisco"
-                    },
-                    "support": {
-                      "tier": "Developer Support",
-                      "name": "Cisco"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-              "apiVersion": "2023-04-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
-              "properties": {
-                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-                "contentId": "[variables('_dataConnectorContentId1')]",
-                "kind": "DataConnector",
-                "version": "[variables('dataConnectorVersion1')]",
-                "source": {
-                  "kind": "Solution",
-                  "name": "Cisco ETD",
-                  "sourceId": "[variables('_solutionId')]"
-                },
-                "author": {
-                  "name": "Cisco"
-                },
-                "support": {
-                  "name": "Cisco Systems",
-                  "tier": "Partner",
-                  "email": "etd-sentinel@cisco.com"
-                }
-              }
-            }
-          ]
-        },
-        "packageKind": "Solution",
-        "packageVersion": "[variables('_solutionVersion')]",
-        "packageName": "[variables('_solutionName')]",
-        "packageId": "[variables('_solutionId')]",
-        "contentSchemaVersion": "3.0.0",
-        "contentId": "[variables('_dataConnectorContentId1')]",
-        "contentKind": "DataConnector",
-        "displayName": "Cisco ETD (using Azure Functions)",
-        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
-        "id": "[variables('_dataConnectorcontentProductId1')]",
-        "version": "[variables('dataConnectorVersion1')]"
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
-      "dependsOn": [
-        "[variables('_dataConnectorId1')]"
-      ],
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-        "contentId": "[variables('_dataConnectorContentId1')]",
-        "kind": "DataConnector",
-        "version": "[variables('dataConnectorVersion1')]",
-        "source": {
-          "kind": "Solution",
-          "name": "Cisco ETD",
-          "sourceId": "[variables('_solutionId')]"
-        },
-        "author": {
-          "name": "Cisco"
-        },
-        "support": {
-          "name": "Cisco Systems",
-          "tier": "Partner",
-          "email": "etd-sentinel@cisco.com"
-        }
-      }
-    },
-    {
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
-      "apiVersion": "2021-03-01-preview",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "location": "[parameters('workspace-location')]",
-      "kind": "GenericUI",
-      "properties": {
-        "connectorUiConfig": {
-          "title": "Cisco ETD (using Azure Functions)",
-          "publisher": "Cisco",
-          "descriptionMarkdown": "The connector fetches data from ETD api for threat analysis",
-          "graphQueries": [
-            {
-              "metricName": "Total data received",
-              "legend": "CiscoETD_CL",
-              "baseQuery": "CiscoETD_CL"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "CiscoETD_CL",
-              "lastDataReceivedQuery": "CiscoETD_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
-          "connectivityCriterias": [
-            {
-              "type": "IsConnectedQuery",
-              "value": [
-                "CiscoETD_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-              ]
-            }
-          ],
-          "sampleQueries": [
-            {
-              "description": "Incidents aggregated over a period on verdict type",
-              "query": "CiscoETD_CL | summarize ThreatCount = count() by verdict_category_s, TimeBin = bin(TimeGenerated, 1h) | project TimeBin, verdict_category_s, ThreatCount | render columnchart"
-            }
-          ],
-          "availability": {
-            "status": 1,
-            "isPreview": false
-          },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions on the workspace are required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "write": true,
-                  "read": true,
-                  "delete": true
-                }
-              },
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
-                }
-              }
-            ],
-            "customs": [
-              {
-                "name": "Microsoft.Web/sites permissions",
-                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
-              },
-              {
-                "name": "Email Threat Defense API, API key, Client ID and Secret",
-                "description": "Ensure you have the API key, Client ID and Secret key."
-              }
-            ]
-          },
-          "instructionSteps": [
-            {
-              "description": ">**NOTE:** This connector uses Azure Functions to connect to the ETD API to pull its logs into Microsoft Sentinel."
-            },
-            {
-              "description": "**Follow the deployment steps to deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the ETD data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following).\n",
-              "instructions": [
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Workspace ID"
-                  },
-                  "type": "CopyableLabel"
-                },
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "PrimaryKey"
-                    ],
-                    "label": "Primary Key"
-                  },
-                  "type": "CopyableLabel"
-                }
-              ]
-            },
-            {
-              "description": "Use this method for automated deployment of the Cisco ETD data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CiscoETD-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Region**. \n3. Enter the **WorkspaceID**, **SharedKey**, **ClientID**, **ClientSecret**, **ApiKey**, **Verdicts**, **ETD Region**\n4. Click **Create** to deploy.",
-              "title": "Azure Resource Manager (ARM) Template"
-            }
-          ],
-          "id": "[variables('_uiConfigId1')]"
-        }
-      }
-    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -393,7 +84,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CiscoETD Workbook with template version 3.0.0",
+        "description": "CiscoETD Workbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -411,7 +102,7 @@
               },
               "properties": {
                 "displayName": "[parameters('workbook1-name')]",
-                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL | summarize TotalMessages = count() by verdict_category_s | extend Categories = coalesce(verdict_category_s, 'No Verdict') | project Verdicts = Categories, TotalMessages | render piechart title = 'Email Threat Defense Messages by Verdict'\",\"size\":0,\"title\":\"Total Messages by Threat Type\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"query - 0\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Top 10 Malicious Senders Domains\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| extend Domain = tostring(split(fromAddress_s, '@')[1])\\n| where isnotnull(Domain) and trim(' ', Domain) != ''\\n| summarize Count = count() by Domain\\n| top 10 by Count desc\\n\",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Domain\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"Count\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"name\":\"query - 0\"}]},\"customWidth\":\"50\",\"name\":\"group - 9\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"customWidth\":\"100\",\"name\":\"group - 6\",\"styleSettings\":{\"margin\":\"10px\",\"showBorder\":true}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| extend Email = fromAddress_s\\n| where isnotnull(Email) and trim(' ', Email) != ''\\n| summarize Count = count() by Email\\n| top 10 by Count desc\",\"size\":0,\"title\":\"Top 10 Malicious Senders\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query - 2\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| summarize Count = count() by mailboxes_s\\n| top 10 by Count desc\\n| extend  Email = tostring(replace(\\\"[\\\\\\\"\\\\\\\"\\\\\\\\[\\\\\\\\]]\\\", \\\"\\\", mailboxes_s))\\n| project Email, Count\",\"size\":0,\"title\":\"Top 10 Targetd users\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"query - 3\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"Group_Top 10\"}],\"fromTemplateId\":\"sentinel-CiscoETD\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"cd8447d8-b10e-4a79-9a0d-1e2b4d7e2f5a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":2592000000}]},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters\"},{\"type\":1,\"content\":{\"json\":\"## Cisco Email Threat Defense\\nThis workbook visualizes email threat data from the Cisco ETD v5 connector querying **CiscoETDv2_CL** directly — fields are extracted at ingestion time by the DCR transform. Use the time range filter above to scope all tiles.\\n\\n> **Note:** Verdict analysis excludes `update` events (re-remediation records that carry no sender/verdict data).\"},\"name\":\"header-text\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Overview\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| extend Folder = tostring(message['action']['folder'])\\n| summarize\\n    ['Total Events']       = count(),\\n    ['New Messages']       = countif(EventType =~ 'create'),\\n    ['Remediation Updates']= countif(EventType =~ 'update'),\\n    Phishing               = countif(Verdict =~ 'phishing'),\\n    Malicious              = countif(Verdict =~ 'malicious'),\\n    BEC                    = countif(Verdict =~ 'bec'),\\n    Graymail               = countif(Verdict =~ 'graymail'),\\n    Spam                   = countif(Verdict =~ 'spam'),\\n    Scam                   = countif(Verdict =~ 'scam'),\\n    Quarantined            = countif(Folder =~ 'quarantine'),\\n    ['Sent to Junk']       = countif(Folder =~ 'junk')\",\"size\":4,\"title\":\"Message Summary\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"100\",\"name\":\"query-summary\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| summarize Count = count() by Verdict\\n| render piechart title = 'Messages by Verdict'\",\"size\":0,\"title\":\"Messages by Verdict\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"33\",\"name\":\"query-verdict-pie\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| summarize Count = count() by bin(EventTime, 1h), Verdict\\n| render timechart title = 'Message Volume Over Time'\",\"size\":0,\"title\":\"Message Volume Over Time (by Verdict)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"67\",\"name\":\"query-volume-time\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-overview\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Senders & Recipients\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Sender)\\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by Sender\\n| top 10 by MessageCount desc\",\"size\":0,\"title\":\"Top 10 Senders\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-top-senders\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Sender)\\n| extend SenderDomain = tostring(split(Sender, '@')[1])\\n| where isnotempty(SenderDomain)\\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by SenderDomain\\n| top 10 by MessageCount desc\",\"size\":0,\"title\":\"Top 10 Sender Domains\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-top-sender-domains\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Recipient)\\n| summarize MessageCount = count(), Verdicts = make_set(Verdict, 5) by Recipient\\n| top 10 by MessageCount desc\",\"size\":0,\"title\":\"Top 10 Targeted Recipients\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-top-recipients\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Recipient)\\n| extend RecipientDomain = tostring(split(Recipient, '@')[1])\\n| where isnotempty(RecipientDomain)\\n| summarize MessageCount = count() by RecipientDomain\\n| top 10 by MessageCount desc\",\"size\":0,\"title\":\"Top 10 Targeted Recipient Domains\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-top-recipient-domains\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-senders-recipients\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Detection Techniques\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| mv-expand detection = message['verdict']['detections']\\n| where isnotnull(detection)\\n| extend Technique = tostring(detection['technique'])\\n| where isnotempty(Technique)\\n| summarize Count = count() by Technique\\n| top 15 by Count desc\",\"size\":0,\"title\":\"Top Detection Techniques\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"60\",\"name\":\"query-detection-techniques\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| extend BusinessRisk = tostring(message['verdict']['businessRisk'])\\n| where isnotempty(BusinessRisk)\\n| summarize Count = count() by BusinessRisk\\n| render piechart title = 'Business Risk'\",\"size\":0,\"title\":\"Business Risk\\n(phishing / malicious only)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"40\",\"name\":\"query-business-risk\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| mv-expand detection = message['verdict']['detections']\\n| where isnotnull(detection)\\n| extend Technique    = tostring(detection['technique']),\\n         DetectionType = tostring(detection['type']),\\n         Description  = tostring(detection['description'])\\n| where isnotempty(Technique)\\n| summarize Count = count() by Verdict, Technique, DetectionType\\n| sort by Verdict asc, Count desc\\n| project Verdict, Technique, DetectionType, Count\",\"size\":0,\"title\":\"Detection Technique Details\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-detection-detail-grid\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-detections\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Actions & Remediation\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| extend Folder = tostring(message['action']['folder'])\\n| where isnotempty(Folder)\\n| summarize Count = count() by Folder\\n| render piechart title = 'Disposition Folder'\",\"size\":0,\"title\":\"Disposition Folder\\n(junk vs quarantine)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"33\",\"name\":\"query-action-folder\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| extend Folder = tostring(message['action']['folder'])\\n| where isnotempty(Folder)\\n| summarize Count = count() by Verdict, Folder\\n| sort by Count desc\",\"size\":0,\"title\":\"Verdict vs. Folder\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\"},\"customWidth\":\"34\",\"name\":\"query-verdict-folder\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Verdict)\\n| extend IsAutoRemediated = tostring(message['verdict']['isAutoRemediated'])\\n| extend ReclassifiedBy  = tostring(message['verdict']['reclassifiedBy'])\\n| where isnotempty(IsAutoRemediated)\\n| summarize Count = count() by IsAutoRemediated, ReclassifiedBy\\n| project ['Auto-Remediated'] = IsAutoRemediated, ['Reclassified By'] = ReclassifiedBy, Count\",\"size\":0,\"title\":\"Auto-Remediation & Reclassification\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"33\",\"name\":\"query-auto-remediation\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'update'\\n| extend Folder       = tostring(message['action']['folder'])\\n| extend RemediatedBy = tostring(message['action']['remediatedBy'])\\n| extend ActionType   = tostring(message['action']['action'])\\n| project EventTime, MessageId, ActionType, Folder, RemediatedBy\\n| sort by EventTime desc\",\"size\":0,\"title\":\"Remediation Update Events\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-remediation-updates\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-actions\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Attachments\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotnull(message['attachments'])\\n| mv-expand attachment = message['attachments']\\n| extend FileName = tostring(attachment['filename'])\\n| where isnotempty(FileName)\\n| extend FileExt = tolower(extract(@'\\\\.([^.]+)$', 1, FileName))\\n| where isnotempty(FileExt)\\n| summarize Count = count() by FileExt\\n| top 10 by Count desc\\n| render piechart title = 'Attachment File Types'\",\"size\":0,\"title\":\"Attachment File Extensions\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"33\",\"name\":\"query-attachment-types\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotnull(message['attachments'])\\n| mv-expand attachment = message['attachments']\\n| extend FileName = tostring(attachment['filename']),\\n         SHA256   = tostring(attachment['SHA256'])\\n| where isnotempty(SHA256)\\n// Deduplicate by SHA256 to find unique files seen across many messages\\n| summarize\\n    FileNames  = make_set(FileName, 10),\\n    TimeSeen   = count(),\\n    Verdicts   = make_set(Verdict, 5),\\n    Senders    = make_set(Sender, 10)\\n    by SHA256\\n| sort by TimeSeen desc\",\"size\":0,\"title\":\"Unique Attachment Hashes (SHA256)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"TimeSeen\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"TimeSeen\",\"sortOrder\":2}]},\"customWidth\":\"67\",\"name\":\"query-attachment-hashes\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// Uses the verdict detections array — type='sha256' entries flag files\\n// identified by threat intelligence, distinct from all attachments above\\nCiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where Verdict =~ 'malicious'\\n| mv-expand detection = message['verdict']['detections']\\n| where tostring(detection['type']) =~ 'sha256'\\n| extend SHA256    = tostring(detection['description']),\\n         Technique = tostring(detection['technique'])\\n| where isnotempty(SHA256)\\n| summarize Count = count() by SHA256, Technique, Sender, Subject\\n| sort by Count desc\",\"size\":0,\"title\":\"Malicious File Hashes (from Threat Detections)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-malicious-hashes\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-attachments\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Suspicious URLs\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// URLs surfaced in the verdict detections array with type='url'\\n// These are the URLs Cisco ETD flagged as malicious/suspicious\\nCiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where Verdict in~ ('phishing', 'malicious')\\n| mv-expand detection = message['verdict']['detections']\\n| where tostring(detection['type']) =~ 'url'\\n| extend MaliciousUrl = tostring(detection['description']),\\n         Technique    = tostring(detection['technique'])\\n| where isnotempty(MaliciousUrl)\\n| summarize Count = count(), Senders = make_set(Sender, 5) by MaliciousUrl, Technique\\n| sort by Count desc\",\"size\":0,\"title\":\"Malicious URLs (flagged in Detections)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-malicious-urls\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// All URLs in urlMetadata across threat messages, grouped by domain\\n// Excludes HTML entities (&nbsp;) and mailto links\\nCiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where Verdict in~ ('phishing', 'malicious', 'bec')\\n| where isnotnull(message['urlMetadata'])\\n| mv-expand urlItem = message['urlMetadata']\\n| extend Url = tostring(urlItem['url'])\\n| where isnotempty(Url)\\n    and Url !startswith '&'\\n    and Url !startswith 'http://mailto'\\n    and not(Url matches regex @'^www\\\\.')\\n| extend UrlDomain = extract(@'^https?://([^/?#\\\\s]+)', 1, Url)\\n| where isnotempty(UrlDomain)\\n| summarize Count = count() by UrlDomain\\n| top 20 by Count desc\",\"size\":0,\"title\":\"Top URL Domains in Threat Messages\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-url-domains\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-urls\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Network Indicators\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// clientIp = the external IP that delivered mail to the Cisco gateway\\n// This is meaningful: hotmail.com sends from Azure IPs, gmail.com from Google IPs, etc.\\nCiscoETDv2_CL\\n| where EventType =~ 'create'\\n| extend ClientIp = tostring(message['clientIp'])\\n| where isnotempty(ClientIp)\\n| summarize\\n    MessageCount = count(),\\n    Verdicts     = make_set(Verdict, 5),\\n    Senders      = make_set(Sender, 10)\\n    by ClientIp\\n| sort by MessageCount desc\",\"size\":0,\"title\":\"Top Sending Client IPs\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"MessageCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-client-ips\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where Verdict in~ ('phishing', 'malicious', 'bec')\\n| extend ClientIp = tostring(message['clientIp'])\\n| where isnotempty(ClientIp)\\n| summarize\\n    ThreatCount  = count(),\\n    Verdicts     = make_set(Verdict, 5),\\n    Senders      = make_set(Sender, 5),\\n    Subjects     = make_set(Subject, 5)\\n    by ClientIp\\n| sort by ThreatCount desc\",\"size\":0,\"title\":\"Threat-Associated Sending IPs\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"ThreatCount\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"ThreatCount\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query-threat-ips\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-network\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Recent Threats\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where Verdict in~ ('phishing', 'malicious', 'bec')\\n| extend ClientIp     = tostring(message['clientIp'])\\n| extend Folder       = tostring(message['action']['folder'])\\n| extend BusinessRisk = tostring(message['verdict']['businessRisk'])\\n| extend HasAttach    = isnotnull(message['attachments']) and array_length(message['attachments']) > 0\\n| extend HasMalUrl    = isnotnull(message['verdict']['detections'])\\n| project\\n    EventTime,\\n    MessageId,\\n    Verdict,\\n    BusinessRisk,\\n    Sender,\\n    Recipient,\\n    Subject,\\n    Folder,\\n    ['Has Attachments'] = HasAttach,\\n    ['Has Malicious URL'] = HasMalUrl,\\n    ClientIp\\n| sort by EventTime desc\\n| take 100\",\"size\":0,\"title\":\"Recent High-Threat Messages (Phishing / Malicious / BEC)\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-recent-threats\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETDv2_CL\\n| where EventType =~ 'create'\\n| where isnotempty(Subject) and isnotempty(Verdict)\\n| where Verdict in~ ('phishing', 'malicious', 'bec')\\n| project EventTime, Verdict, Subject, Sender, Recipient\\n| sort by EventTime desc\",\"size\":0,\"title\":\"Subject Lines in Threat Messages\",\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"EventTime\",\"sortOrder\":2}]},\"customWidth\":\"100\",\"name\":\"query-threat-subjects\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"group-recent\",\"styleSettings\":{\"showBorder\":true,\"margin\":\"10px\"}}],\"fromTemplateId\":\"sentinel-CiscoETDv2_CL\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
                 "version": "1.0",
                 "sourceId": "[variables('workspaceResourceId')]",
                 "category": "sentinel"
@@ -433,12 +124,14 @@
                   "sourceId": "[variables('_solutionId')]"
                 },
                 "author": {
-                  "name": "Cisco"
+                  "name": "Cisco",
+                  "email": "[variables('_email')]"
                 },
                 "support": {
-                  "name": "Cisco Systems",
+                  "name": "Cisco",
+                  "email": "etd-sentinel@cisco.com",
                   "tier": "Partner",
-                  "email": "etd-sentinel@cisco.com"
+                  "link": "https://www.cisco.com/c/en/us/support/index.html"
                 },
                 "dependencies": {
                   "operator": "AND",
@@ -471,20 +164,704 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Cisco Email Threat Defense (ETD)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CiscoETDConnectorDefinition",
+                  "title": "Cisco Email Threat Defense (ETD)",
+                  "publisher": "Cisco",
+                  "descriptionMarkdown": "The [Cisco Email Threat Defense (ETD)](https://docs.cmd.cisco.com/en/Content/secure-email-threat-defense-user-guide/homeUG.htm) data connector provides the capability to ingest [message events](https://docs.cmd.cisco.com/en/Content/secure-email-threat-defense-user-guide/Messages/messages.htm) from Cisco ETD into Microsoft Sentinel using the [Log Export API](https://developer.cisco.com/docs/message-search-api/log-export-api/).",
+                  "graphQueriesTableName": "CiscoETDv2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total messages received",
+                      "legend": "Cisco ETD Messages",
+                      "baseQuery": "CiscoETDv2_CL"
+                    },
+                    {
+                      "metricName": "Malicious messages",
+                      "legend": "Malicious Threats",
+                      "baseQuery": "CiscoETDv2_CL | where message_verdict_verdict == 'malicious'"
+                    },
+                    {
+                      "metricName": "Phishing messages",
+                      "legend": "Phishing Threats",
+                      "baseQuery": "CiscoETDv2_CL | where message_verdict_verdict == 'phishing'"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get all Cisco ETD threat messages",
+                      "query": "CiscoETDv2_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get recent malicious messages",
+                      "query": "CiscoETDv2_CL\n| where message_verdict_verdict == 'malicious'\n| take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CiscoETDv2_CL",
+                      "lastDataReceivedQuery": "CiscoETDv2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cisco ETD API Credentials",
+                        "description": "Cisco ETD API credentials are required. Refer to the [Cisco ETD API Authentication documentation](https://developer.cisco.com/docs/message-search-api/authentication/) for more information."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect to Cisco ETD API",
+                      "description": "Provide your Cisco ETD API endpoint, Client ID, Client Secret, and API Key. These credentials can be obtained from your Cisco ETD administrator or through the Cisco ETD management console.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Base Endpoint URL",
+                            "placeholder": "https://api.us.etd.cisco.com",
+                            "type": "text",
+                            "name": "baseEndpoint",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client ID",
+                            "placeholder": "Enter OAuth2 Client ID",
+                            "type": "text",
+                            "name": "clientId",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client Secret",
+                            "placeholder": "Enter OAuth2 Client Secret",
+                            "type": "password",
+                            "name": "clientSecret",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Key",
+                            "placeholder": "Enter Cisco ETD API Key",
+                            "type": "password",
+                            "name": "apiKey",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Connect",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cisco",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cisco",
+                  "email": "etd-sentinel@cisco.com",
+                  "tier": "Partner",
+                  "link": "https://www.cisco.com/c/en/us/support/index.html"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CiscoETDDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CiscoETDv2_CL": {
+                    "columns": [
+                      {
+                        "name": "downloadLink",
+                        "type": "string"
+                      },
+                      {
+                        "name": "expand",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CiscoETDv2_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project TimeGenerated=now(), EventTime=todatetime(expand.message.timestamp), EventType=tostring(expand.message.eventType), MessageId=tostring(expand.message.id), Verdict=tostring(iff(isnotnull(expand.message.verdict.verdict), expand.message.verdict.verdict, expand.message.verdict.category)), Sender=tostring(iff(isnotempty(tostring(expand.message.fromAddresses)), expand.message.fromAddresses, expand.message.returnPath)), Recipient=tostring(iff(isnotempty(tostring(expand.message.toAddresses[0])), expand.message.toAddresses[0], expand.message.envelopeTo[0])), Subject=tostring(expand.message.subject), message=todynamic(expand.message)",
+                    "outputStream": "Custom-CiscoETDv2_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CiscoETDv2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CiscoETDv2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "Datetime",
+                      "isDefaultDisplay": true,
+                      "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                    },
+                    {
+                      "name": "EventTime",
+                      "type": "Datetime",
+                      "description": "Timestamp of the email event from Cisco ETD."
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "String",
+                      "description": "Event type: create or update."
+                    },
+                    {
+                      "name": "MessageId",
+                      "type": "String",
+                      "description": "Unique identifier of the email message."
+                    },
+                    {
+                      "name": "Verdict",
+                      "type": "String",
+                      "description": "Threat verdict: phishing, malicious, bec, spam, scam, graymail."
+                    },
+                    {
+                      "name": "Sender",
+                      "type": "String",
+                      "description": "Sender email address."
+                    },
+                    {
+                      "name": "Recipient",
+                      "type": "String",
+                      "description": "Primary recipient email address."
+                    },
+                    {
+                      "name": "Subject",
+                      "type": "String",
+                      "description": "Email subject line."
+                    },
+                    {
+                      "name": "message",
+                      "type": "Dynamic",
+                      "description": "Full Cisco ETD message event object."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CiscoETDConnectorDefinition",
+          "title": "Cisco Email Threat Defense (ETD)",
+          "publisher": "Cisco",
+          "descriptionMarkdown": "The [Cisco Email Threat Defense (ETD)](https://docs.cmd.cisco.com/en/Content/secure-email-threat-defense-user-guide/homeUG.htm) data connector provides the capability to ingest [message events](https://docs.cmd.cisco.com/en/Content/secure-email-threat-defense-user-guide/Messages/messages.htm) from Cisco ETD into Microsoft Sentinel using the [Log Export API](https://developer.cisco.com/docs/message-search-api/log-export-api/).",
+          "graphQueriesTableName": "CiscoETDv2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total messages received",
+              "legend": "Cisco ETD Messages",
+              "baseQuery": "CiscoETDv2_CL"
+            },
+            {
+              "metricName": "Malicious messages",
+              "legend": "Malicious Threats",
+              "baseQuery": "CiscoETDv2_CL | where message_verdict_verdict == 'malicious'"
+            },
+            {
+              "metricName": "Phishing messages",
+              "legend": "Phishing Threats",
+              "baseQuery": "CiscoETDv2_CL | where message_verdict_verdict == 'phishing'"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get all Cisco ETD threat messages",
+              "query": "CiscoETDv2_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get recent malicious messages",
+              "query": "CiscoETDv2_CL\n| where message_verdict_verdict == 'malicious'\n| take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CiscoETDv2_CL",
+              "lastDataReceivedQuery": "CiscoETDv2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": []
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cisco ETD API Credentials",
+                "description": "Cisco ETD API credentials are required. Refer to the [Cisco ETD API Authentication documentation](https://developer.cisco.com/docs/message-search-api/authentication/) for more information."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect to Cisco ETD API",
+              "description": "Provide your Cisco ETD API endpoint, Client ID, Client Secret, and API Key. These credentials can be obtained from your Cisco ETD administrator or through the Cisco ETD management console.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Base Endpoint URL",
+                    "placeholder": "https://api.us.etd.cisco.com",
+                    "type": "text",
+                    "name": "baseEndpoint",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client ID",
+                    "placeholder": "Enter OAuth2 Client ID",
+                    "type": "text",
+                    "name": "clientId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client Secret",
+                    "placeholder": "Enter OAuth2 Client Secret",
+                    "type": "password",
+                    "name": "clientSecret",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key",
+                    "placeholder": "Enter Cisco ETD API Key",
+                    "type": "password",
+                    "name": "apiKey",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Connect",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Cisco",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Cisco",
+          "email": "etd-sentinel@cisco.com",
+          "tier": "Partner",
+          "link": "https://www.cisco.com/c/en/us/support/index.html"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Cisco Email Threat Defense (ETD)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Cisco Email Threat Defense (ETD)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "baseEndpoint": {
+              "defaultValue": "baseEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiKey": {
+              "defaultValue": "apiKey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cisco",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cisco",
+                  "email": "etd-sentinel@cisco.com",
+                  "tier": "Partner",
+                  "link": "https://www.cisco.com/c/en/us/support/index.html"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CiscoETDMessages', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CiscoETDConnectorDefinition",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CiscoETDv2_CL"
+                },
+                "dataType": "CiscoETDv2_CL",
+                "auth": {
+                  "type": "JwtToken",
+                  "userName": {
+                    "key": "clientId",
+                    "value": "[[parameters('clientId')]"
+                  },
+                  "password": {
+                    "key": "clientSecret",
+                    "value": "[[parameters('clientSecret')]"
+                  },
+                  "TokenEndpoint": "[[concat(parameters('baseEndpoint'),'/v1/oauth/token')]",
+                  "TokenEndpointHttpMethod": "POST",
+                  "Headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "x-api-key": "[[parameters('apiKey')]"
+                  },
+                  "IsCredentialsInHeaders": true,
+                  "JwtTokenJsonPath": "$.accessToken"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('baseEndpoint'),'/v1/logs/downloadLinks')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 60,
+                  "queryTimeFormat": "yyyy-MM-ddTHH",
+                  "httpMethod": "POST",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "{\"timeRange\": [\"{_QueryWindowStartTime}\", \"{_QueryWindowEndTime}\"], \"logTypes\": [\"message\"]}",
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Scuba",
+                    "x-api-key": "[[parameters('apiKey')]"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data.message"
+                  ],
+                  "format": "json"
+                },
+                "shouldJoinNestedData": true,
+                "joinedDataStepName": "downloadLink",
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "fetchMessageData",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project downloadUrl = res.value"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "fetchMessageData": {
+                    "shouldJoinNestedData": true,
+                    "joinedDataStepName": "expand",
+                    "auth": {
+                      "AuthType": "None"
+                    },
+                    "request": {
+                      "httpMethod": "GET",
+                      "apiEndpoint": "$downloadUrl$",
+                      "headers": {
+                        "Accept": "application/x-ndjson"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                },
+                "extra": {
+                  "nestedTransformName": "/ASI/Microsoft/MvExpandTransformer"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cisco ETD",
-        "publisherDisplayName": "Cisco Systems",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20ETD/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Cisco ETD Solution for Microsoft Microsoft Sentinel makes it easy to connect cisco email threat data to the Microsoft Sentinel, improving visibility into email threats.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "publisherDisplayName": "Cisco",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20ETD/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cisco Email Threat Defense (ETD) solution for Microsoft Sentinel enables you to ingest message events and threat data from Cisco ETD into Microsoft Sentinel using the Log Export API with nested polling.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
-        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/cisco-logo-72px.svg\" width=\"75px\" height=\"75px\">",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/cisco-logo-transparent.svg\" width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
@@ -493,25 +870,27 @@
           "sourceId": "[variables('_solutionId')]"
         },
         "author": {
-          "name": "Cisco"
+          "name": "Cisco",
+          "email": "[variables('_email')]"
         },
         "support": {
-          "name": "Cisco Systems",
+          "name": "Cisco",
           "email": "etd-sentinel@cisco.com",
-          "tier": "Partner"
+          "tier": "Partner",
+          "link": "https://www.cisco.com/c/en/us/support/index.html"
         },
         "dependencies": {
           "operator": "AND",
           "criteria": [
             {
-              "kind": "DataConnector",
-              "contentId": "[variables('_dataConnectorContentId1')]",
-              "version": "[variables('dataConnectorVersion1')]"
-            },
-            {
               "kind": "Workbook",
               "contentId": "[variables('_workbookContentId1')]",
               "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             }
           ]
         },
@@ -521,7 +900,9 @@
         ],
         "categories": {
           "domains": [
-            "Security - Threat Protection"
+            "Security - Threat Protection",
+            "Security - Threat Intelligence",
+            "IT Operations"
           ]
         }
       },

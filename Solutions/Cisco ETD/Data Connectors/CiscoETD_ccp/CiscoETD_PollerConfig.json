@@ -1,0 +1,97 @@
+[
+  {
+    "name": "CiscoETDMessages",
+    "apiVersion": "2025-09-01",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "connectorDefinitionName": "CiscoETDConnectorDefinition",
+      "dcrConfig": {
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+        "streamName": "Custom-CiscoETDv2_CL"
+      },
+      "dataType": "CiscoETDv2_CL",
+      "auth": {
+        "type": "JwtToken",
+        "userName": {
+          "key": "clientId",
+          "value": "{{clientId}}"
+        },
+        "password": {
+          "key": "clientSecret",
+          "value": "{{clientSecret}}"
+        },
+        "TokenEndpoint": "{{baseEndpoint}}/v1/oauth/token",
+        "TokenEndpointHttpMethod": "POST",
+        "Headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "x-api-key": "[[parameters('apiKey')]"
+        },
+        "IsCredentialsInHeaders": true,
+        "JwtTokenJsonPath": "$.accessToken"
+      },
+      "request": {
+        "apiEndpoint": "{{baseEndpoint}}/v1/logs/downloadLinks",
+        "rateLimitQPS": 10,
+        "queryWindowInMin": 60,
+        "queryTimeFormat": "yyyy-MM-ddTHH",
+        "httpMethod": "POST",
+        "retryCount": 3,
+        "timeoutInSeconds": 30,
+        "isPostPayloadJson": true,
+        "queryParametersTemplate": "{\"timeRange\": [\"{_QueryWindowStartTime}\", \"{_QueryWindowEndTime}\"], \"logTypes\": [\"message\"]}",
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "Scuba",
+          "x-api-key": "{{apiKey}}"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.data.message"
+        ],
+        "format": "json"
+      },
+      "shouldJoinNestedData": true,
+      "joinedDataStepName": "downloadLink",
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetchMessageData",
+              "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project downloadUrl = res.value"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetchMessageData": {
+          "shouldJoinNestedData": true,
+          "joinedDataStepName": "expand",
+          "auth": {
+            "AuthType": "None"
+          },
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "$downloadUrl$",
+            "headers": {
+              "Accept": "application/x-ndjson"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$"
+            ],
+            "format": "json"
+          }
+        }
+      },
+      "extra": {
+        "nestedTransformName": "/ASI/Microsoft/MvExpandTransformer"
+      }
+    }
+  }
+]
