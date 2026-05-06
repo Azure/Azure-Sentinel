@@ -6756,6 +6756,328 @@ def extract_content_item_from_workbook(
     return result
 
 
+# Logic App connector extraction --------------------------------------------------
+
+# Regex to pull the connector identifier following /managedApis/ or /customApis/.
+# The api id often appears inside an ARM `[concat(...)]` expression and may end
+# with `'`, `)`, `]`, `"`, whitespace, comma, or end-of-string.
+_LOGIC_APP_API_ID_RE = re.compile(
+    r"/(managedApis|customApis)/([^'\"\)\]\s,/]*)",
+    re.IGNORECASE,
+)
+
+# When the api name segment is empty (because the next token is `parameters('...')`)
+# look for an inline parameter reference appearing within the same expression.
+_LOGIC_APP_API_PARAM_REF_RE = re.compile(
+    r"/(managedApis|customApis)/[^A-Za-z0-9_\-]*parameters\(\s*'([^']+)'\s*\)",
+    re.IGNORECASE,
+)
+
+# A parameter named e.g. `customApis_AbuseIPDBAPI_name` carries the api name in
+# its middle segment when no defaultValue is available.
+_API_PARAM_NAME_RE = re.compile(
+    r"^(?:customApis|managedApis)_(.+?)_name$",
+    re.IGNORECASE,
+)
+
+
+# Regex to extract the connection key from
+# `@parameters('$connections')['<KEY>']['connectionId']` action expressions.
+_LOGIC_APP_CONNECTION_KEY_RE = re.compile(
+    r"\$connections['\"]?\)?\s*\[\s*['\"]([^'\"]+)['\"]\s*\]",
+    re.IGNORECASE,
+)
+
+
+def _extract_action_params_of_interest(action_type: str, inputs: Any) -> Dict[str, str]:
+    """
+    Return a dict of "interesting" parameter values for a single action invocation.
+    Empty dict if nothing relevant.
+    """
+    if not isinstance(inputs, dict):
+        return {}
+    t = (action_type or "").lower()
+    out: Dict[str, str] = {}
+    if t == "http":
+        for k in ("method", "uri"):
+            v = inputs.get(k)
+            if isinstance(v, str) and v.strip():
+                out[k] = v.strip()
+    elif t == "apiconnection":
+        for k in ("method", "path"):
+            v = inputs.get(k)
+            if isinstance(v, str) and v.strip():
+                out[k] = v.strip()
+    elif t == "function":
+        fn = inputs.get("function")
+        if isinstance(fn, dict) and isinstance(fn.get("id"), str):
+            out["functionId"] = fn["id"].strip()
+        v = inputs.get("method")
+        if isinstance(v, str) and v.strip():
+            out["method"] = v.strip()
+    elif t == "workflow":
+        host = inputs.get("host")
+        if isinstance(host, dict):
+            wf = host.get("workflow")
+            if isinstance(wf, dict) and isinstance(wf.get("id"), str):
+                out["workflowId"] = wf["id"].strip()
+            tn = host.get("triggerName")
+            if isinstance(tn, str) and tn.strip():
+                out["triggerName"] = tn.strip()
+    elif t == "apimanagement":
+        am = inputs.get("apiManagement")
+        if isinstance(am, dict):
+            if isinstance(am.get("name"), str):
+                out["apiManagementName"] = am["name"].strip()
+            if isinstance(am.get("operationId"), str):
+                out["operationId"] = am["operationId"].strip()
+        tpl = inputs.get("pathTemplate")
+        if isinstance(tpl, dict) and isinstance(tpl.get("template"), str):
+            out["pathTemplate"] = tpl["template"].strip()
+        v = inputs.get("method")
+        if isinstance(v, str) and v.strip():
+            out["method"] = v.strip()
+    return out
+
+
+def extract_playbook_logic_app_connectors(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extract Logic App connectors and built-in actions used by a playbook.
+
+    Sources scanned:
+      * ``Microsoft.Web/connections`` resources -- managed/custom API connection
+        instances (yields ``managedApi``/``customApi`` rows).
+      * ``Microsoft.Logic/workflows`` ``properties.definition.actions`` (and any
+        top-level ``definition.actions``) -- walked recursively. Built-in action
+        types ``Http``, ``Function``, ``Workflow``, ``ApiManagement`` are emitted
+        as ``api_kind='builtin'`` rows. ``ApiConnection`` actions are matched
+        back to managed/custom connection rows by connection key (the
+        ``$connections`` lookup name) so per-action ``method``/``path`` are
+        attached as parameters. Pure control-flow actions (Compose, If, Foreach,
+        Switch, Until, Scope, InitializeVariable, SetVariable, ParseJson,
+        Terminate, Response, etc.) are intentionally ignored.
+
+    Returns a list of dicts aggregated per (api_name, api_kind), with these keys:
+        api_name, api_kind ('managedApi'|'customApi'|'builtin'|'other'),
+        is_custom (bool), is_sentinel (bool),
+        connection_count (int) -- number of Microsoft.Web/connections resources
+            of this api (always 0 for builtins),
+        connection_kinds (list[str]), connection_names (list[str]),
+        action_count (int) -- number of action invocations of this type/api,
+        parameters (list[dict]) -- one dict per action invocation, containing
+            an ``action`` key (action name in workflow) plus any captured
+            parameters of interest (e.g. ``method``, ``uri``, ``path``,
+            ``functionId``, ``workflowId``, ``apiManagementName``,
+            ``pathTemplate``).
+    """
+    if not isinstance(data, dict):
+        return []
+
+    arm_parameters = data.get("parameters") if isinstance(data.get("parameters"), dict) else {}
+
+    def resolve_param_value(param_name: str) -> str:
+        """Resolve an ARM parameter reference. Falls back to deriving from the param name."""
+        if not param_name:
+            return ""
+        param = arm_parameters.get(param_name) if isinstance(arm_parameters, dict) else None
+        if isinstance(param, dict):
+            default = param.get("defaultValue")
+            if isinstance(default, str) and default.strip():
+                return default.strip()
+        # Fallback: parse out the api name from the parameter name itself
+        m = _API_PARAM_NAME_RE.match(param_name)
+        if m:
+            return m.group(1)
+        return ""
+
+    # Aggregate by (api_name, api_kind)
+    aggregated: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    def _get_or_create_entry(api_name: str, api_kind: str) -> Optional[Dict[str, Any]]:
+        api_name = (api_name or "").strip()
+        if not api_name:
+            return None
+        api_kind = api_kind or "other"
+        if api_kind == "managedApi":
+            api_name = api_name.lower()
+        key = (api_name.lower(), api_kind)
+        entry = aggregated.get(key)
+        if entry is None:
+            entry = {
+                "api_name": api_name,
+                "api_kind": api_kind,
+                "is_custom": api_kind == "customApi",
+                "is_sentinel": api_name.lower() == "azuresentinel",
+                "connection_count": 0,
+                "connection_kinds": [],
+                "connection_names": [],
+                "action_count": 0,
+                "parameters": [],
+            }
+            aggregated[key] = entry
+        return entry
+
+    def add_entry(api_name: str, api_kind: str, conn_name: str, conn_kind: str) -> None:
+        # Managed Logic App connector identifiers are case-insensitive in ARM and
+        # canonically lowercase (e.g. `azuresentinel`, `office365`). Solutions
+        # sometimes capitalize them inconsistently -- normalize to lowercase so
+        # the same connector doesn't appear as multiple rows in aggregations.
+        # Custom API names are author-defined and case-sensitive, so leave them.
+        entry = _get_or_create_entry(api_name, api_kind)
+        if entry is None:
+            return
+        entry["connection_count"] += 1
+        if conn_kind and conn_kind not in entry["connection_kinds"]:
+            entry["connection_kinds"].append(conn_kind)
+        if conn_name and conn_name not in entry["connection_names"]:
+            entry["connection_names"].append(conn_name)
+
+    def add_action(api_name: str, api_kind: str, action_name: str, params: Dict[str, str]) -> None:
+        entry = _get_or_create_entry(api_name, api_kind)
+        if entry is None:
+            return
+        entry["action_count"] += 1
+        record: Dict[str, str] = {"action": action_name} if action_name else {}
+        record.update(params or {})
+        if record:
+            entry["parameters"].append(record)
+
+    def parse_api_id(api_id_value: Any) -> Tuple[str, str]:
+        """Return (api_kind, api_name) from a (possibly ARM-expression) api.id string."""
+        if not isinstance(api_id_value, str):
+            return ("", "")
+        m = _LOGIC_APP_API_ID_RE.search(api_id_value)
+        if not m:
+            return ("other", "")
+        kind_raw = m.group(1).lower()
+        api_kind = "managedApi" if kind_raw == "managedapis" else "customApi"
+        api_name = m.group(2)
+        if not api_name:
+            # Look for an inline parameter reference (e.g. /customApis/', parameters('x'))
+            pm = _LOGIC_APP_API_PARAM_REF_RE.search(api_id_value)
+            if pm:
+                api_name = resolve_param_value(pm.group(2))
+        return (api_kind, api_name)
+
+    # Built-in workflow action types (option 2 set) -- map type -> api_name.
+    # Other action types are control-flow / data-shaping (Compose, If, Foreach,
+    # Switch, Until, Scope, InitializeVariable, SetVariable, ParseJson,
+    # Terminate, Response, Wait, Recurrence, etc.) and intentionally skipped.
+    builtin_action_map = {
+        "http": "http",
+        "function": "function",
+        "workflow": "workflow",
+        "apimanagement": "apimanagement",
+    }
+
+    # Workflow definitions to scan for actions/triggers.
+    workflow_definitions: List[Dict[str, Any]] = []
+
+    # Walk top-level resources for Microsoft.Web/connections + Microsoft.Logic/workflows
+    resources = data.get("resources")
+    if isinstance(resources, list):
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            rtype = str(resource.get("type", "")).lower()
+            if rtype == "microsoft.web/connections":
+                props = resource.get("properties", {}) if isinstance(resource.get("properties"), dict) else {}
+                api = props.get("api", {}) if isinstance(props.get("api"), dict) else {}
+                api_kind, api_name = parse_api_id(api.get("id", ""))
+                if not api_name:
+                    continue
+                conn_name = str(resource.get("name", "")) if resource.get("name") is not None else ""
+                conn_kind = str(resource.get("kind", "")) if resource.get("kind") is not None else ""
+                add_entry(api_name, api_kind, conn_name, conn_kind)
+            elif rtype == "microsoft.logic/workflows":
+                props = resource.get("properties", {}) if isinstance(resource.get("properties"), dict) else {}
+                definition = props.get("definition")
+                if isinstance(definition, dict):
+                    workflow_definitions.append(definition)
+    # Also accept a top-level definition (rare bare-Logic-App format).
+    top_def = data.get("definition")
+    if isinstance(top_def, dict):
+        workflow_definitions.append(top_def)
+
+    def _resolve_apiconnection_key(inputs: Any) -> str:
+        """Pull the connection key (e.g. 'azuresentinel') from an ApiConnection action's
+        host.connection.name expression."""
+        if not isinstance(inputs, dict):
+            return ""
+        host = inputs.get("host")
+        if not isinstance(host, dict):
+            return ""
+        conn = host.get("connection")
+        if not isinstance(conn, dict):
+            return ""
+        # Newer format: explicit referenceName
+        ref = conn.get("referenceName")
+        if isinstance(ref, str) and ref.strip():
+            return ref.strip()
+        name_expr = conn.get("name")
+        if isinstance(name_expr, str):
+            m = _LOGIC_APP_CONNECTION_KEY_RE.search(name_expr)
+            if m:
+                return m.group(1)
+        return ""
+
+    def _walk_actions(actions_obj: Any) -> None:
+        if not isinstance(actions_obj, dict):
+            return
+        for action_name, action in actions_obj.items():
+            if not isinstance(action, dict):
+                continue
+            atype = str(action.get("type", "") or "")
+            atype_lower = atype.lower()
+            inputs = action.get("inputs", {})
+            params = _extract_action_params_of_interest(atype, inputs)
+
+            if atype_lower in builtin_action_map:
+                add_action(
+                    api_name=builtin_action_map[atype_lower],
+                    api_kind="builtin",
+                    action_name=str(action_name),
+                    params=params,
+                )
+            elif atype_lower == "apiconnection":
+                # Map back to the managed/custom api entry by connection key.
+                key = _resolve_apiconnection_key(inputs)
+                if key:
+                    # Default to managedApi; if a customApi entry already exists
+                    # under this name, _get_or_create_entry will reuse it.
+                    api_kind = "customApi" if (key.lower(), "customApi") in aggregated else "managedApi"
+                    add_action(
+                        api_name=key,
+                        api_kind=api_kind,
+                        action_name=str(action_name),
+                        params=params,
+                    )
+
+            # Recurse into nested action containers
+            _walk_actions(action.get("actions"))
+            else_branch = action.get("else")
+            if isinstance(else_branch, dict):
+                _walk_actions(else_branch.get("actions"))
+            cases = action.get("cases")
+            if isinstance(cases, dict):
+                for case in cases.values():
+                    if isinstance(case, dict):
+                        _walk_actions(case.get("actions"))
+            default = action.get("default")
+            if isinstance(default, dict):
+                _walk_actions(default.get("actions"))
+
+    for wf_def in workflow_definitions:
+        _walk_actions(wf_def.get("actions"))
+        # Triggers can also be Http / Recurrence / ApiConnection; include the
+        # action-equivalent ones for completeness.
+        triggers = wf_def.get("triggers")
+        if isinstance(triggers, dict):
+            _walk_actions(triggers)
+
+    return list(aggregated.values())
+
+
 def extract_playbook_queries_and_tables(data: Dict[str, Any]) -> Tuple[List[str], List[str]]:
     """
     Extract KQL queries and write-to tables from a playbook (Logic App) JSON structure.
@@ -6946,6 +7268,11 @@ def extract_content_item_from_playbook(
     queries, write_tables = extract_playbook_queries_and_tables(data)
     combined_query = "\n---\n".join(queries) if queries else ""
     write_tables_str = ",".join(write_tables) if write_tables else ""
+
+    # Extract Logic App connectors (Microsoft.Web/connections). Stashed under a
+    # leading-underscore key so the content_items.csv DictWriter (extrasaction=
+    # 'ignore') skips it; consumed later to emit playbook_connectors.csv.
+    logic_app_connectors = extract_playbook_logic_app_connectors(data)
     
     # Extract vendor/product from combined queries (legacy)
     vp = {'vendor': set(), 'product': set()}
@@ -6980,6 +7307,9 @@ def extract_content_item_from_playbook(
         "solution_name": solution_name,
         "solution_folder": solution_folder,
         "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder)}" if solution_folder else "",
+        # Internal-only field (leading underscore) -- ignored by the content_items.csv
+        # DictWriter and consumed later to emit playbook_connectors.csv.
+        "_logic_app_connectors": logic_app_connectors,
     }
 
 
@@ -7540,6 +7870,12 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         type=Path,
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "content_tables_mapping.csv",
         help="Path for the content items to tables mapping CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--playbook-connectors-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "playbook_connectors.csv",
+        help="Path for the playbook (Logic App) connectors CSV file (default: %(default)s)",
     )
     parser.add_argument(
         "--asim-parsers-csv",
@@ -9861,6 +10197,96 @@ def main() -> None:
         writer = csv.DictWriter(csvfile, fieldnames=content_tables_fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(content_table_mappings)
+
+    # Write playbook (Logic App) connectors CSV. One row per
+    # (playbook, api_name, api_kind) -- multiple connection instances of the
+    # same connector type within a playbook are aggregated into connection_count.
+    playbook_connectors_fieldnames = [
+        'solution_name',
+        'solution_folder',
+        'solution_github_url',
+        'playbook_name',
+        'playbook_file',
+        'api_name',
+        'api_kind',
+        'is_custom',
+        'is_sentinel',
+        'connection_count',
+        'connection_kinds',
+        'connection_names',
+        'action_count',
+        'parameters',
+    ]
+    playbook_connectors_rows: List[Dict[str, Any]] = []
+    for ci in all_content_items:
+        if ci.get('content_type') != 'playbook':
+            continue
+        connectors = ci.get('_logic_app_connectors') or []
+        if not connectors:
+            continue
+        # Re-aggregate per-playbook by normalized (api_name, api_kind) to defend
+        # against cached entries that predate the managedApi lowercase fix in
+        # add_entry(): if a playbook has both `Azuresentinel` and `azuresentinel`
+        # rows in cache, merge them here so the CSV is consistent.
+        merged: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for c in connectors:
+            api_kind = c.get('api_kind', '') or 'other'
+            api_name = (c.get('api_name', '') or '').strip()
+            if not api_name:
+                continue
+            if api_kind == 'managedApi':
+                api_name = api_name.lower()
+            key = (api_name.lower(), api_kind)
+            agg = merged.get(key)
+            if agg is None:
+                agg = {
+                    'api_name': api_name,
+                    'api_kind': api_kind,
+                    'is_custom': api_kind == 'customApi',
+                    'is_sentinel': api_name.lower() == 'azuresentinel',
+                    'connection_count': 0,
+                    'connection_kinds': [],
+                    'connection_names': [],
+                    'action_count': 0,
+                    'parameters': [],
+                }
+                merged[key] = agg
+            agg['connection_count'] += int(c.get('connection_count', 0) or 0)
+            agg['action_count'] += int(c.get('action_count', 0) or 0)
+            for k in (c.get('connection_kinds') or []):
+                if k and k not in agg['connection_kinds']:
+                    agg['connection_kinds'].append(k)
+            for n in (c.get('connection_names') or []):
+                if n and n not in agg['connection_names']:
+                    agg['connection_names'].append(n)
+            for p in (c.get('parameters') or []):
+                if isinstance(p, dict):
+                    agg['parameters'].append(p)
+        for c in merged.values():
+            playbook_connectors_rows.append({
+                'solution_name': ci.get('solution_name', ''),
+                'solution_folder': ci.get('solution_folder', ''),
+                'solution_github_url': ci.get('solution_github_url', ''),
+                'playbook_name': ci.get('content_name', ''),
+                'playbook_file': ci.get('content_file', ''),
+                'api_name': c['api_name'],
+                'api_kind': c['api_kind'],
+                'is_custom': 'true' if c['is_custom'] else 'false',
+                'is_sentinel': 'true' if c['is_sentinel'] else 'false',
+                'connection_count': c['connection_count'],
+                'connection_kinds': ';'.join(c['connection_kinds']),
+                'connection_names': ';'.join(c['connection_names']),
+                'action_count': c['action_count'],
+                # JSON array of action invocations w/ params; loadable in Kusto
+                # via `parse_json(parameters)`.
+                'parameters': json.dumps(c['parameters'], ensure_ascii=False) if c['parameters'] else '',
+            })
+    playbook_connectors_path = args.playbook_connectors_csv.resolve()
+    with playbook_connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=playbook_connectors_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(playbook_connectors_rows)
+    log_print(f"Wrote {len(playbook_connectors_rows)} rows to {playbook_connectors_path}")
 
     report_fieldnames = [
         "solution_name",

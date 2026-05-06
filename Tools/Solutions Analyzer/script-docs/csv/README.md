@@ -19,6 +19,7 @@ Per-CSV reference documentation. Each page covers what the CSV contains, how it'
 
 - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.md) — three-column edge list (solution × connector × table).
 - [`content_tables_mapping.csv`](content_tables_mapping.md) — content-item-to-table edges with `read`/`write` flag for playbooks.
+- [`playbook_connectors.csv`](playbook_connectors.md) — Logic App connectors used by each playbook (managed and custom APIs).
 - [`solution_dependencies.csv`](solution_dependencies.md) — solution-to-solution dependency edges (explicit + ASIM-derived optional).
 - [`table_schemas.csv`](table_schemas.md) — unified table column schemas (DCR + docs + ARM + KQL validation).
 
@@ -53,7 +54,7 @@ Per-CSV reference documentation. Each page covers what the CSV contains, how it'
 | Role | CSVs |
 |------|------|
 | **Entity** | [`connectors`](connectors.md), [`solutions`](solutions.md), [`tables`](tables.md), [`parsers`](parsers.md), [`asim_parsers`](asim_parsers.md), [`content_items`](content_items.md) |
-| **Mapping / edges** | [`solutions_connectors_tables_mapping_simplified`](solutions_connectors_tables_mapping_simplified.md), [`content_tables_mapping`](content_tables_mapping.md), [`solution_dependencies`](solution_dependencies.md) |
+| **Mapping / edges** | [`solutions_connectors_tables_mapping_simplified`](solutions_connectors_tables_mapping_simplified.md), [`content_tables_mapping`](content_tables_mapping.md), [`playbook_connectors`](playbook_connectors.md), [`solution_dependencies`](solution_dependencies.md) |
 | **Schema** | [`table_schemas`](table_schemas.md), [`la_table_schemas`](la_table_schemas.md), [`asim_fields`](asim_fields.md), [`asim_entity_fields`](asim_entity_fields.md), [`asim_logical_types`](asim_logical_types.md), [`asim_vendors_products`](asim_vendors_products.md) |
 | **Reference** | [`tables_reference`](tables_reference.md) |
 | **Report / diagnostic** | [`solutions_connectors_tables_issues_and_exceptions_report`](solutions_connectors_tables_issues_and_exceptions_report.md), [`asim_parsers_unmatched_report`](asim_parsers_unmatched_report.md), [`asim_extraction_failures`](asim_extraction_failures.md) |

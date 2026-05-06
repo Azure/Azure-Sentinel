@@ -2716,7 +2716,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                                  tables_reference: Dict[str, Dict[str, str]] = None,
                                  content_table_parser_mapping: Dict[str, Dict[str, str]] = None,
                                  parser_filter_fields: Dict[str, str] = None,
-                                 connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
+                                 connectors_reference: Dict[str, Dict[str, str]] = None,
+                                 playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = None) -> int:
     """
     Generate individual documentation pages for each content item.
     
@@ -2744,6 +2745,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
         parser_filter_fields = {}
     if connectors_reference is None:
         connectors_reference = {}
+    if playbook_connectors_by_playbook is None:
+        playbook_connectors_by_playbook = {}
     
     pages_created = 0
     
@@ -2963,6 +2966,76 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                             f.write(", ".join(solution_links))
                             f.write("\n\n")
                 
+                # Logic App Connectors section for playbooks
+                if content_type == 'playbook':
+                    pb_connectors = playbook_connectors_by_playbook.get(
+                        (solution_folder or '', content_file or ''), []
+                    )
+                    if pb_connectors:
+                        f.write("## Logic App Connectors\n\n")
+                        f.write(f"This playbook uses **{len(pb_connectors)}** Logic App connector"
+                                f"{'s' if len(pb_connectors) != 1 else ''} / built-in action"
+                                f"{'s' if len(pb_connectors) != 1 else ''}:\n\n")
+                        f.write("| Connector / Action | Type | Connections | Actions |\n")
+                        f.write("|:-------------------|:-----|:-----------:|:-------:|\n")
+                        # Sort: managed first, then custom, then builtin, then by name
+                        def _pbc_sort_key(r):
+                            k = r.get('api_kind') or ''
+                            kind_rank = {'managedApi': 0, 'customApi': 1, 'builtin': 2}.get(k, 3)
+                            return (kind_rank, (r.get('api_name') or '').lower())
+                        sorted_pbcs = sorted(pb_connectors, key=_pbc_sort_key)
+                        for r in sorted_pbcs:
+                            api_name = r.get('api_name', '')
+                            api_kind = r.get('api_kind', '')
+                            if api_kind == 'managedApi':
+                                kind_label = 'Managed'
+                            elif api_kind == 'customApi':
+                                kind_label = 'Custom'
+                            elif api_kind == 'builtin':
+                                kind_label = 'Built-in'
+                            else:
+                                kind_label = api_kind or '-'
+                            count = r.get('connection_count', '') or '0'
+                            action_count = r.get('action_count', '') or '0'
+                            f.write(f"| `{api_name}` | {kind_label} | {count} | {action_count} |\n")
+                        f.write("\n")
+
+                        # Per-connector action parameter details (URLs, paths, etc.)
+                        params_blocks = []
+                        for r in sorted_pbcs:
+                            params_raw = r.get('parameters') or ''
+                            if not params_raw:
+                                continue
+                            try:
+                                params_list = json.loads(params_raw) if isinstance(params_raw, str) else params_raw
+                            except (ValueError, TypeError):
+                                continue
+                            if not isinstance(params_list, list) or not params_list:
+                                continue
+                            api_name = r.get('api_name', '')
+                            api_kind = r.get('api_kind', '')
+                            block_lines = [f"**`{api_name}`** ({api_kind}):"]
+                            for p in params_list:
+                                if not isinstance(p, dict):
+                                    continue
+                                action = p.get('action', '')
+                                # Prefer uri (Http), then path (ApiConnection), then functionId/workflowId/pathTemplate
+                                detail_keys = ('method', 'uri', 'path', 'pathTemplate',
+                                               'functionId', 'workflowId',
+                                               'apiManagementName', 'operationId', 'triggerName')
+                                details = [f"{k}=`{p[k]}`" for k in detail_keys if p.get(k)]
+                                if action:
+                                    block_lines.append(f"- *{action}*: {', '.join(details) if details else '(no params)'}")
+                                elif details:
+                                    block_lines.append(f"- {', '.join(details)}")
+                            if len(block_lines) > 1:
+                                params_blocks.append('\n'.join(block_lines))
+                        if params_blocks:
+                            f.write("<details><summary>Action parameters (URLs, paths, function IDs)</summary>\n\n")
+                            for blk in params_blocks:
+                                f.write(blk + "\n\n")
+                            f.write("</details>\n\n")
+
                 # Additional Documentation section for playbooks (embedded README content)
                 if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
                     readme_content, readme_github_url = get_playbook_readme_content(
@@ -7366,6 +7439,7 @@ def generate_statistics_page(
     solution_dependencies: Dict[str, List[Dict[str, str]]] = None,
     tables_with_schemas: Set[str] = None,
     table_schemas_by_table: Dict[str, List[Dict[str, str]]] = None,
+    playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = None,
 ) -> None:
     """
     Generate a unified statistics page that consolidates statistics from all index pages.
@@ -7378,6 +7452,8 @@ def generate_statistics_page(
         tables_with_schemas = set()
     if table_schemas_by_table is None:
         table_schemas_by_table = {}
+    if playbook_connectors_by_playbook is None:
+        playbook_connectors_by_playbook = {}
     
     stats_path = output_dir / "statistics.md"
     
@@ -8168,6 +8244,96 @@ def generate_statistics_page(
         f.write("\n")
         f.write("*\\* Parsers from solution content. See [Parsers](parsers/parsers-index.md) section for all parsers including legacy.*\n\n")
         
+        # ----- Logic App connectors used by playbooks -----
+        if playbook_connectors_by_playbook:
+            total_pb_connector_usages = sum(
+                len(rows) for rows in playbook_connectors_by_playbook.values()
+            )
+            playbooks_using_connectors = len(playbook_connectors_by_playbook)
+            unique_managed: Set[str] = set()
+            unique_custom: Set[str] = set()
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    api_name = (r.get('api_name', '') or '').lower()
+                    if not api_name:
+                        continue
+                    if r.get('api_kind') == 'managedApi':
+                        unique_managed.add(api_name)
+                    elif r.get('api_kind') == 'customApi':
+                        unique_custom.add(api_name)
+            unique_total = len(unique_managed | unique_custom)
+
+            # Built-in actions (Http, Function, Workflow, ApiManagement)
+            unique_builtins: Set[str] = set()
+            total_builtin_actions = 0
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    if r.get('api_kind') == 'builtin':
+                        nm = (r.get('api_name', '') or '').lower()
+                        if nm:
+                            unique_builtins.add(nm)
+                        try:
+                            total_builtin_actions += int(r.get('action_count') or 0)
+                        except (TypeError, ValueError):
+                            pass
+
+            f.write("### Playbook Logic App Connectors\n\n")
+            f.write("Connectors and built-in actions referenced by playbooks. Managed/custom rows "
+                    "come from `Microsoft.Web/connections` resources; built-in rows come from walking "
+                    "`definition.actions` for `Http`, `Function`, `Workflow`, and `ApiManagement` types. "
+                    "Multiple connection or action instances of the same type within a playbook are "
+                    "aggregated.\n\n")
+            f.write("| Metric | Count |\n")
+            f.write("|:-------|------:|\n")
+            f.write(f"| Playbooks using Logic App connectors / built-ins | {playbooks_using_connectors:,} |\n")
+            f.write(f"| Total connector / built-in usages (rows) | {total_pb_connector_usages:,} |\n")
+            f.write(f"| Unique managed/custom connector types | {unique_total:,} |\n")
+            f.write(f"| &nbsp;&nbsp;Managed (Microsoft-published) | {len(unique_managed):,} |\n")
+            f.write(f"| &nbsp;&nbsp;Custom | {len(unique_custom):,} |\n")
+            f.write(f"| Unique built-in action types | {len(unique_builtins):,} |\n")
+            f.write(f"| Total built-in action invocations | {total_builtin_actions:,} |\n")
+            f.write("\n")
+
+            # Top managed connectors by playbook usage
+            from collections import Counter
+            managed_counter: Counter = Counter()
+            custom_counter: Counter = Counter()
+            builtin_counter: Counter = Counter()
+            builtin_action_counter: Counter = Counter()
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    api_name = r.get('api_name', '') or ''
+                    if not api_name:
+                        continue
+                    kind = r.get('api_kind')
+                    if kind == 'managedApi':
+                        managed_counter[api_name] += 1
+                    elif kind == 'customApi':
+                        custom_counter[api_name] += 1
+                    elif kind == 'builtin':
+                        builtin_counter[api_name] += 1
+                        try:
+                            builtin_action_counter[api_name] += int(r.get('action_count') or 0)
+                        except (TypeError, ValueError):
+                            pass
+
+            if managed_counter:
+                f.write("**Top managed connectors by playbook usage**\n\n")
+                f.write("| Connector | Playbooks |\n")
+                f.write("|:----------|----------:|\n")
+                for name, count in managed_counter.most_common(15):
+                    f.write(f"| `{name}` | {count} |\n")
+                f.write("\n")
+
+            if builtin_counter:
+                f.write("**Built-in actions by playbook usage**\n\n")
+                f.write("| Action type | Playbooks | Action invocations |\n")
+                f.write("|:------------|----------:|-------------------:|\n")
+                for name, count in builtin_counter.most_common():
+                    invocations = builtin_action_counter.get(name, 0)
+                    f.write(f"| `{name}` | {count} | {invocations} |\n")
+                f.write("\n")
+
         # ===================== PARSERS STATISTICS =====================
         f.write("## Parsers\n\n")
         
@@ -8726,6 +8892,12 @@ def main() -> None:
         help="Path to content-to-tables mapping CSV file (default: content_tables_mapping.csv)",
     )
     parser.add_argument(
+        "--playbook-connectors-csv",
+        type=Path,
+        default=Path(__file__).parent / "playbook_connectors.csv",
+        help="Path to playbook (Logic App) connectors CSV file (default: playbook_connectors.csv)",
+    )
+    parser.add_argument(
         "--solutions-csv",
         type=Path,
         default=Path(__file__).parent / "solutions.csv",
@@ -8975,6 +9147,21 @@ def main() -> None:
         print(f"Loaded {total_mappings} content-table mappings for {len(content_tables_by_table)} tables")
     else:
         print(f"Warning: Content-tables mapping CSV not found: {args.content_tables_csv}")
+
+    # Load playbook (Logic App) connectors CSV
+    # Keyed by (solution_folder, playbook_file) -> list of connector dicts
+    playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = defaultdict(list)
+    if args.playbook_connectors_csv.exists():
+        print(f"Reading {args.playbook_connectors_csv}...")
+        with args.playbook_connectors_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                key = (row.get('solution_folder', ''), row.get('playbook_file', ''))
+                playbook_connectors_by_playbook[key].append(row)
+        total_pbc = sum(len(v) for v in playbook_connectors_by_playbook.values())
+        print(f"Loaded {total_pbc} playbook-connector rows for {len(playbook_connectors_by_playbook)} playbooks")
+    else:
+        print(f"Warning: Playbook connectors CSV not found: {args.playbook_connectors_csv}")
     
     # Build content_id to tables mapping for solution pages
     # Uses get_content_key() to handle items without content_id (workbooks, playbooks)
@@ -9270,7 +9457,7 @@ def main() -> None:
     generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup, table_schemas_by_table)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
-    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference)
+    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference, playbook_connectors_by_playbook)
     
     # Generate ASIM parser documentation
     asim_source_pairs = 0
@@ -9377,6 +9564,7 @@ def main() -> None:
         solution_dependencies=solution_dependencies,
         tables_with_schemas=tables_with_schemas,
         table_schemas_by_table=table_schemas_by_table,
+        playbook_connectors_by_playbook=playbook_connectors_by_playbook,
     )
     
     # Generate the README.md for the docs folder
