@@ -1,7 +1,8 @@
 id: f8ea7d50-e33b-4b9d-9c3e-a59fcbcee281
 name: Network ACL with all the open ports to a specified CIDR
 description: |
-  'Detected network ACL with all the ports open to a specified CIDR. This could lead to potential lateral movements or initial access attacks. Make sure to mitigate this risk.'
+  Detects Network ACL entries that allow very broad inbound access ranges, including all protocols or large port
+  ranges. Such changes can significantly increase exposure and may indicate weakening of cloud network controls.
 severity: High
 status: Available
 requiredDataConnectors:
@@ -15,7 +16,7 @@ triggerThreshold: 0
 tactics:
   - DefenseEvasion
 relevantTechniques:
-  - T1562
+  - T1562.007
 query: |
     AWSCloudTrail
     | where EventName in ('CreateNetworkAclEntry', 'ReplaceNetworkAclEntry') and isempty(ErrorMessage) and isempty(ErrorCode)
@@ -30,7 +31,6 @@ query: |
     | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
     | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
       AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
-    | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -44,5 +44,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.2
+customDetails:
+  EventName: EventName
+  RuleAction: ruleAction
+  AclProtocol: aclProtocol
+  AWSRegion: AWSRegion
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS Network ACL overly permissive rule by {{AccountName}} in {{AWSRegion}}'
+  alertDescriptionFormat: 'Detected {{EventName}} from {{SourceIpAddress}} that opened broad Network ACL access in account {{RecipientAccountId}}.'
+version: 1.0.3
 kind: Scheduled

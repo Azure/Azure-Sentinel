@@ -1,7 +1,7 @@
 id: 7e258a45-b356-44f6-9a62-2643cef7b869
-name: IAM AccessDenied discovery events
+name: AWS IAM AccessDenied discovery events
 description: |
-  'The following detection identifies excessive AccessDenied events within an hour timeframe. It is possible that an access key to AWS may have been stolen and is being misused to perform discovery events.'
+  Identifies excessive AccessDenied discovery events for IAM users within short intervals, which may indicate stolen credentials being used to enumerate permissions and resources.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
@@ -10,19 +10,25 @@ requiredDataConnectors:
 tactics:
   - Discovery
 relevantTechniques:
-  - T1087
+  - T1087.002
+  - T1087.003
+  - T1087.004
+  - T1069.002
+  - T1069.003
 query: |
     AWSCloudTrail
     | where ErrorMessage in ("Access Denied","AccessDenied") and UserIdentityType == 'IAMUser' and UserAgent !endswith ".amazonaws.com"
     | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | summarize failures = count(), Source_IP_Addresses=make_set(SourceIpAddress) by bin(TimeGenerated, 1h), UserIdentityUserName, UserIdentityArn
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), failures = count() by SourceIpAddress, UserIdentityUserName, UserIdentityArn, bin(TimeGenerated, 1h)
     | where failures >= 5
+    | order by failures desc, EndTime desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

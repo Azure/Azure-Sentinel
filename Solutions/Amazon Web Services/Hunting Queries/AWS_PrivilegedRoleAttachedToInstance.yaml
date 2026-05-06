@@ -1,9 +1,8 @@
 id: 0db42a94-e7c8-4bf1-99a7-1a2fb4158212
-name: Privileged role attached to Instance
+name: AWS IAM Privileged Role Attached to Instance
 description: |
-  'Identity and Access Management (IAM) securely manages access to AWS services and resources. 
-  Identifies when a Privileged role is attached to an existing instance or new instance at deployment. This instance may be used by an adversary to escalate a normal user privileges to an adminsitrative level.
-  and AWS API AddRoleToInstanceProfile at https://docs.aws.amazon.com/IAM/latest/APIReference/API_AddRoleToInstanceProfile.html '
+  Identifies when a privileged IAM role is attached to an existing or new instance, which may indicate privilege escalation to administrative level.
+severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
@@ -14,7 +13,7 @@ requiredDataConnectors:
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
-  - T1098
+  - T1098.001
 query: |
 
   let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
@@ -38,13 +37,14 @@ query: |
   | extend InstanceProfileName = tostring(parse_json(RequestParameters).InstanceProfileName), RoleName = tostring(parse_json(RequestParameters).roleName)
   | summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventSource, EventName, UserIdentityType , UserIdentityArn , UserIdentityUserName, SourceIpAddress, RoleName
   ) on RoleName 
-  | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIpAddress, AccountCustomEntity = RoleName
+  | order by StartTimeUtc desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

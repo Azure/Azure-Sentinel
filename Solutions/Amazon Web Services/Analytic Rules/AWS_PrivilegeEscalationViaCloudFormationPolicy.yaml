@@ -1,7 +1,9 @@
 id: 719d5204-10ab-4b1f-aee1-da7326750260
 name: Privilege escalation via CloudFormation policy
 description: |
-  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on CloudFormation policy. Attackers could use these events for privilege escalation. Verify these actions with the user.'
+  Detects creation of inline IAM policies with CloudFormation and IAM permissions associated with privilege
+  escalation pathways, including iam:PassRole plus stack creation capabilities. This pattern can enable indirect
+  elevation and should be investigated for unauthorized policy changes.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -15,7 +17,7 @@ triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
-  - T1484
+  - T1098.003
 query: |
     AWSCloudTrail
       | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -31,7 +33,6 @@ query: |
       | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
         AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
       | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
-      | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -45,5 +46,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  UserIdentityArn: UserIdentityArn
+  RecipientAccountId: RecipientAccountId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS CloudFormation privilege escalation policy update by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} Event, updating inline CloudFormation escalation policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

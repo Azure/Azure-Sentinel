@@ -1,7 +1,7 @@
 id: 454133a7-5427-4a7c-bdc4-0adfa84dda16
 name: Creating keys with encrypt policy without MFA
 description: |
-  'Detection of KMS keys where action kms:Encrypt is accessible for everyone (also outside of your organization). This is an idicator that your account is compromised and the attacker uses the encryption key to compromise another company.'
+  Identifies AWS KMS key creation or policy changes that allow `kms:Encrypt` or `kms:*` to any principal. This configuration can expose encryption capability outside approved boundaries and should be investigated as overly permissive or malicious.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -18,15 +18,15 @@ relevantTechniques:
   - T1485
 query: |
     let check_actions = AWSCloudTrail
-    | where (EventName == "CreateKey" or EventName == "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+    | where EventName in ("CreateKey", "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
     | extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\"','"')).['Statement'])
     | mv-expand state
     | extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),
              Principal=tostring(parse_json(state.['Principal']))
-    | where (Action == "kms:Encrypt" or Action == "kms:*") and (Effect == 'Allow') and (Principal has "*")
+    | where Action in ("kms:Encrypt", "kms:*") and (Effect == 'Allow') and (Principal has "*")
     | distinct AwsEventId;
     AWSCloudTrail
-    | where (EventName == "CreateKey" or EventName == "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+    | where EventName in ("CreateKey", "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
     | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
     | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
     | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
@@ -48,5 +48,12 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.2
+customDetails:
+  AwsEventId: AwsEventId
+  EventName: EventName
+  UserIdentityArn: UserIdentityArn
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS KMS key creation or policy update by {{AccountName}} without MFA'
+  alertDescriptionFormat: 'KMS key creation or policy update by {{AccountName}} without MFA resulted in permissive encrypt access. AwsEventId: {{AwsEventId}}'
+version: 1.0.3
 kind: Scheduled

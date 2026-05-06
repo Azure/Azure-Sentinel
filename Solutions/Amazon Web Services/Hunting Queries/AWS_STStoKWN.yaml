@@ -1,16 +1,18 @@
 id: 46685737-676a-4084-8e98-31b2998062db
-name: Suspicious activity of STS Token related to Kubernetes worker node
+name: AWS STS Token Suspicious Activity from Kubernetes Worker Node
 description: |
-  'Suspicious activity of the STS token of an EC2 machine hosted by EKS (for example, by SSRF) indicates a possible token hijacking. An attacker may have stolen the token and could abuse its permissions to escalate privileges and move laterally in the cloud account.'
+  Identifies STS token usage from an EKS-hosted EC2 instance that originates outside AWS IP ranges, which may indicate token hijacking via SSRF or credential theft.
 severity: High
 requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
       - AWSCloudTrail
 tactics:
-  - Credential Access
+  - CredentialAccess
+  - LateralMovement
 relevantTechniques:
   - T1528
+  - T1550.001
 query: |
     let aws_public_ips = externaldata(prefixes: string)
     [ 
@@ -52,16 +54,16 @@ query: |
     | where ipv4_is_private(SourceIpAddress) == false
     | extend IsInRange = ipv4_is_in_range(SourceIpAddress, ip_prefix)
     | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, AssumedRoleArn = UserIdentityArn
-    | summarize timestamp=arg_max(timestamp,*), r = make_set(IsInRange) by SourceIpAddress, UserIdentityUserName, UserIdentityArn
+    | summarize TimeGenerated=arg_max(TimeGenerated,*), r = make_set(IsInRange, 100) by SourceIpAddress, UserIdentityUserName, UserIdentityArn
     | where not (set_has_element(r, true))
     | project-away ip_prefix, IsInRange
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

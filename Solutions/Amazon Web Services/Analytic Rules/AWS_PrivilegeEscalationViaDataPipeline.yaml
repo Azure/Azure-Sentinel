@@ -1,7 +1,9 @@
 id: 48896551-1c28-4a09-8388-e51e5a927d23
 name: Privilege escalation via DataPipeline policy
 description: |
-  'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on Datapipeline policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'
+  Detects inline IAM policy updates that combine Data Pipeline permissions with IAM privileges such as
+  iam:PassRole. This sequence can enable indirect execution and elevated access pathways, indicating potential
+  privilege escalation activity.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -15,7 +17,7 @@ triggerThreshold: 0
 tactics:
   - PrivilegeEscalation
 relevantTechniques:
-  - T1484
+  - T1098.003
 query: |
     AWSCloudTrail
       | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
@@ -31,7 +33,6 @@ query: |
       | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
         AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
       | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
-      | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -45,5 +46,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.1
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  UserIdentityArn: UserIdentityArn
+  RecipientAccountId: RecipientAccountId
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS Data Pipeline privilege escalation policy update by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} Event, updating inline Data Pipeline escalation policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.2
 kind: Scheduled

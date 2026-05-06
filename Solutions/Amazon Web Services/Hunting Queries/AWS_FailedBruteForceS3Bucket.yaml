@@ -1,7 +1,7 @@
 id: 13afb771-5d55-4d69-a745-83d2fc69a923
-name: Failed brute force on S3 bucket
+name: AWS Failed Brute Force on S3 Bucket
 description: |
-  'Detected failed brute attempt on S3 bucket. If it is not an anonymous principle, verify with the user.'
+  Identifies repeated failed S3 GetObject attempts from anonymous or mismatched identities, which may indicate brute force activity against bucket objects.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
@@ -12,20 +12,25 @@ tactics:
 relevantTechniques:
   - T1619
 query: |
-    AWSCloudTrail
-    | where EventName == "GetObject" and not(isempty(ErrorCode) and isempty(ErrorMessage))
-    | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
-    | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
-    | summarize arg_max(TimeGenerated, *), failed_attempts = dcount(keyName) by UserIdentityAccountId, SourceIpAddress, bucketName
-    | where failed_attempts > 20
-    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, bucketName
+  AWSCloudTrail
+  | where EventName == "GetObject" and not(isempty(ErrorCode) and isempty(ErrorMessage))
+  | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+  | extend BucketName = tostring(parse_json(RequestParameters).bucketName), KeyName = tostring(parse_json(RequestParameters).key)
+  | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), failed_attempts = dcount(KeyName) by UserIdentityAccountId, SourceIpAddress, UserIdentityUserName, BucketName
+  | where failed_attempts > 20
+  | order by failed_attempts desc, EndTime desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: BucketName
+version: 1.0.0

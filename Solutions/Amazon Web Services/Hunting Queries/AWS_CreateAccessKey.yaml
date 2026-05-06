@@ -1,7 +1,7 @@
 id: a2772445-9bb1-4176-9481-b262cb59118a
-name: New access key created to user
+name: AWS IAM New Access Key Created for User
 description: |
-  'An attacker with the CreateAccessKey permissions on other users can create an access Key ID and secret access key belonging to another user in the AWS environment for privilege escalation.'
+  Detects CreateAccessKey events where a principal creates new access keys, which may indicate persistence or privilege abuse if generated for another identity.
 severity: Low
 requiredDataConnectors:
   - connectorId: AWS
@@ -9,21 +9,24 @@ requiredDataConnectors:
       - AWSCloudTrail
 tactics:
   - Persistence
+  - PrivilegeEscalation
 relevantTechniques:
   - T1098
+  - T1098.004
 query: |
   AWSCloudTrail
   | where  EventName == "CreateAccessKey" and isempty(ErrorCode) and isempty(ErrorMessage)
   | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
-  UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData,UserIdentityArn, ResponseElements, RequestParameters
+    UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData,UserIdentityArn, ResponseElements, RequestParameters
   | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-  | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

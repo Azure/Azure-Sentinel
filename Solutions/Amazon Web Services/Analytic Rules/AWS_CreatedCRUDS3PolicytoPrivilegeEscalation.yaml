@@ -1,7 +1,8 @@
 id: 467cbe7e-e6d4-4f4e-8e44-84dd01932c32
 name: Created CRUD S3 policy and then privilege escalation
 description: |
-  'Detected creation of new CRUD S3 policy and afterwards used one of the attach policy operations (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'
+  Identifies creation of IAM policies that grant broad Amazon S3 CRUD permissions, followed by policy attachment activity to users, roles, or groups. This sequence can indicate attempts to
+  expand access and should be investigated as potential cloud privilege escalation.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -13,9 +14,12 @@ queryPeriod: 1d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
+  - DefenseEvasion
   - PrivilegeEscalation
+  - Persistence
 relevantTechniques:
   - T1484
+  - T1098.003
 query: |
   let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
   let createPolicy =  dynamic(["CreatePolicy", "CreatePolicyVersion"]);
@@ -59,7 +63,6 @@ query: |
   )
   on PolicyName
   | project-away PolicyName1
-  | extend timestamp = StartTime
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -73,5 +76,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: SourceIpAddress
-version: 1.0.2
+customDetails:
+  PolicyName: PolicyName
+  EventName: EventName
+  RecipientAccountId: RecipientAccountId
+  UserIdentityArn: UserIdentityArn
+alertDetailsOverride:
+  alertDisplayNameFormat: 'AWS S3 privilege escalation policy activity: {{PolicyName}} by {{AccountName}}'
+  alertDescriptionFormat: 'Detected {{EventName}} for policy {{PolicyName}} in account {{RecipientAccountId}}.'
+version: 1.0.3
 kind: Scheduled

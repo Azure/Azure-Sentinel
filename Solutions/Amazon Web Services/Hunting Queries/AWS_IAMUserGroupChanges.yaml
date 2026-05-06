@@ -1,8 +1,7 @@
 id: d022a62c-643b-4e8a-b583-0230e32a96e4
-name: Changes made to AWS IAM objects
+name: AWS IAM user and group object changes
 description: |
-  'Identity and Access Management (IAM) securely manages access to AWS services and resources.
-  This query looks for when an API call is made to change an IAM, particularly those related to new objects being created or deleted. If these turn out to be noisy, filter out the most common for your environment.'  
+  Identifies IAM user and group object creation or deletion events that may indicate unauthorized identity administration, privilege abuse, or defense evasion activity.
 severity: Medium
 requiredDataConnectors:
   - connectorId: AWS
@@ -12,20 +11,24 @@ tactics:
   - PrivilegeEscalation
   - DefenseEvasion
 relevantTechniques:
-  - T1078
-  - T1484
+  - T1078.004
+  - T1484.001
+  - T1136.003
+  - T1098.001
 query: |
     AWSCloudTrail
      | where  EventName in~ ("DeleteUser", "DeleteGroup", "CreateUser") and isempty(ErrorMessage) and isempty(ErrorCode)
+     | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
      | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
        UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
-     | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityAccountId
+     | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0

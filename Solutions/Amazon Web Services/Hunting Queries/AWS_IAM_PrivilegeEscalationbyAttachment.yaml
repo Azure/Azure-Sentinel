@@ -1,11 +1,8 @@
 id: e1a91db8-f2b3-4531-bff6-da133d4f4f1a
-name: IAM Privilege Escalation by Instance Profile attachment
+name: AWS IAM Privilege Escalation by Instance Profile Attachment
 description: |
-  'An instance profile is a container for an IAM role that you can use to pass role information to an EC2 instance when the instance start.
-  Identifies when existing role is removed and new/existing high privileged role is added to instance profile. 
-  Any instance with this instance profile attached is able to perform privileged operations.
-  AWS Instance Profile: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html 
-  and CloudGoat - IAM PrivilegeEscalation by Attachment: https://github.com/RhinoSecurityLabs/cloudgoat/tree/master/cloudgoat/scenarios/aws/iam_privesc_by_attachment '
+  Identifies RemoveRoleFromInstanceProfile followed by AddRoleToInstanceProfile from the same source and identity, which may indicate privilege escalation by attaching a higher-privileged role to an instance profile.
+  AWS Instance Profile: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html
 requiredDataConnectors:
   - connectorId: AWS
     dataTypes:
@@ -18,7 +15,6 @@ tactics:
 relevantTechniques:
   - T1098
 query: |
-
   // Creating separate table for RemoveRoleToInstanceProfile
   let RemoveRole=AWSCloudTrail
   | where  EventName in~ ("RemoveRoleFromInstanceProfile") and isempty(ErrorMessage)
@@ -41,14 +37,16 @@ query: |
   | where TimeAdded  > TimeRemoved // Checking if RoleAdd operation was performed after removal
   | summarize TotalCount=count() by TimeAdded, TimeRemoved, RoleAdded, RoleRemoved, UserIdentityUserName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
   SourceIpAddress, AWSRegion, EventSource, RoleRemovedCount, RoleAddedCount
-  | extend timestamp = iff(TimeAdded > TimeRemoved,TimeAdded, TimeRemoved), IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  | extend TimeGenerated = iff(TimeAdded > TimeRemoved, TimeAdded, TimeRemoved)
+  | order by TimeGenerated desc
 
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserIdentityUserName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SourceIpAddress
+version: 1.0.0
