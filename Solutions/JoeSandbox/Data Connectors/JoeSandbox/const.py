@@ -66,9 +66,9 @@ SENTINEL_API = APIConfig(
 RETRY_STATUS_CODE = [500, 501, 502, 503, 504, 429]
 CONFIDENCE = {"malicious": "100", "suspicious": "75"}
 HASH_TYPE_LIST = [
-    ("MD5", "md5_hash"),
-    ("SHA-1", "sha1_hash"),
-    ("SHA-256", "sha256_hash"),
+    ("MD5", "md5"),
+    ("SHA-1", "sha1"),
+    ("SHA-256", "sha256"),
 ]
 IOC_LIST = ["domains", "ips", "urls", "files"]
 DATE_FORMAT = "%Y-%m-%d"
