@@ -3088,11 +3088,24 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                                 kind_label = api_kind or '-'
                             count = r.get('connection_count', '') or '0'
                             action_count = r.get('action_count', '') or '0'
-                            f.write(f"| `{api_name}` | {kind_label} | {count} | {action_count} |\n")
+                            # Link the connector / action name to its per-connector page
+                            # under ../logic-apps/. Fall back to plain code if api_name or
+                            # api_kind is empty (shouldn't happen, defensive).
+                            if api_name and api_kind:
+                                la_slug = _logic_apps_page_filename(api_name, api_kind)
+                                api_cell = f"[`{api_name}`](../logic-apps/{la_slug}.md)"
+                            else:
+                                api_cell = f"`{api_name}`"
+                            f.write(f"| {api_cell} | {kind_label} | {count} | {action_count} |\n")
                         f.write("\n")
 
                         # Per-connector action parameter details (URLs, paths, etc.)
+                        # Render as a separate sub-heading + table per connector so that
+                        # each action's parameters are clearly attributed and easy to scan.
                         params_blocks = []
+                        kind_label_map = {'managedApi': 'Managed', 'customApi': 'Custom', 'builtin': 'Built-in'}
+                        endpoint_keys = ('uri', 'path', 'pathTemplate')
+                        other_keys = ('functionId', 'workflowId', 'apiManagementName', 'operationId', 'triggerName')
                         for r in sorted_pbcs:
                             params_raw = r.get('parameters') or ''
                             if not params_raw:
@@ -3105,22 +3118,37 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                                 continue
                             api_name = r.get('api_name', '')
                             api_kind = r.get('api_kind', '')
-                            block_lines = [f"**`{api_name}`** ({api_kind}):"]
+                            kind_label = kind_label_map.get(api_kind, api_kind or '-')
+                            rows: List[str] = []
                             for p in params_list:
                                 if not isinstance(p, dict):
                                     continue
-                                action = p.get('action', '')
-                                # Prefer uri (Http), then path (ApiConnection), then functionId/workflowId/pathTemplate
-                                detail_keys = ('method', 'uri', 'path', 'pathTemplate',
-                                               'functionId', 'workflowId',
-                                               'apiManagementName', 'operationId', 'triggerName')
-                                details = [f"{k}=`{p[k]}`" for k in detail_keys if p.get(k)]
-                                if action:
-                                    block_lines.append(f"- *{action}*: {', '.join(details) if details else '(no params)'}")
-                                elif details:
-                                    block_lines.append(f"- {', '.join(details)}")
-                            if len(block_lines) > 1:
-                                params_blocks.append('\n'.join(block_lines))
+                                action = p.get('action', '') or '—'
+                                method = p.get('method', '') or '—'
+                                # Endpoint: first non-empty of uri / path / pathTemplate
+                                endpoint = ''
+                                for k in endpoint_keys:
+                                    v = p.get(k)
+                                    if v:
+                                        endpoint = str(v)
+                                        break
+                                endpoint_cell = f"`{endpoint}`" if endpoint else '—'
+                                # Other params
+                                other_parts = [f"{k}=`{p[k]}`" for k in other_keys if p.get(k)]
+                                other_cell = '<br>'.join(other_parts) if other_parts else '—'
+                                rows.append(
+                                    f"| {action} | {method} | {endpoint_cell} | {other_cell} |"
+                                )
+                            if not rows:
+                                continue
+                            block = [
+                                f"#### [`{api_name}`](../logic-apps/{_logic_apps_page_filename(api_name, api_kind)}.md) ({kind_label})",
+                                "",
+                                "| Action | Method | Endpoint | Other |",
+                                "|:-------|:-------|:---------|:------|",
+                                *rows,
+                            ]
+                            params_blocks.append('\n'.join(block))
                         if params_blocks:
                             f.write("<details><summary>Action parameters (URLs, paths, function IDs)</summary>\n\n")
                             for blk in params_blocks:
@@ -7476,6 +7504,8 @@ def generate_logic_apps_index(
     
     # Build a (solution_folder, content_file) -> playbook content item lookup so we can
     # generate accurate links to playbook content pages (which embed a uniqueness hash).
+    # For standalone playbooks (under /Playbooks/ not in any Solutions folder),
+    # solution_folder is empty — match those on content_file alone.
     playbook_lookup: Dict[Tuple[str, str], Dict[str, str]] = {}
     if content_items_by_solution:
         for items in content_items_by_solution.values():
@@ -7483,7 +7513,7 @@ def generate_logic_apps_index(
                 if (ci.get('content_type') or '') != 'playbook':
                     continue
                 key = (ci.get('solution_folder') or '', ci.get('content_file') or '')
-                if key[0] and key[1]:
+                if key[1]:
                     playbook_lookup[key] = ci
     
     # Aggregate across all playbooks: (api_name, api_kind) -> list of playbook usage records
@@ -7504,13 +7534,11 @@ def generate_logic_apps_index(
     def _kind_label(kind: str) -> str:
         return {'managedApi': 'Managed', 'customApi': 'Custom', 'builtin': 'Built-in'}.get(kind, kind or '-')
     
-    # Sort: managed first, then built-in, then custom; within each group by playbook count desc, then by name
-    kind_rank = {'managedApi': 0, 'builtin': 1, 'customApi': 2}
-    
+    # Sort by playbook count desc, then by name (kind is shown in the Type column)
     def _index_sort_key(item):
         (name, kind), records = item
         unique_playbooks = len({(r.get('solution_folder') or '', r.get('playbook_file') or '') for r in records})
-        return (kind_rank.get(kind, 3), -unique_playbooks, name.lower())
+        return (-unique_playbooks, name.lower())
     
     sorted_items = sorted(aggregated.items(), key=_index_sort_key)
     
@@ -7520,12 +7548,8 @@ def generate_logic_apps_index(
         f.write("# Logic App Connectors and Built-in Actions\n\n")
         write_browse_section(f, 'logic-apps-index', "../")
         f.write("Logic Apps connectors and built-in actions referenced by Microsoft Sentinel "
-                "playbooks. **Managed** connectors come from `Microsoft.Web/connections` "
-                "resources backed by Microsoft-published APIs (`/providers/Microsoft.Web/locations/.../managedApis/...`). "
-                "**Custom** connectors are solution-specific APIs (`/customApis/...`). "
-                "**Built-in** rows are workflow actions of type `Http`, `Function`, `Workflow`, "
-                "or `ApiManagement` that don't use a connection resource. Multiple action "
-                "instances of the same connector within a playbook are aggregated.\n\n")
+                "playbooks. Multiple action instances of the same connector within a playbook "
+                "are aggregated.\n\n")
         
         # Summary metrics
         total_managed = sum(1 for (_, k) in aggregated.keys() if k == 'managedApi')
@@ -7534,12 +7558,12 @@ def generate_logic_apps_index(
         total_playbooks = len({(r.get('solution_folder') or '', r.get('playbook_file') or '')
                                for rows in aggregated.values() for r in rows})
         
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| Managed connectors | {total_managed:,} |\n")
-        f.write(f"| Custom connectors | {total_custom:,} |\n")
-        f.write(f"| Built-in action types | {total_builtin:,} |\n")
-        f.write(f"| Playbooks using Logic App connectors / built-ins | {total_playbooks:,} |\n")
+        f.write("| Type | Count | Description |\n")
+        f.write("|:-----|------:|:------------|\n")
+        f.write(f"| Managed connectors | {total_managed:,} | `Microsoft.Web/connections` resources backed by Microsoft-published APIs (`/providers/Microsoft.Web/locations/.../managedApis/...`). |\n")
+        f.write(f"| Custom connectors | {total_custom:,} | Solution-specific APIs (`/customApis/...`). |\n")
+        f.write(f"| Built-in action types | {total_builtin:,} | Workflow actions of type `Http`, `Function`, `Workflow`, or `ApiManagement` that don't use a connection resource. |\n")
+        f.write(f"| Playbooks using Logic App connectors / built-ins | {total_playbooks:,} | |\n")
         f.write("\n")
         
         f.write("| Connector / Action | Type | Playbooks | Solutions | Microsoft Learn |\n")
@@ -7592,9 +7616,20 @@ def generate_logic_apps_index(
                 existing['action_count'] += action_count
                 existing['connection_count'] += connection_count
         
+        def _pb_display_name(r: Dict[str, Any]) -> str:
+            name = r.get('playbook_name') or ''
+            if name in ('', '<PlaybookName>', 'PlaybookName'):
+                ci = playbook_lookup.get((r.get('solution_folder') or '', r.get('playbook_file') or ''))
+                if ci:
+                    name = ci.get('content_name', '') or name
+            if not name or name in ('<PlaybookName>', 'PlaybookName'):
+                pb_file = r.get('playbook_file') or ''
+                name = pb_file.split('/')[0] if '/' in pb_file else (pb_file or '(unnamed)')
+            return name
+
         sorted_playbooks = sorted(
             by_playbook.values(),
-            key=lambda r: ((r.get('solution_name') or '').lower(), (r.get('playbook_name') or '').lower()),
+            key=lambda r: _pb_display_name(r).lower(),
         )
         
         learn_url = resolve_connector_learn_url(api_name, api_kind)
@@ -7611,7 +7646,7 @@ def generate_logic_apps_index(
             unique_solutions = sorted({(r.get('solution_name') or '').strip() for r in by_playbook.values() if r.get('solution_name')})
             f.write(f"| **Solutions** | {len(unique_solutions):,} |\n")
             if learn_url:
-                f.write(f"| **Microsoft Learn** | [{learn_url}]({learn_url}) |\n")
+                f.write(f"| **Microsoft Learn** | [View Documentation]({learn_url}) |\n")
             else:
                 f.write(f"| **Microsoft Learn** | — |\n")
             f.write("\n")
@@ -7621,11 +7656,22 @@ def generate_logic_apps_index(
             f.write("| Playbook | Solution | Connections | Actions |\n")
             f.write("|:---------|:---------|------------:|--------:|\n")
             for pb in sorted_playbooks:
-                pb_name = pb['playbook_name'] or '(unnamed)'
+                pb_name_raw = pb['playbook_name'] or ''
                 sol_name = pb['solution_name']
                 # Resolve content item to get accurate page filename (includes uniqueness hash).
                 pb_lookup_key = (pb.get('solution_folder') or '', pb.get('playbook_file') or '')
                 ci = playbook_lookup.get(pb_lookup_key)
+                # Some standalone playbook templates leave the ARM displayName as the literal
+                # placeholder `<PlaybookName>` (or `PlaybookName`). When that happens fall
+                # back to the resolved content_name from content_items.csv (which the mapper
+                # derives from the file path) so the cell isn't blank or stripped as HTML.
+                pb_name = pb_name_raw
+                if pb_name in ('', '<PlaybookName>', 'PlaybookName') and ci:
+                    pb_name = ci.get('content_name', '') or pb_name_raw
+                if not pb_name or pb_name in ('<PlaybookName>', 'PlaybookName'):
+                    # Last-resort fallback: use the playbook folder name from the file path.
+                    pb_file = pb.get('playbook_file') or ''
+                    pb_name = pb_file.split('/')[0] if '/' in pb_file else (pb_file or '(unnamed)')
                 if ci:
                     pb_filename = get_content_item_filename(
                         ci.get('content_id', '') or '',
@@ -7637,8 +7683,15 @@ def generate_logic_apps_index(
                     pb_link = f"[{pb_name}](../content/{pb_filename}.md)"
                 else:
                     pb_link = pb_name
-                if sol_name:
+                if sol_name and sol_name not in ('Standalone Content', 'GitHub Only'):
                     sol_link = f"[{sol_name}](../solutions/{sanitize_filename(sol_name)}.md)"
+                elif sol_name == 'Standalone Content' or (ci and (ci.get('content_source') or '') == 'Standalone'):
+                    # Standalone content items (in /Playbooks/ but not in any Solution).
+                    # Match the icon/label convention used elsewhere in the docs (no link
+                    # — there's no Standalone Content solution page).
+                    sol_link = '📄 Standalone'
+                elif sol_name == 'GitHub Only' or (ci and (ci.get('content_source') or '') == 'GitHub Only'):
+                    sol_link = '🔗 GitHub Only'
                 else:
                     sol_link = '-'
                 f.write(f"| {pb_link} | {sol_link} | {pb['connection_count']} | {pb['action_count']} |\n")
@@ -9425,6 +9478,12 @@ def main() -> None:
                     # Also set the solution_name in the row so links are generated correctly
                     row['solution_name'] = 'GitHub Only'
                     content_items_by_solution['GitHub Only'].append(row)
+                elif content_source == 'Standalone':
+                    # Group Standalone items (e.g., playbooks under /Playbooks/ not in any
+                    # Solutions folder) under 'Standalone Content' synthetic solution. The
+                    # row's solution_name stays empty so downstream renderers can detect
+                    # standalone via content_source and render the 📄 icon.
+                    content_items_by_solution['Standalone Content'].append(row)
         total_content = sum(len(items) for items in content_items_by_solution.values())
         print(f"Loaded {total_content} content items from {len(content_items_by_solution)} solutions")
     else:

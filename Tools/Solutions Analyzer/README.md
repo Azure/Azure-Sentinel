@@ -202,7 +202,9 @@ See the script documentation for details:
 
 **Logic Apps Connector / Built-in Action Index:**
 - New top-level Logic Apps section in the docs (`logic-apps/logic-apps-index.md` plus per-connector pages) listing every managed connector, custom connector, and built-in action type referenced by playbooks across all solutions, with playbook count, solution count, and a link to the corresponding Microsoft Learn page when one exists.
-- Each per-connector page lists every playbook using the connector and the solution it belongs to, with direct links to the playbook content page and solution page.
+- Each per-connector page lists every playbook using the connector and the solution it belongs to, with direct links to the playbook content page and solution page. Playbooks are sorted alphabetically by display name.
+- The Logic Apps index table is sorted by playbook count (descending), and the Managed/Custom/Built-in type descriptions are surfaced as a `Description` column on the summary metrics table rather than buried in the intro paragraph.
+- Connector / action names rendered on playbook content pages — both in the summary "Logic App Connectors" table and in each per-connector "Action parameters" sub-heading — link to the corresponding Logic Apps page.
 - New "🔌 Logic Apps" entry added to the markdown navigation strip and the interactive `index.html` navbar.
 - The "Top managed connectors by playbook usage" and "Built-in actions by playbook usage" tables on the Statistics page now link each connector / action name to its Logic Apps page.
 
