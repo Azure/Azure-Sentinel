@@ -1,0 +1,223 @@
+Parser:
+  Title: Alert Event ASIM parser for Google SecOps Detection Alerts
+  Version: '0.1.0'
+  LastUpdated: May 04, 2025
+Product:
+  Name: Google SecOps
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Google SecOps Detection Alerts API
+  Link: https://cloud.google.com/chronicle/docs/reference/rest/v1alpha/projects.locations.instances.legacy/legacySearchDetections
+Description: |
+  This ASIM parser supports normalizing Google SecOps Detection Alerts
+  (ingested via the DetectionAlerts_CL custom table) to the ASIM AlertEvent normalized schema.
+ParserName: ASimAlertEventGoogleSecOps
+EquivalentBuiltInParser: _ASim_AlertEvent_GoogleSecOps
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AlertVerdictLookup = datatable(threat_verdict: string, AlertVerdict: string)
+    [
+    "MALICIOUS",  "True Positive",
+    "SUSPICIOUS", "True Positive",
+    "BENIGN",     "Benign Positive",
+    "UNKNOWN",    "Unknown"
+  ];
+  let SeverityLookup = datatable(orig_severity: string, EventSeverity: string)
+    [
+    "CRITICAL",      "High",
+    "HIGH",          "High",
+    "MEDIUM",        "Medium",
+    "LOW",           "Low",
+    "INFORMATIONAL", "Informational",
+    "INFO",          "Informational"
+  ];
+  let EventSubTypeLookup = datatable(detection_type: string, EventSubType: string)
+    [
+    "RULE_DETECTION", "Threat",
+    "GCTI_FINDING",   "Threat",
+    "JOB_DETECTION",  "Suspicious Activity"
+  ];
+  let DetectionMethodLookup = datatable(detection_type: string, DetectionMethod: string)
+    [
+    "RULE_DETECTION", "Behavioral Analytics",
+    "GCTI_FINDING",   "Threat Intelligence",
+    "JOB_DETECTION",  "Automated Investigation"
+  ];
+  let parser = (disabled: bool=false) {
+    DetectionAlerts_CL
+    | where not(disabled)
+    // ── Expand detection array (one row per detection element) ───────────────
+    | extend detection_array = column_ifexists("detection", dynamic([]))
+    | where isnotnull(detection_array) and array_length(detection_array) > 0
+    | mv-expand detection = detection_array
+    // ── Top-level columns ────────────────────────────────────────────────────
+    | extend
+        detection_id   = column_ifexists("id", ""),
+        detection_type = column_ifexists("DetectionType", ""),
+        tw_start       = todatetime(column_ifexists("timeWindow_startTime", "")),
+        tw_end         = todatetime(column_ifexists("timeWindow_endTime", "")),
+        collection_arr = column_ifexists("collectionElements", dynamic(null)),
+        detect_timing  = column_ifexists("detectionTimingDetails", dynamic(null)),
+        latency_metrics = column_ifexists("latencyMetrics", dynamic(null))
+    // ── Fields from expanded detection element ───────────────────────────────
+    | extend
+        rule_name      = tostring(detection.ruleName),
+        rule_id        = tostring(detection.ruleId),
+        rule_version   = tostring(detection.ruleVersion),
+        rule_type      = tostring(detection.ruleType),
+        rule_labels    = detection.ruleLabels,
+        detect_desc    = tostring(detection.description),
+        orig_severity  = tostring(detection.severity),
+        alert_state    = tostring(detection.alertState),
+        risk_score_raw = tostring(detection.riskScore),
+        url_back       = tostring(detection.urlBackToProduct),
+        detect_fields  = detection.detectionFields,
+        outcomes       = detection.outcomes,
+        variables      = detection.variables
+    // ── Entity variables (principal / source / target) ───────────────────────
+    | extend
+        DvcIpAddr   = tostring(coalesce(
+                        variables.principal_ip.value,
+                        variables.source_ip.value,
+                        variables.correlation_ip.value)),
+        Username    = tostring(coalesce(
+                        variables.principal_user_userid.value,
+                        variables.source_user_userid.value,
+                        variables.user.value))
+    // ── Severity normalisation ────────────────────────────────────────────────
+    | lookup SeverityLookup on orig_severity
+    | extend EventSeverity = coalesce(EventSeverity, "Informational")
+    // ── EventSubType / DetectionMethod ───────────────────────────────────────
+    | lookup EventSubTypeLookup on detection_type
+    | extend EventSubType = coalesce(EventSubType, "Threat")
+    | lookup DetectionMethodLookup on detection_type
+    | extend DetectionMethod = coalesce(DetectionMethod, "Behavioral Analytics")
+    // ── AlertStatus ──────────────────────────────────────────────────────────
+    | extend
+        AlertStatus         = case(alert_state == "ALERTING", "Active", "Closed"),
+        AlertOriginalStatus = alert_state
+    // ── ThreatRiskLevel ──────────────────────────────────────────────────────
+    | extend
+        ThreatRiskLevel         = toint(risk_score_raw),
+        ThreatOriginalRiskLevel = risk_score_raw
+    // ── Threat intelligence from collectionElements ──────────────────────────
+    | extend
+        threat_obj          = coalesce(todynamic(collection_arr)[0].references[0].entity.metadata.threat[0],todynamic(collection_arr)[1].references[0].entity.metadata.threat[0]),
+        entity_type_raw     = coalesce(tostring(todynamic(collection_arr)[0].references[0].entity.metadata.entityType), tostring(todynamic(collection_arr)[1].references[0].entity.metadata.entityType))
+    | extend
+        threat_verdict_raw  = tostring(threat_obj.threatVerdict),
+        threat_category_raw = tostring(threat_obj.category),
+        threat_name_raw     = tostring(threat_obj.summary),
+        threat_first_ts     = todatetime(threat_obj.firstDiscoveredTime),
+        threat_last_ts      = todatetime(threat_obj.lastUpdatedTime),
+        threat_url          = tostring(threat_obj.urlBackToProduct)
+    // ── AlertVerdict ─────────────────────────────────────────────────────────
+    | extend threat_verdict = threat_verdict_raw
+    | lookup AlertVerdictLookup on threat_verdict
+    | extend AlertVerdict = coalesce(AlertVerdict, "Unknown")
+    // ── ThreatCategory ────────────────────────────────────────────────────────
+    | extend
+        ThreatOriginalCategory = threat_category_raw,
+        ThreatCategory = case(
+            threat_category_raw has "MALWARE",       "Malware",
+            threat_category_raw has "RANSOMWARE",    "Ransomware",
+            threat_category_raw has "TROJAN",        "Trojan",
+            threat_category_raw has "VIRUS",         "Virus",
+            threat_category_raw has "WORM",          "Worm",
+            threat_category_raw has "ADWARE",        "Adware",
+            threat_category_raw has "SPYWARE",       "Spyware",
+            threat_category_raw has "ROOTKIT",       "Rootkit",
+            threat_category_raw has "CRYPTOMINER",   "Cryptominer",
+            threat_category_raw has "PHISHING",      "Phishing",
+            threat_category_raw has "SPAM",          "Spam",
+            threat_category_raw has "NETWORK_RECON", "Security Policy Violation",
+            isnotempty(threat_category_raw),         "Unknown",
+                                                     "Unknown")
+    // ── IndicatorType ─────────────────────────────────────────────────────────
+    | extend IndicatorType = case(
+        entity_type_raw == "IP_ADDRESS",  "Ip",
+        entity_type_raw == "DOMAIN_NAME", "Url",
+        entity_type_raw == "USER",        "User",
+        entity_type_raw == "ASSET",       "Host",
+        entity_type_raw == "FILE",        "File",
+        entity_type_raw == "URL",         "Url",
+        entity_type_raw == "PROCESS",     "Process",
+                                          "Ip")
+    // Hostname helper function
+    | extend Hostname = tostring(coalesce(
+                variables.principal_hostname.value,
+                variables.principal_asset_hostname.value,
+                variables.source_hostname.value))
+    | invoke _ASIM_ResolveDvcFQDN("Hostname")
+    // ── User fields ───────────────────────────────────────────────────────────
+    | extend UsernameType = _ASIM_GetUsernameType(Username)
+        // ── AttackTactics / AttackTechniques ─────────────────────────────────────
+    | mv-apply rl = rule_labels on (
+        summarize
+            AttackTactics = anyif(tostring(rl.value), rl.key == "mitre_attack_tactic"),
+            AttackTechniques = anyif(tostring(rl.value), rl.key == "mitre_attack_technique")
+    )
+    // ── Mandatory / Recommended event fields ────────────────────────────────
+    | extend
+        EventType             = "Alert",
+        EventCount            = int(1),
+        EventStartTime        = tw_start,
+        EventEndTime          = tw_end,
+        EventUid              = detection_id,
+        EventOriginalUid      = detection_id,
+        EventProduct          = 'GoogleSecOps',
+        EventVendor           = 'Google',
+        EventSchema           = 'AlertEvent',
+        EventSchemaVersion    = '0.1',
+        EventMessage          = detect_desc,
+        EventOriginalSeverity = orig_severity,
+        EventOriginalSubType  = detection_type,
+        EventReportUrl        = url_back
+    // ── Alert / Rule / Threat fields ─────────────────────────────────────────
+    | extend
+        AlertName               = rule_name,
+        RuleName                = rule_name,
+        RuleDescription         = detect_desc,
+        ThreatName              = threat_name_raw,
+        ThreatFirstReportedTime = threat_first_ts,
+        ThreatLastReportedTime  = threat_last_ts,
+        Url                     = threat_url
+    // ── AdditionalFields bag ─────────────────────────────────────────────────
+    | extend AdditionalFields = bag_pack(
+        "ruleId",                 rule_id,
+        "ruleVersion",            rule_version,
+        "ruleType",               rule_type,
+        "ruleLabels",             rule_labels,
+        "detectionFields",        detect_fields,
+        "outcomes",               outcomes,
+        "variables",              variables,
+        "detectionTimingDetails", detect_timing,
+        "latencyMetrics",         latency_metrics,
+        "collectionElements", collection_arr)
+    // ── Aliases ──────────────────────────────────────────────────────────────
+    | extend
+        AlertId          = EventUid,
+        AlertDescription = EventMessage,
+        IpAddr           = DvcIpAddr,
+        Hostname         = DvcHostname,
+        User             = Username,
+        Rule             = RuleName
+    // ── Drop intermediate working columns ────────────────────────────────────
+    | project-away
+        detection_array, detection_type, tw_start, tw_end, detect_timing,
+        latency_metrics, rule_name, rule_id, rule_version, rule_type,
+        rule_labels, detect_desc, orig_severity, alert_state, risk_score_raw,
+        url_back, detect_fields, outcomes, variables, collection_arr, collectionElements,
+        threat_obj, entity_type_raw, threat_verdict_raw, threat_category_raw,
+        threat_name_raw, threat_first_ts, threat_last_ts, threat_url, threat_verdict
+  };
+  parser(disabled = disabled)
