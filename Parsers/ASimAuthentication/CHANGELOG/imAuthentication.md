@@ -2,7 +2,7 @@
 
 ## Version 0.3.12
 
-- (2026-05-06) Add pack parameter to updated Salesforce Service Cloud parser - [PR #](https://github.com/Azure/Azure-Sentinel/pull/)
+- (2026-05-06) Add pack parameter to updated Salesforce Service Cloud parser - [PR #14215](https://github.com/Azure/Azure-Sentinel/pull/14215)
 
 ## Version 0.3.11
 
