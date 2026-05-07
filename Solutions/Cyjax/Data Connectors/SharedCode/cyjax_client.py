@@ -128,35 +128,26 @@ class CyjaxClient:
                             consts.LOGS_STARTS_WITH,
                             __method_name,
                             consts.FUNCTION_NAME,
-                            "Enrichment authentication failed (401) for IOC value={}".format(
-                                ioc_value
-                            ),
+                            "Enrichment authentication failed (401) for IOC value={}".format(ioc_value),
                         )
                     )
-                    raise CyjaxAuthenticationException(
-                        "Authentication failed: Invalid or expired API token."
-                    )
+                    raise CyjaxAuthenticationException("Authentication failed: Invalid or expired API token.")
                 elif response.status_code == 403:
                     applogger.error(
                         self.log_format.format(
                             consts.LOGS_STARTS_WITH,
                             __method_name,
                             consts.FUNCTION_NAME,
-                            "Enrichment forbidden (403) for IOC value={}".format(
-                                ioc_value
-                            ),
+                            "Enrichment forbidden (403) for IOC value={}".format(ioc_value),
                         )
                     )
-                    raise CyjaxAuthenticationException(
-                        "Forbidden: Insufficient permissions for enrichment endpoint."
-                    )
+                    raise CyjaxAuthenticationException("Forbidden: Insufficient permissions for enrichment endpoint.")
                 elif response.status_code in consts.RETRY_STATUS_CODE:
                     if retry_count >= consts.MAX_RETRIES:
                         break
                     retry_count += 1
                     sleep_time = min(
-                        consts.MIN_SLEEP_TIME
-                        * (consts.BACKOFF_MULTIPLIER**retry_count),
+                        consts.MIN_SLEEP_TIME * (consts.BACKOFF_MULTIPLIER**retry_count),
                         consts.MAX_SLEEP_TIME,
                     )
                     if response.status_code == 429:
@@ -190,9 +181,7 @@ class CyjaxClient:
                         )
                     )
                     raise CyjaxAPIException(
-                        "Enrichment unexpected API error: status code {}".format(
-                            response.status_code
-                        )
+                        "Enrichment unexpected API error: status code {}".format(response.status_code)
                     )
             except (CyjaxAuthenticationException, CyjaxAPIException):
                 raise
@@ -212,9 +201,7 @@ class CyjaxClient:
                     consts.MAX_SLEEP_TIME,
                 )
                 error_type = (
-                    "connection error"
-                    if isinstance(network_err, requests.exceptions.ConnectionError)
-                    else "timeout"
+                    "connection error" if isinstance(network_err, requests.exceptions.ConnectionError) else "timeout"
                 )
                 applogger.error(
                     self.log_format.format(
@@ -238,45 +225,29 @@ class CyjaxClient:
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Enrichment request error, IOC value={}: {}".format(
-                            ioc_value, req_err
-                        ),
+                        "Enrichment request error, IOC value={}: {}".format(ioc_value, req_err),
                     )
                 )
-                raise CyjaxException(
-                    "Enrichment request error for IOC value={}: {}".format(
-                        ioc_value, req_err
-                    )
-                )
+                raise CyjaxException("Enrichment request error for IOC value={}: {}".format(ioc_value, req_err))
             except Exception as err:
                 applogger.error(
                     self.log_format.format(
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Enrichment unexpected error, IOC value={}: {}".format(
-                            ioc_value, err
-                        ),
+                        "Enrichment unexpected error, IOC value={}: {}".format(ioc_value, err),
                     )
                 )
-                raise CyjaxException(
-                    "Enrichment unexpected error for IOC value={}: {}".format(
-                        ioc_value, err
-                    )
-                )
+                raise CyjaxException("Enrichment unexpected error for IOC value={}: {}".format(ioc_value, err))
         applogger.error(
             self.log_format.format(
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "Enrichment max retries ({}) exceeded for IOC value={}".format(
-                    consts.MAX_RETRIES, ioc_value
-                ),
+                "Enrichment max retries ({}) exceeded for IOC value={}".format(consts.MAX_RETRIES, ioc_value),
             )
         )
-        raise CyjaxException(
-            "Enrichment max retries exceeded for IOC value={}".format(ioc_value)
-        )
+        raise CyjaxException("Enrichment max retries exceeded for IOC value={}".format(ioc_value))
 
     def _make_api_request(self, url, params, method_name):
         """Make an API request with retry logic and error handling.
@@ -318,9 +289,7 @@ class CyjaxClient:
                             consts.LOGS_STARTS_WITH,
                             method_name,
                             consts.FUNCTION_NAME,
-                            "API request successful, status code: {}".format(
-                                response.status_code
-                            ),
+                            "API request successful, status code: {}".format(response.status_code),
                         )
                     )
                     return response.json()
@@ -333,9 +302,7 @@ class CyjaxClient:
                             "Authentication failed, status code: 401",
                         )
                     )
-                    raise CyjaxAuthenticationException(
-                        "Authentication failed: Invalid or expired API token."
-                    )
+                    raise CyjaxAuthenticationException("Authentication failed: Invalid or expired API token.")
                 elif response.status_code == 403:
                     applogger.error(
                         self.log_format.format(
@@ -345,15 +312,12 @@ class CyjaxClient:
                             "Forbidden, status code: 403",
                         )
                     )
-                    raise CyjaxAuthenticationException(
-                        "Forbidden: Insufficient permissions for this API endpoint."
-                    )
+                    raise CyjaxAuthenticationException("Forbidden: Insufficient permissions for this API endpoint.")
                 elif response.status_code in consts.RETRY_STATUS_CODE:
                     if retry_count >= consts.MAX_RETRIES:
                         break
                     sleep_time = min(
-                        consts.MIN_SLEEP_TIME
-                        * (consts.BACKOFF_MULTIPLIER**(retry_count + 1)),
+                        consts.MIN_SLEEP_TIME * (consts.BACKOFF_MULTIPLIER ** (retry_count + 1)),
                         consts.MAX_SLEEP_TIME,
                     )
                     if response.status_code == 429:
@@ -381,16 +345,10 @@ class CyjaxClient:
                             consts.LOGS_STARTS_WITH,
                             method_name,
                             consts.FUNCTION_NAME,
-                            "Unexpected status code: {}, response: {}".format(
-                                response.status_code, response.text
-                            ),
+                            "Unexpected status code: {}, response: {}".format(response.status_code, response.text),
                         )
                     )
-                    raise CyjaxAPIException(
-                        "Unexpected API error: status code {}".format(
-                            response.status_code
-                        )
-                    )
+                    raise CyjaxAPIException("Unexpected API error: status code {}".format(response.status_code))
             except (CyjaxAuthenticationException, CyjaxAPIException):
                 raise
             except requests.exceptions.ConnectionError as conn_err:
@@ -404,11 +362,7 @@ class CyjaxClient:
                     )
                 )
                 if retry_count > consts.MAX_RETRIES:
-                    raise CyjaxException(
-                        "Connection error after {} retries: {}".format(
-                            consts.MAX_RETRIES, conn_err
-                        )
-                    )
+                    raise CyjaxException("Connection error after {} retries: {}".format(consts.MAX_RETRIES, conn_err))
                 sleep_time = min(
                     consts.MIN_SLEEP_TIME * (consts.BACKOFF_MULTIPLIER**retry_count),
                     consts.MAX_SLEEP_TIME,
@@ -425,11 +379,7 @@ class CyjaxClient:
                     )
                 )
                 if retry_count > consts.MAX_RETRIES:
-                    raise CyjaxException(
-                        "Timeout error after {} retries: {}".format(
-                            consts.MAX_RETRIES, timeout_err
-                        )
-                    )
+                    raise CyjaxException("Timeout error after {} retries: {}".format(consts.MAX_RETRIES, timeout_err))
                 sleep_time = min(
                     consts.MIN_SLEEP_TIME * (consts.BACKOFF_MULTIPLIER**retry_count),
                     consts.MAX_SLEEP_TIME,
