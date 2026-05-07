@@ -109,9 +109,16 @@ MAX_FILE_AGE_FOR_INGESTION = 120  # 2 minutes
 # Error handling and timeouts for API calls
 
 # Google SecOps API streaming timeout
-API_TIMEOUT_SECONDS = 300  # 5 minutes
+API_TIMEOUT_SECONDS = 300  # 5 minutes — per-read httpx timeout
 # Google SecOps server sends heartbeat every ~15 seconds
 # 300s timeout is safe for detecting truly dead connections
+
+# Maximum wall-clock seconds to spend streaming a single API call.
+# When there are no detections the server streams heartbeats for the entire
+# window duration (potentially hours). We stop after this many seconds and
+# use the most recent heartbeat nextPageStartTime to advance the checkpoint.
+# Must be well under the Azure Function timeout (600 s).
+STREAM_MAX_SECONDS = int(os.environ.get("StreamMaxSeconds", "300"))  # 5 minutes
 
 # Retry behavior for transient errors
 RETRY_BASE_DELAY_SECONDS = 2  # Initial backoff delay: 2 seconds
