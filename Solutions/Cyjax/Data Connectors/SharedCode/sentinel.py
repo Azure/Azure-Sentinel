@@ -38,18 +38,14 @@ class MicrosoftSentinel:
                     consts.FUNCTION_NAME,
                 )
             )
-            azure_auth_url = consts.AZURE_AUTHENTICATION_URL.format(
-                consts.AZURE_TENANT_ID
-            )
+            azure_auth_url = consts.AZURE_AUTHENTICATION_URL.format(consts.AZURE_TENANT_ID)
             body = {
                 "client_id": consts.AZURE_CLIENT_ID,
                 "client_secret": consts.AZURE_CLIENT_SECRET,
                 "grant_type": "client_credentials",
                 "scope": consts.AUTH_SCOPE,
             }
-            response = requests.post(
-                url=azure_auth_url, data=body, timeout=consts.REQUEST_TIMEOUT
-            )
+            response = requests.post(url=azure_auth_url, data=body, timeout=consts.REQUEST_TIMEOUT)
             if 200 <= response.status_code <= 299:
                 json_response = response.json()
                 if "access_token" not in json_response:
@@ -60,9 +56,7 @@ class MicrosoftSentinel:
                             consts.FUNCTION_NAME,
                         )
                     )
-                    raise CyjaxAuthenticationException(
-                        "Access token not found in Sentinel API response."
-                    )
+                    raise CyjaxAuthenticationException("Access token not found in Sentinel API response.")
                 bearer_token = json_response.get("access_token")
                 applogger.info(
                     "{}(method={}) : {} : Microsoft Sentinel access token generated successfully.".format(
@@ -74,6 +68,7 @@ class MicrosoftSentinel:
                 return bearer_token
             elif response.status_code == 400 or response.status_code == 401:
                 # Parse error response for more details
+                error_msg = "Authentication failed with status code: {}".format(response.status_code)
                 try:
                     json_response = response.json()
                     error = json_response.get("error", "")
@@ -82,12 +77,9 @@ class MicrosoftSentinel:
                         error_msg = "Bad Request: {}: {}".format(error, error_desc)
                     elif response.status_code == 401:
                         error_msg = "Unauthorized: {}: {}".format(error, error_desc)
-                    
                 except (ValueError, json.JSONDecodeError):
                     # If we can't parse JSON, use default error
-                    error_msg = "Authentication failed: {} {}".format(
-                        response.status_code, response.text
-                    )
+                    error_msg = "Authentication failed: {} {}".format(response.status_code, response.text)
 
                 applogger.error(
                     "{}(method={}) : {} : {}".format(
@@ -125,9 +117,7 @@ class MicrosoftSentinel:
                     error,
                 )
             )
-            raise CyjaxAuthenticationException(
-                "Unexpected error during Sentinel authentication: {}".format(error)
-            )
+            raise CyjaxAuthenticationException("Unexpected error during Sentinel authentication: {}".format(error))
 
     def upload_indicators(self, stix_objects):
         """Upload STIX indicator objects to Microsoft Sentinel via Upload Indicator API.
@@ -166,9 +156,7 @@ class MicrosoftSentinel:
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "Upload complete. Success: {}, Failed: {}".format(
-                    success_count, failure_count
-                ),
+                "Upload complete. Success: {}, Failed: {}".format(success_count, failure_count),
             )
         )
 
@@ -203,9 +191,7 @@ class MicrosoftSentinel:
                     consts.LOGS_STARTS_WITH,
                     __method_name,
                     consts.FUNCTION_NAME,
-                    "Validation error at recordIndex {}: {}".format(
-                        record_index, error_messages
-                    ),
+                    "Validation error at recordIndex {}: {}".format(record_index, error_messages),
                 )
             )
             if record_index is not None and record_index < len(batch):
@@ -442,15 +428,11 @@ class MicrosoftSentinel:
                             consts.LOGS_STARTS_WITH,
                             __method_name,
                             consts.FUNCTION_NAME,
-                            "Server error (500) for IOC upload. Response: {}".format(
-                                response.text
-                            ),
+                            "Server error (500) for IOC upload. Response: {}".format(response.text),
                         )
                     )
                     # Don't retry - server errors indicate API issues
-                    raise SentinelUploadException(
-                        "Microsoft Sentinel server error (500). Please try again later."
-                    )
+                    raise SentinelUploadException("Microsoft Sentinel server error (500). Please try again later.")
 
                 else:
                     applogger.error(
@@ -506,15 +488,12 @@ class MicrosoftSentinel:
             error_msg = "Max retries exceeded for IOC upload due to authentication failures (401)"
         else:
             error_msg = "Max retries exceeded for IOC upload"
-        
         applogger.error(
             self.log_format.format(
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "{} - 429 retries: {}, 401 retries: {}".format(
-                    error_msg, retry_count_429, retry_count_401
-                ),
+                "{} - 429 retries: {}, 401 retries: {}".format(error_msg, retry_count_429, retry_count_401),
             )
         )
         return {

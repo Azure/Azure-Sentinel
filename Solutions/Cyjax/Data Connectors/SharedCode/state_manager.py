@@ -19,9 +19,7 @@ class StateManager:
 
     def __init__(self, connection_string, file_path, share_name):
         """Initialize the share_cli and file_cli."""
-        self.share_cli = ShareClient.from_connection_string(
-            conn_str=connection_string, share_name=share_name
-        )
+        self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
         self.file_cli = ShareFileClient.from_connection_string(
             conn_str=connection_string, share_name=share_name, file_path=file_path
         )
