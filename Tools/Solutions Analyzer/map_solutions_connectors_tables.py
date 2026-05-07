@@ -2222,6 +2222,54 @@ def apply_overrides_to_data(
     return [apply_overrides_to_row(row, overrides, entity_type, key_field) for row in data]
 
 
+# Solution-info fields that must be patched at metadata-collection time, BEFORE
+# downstream consumers (marketplace lookup, dependency graph, synthetic connector
+# row construction) read them. Standard Solution-entity overrides applied later
+# via apply_overrides_to_data() only patch the OUTPUT rows; they cannot fix
+# upstream behaviors that depend on these fields being correct in solutions_info.
+SOLUTION_INIT_OVERRIDE_FIELDS: Set[str] = {
+    'solution_publisher_id',
+    'solution_offer_id',
+}
+
+
+def apply_early_solution_metadata_overrides(
+    solution_info: Dict[str, str],
+    overrides: List[Override]
+) -> Dict[str, str]:
+    """Patch solution_info with Solution-entity overrides for fields that must be
+    set BEFORE marketplace lookup and dependency graph construction.
+
+    Currently restricted to a small whitelist (SOLUTION_INIT_OVERRIDE_FIELDS) to
+    avoid double-application or accidental masking of late-stage overrides
+    (e.g., is_published, which is intentionally set from marketplace data).
+
+    Use case: solutions whose folder structure does not include a
+    SolutionMetadata.json (e.g., the agent-based SAP solution under Solutions/SAP/)
+    have empty publisher_id/offer_id by default. Without these populated,
+    marketplace lookup is skipped, dependency graph excludes the solution, and
+    the synthetic_connector mechanism produces rows with no Marketplace identity.
+    Patching these fields at metadata-collection time threads the corrected
+    identity through the entire downstream pipeline.
+
+    Pattern matching uses solution_name (same key as the late-stage Solution
+    overrides applied in apply_overrides_to_data()).
+
+    Returns the (mutated) solution_info dict for chaining.
+    """
+    name = solution_info.get('solution_name', '')
+    if not name:
+        return solution_info
+    for override in overrides:
+        if override.entity != 'solution':
+            continue
+        if override.field not in SOLUTION_INIT_OVERRIDE_FIELDS:
+            continue
+        if override.matches(name):
+            solution_info[override.field] = override.value
+    return solution_info
+
+
 def apply_plural_table_fix(name: str) -> Tuple[str, Optional[str]]:
     lowered = name.lower()
     corrected = PLURAL_TABLE_CORRECTIONS.get(lowered)
@@ -7422,7 +7470,15 @@ def main() -> None:
         if solution_idx % 50 == 0 or solution_idx == 1:
             log_print(f"  [{solution_idx}/{total_solutions}] Processing {solution_dir.name}...")
         solution_info = collect_solution_info(solution_dir.resolve())
-        
+
+        # Apply Solution-entity overrides for fields that must be patched BEFORE
+        # downstream consumers (marketplace lookup, dependency graph, synthetic
+        # connector row construction) read them. See SOLUTION_INIT_OVERRIDE_FIELDS.
+        # The cached collect_solution_info() result is left unmodified; this patch
+        # is applied per-run to the local solution_info before it enters
+        # all_solutions_info.
+        solution_info = apply_early_solution_metadata_overrides(solution_info, overrides)
+
         # Store all solution info for later processing
         all_solutions_info[solution_info["solution_name"]] = solution_info
         
@@ -8190,8 +8246,14 @@ def main() -> None:
                 details="Solution contains connectors but is missing SolutionMetadata.json.",
             )
         
-        # Track solutions that truly have no connectors (no Data Connectors dir or no valid connectors)
-        if not has_data_connectors_dir or not has_valid_connector:
+        # Track solutions that truly have no connectors. has_valid_connector is True
+        # when either (a) the Data Connectors/ directory contained at least one valid
+        # connector definition file, or (b) a synthetic_connector entry in the
+        # overrides CSV produced rows for this solution. The previous condition also
+        # required a Data Connectors/ directory to exist, which incorrectly excluded
+        # solutions whose connectors are declared exclusively via synthetic_connector
+        # overrides (e.g., the agent-based SAP solution under Solutions/SAP/).
+        if not has_valid_connector:
             solutions_without_connectors.add(solution_info["solution_name"])
 
     # Add rows for solutions without any connectors
