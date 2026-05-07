@@ -485,4 +485,3 @@ def submit_indicator(indicators_list: list) -> bool:
     except Exception as err:
         logging.info(f"Error occurred during IOC creation: {err}")
         raise
-

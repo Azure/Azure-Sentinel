@@ -1,5 +1,9 @@
 # Changelog for vimAuthenticationVMwareVCenter.yaml
 
+## Version 0.1.2
+
+- (2026-05-01) Fix typing of DvcId from dynamic to string - [PR #14182](https://github.com/Azure/Azure-Sentinel/pull/14182)
+
 ## Version 0.1.1
 
 - (2026-04-14) Add missing column EventSeverity - [PR #14075](https://github.com/Azure/Azure-Sentinel/pull/14075)

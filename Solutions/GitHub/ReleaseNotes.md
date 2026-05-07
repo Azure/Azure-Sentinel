@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.2.1       | 04-05-2026                     | Migrated Parsers and Workbooks to `githubscanaudit` CLv1 & CLv2 union alias          |
 | 3.2.0       | 24-04-2026                     | Added **GitHub Webhook V2** data connector (CLv2/Logs Ingestion API) public preview |
 | 3.1.4       | 19-03-2026                     | Fix NRT 2FA rule for new parser format. |
 | 3.1.3       | 29-01-2026                     | Promoted GitHub Enterprise Cloud Audit Log CCF connector from Public Preview to GA. |
