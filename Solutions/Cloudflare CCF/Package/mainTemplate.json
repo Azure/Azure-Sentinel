@@ -55,17 +55,22 @@
     "email": "support@cloudflare.com",
     "_email": "[variables('email')]",
     "_solutionName": "Cloudflare CCF",
-    "_solutionVersion": "3.0.2",
+    "_solutionVersion": "3.0.3",
     "solutionId": "cloudflare.azure-sentinel-solution-cloudflare-ccf",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.2",
+    "dataConnectorCCPVersion": "3.0.3",
     "_dataConnectorContentIdConnectorDefinition1": "CloudflareDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "CloudflareDefinitionConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
+    "_dataConnectorContentIdConnectorDefinition2": "CloudflareAuditLogDefinition",
+    "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
+    "_dataConnectorContentIdConnections2": "CloudflareAuditLogDefinitionConnections",
+    "dataConnectorTemplateNameConnections2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections2')))]",
+    "dataCollectionEndpointId2": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "parserObject1": {
       "_parserName1": "[concat(parameters('workspace'),'/','Cloudflare')]",
       "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Cloudflare')]",
@@ -4422,6 +4427,62 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "CloudflareAuditLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 90,
+                "schema": {
+                  "name": "CloudflareAuditLog_CL",
+                  "description": "Cloudflare account audit log events capturing actions taken against the Cloudflare account, including user logins, setting changes, DNS updates, firewall rule modifications, and more.",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "description": "The timestamp of when the action was logged, extracted from action.time.",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Id",
+                      "description": "A unique identifier for the audit log entry.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Account",
+                      "description": "An object containing account information. Includes 'id' (unique account identifier) and 'name' (account name).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Action",
+                      "description": "An object describing the action performed. Includes 'description' (short description of the action), 'result' (string: 'success' or 'failure'), 'time' (ISO 8601 timestamp when the action was logged), and 'type' (action category: 'create', 'delete', 'update', or 'view').",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Actor",
+                      "description": "An object describing who performed the action. Includes 'id' (actor user ID), 'context' (how the actor authenticated: 'api_key', 'api_token', 'dash', 'oauth', or 'dash_sso'), 'email' (actor email address), 'ip_address' (IP address of the request), 'token_id' (API token ID when context is api_token or oauth), 'token_name' (API token name), and 'type' (actor type: 'account', 'cloudflare_admin', 'system', or 'user').",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Raw",
+                      "description": "An object containing raw HTTP request and response details. Includes 'cf_ray_id' (Cloudflare Ray ID), 'method' (HTTP method), 'status_code' (HTTP response status code), 'uri' (request URI), and 'user_agent' (client user agent string).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Resource",
+                      "description": "An object describing the affected resource. Includes 'id' (resource identifier), 'product' (Cloudflare product associated with the resource), 'request' (raw request body), 'response' (raw response body), 'scope' (resource scope), and 'type' (resource type).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Zone",
+                      "description": "An object containing zone information associated with the action. Includes 'id' (zone identifier) and 'name' (zone name, e.g. 'example.com').",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
             }
           ]
         },
@@ -4790,18 +4851,18 @@
                         "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('EGSystemTopicName'))]"
                       ],
                       "properties": {
+                        "filter": {
+                          "includedEventTypes": [
+                            "Microsoft.Storage.BlobCreated"
+                          ],
+                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
+                        },
                         "destination": {
                           "endpointType": "StorageQueue",
                           "properties": {
                             "queueName": "[[variables('queueName')]",
                             "resourceId": "[[variables('storageAccountId')]"
                           }
-                        },
-                        "filter": {
-                          "includedEventTypes": [
-                            "Microsoft.Storage.BlobCreated"
-                          ],
-                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
                         }
                       }
                     },
@@ -4891,13 +4952,603 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "displayName": "Cloudflare Audit Logs (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CloudflareAuditLogDefinition",
+                  "title": "Cloudflare Audit Logs (via Codeless Connector Framework)",
+                  "publisher": "Cloudflare",
+                  "descriptionMarkdown": "The [Cloudflare](https://www.cloudflare.com/) Audit Logs connector provides the capability to ingest Cloudflare [account audit logs](https://developers.cloudflare.com/fundamentals/account/account-security/audit-logs/) into Microsoft Sentinel using the Cloudflare Audit Logs v2 API.\n\nAudit logs capture actions taken against your Cloudflare account, including user logins, setting changes, and more.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:\n\na. [Codeless Connector Framework (CCF)](https://learn.microsoft.com/en-us/azure/sentinel/create-custom-connector)",
+                  "graphQueriesTableName": "CloudflareAuditLog_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Cloudflare Audit Log events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample Cloudflare Audit Log Events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    },
+                    {
+                      "description": "Cloudflare Audit Log Events by Actor",
+                      "query": "{{graphQueriesTableName}}\n | summarize count() by tostring(Actor)"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cloudflare Account API token",
+                        "description": "A Cloudflare Account API token with **Account & Billing > Account Settings > Read** permission is required. Refer to the [Cloudflare documentation](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/) for instructions on creating an API token."
+                      },
+                      {
+                        "name": "Cloudflare Account ID",
+                        "description": "Your Cloudflare Account ID is available in the Cloudflare dashboard URL or under **Account Home > Overview**. Refer to the [Cloudflare documentation](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/) for instructions."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Cloudflare Audit Logs to Microsoft Sentinel",
+                      "description": "To enable ingestion of Cloudflare account audit logs, provide your Cloudflare Account ID and Cloudflare Account API token below, then click Connect.\n\n> **Note:** Ensure your API token has the **Account & Billing > Account Settings > Read** permission scope.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Cloudflare Account ID",
+                            "placeholder": "Enter your Cloudflare Account ID (e.g. 9a7806061c88ada191ed06f989cc3dac)",
+                            "type": "text",
+                            "name": "accountId",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Cloudflare Account API token",
+                            "placeholder": "Enter your Cloudflare Account API token",
+                            "type": "password",
+                            "name": "apikey",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "Connect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cloudflare",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cloudflare",
+                  "email": "support@cloudflare.com",
+                  "tier": "Partner",
+                  "link": "https://support.cloudflare.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CloudflareAuditLogDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId2')]",
+                "streamDeclarations": {
+                  "Custom-CloudflareAuditLog_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "account",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "action",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "actor",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "raw",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "resource",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "zone",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CloudflareAuditLog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = todatetime(action['time']) | project-rename Id=id, Account=account, Action=action, Actor=actor, Raw=raw, Resource=resource, Zone=zone",
+                    "outputStream": "Custom-CloudflareAuditLog_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CloudflareAuditLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 90,
+                "schema": {
+                  "name": "CloudflareAuditLog_CL",
+                  "description": "Cloudflare account audit log events capturing actions taken against the Cloudflare account, including user logins, setting changes, DNS updates, firewall rule modifications, and more.",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "description": "The timestamp of when the action was logged, extracted from action.time.",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Id",
+                      "description": "A unique identifier for the audit log entry.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Account",
+                      "description": "An object containing account information. Includes 'id' (unique account identifier) and 'name' (account name).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Action",
+                      "description": "An object describing the action performed. Includes 'description' (short description of the action), 'result' (string: 'success' or 'failure'), 'time' (ISO 8601 timestamp when the action was logged), and 'type' (action category: 'create', 'delete', 'update', or 'view').",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Actor",
+                      "description": "An object describing who performed the action. Includes 'id' (actor user ID), 'context' (how the actor authenticated: 'api_key', 'api_token', 'dash', 'oauth', or 'dash_sso'), 'email' (actor email address), 'ip_address' (IP address of the request), 'token_id' (API token ID when context is api_token or oauth), 'token_name' (API token name), and 'type' (actor type: 'account', 'cloudflare_admin', 'system', or 'user').",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Raw",
+                      "description": "An object containing raw HTTP request and response details. Includes 'cf_ray_id' (Cloudflare Ray ID), 'method' (HTTP method), 'status_code' (HTTP response status code), 'uri' (request URI), and 'user_agent' (client user agent string).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Resource",
+                      "description": "An object describing the affected resource. Includes 'id' (resource identifier), 'product' (Cloudflare product associated with the resource), 'request' (raw request body), 'response' (raw response body), 'scope' (resource scope), and 'type' (resource type).",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Zone",
+                      "description": "An object containing zone information associated with the action. Includes 'id' (zone identifier) and 'name' (zone name, e.g. 'example.com').",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CloudflareAuditLogDefinition",
+          "title": "Cloudflare Audit Logs (via Codeless Connector Framework)",
+          "publisher": "Cloudflare",
+          "descriptionMarkdown": "The [Cloudflare](https://www.cloudflare.com/) Audit Logs connector provides the capability to ingest Cloudflare [account audit logs](https://developers.cloudflare.com/fundamentals/account/account-security/audit-logs/) into Microsoft Sentinel using the Cloudflare Audit Logs v2 API.\n\nAudit logs capture actions taken against your Cloudflare account, including user logins, setting changes, and more.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:\n\na. [Codeless Connector Framework (CCF)](https://learn.microsoft.com/en-us/azure/sentinel/create-custom-connector)",
+          "graphQueriesTableName": "CloudflareAuditLog_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Cloudflare Audit Log events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample Cloudflare Audit Log Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            },
+            {
+              "description": "Cloudflare Audit Log Events by Actor",
+              "query": "{{graphQueriesTableName}}\n | summarize count() by tostring(Actor)"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cloudflare Account API token",
+                "description": "A Cloudflare Account API token with **Account & Billing > Account Settings > Read** permission is required. Refer to the [Cloudflare documentation](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/) for instructions on creating an API token."
+              },
+              {
+                "name": "Cloudflare Account ID",
+                "description": "Your Cloudflare Account ID is available in the Cloudflare dashboard URL or under **Account Home > Overview**. Refer to the [Cloudflare documentation](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/) for instructions."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Cloudflare Audit Logs to Microsoft Sentinel",
+              "description": "To enable ingestion of Cloudflare account audit logs, provide your Cloudflare Account ID and Cloudflare Account API token below, then click Connect.\n\n> **Note:** Ensure your API token has the **Account & Billing > Account Settings > Read** permission scope.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Cloudflare Account ID",
+                    "placeholder": "Enter your Cloudflare Account ID (e.g. 9a7806061c88ada191ed06f989cc3dac)",
+                    "type": "text",
+                    "name": "accountId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Cloudflare Account API token",
+                    "placeholder": "Enter your Cloudflare Account API token",
+                    "type": "password",
+                    "name": "apikey",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "Connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Cloudflare",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Cloudflare",
+          "email": "support@cloudflare.com",
+          "tier": "Partner",
+          "link": "https://support.cloudflare.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+        "displayName": "Cloudflare Audit Logs (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Cloudflare Audit Logs (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "accountId": {
+              "defaultValue": "accountId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apikey": {
+              "defaultValue": "apikey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections2": "[variables('_dataConnectorContentIdConnections2')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cloudflare",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cloudflare",
+                  "email": "support@cloudflare.com",
+                  "tier": "Partner",
+                  "link": "https://support.cloudflare.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CloudflareAuditLogPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CloudflareAuditLogDefinition",
+                "dataType": "CloudflareAuditLog_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-CloudflareAuditLog_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.cloudflare.com/client/v4/accounts/', parameters('accountId'), '/logs/audit')]",
+                  "httpMethod": "GET",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "since",
+                  "endTimeAttributeName": "before",
+                  "rateLimitQPS": 1200,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "direction": "asc"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.result"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "pageSize": 1000,
+                  "pageSizeParaName": "limit",
+                  "nextPageParaName": "cursor",
+                  "nextPageTokenJsonPath": "$.result_info.cursor"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('parserObject1').parserTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cloudflare Data Parser with template version 3.0.2",
+        "description": "Cloudflare Data Parser with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -5029,7 +5680,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cloudflare Workbook with template version 3.0.2",
+        "description": "Cloudflare Workbook with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -5117,7 +5768,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFClientErrors_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFClientErrors_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -5202,7 +5853,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFClientTlsErrors_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFClientTlsErrors_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -5287,7 +5938,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFFilesRequested_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFFilesRequested_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -5372,7 +6023,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFRareUAs_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFRareUAs_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -5457,7 +6108,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFServerErrors_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFServerErrors_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -5542,7 +6193,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFServerTlsErrors_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFServerTlsErrors_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject6').huntingQueryVersion6]",
@@ -5627,7 +6278,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFTopNetworkRules_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFTopNetworkRules_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject7').huntingQueryVersion7]",
@@ -5712,7 +6363,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFTopWafRules_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFTopWafRules_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject8').huntingQueryVersion8]",
@@ -5797,7 +6448,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedCountries_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedCountries_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject9').huntingQueryVersion9]",
@@ -5882,7 +6533,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedEdgeResponse_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedEdgeResponse_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject10').huntingQueryVersion10]",
@@ -5967,7 +6618,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFBadClientIp_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFBadClientIp_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -6010,22 +6661,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "CompleteUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -6081,7 +6732,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFEmptyUA_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFEmptyUA_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -6124,13 +6775,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6186,7 +6837,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFMultipleErrorsSource_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFMultipleErrorsSource_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -6229,13 +6880,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6291,7 +6942,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFMultipleUAs_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFMultipleUAs_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -6334,13 +6985,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6396,7 +7047,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedCountry_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedCountry_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -6439,22 +7090,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "CompleteUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -6510,7 +7161,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedPost_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedPost_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -6554,13 +7205,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6616,7 +7267,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedRequest_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedRequest_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -6659,13 +7310,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6721,7 +7372,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFUnexpectedUrl_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFUnexpectedUrl_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -6764,13 +7415,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -6826,7 +7477,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFWafThreatAllowed_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFWafThreatAllowed_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -6869,22 +7520,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "CompleteUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -6940,7 +7591,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CloudflareCCFXSSProbingPattern_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "CloudflareCCFXSSProbingPattern_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -6983,22 +7634,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SrcIpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "CompleteUrl"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -7050,12 +7701,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.2",
+        "version": "3.0.3",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cloudflare CCF",
         "publisherDisplayName": "Cloudflare",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cloudflare%20CCF/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.cloudflare.com/\">Cloudflare</a> solution provides the capability to ingest <a href=\"https://developers.cloudflare.com/logs/\">Cloudflare logs</a> into Microsoft Sentinel using the Codeless Connector Framework (CCF) and Azure Blob Storage. Refer to <a href=\"https://developers.cloudflare.com/logs/about/\">Cloudflare documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a> (for reference, legacy support)</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 10, <strong>Hunting Queries:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cloudflare%20CCF/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.cloudflare.com/\">Cloudflare</a> solution provides the capability to ingest <a href=\"https://developers.cloudflare.com/logs/\">Cloudflare logs</a> into Microsoft Sentinel using the Codeless Connector Framework (CCF) and Azure Blob Storage. Refer to <a href=\"https://developers.cloudflare.com/logs/about/\">Cloudflare documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a> (for reference, legacy support)</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 2, <strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 10, <strong>Hunting Queries:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -7083,6 +7734,11 @@
             {
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
               "version": "[variables('dataConnectorCCPVersion')]"
             },
             {
