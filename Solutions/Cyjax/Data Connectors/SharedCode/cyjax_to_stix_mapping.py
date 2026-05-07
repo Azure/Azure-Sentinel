@@ -97,9 +97,7 @@ def validate_ioc_value(ioc_type, ioc_value):
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "Validation failed for IOC type: {}, value: {}".format(
-                    ioc_type, ioc_value
-                ),
+                "Validation failed for IOC type: {}, value: {}".format(ioc_type, ioc_value),
             )
         )
         return False
@@ -163,6 +161,7 @@ def _build_extensions(ioc_data, enrichment_data):
     Returns:
         dict: The STIX extensions object.
     """
+    __method_name = inspect.currentframe().f_code.co_name
     extension = {"extension_type": "property-extension"}
     if ioc_data.get("uuid"):
         extension["cyjax_uuid"] = ioc_data["uuid"]
@@ -204,7 +203,7 @@ def _build_extensions(ioc_data, enrichment_data):
             import json
 
             # Store only first 35 sightings to avoid Sentinel 25KB cell limit
-            limited_sightings = sightings[:consts.SIGHTINGS_LIMIT]
+            limited_sightings = sightings[: consts.SIGHTINGS_LIMIT]
             try:
                 extension["enrichment_sightings"] = json.dumps(limited_sightings)
             except (TypeError, ValueError) as json_err:
@@ -213,9 +212,7 @@ def _build_extensions(ioc_data, enrichment_data):
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Failed to serialize sightings for IOC {}: {}".format(
-                            ioc_data.get("uuid", ""), json_err
-                        ),
+                        "Failed to serialize sightings for IOC {}: {}".format(ioc_data.get("uuid", ""), json_err),
                     )
                 )
             if len(sightings) > consts.SIGHTINGS_LIMIT:
@@ -303,9 +300,7 @@ def map_cyjax_ioc_to_stix(ioc_data, enrichment_data=None):
                     consts.LOGS_STARTS_WITH,
                     __method_name,
                     consts.FUNCTION_NAME,
-                    "Skipping invalid IOC: type={}, value={}".format(
-                        ioc_type, ioc_value
-                    ),
+                    "Skipping invalid IOC: type={}, value={}".format(ioc_type, ioc_value),
                 )
             )
             return None

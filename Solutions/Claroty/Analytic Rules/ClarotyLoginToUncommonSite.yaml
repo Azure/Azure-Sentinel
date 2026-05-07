@@ -1,7 +1,6 @@
 id: e7dbcbc3-b18f-4635-b27c-718195c369f1
 name: Claroty - Login to uncommon location
-description: |
-  'Detects user login to uncommon location.'
+description: 'Detects user login to uncommon location.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -24,21 +23,25 @@ query: |
   | extend Site = column_ifexists("site_name","")
   | where isnotempty(Site)
   | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
-  | summarize all_loc = makeset(tostring(Site)) by SrcUsername
-  | extend k = 1;
+  | where isnotempty(SrcUsername)
+  | summarize all_loc = make_set(tostring(Site)) by SrcUsername;
   ClarotyEvent
+  | where TimeGenerated > ago(14d)
   | where EventType has 'Login to SRA succeeded'
   | extend Site = column_ifexists("site_name","")
   | where isnotempty(Site)
   | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
-  | extend k = 1
-  | join kind=innerunique (usr_sites) on k
-  | where all_loc !contains Site
+  | where isnotempty(SrcUsername)
+  | join kind=leftouter (usr_sites) on SrcUsername
+  | where isempty(all_loc) or not(set_has_element(all_loc, tostring(Site)))
   | extend SrcIpAddr
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), EventCount=count(), Sites=make_set(Site, 100), KnownSites=any(all_loc) by SrcUsername, SrcIpAddr, Site, EventType, EventMessage
+  | extend UncommonSiteCount = array_length(Sites)
+  | project StartTime, EndTime, SrcUsername, SrcIpAddr, Site, EventType, EventMessage, EventCount, UncommonSiteCount, KnownSites
 entityMappings:
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: SrcIpAddr
-version: 1.0.3
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+version: 1.0.4
 kind: Scheduled

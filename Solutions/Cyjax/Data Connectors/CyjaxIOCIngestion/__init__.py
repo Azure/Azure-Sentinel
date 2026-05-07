@@ -16,9 +16,7 @@ def main(mytimer: func.TimerRequest) -> None:
     Args:
         mytimer (func.TimerRequest): The timer trigger request object.
     """
-    utc_timestamp = (
-        datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
-    )
+    utc_timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
     start = time.time()
     applogger.info(
         "{} : {}, Function App started at {}".format(
