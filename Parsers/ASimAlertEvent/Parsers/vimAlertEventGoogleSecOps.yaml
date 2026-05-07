@@ -98,11 +98,11 @@ ParserQuery: |
     | where not(disabled)
     | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
-    // ── Expand detection array (one row per detection element) ───────────────
+    //  Expand detection array (one row per detection element) 
     | extend detection_array = column_ifexists("detection", dynamic([]))
     | where isnotnull(detection_array) and array_length(detection_array) > 0
     | mv-expand detection = detection_array
-    // ── Top-level columns ────────────────────────────────────────────────────
+    //  Top-level columns 
     | extend
         detection_id       = column_ifexists("id", ""),
         detection_type     = column_ifexists("DetectionType", ""),
@@ -111,7 +111,7 @@ ParserQuery: |
         collection_arr     = column_ifexists("collectionElements", dynamic(null)),
         detect_timing      = column_ifexists("detectionTimingDetails", dynamic(null)),
         latency_metrics    = column_ifexists("latencyMetrics", dynamic(null))
-    // ── Fields from expanded detection element ───────────────────────────────
+    //  Fields from expanded detection element 
     | extend
         rule_name          = tostring(detection.ruleName),
         rule_id            = tostring(detection.ruleId),
@@ -126,7 +126,7 @@ ParserQuery: |
         detect_fields      = detection.detectionFields,
         outcomes           = detection.outcomes,
         variables          = detection.variables
-    // ── Entity variables (principal / source / target) ───────────────────────
+    //  Entity variables (principal / source / target) 
     | extend
         DvcIpAddr   = tostring(coalesce(
                         variables.principal_ip.value,
@@ -142,28 +142,28 @@ ParserQuery: |
                 variables.principal_asset_hostname.value,
                 variables.source_hostname.value))
     | invoke _ASIM_ResolveDvcFQDN("Hostname")
-    // ── IP / hostname / username filters ─────────────────────────────────────
+    //  IP / hostname / username filters 
     | where (array_length(ipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
     | where (array_length(hostname_has_any) == 0) or (DvcHostname has_any (hostname_has_any))
     | where (array_length(username_has_any) == 0) or (Username has_any (username_has_any))
-    // ── Severity normalisation ────────────────────────────────────────────────
+    //  Severity normalisation 
     | lookup SeverityLookup on orig_severity
     | extend EventSeverity = coalesce(EventSeverity, "Informational")
     | where (array_length(eventseverity_has_any) == 0) or (EventSeverity has_any (eventseverity_has_any))
-    // ── EventSubType / DetectionMethod ───────────────────────────────────────
+    //  EventSubType / DetectionMethod 
     | lookup EventSubTypeLookup on detection_type
     | extend EventSubType = coalesce(EventSubType, "Threat")
     | lookup DetectionMethodLookup on detection_type
     | extend DetectionMethod = coalesce(DetectionMethod, "Behavioral Analytics")
-    // ── AlertStatus ──────────────────────────────────────────────────────────
+    //  AlertStatus 
     | extend
         AlertStatus         = case(alert_state == "ALERTING", "Active", "Closed"),
         AlertOriginalStatus = alert_state
-    // ── ThreatRiskLevel ──────────────────────────────────────────────────────
+    //  ThreatRiskLevel 
     | extend
         ThreatRiskLevel         = toint(risk_score_raw),
         ThreatOriginalRiskLevel = risk_score_raw
-    // ── Threat intelligence from collectionElements ──────────────────────────
+    //  Threat intelligence from collectionElements 
     | extend
         threat_obj          = coalesce(todynamic(collection_arr)[0].references[0].entity.metadata.threat[0], todynamic(collection_arr)[1].references[0].entity.metadata.threat[0]),
         entity_type_raw     = coalesce(tostring(todynamic(collection_arr)[0].references[0].entity.metadata.entityType), tostring(todynamic(collection_arr)[1].references[0].entity.metadata.entityType))
@@ -174,12 +174,12 @@ ParserQuery: |
         threat_first_ts     = todatetime(threat_obj.firstDiscoveredTime),
         threat_last_ts      = todatetime(threat_obj.lastUpdatedTime),
         threat_url          = tostring(threat_obj.urlBackToProduct)
-    // ── AlertVerdict ─────────────────────────────────────────────────────────
+    //  AlertVerdict 
     | extend threat_verdict = threat_verdict_raw
     | lookup AlertVerdictLookup on threat_verdict
     | extend AlertVerdict = coalesce(AlertVerdict, "Unknown")
     | where (array_length(alertverdict_has_any) == 0) or (AlertVerdict has_any (alertverdict_has_any))
-    // ── ThreatCategory ────────────────────────────────────────────────────────
+    //  ThreatCategory 
     | extend
         ThreatOriginalCategory = threat_category_raw,
         ThreatCategory = case(
@@ -198,7 +198,7 @@ ParserQuery: |
             isnotempty(threat_category_raw),         "Unknown",
                                                      "Unknown")
     | where (array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any))
-    // ── IndicatorType ─────────────────────────────────────────────────────────
+    //  IndicatorType 
     | extend IndicatorType = case(
         entity_type_raw == "IP_ADDRESS",  "Ip",
         entity_type_raw == "DOMAIN_NAME", "Url",
@@ -208,10 +208,10 @@ ParserQuery: |
         entity_type_raw == "URL",         "Url",
         entity_type_raw == "PROCESS",     "Process",
                                           "Ip")
-    // ── User fields ───────────────────────────────────────────────────────────
+    //  User fields 
     | extend UsernameType = _ASIM_GetUsernameType(Username)
-    // ── AttackTactics / AttackTechniques ─────────────────────────────────────
-    // ── AttackTactics / AttackTechniques ─────────────────────────────────────
+    //  AttackTactics / AttackTechniques 
+    //  AttackTactics / AttackTechniques 
     | mv-apply rl = rule_labels on (
         summarize
             AttackTactics = anyif(tostring(rl.value), rl.key == "mitre_attack_tactic"),
@@ -219,7 +219,7 @@ ParserQuery: |
     )
     | where (array_length(attacktactics_has_any) == 0) or (AttackTactics has_any (attacktactics_has_any))
     | where (array_length(attacktechniques_has_any) == 0) or (AttackTechniques has_any (attacktechniques_has_any))
-    // ── Mandatory / Recommended event fields ────────────────────────────────
+    //  Mandatory / Recommended event fields 
     | extend
         EventType             = "Alert",
         EventCount            = int(1),
@@ -235,7 +235,7 @@ ParserQuery: |
         EventOriginalSeverity = orig_severity,
         EventOriginalSubType  = detection_type,
         EventReportUrl        = url_back
-    // ── Alert / Rule / Threat fields ─────────────────────────────────────────
+    //  Alert / Rule / Threat fields 
     | extend
         AlertName               = rule_name,
         RuleName                = rule_name,
@@ -244,7 +244,7 @@ ParserQuery: |
         ThreatFirstReportedTime = threat_first_ts,
         ThreatLastReportedTime  = threat_last_ts,
         Url                     = threat_url
-    // ── AdditionalFields bag ─────────────────────────────────────────────────
+    //  AdditionalFields bag 
     | extend AdditionalFields = bag_pack(
         "ruleId",                 rule_id,
         "ruleVersion",            rule_version,
@@ -255,7 +255,7 @@ ParserQuery: |
         "variables",              variables,
         "detectionTimingDetails", detect_timing,
         "latencyMetrics",         latency_metrics)
-    // ── Aliases ──────────────────────────────────────────────────────────────
+    //  Aliases 
     | extend
         AlertId          = EventUid,
         AlertDescription = EventMessage,
@@ -263,7 +263,7 @@ ParserQuery: |
         Hostname         = DvcHostname,
         User             = Username,
         Rule             = RuleName
-    // ── Drop intermediate working columns ────────────────────────────────────
+    //  Drop intermediate working columns 
     | project-away
         detection_array, detection_type, tw_start, tw_end, detect_timing,
         latency_metrics, rule_name, rule_id, rule_version, rule_type,

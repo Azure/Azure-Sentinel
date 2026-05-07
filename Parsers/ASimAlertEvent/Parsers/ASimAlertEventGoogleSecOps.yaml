@@ -55,11 +55,11 @@ ParserQuery: |
   let parser = (disabled: bool=false) {
     DetectionAlerts_CL
     | where not(disabled)
-    // ── Expand detection array (one row per detection element) ───────────────
+    //  Expand detection array (one row per detection element) 
     | extend detection_array = column_ifexists("detection", dynamic([]))
     | where isnotnull(detection_array) and array_length(detection_array) > 0
     | mv-expand detection = detection_array
-    // ── Top-level columns ────────────────────────────────────────────────────
+    //  Top-level columns 
     | extend
         detection_id   = column_ifexists("id", ""),
         detection_type = column_ifexists("DetectionType", ""),
@@ -68,7 +68,7 @@ ParserQuery: |
         collection_arr = column_ifexists("collectionElements", dynamic(null)),
         detect_timing  = column_ifexists("detectionTimingDetails", dynamic(null)),
         latency_metrics = column_ifexists("latencyMetrics", dynamic(null))
-    // ── Fields from expanded detection element ───────────────────────────────
+    //  Fields from expanded detection element 
     | extend
         rule_name      = tostring(detection.ruleName),
         rule_id        = tostring(detection.ruleId),
@@ -83,7 +83,7 @@ ParserQuery: |
         detect_fields  = detection.detectionFields,
         outcomes       = detection.outcomes,
         variables      = detection.variables
-    // ── Entity variables (principal / source / target) ───────────────────────
+    //  Entity variables (principal / source / target) 
     | extend
         DvcIpAddr   = tostring(coalesce(
                         variables.principal_ip.value,
@@ -93,23 +93,23 @@ ParserQuery: |
                         variables.principal_user_userid.value,
                         variables.source_user_userid.value,
                         variables.user.value))
-    // ── Severity normalisation ────────────────────────────────────────────────
+    //  Severity normalisation 
     | lookup SeverityLookup on orig_severity
     | extend EventSeverity = coalesce(EventSeverity, "Informational")
-    // ── EventSubType / DetectionMethod ───────────────────────────────────────
+    //  EventSubType / DetectionMethod 
     | lookup EventSubTypeLookup on detection_type
     | extend EventSubType = coalesce(EventSubType, "Threat")
     | lookup DetectionMethodLookup on detection_type
     | extend DetectionMethod = coalesce(DetectionMethod, "Behavioral Analytics")
-    // ── AlertStatus ──────────────────────────────────────────────────────────
+    //  AlertStatus 
     | extend
         AlertStatus         = case(alert_state == "ALERTING", "Active", "Closed"),
         AlertOriginalStatus = alert_state
-    // ── ThreatRiskLevel ──────────────────────────────────────────────────────
+    //  ThreatRiskLevel 
     | extend
         ThreatRiskLevel         = toint(risk_score_raw),
         ThreatOriginalRiskLevel = risk_score_raw
-    // ── Threat intelligence from collectionElements ──────────────────────────
+    //  Threat intelligence from collectionElements 
     | extend
         threat_obj          = coalesce(todynamic(collection_arr)[0].references[0].entity.metadata.threat[0],todynamic(collection_arr)[1].references[0].entity.metadata.threat[0]),
         entity_type_raw     = coalesce(tostring(todynamic(collection_arr)[0].references[0].entity.metadata.entityType), tostring(todynamic(collection_arr)[1].references[0].entity.metadata.entityType))
@@ -120,11 +120,11 @@ ParserQuery: |
         threat_first_ts     = todatetime(threat_obj.firstDiscoveredTime),
         threat_last_ts      = todatetime(threat_obj.lastUpdatedTime),
         threat_url          = tostring(threat_obj.urlBackToProduct)
-    // ── AlertVerdict ─────────────────────────────────────────────────────────
+    //  AlertVerdict 
     | extend threat_verdict = threat_verdict_raw
     | lookup AlertVerdictLookup on threat_verdict
     | extend AlertVerdict = coalesce(AlertVerdict, "Unknown")
-    // ── ThreatCategory ────────────────────────────────────────────────────────
+    //  ThreatCategory 
     | extend
         ThreatOriginalCategory = threat_category_raw,
         ThreatCategory = case(
@@ -142,7 +142,7 @@ ParserQuery: |
             threat_category_raw has "NETWORK_RECON", "Security Policy Violation",
             isnotempty(threat_category_raw),         "Unknown",
                                                      "Unknown")
-    // ── IndicatorType ─────────────────────────────────────────────────────────
+    //  IndicatorType 
     | extend IndicatorType = case(
         entity_type_raw == "IP_ADDRESS",  "Ip",
         entity_type_raw == "DOMAIN_NAME", "Url",
@@ -158,15 +158,15 @@ ParserQuery: |
                 variables.principal_asset_hostname.value,
                 variables.source_hostname.value))
     | invoke _ASIM_ResolveDvcFQDN("Hostname")
-    // ── User fields ───────────────────────────────────────────────────────────
+    //  User fields 
     | extend UsernameType = _ASIM_GetUsernameType(Username)
-        // ── AttackTactics / AttackTechniques ─────────────────────────────────────
+        //  AttackTactics / AttackTechniques 
     | mv-apply rl = rule_labels on (
         summarize
             AttackTactics = anyif(tostring(rl.value), rl.key == "mitre_attack_tactic"),
             AttackTechniques = anyif(tostring(rl.value), rl.key == "mitre_attack_technique")
     )
-    // ── Mandatory / Recommended event fields ────────────────────────────────
+    //  Mandatory / Recommended event fields 
     | extend
         EventType             = "Alert",
         EventCount            = int(1),
@@ -182,7 +182,7 @@ ParserQuery: |
         EventOriginalSeverity = orig_severity,
         EventOriginalSubType  = detection_type,
         EventReportUrl        = url_back
-    // ── Alert / Rule / Threat fields ─────────────────────────────────────────
+    //  Alert / Rule / Threat fields 
     | extend
         AlertName               = rule_name,
         RuleName                = rule_name,
@@ -191,7 +191,7 @@ ParserQuery: |
         ThreatFirstReportedTime = threat_first_ts,
         ThreatLastReportedTime  = threat_last_ts,
         Url                     = threat_url
-    // ── AdditionalFields bag ─────────────────────────────────────────────────
+    //  AdditionalFields bag 
     | extend AdditionalFields = bag_pack(
         "ruleId",                 rule_id,
         "ruleVersion",            rule_version,
@@ -203,7 +203,7 @@ ParserQuery: |
         "detectionTimingDetails", detect_timing,
         "latencyMetrics",         latency_metrics,
         "collectionElements", collection_arr)
-    // ── Aliases ──────────────────────────────────────────────────────────────
+    //  Aliases 
     | extend
         AlertId          = EventUid,
         AlertDescription = EventMessage,
@@ -211,7 +211,7 @@ ParserQuery: |
         Hostname         = DvcHostname,
         User             = Username,
         Rule             = RuleName
-    // ── Drop intermediate working columns ────────────────────────────────────
+    //  Drop intermediate working columns 
     | project-away
         detection_array, detection_type, tw_start, tw_end, detect_timing,
         latency_metrics, rule_name, rule_id, rule_version, rule_type,
