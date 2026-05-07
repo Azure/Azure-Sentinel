@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimAuthenticationVMwareESXi')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM parser for VMware ESXi",
+        "category": "ASIM",
+        "FunctionAlias": "ASimAuthenticationVMwareESXi",
+        "query": "let parser = (disabled: bool=false, pack: bool=false)\n{\n    let DCUIEvents = (\n        Syslog\n        | where not(disabled)\n        | where ProcessName == \"DCUI\"\n        | where SyslogMessage has_any (\"logged in\", \"logged out\") or SyslogMessage has_all (\"Authentication of user\", \"failed\")\n        | extend\n            TargetUsername = extract(@\"[Uu]ser (\\S+)\", 1, SyslogMessage),\n            EventType = case(SyslogMessage has \"logged out\", \"Logoff\", \"Logon\"),\n            EventResult = case(\n                SyslogMessage has_any (\"logged in\", \"logged out\", \"succeeded\"), \"Success\",\n                SyslogMessage has \"failed\", \"Failure\",\n                \"\"\n            ),\n            EventResultDetails = iff(SyslogMessage has \"time out\", \"Session timeout\", \"\"),\n            EventSubType = \"Interactive\",\n            LogonMethod = \"Username & Password\"\n        | where isnotempty(TargetUsername)\n    );\n    let HostdEvents = (\n        union kind=inner (\n            Syslog\n            | where not(disabled)\n            | where ProcessName == \"Hostd\"\n            | project TimeGenerated, EventTime, Facility, HostName, SeverityLevel, SyslogMessage, ProcessID, ProcessName, Type\n        ), (\n            union kind=inner AVSSyslog, AVSEsxiSyslog\n            | where not(disabled)\n            | where AppName == \"Hostd\"\n            | project-rename EventTime=LogCreationTime, SyslogMessage=Message, SeverityLevel=Severity, ProcessName=AppName, ProcessID=ProcId\n        )\n        | where SyslogMessage has_any (\"Accepted password\", \"Rejected password\", \"Cannot login\")\n        | extend\n            TargetUsername = coalesce(\n                extract(@\"for user (\\S+) from\", 1, SyslogMessage),\n                extract(@\"Cannot login user (\\S+)@\", 1, SyslogMessage),\n                extract(@\"Cannot login (\\S+)@\", 1, SyslogMessage)\n            ),\n            SrcIpAddr = coalesce(\n                extract(@\"for user \\S+ from ([\\d.]+)\", 1, SyslogMessage),\n                extract(@\"Cannot login user \\S+@([\\d.]+)\", 1, SyslogMessage),\n                extract(@\"Cannot login \\S+@([\\d.]+)\", 1, SyslogMessage)\n            ),\n            EventResult = case(\n                SyslogMessage has \"Accepted password\", \"Success\",\n                SyslogMessage has_any (\"Rejected password\", \"Cannot login\"), \"Failure\",\n                \"\"\n            ),\n            EventType = \"Logon\",\n            EventSubType = \"Remote\",\n            EventOriginalResultDetails = extract(@\"@[\\d.]+: (.+)$\", 1, SyslogMessage),\n            TargetSessionId = extract(@\"session=(\\S+)\", 1, SyslogMessage),\n            OperationId = extract(@\"opID=([^\\s\\]]+)\", 1, SyslogMessage),\n            SessionIdShort = extract(@\"sid=([a-f0-9]+)\", 1, SyslogMessage)\n        | where isnotempty(TargetUsername)\n        | extend EventResultDetails = case(\n            EventOriginalResultDetails == \"no permission\", \"Logon violates policy\", //Event Type Description: A user could not log in due to insufficient access permission \n            \"\"\n        )\n    );\n    union DCUIEvents, HostdEvents\n    | invoke _ASIM_ResolveDvcFQDN(\"HostName\")\n    | project-rename EventOriginalSeverity = SeverityLevel\n    | extend\n        EventCount = int(1),\n        EventStartTime = coalesce(EventTime, TimeGenerated),\n        EventEndTime = coalesce(EventTime, TimeGenerated),\n        EventVendor = \"VMware\",\n        EventProduct = \"ESXi\",\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.4\",\n        TargetUsernameType = \"Simple\",\n        EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),\n        DvcIpAddr = iif(HostIP != \"Unknown IP\", tostring(HostIP), dynamic(null)),\n        DvcOs = \"VMkernel\",\n        TargetHostname = DvcHostname\n    | extend\n        AdditionalFields = iif(\n            pack,\n            bag_pack(\n                'OperationId', OperationId,\n                'SessionIdShort', SessionIdShort\n            ),\n            dynamic(null)\n        )\n    | extend\n        User = TargetUsername,\n        Dvc = DvcHostname,\n        IpAddr = SrcIpAddr,\n        Src = SrcIpAddr\n    | project\n        TimeGenerated,\n        _ResourceId,\n        Type,\n        EventCount,\n        EventStartTime,\n        EventEndTime,\n        EventType,\n        EventSubType,\n        EventResult,\n        EventResultDetails,\n        EventOriginalResultDetails,\n        EventSeverity,\n        EventOriginalSeverity,\n        EventVendor,\n        EventProduct,\n        //EventProductVersion,\n        EventSchema,\n        EventSchemaVersion,\n        DvcHostname,\n        DvcIpAddr,\n        DvcOs,\n        DvcDomain,\n        DvcDomainType,\n        DvcFQDN,\n        //DvcId,\n        //DvcIdType,\n        SrcIpAddr,\n        //SrcHostname,\n        TargetUsername,\n        TargetUsernameType,\n        //TargetUserType,\n        //TargetUserDomain,\n        TargetHostname,\n        TargetSessionId,\n        LogonMethod,\n        //LogonProtocol,\n        AdditionalFields,\n        User,\n        Dvc,\n        IpAddr,\n        Src\n};\nparser(disabled = disabled, pack = pack)",
+        "version": 1,
+        "functionParameters": "disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
