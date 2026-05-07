@@ -1,0 +1,1674 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "string",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is setup"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "string",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is setup"
+            }
+        },
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "Crowd Strike API",
+        "_solutionVersion": "1.1.0",
+        "_solutionAuthor": "Eric.Lamer@RobertHalf.com",
+        "_packageIcon": "microsoft_logo",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-CrowdStrike-api",
+        "dataConnectorVersionConnectorDefinition": "1.1.0",
+        "dataConnectorVersionConnections": "1.1.0",
+        "_solutionTier": "Microsoft",
+        "_dataConnectorContentIdConnectorDefinition": "CrowdStrikeAPIConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "Connections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_logAnalyticsTableId1": "CrowdStrikeVulnerabilities_CL",
+        "_logAnalyticsTableId2": "CrowdStrikeAlerts_CL",
+        "_logAnalyticsTableId3": "CrowdStrikeCases_CL",
+        "_logAnalyticsTableId4": "CrowdStrikeHostsGroups_CL",
+        "_logAnalyticsTableId5": "CrowdStrikeHosts_CL"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2025-09-01",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "parameters": {},
+                "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "Customizable",
+                            "properties": {
+                                "connectorUiConfig": {
+                                    "id": "CrowdStrikeAPIDataConnector",
+                                    "title": "CrowdStrike API Data Connector",
+                                    "publisher": "Microsoft",
+                                    "descriptionMarkdown": "The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting logs from the CrowdStrike API into Microsoft Sentinel. This connector is built on the Microsoft Sentinel Codeless Connector Platform and uses the CrowdStrike API to fetch logs for Alerts, Detections, Hosts, Cases, and Vulnerabilities. It supports DCR-based ingestion time transformations so that queries can run more efficiently.",
+                                    "graphQueries": [
+                      {
+                        "metricName": "Total Vulnerability logs received",
+                        "legend": "CrowdStrike Vulnerability Logs",
+                        "baseQuery": "CrowdStrikeVulnerabilities_CL"
+                      },
+                      {
+                        "metricName": "Total Alert logs received",
+                        "legend": "CrowdStrike Alert Logs",
+                        "baseQuery": "CrowdStrikeAlerts_CL"
+                      },
+                      {
+                        "metricName": "Total Cases logs received",
+                        "legend": "CrowdStrike Case Logs",
+                        "baseQuery": "CrowdStrikeCases_CL"
+                      },
+                      {
+                        "metricName": "Total Detection logs received",
+                        "legend": "CrowdStrike Hosts Groups Logs",
+                        "baseQuery": "CrowdStrikeHostsGroups_CL"
+                      },
+                      {
+                        "metricName": "Total Host logs received",
+                        "legend": "CrowdStrike Host Logs",
+                        "baseQuery": "CrowdStrikeHosts_CL"
+                      }
+                                    ],
+                                    "sampleQueries": [
+                      {
+                        "description": "Get sample of CrowdStrike Vulnerability logs",
+                        "query": "CrowdStrikeVulnerabilities_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Alert logs",
+                        "query": "CrowdStrikeAlerts_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Case logs",
+                        "query": "CrowdStrikeCases_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Hosts Groups logs",
+                        "query": "CrowdStrikeHostsGroups_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Host logs",
+                        "query": "CrowdStrikeHosts_CL | take 10"
+                      }
+                                    ],
+                                    "dataTypes": [
+                      {
+                        "name": "CrowdStrikeVulnerabilities_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeVulnerabilities_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeAlerts_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeAlerts_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeCases_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeCases_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeHostsGroups_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeHostsGroups_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeHosts_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeHosts_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      }
+                                    ],
+                                    "connectivityCriteria": [
+                                        {
+                                            "type": "HasDataConnectors",
+                                            "value": null
+                                        }
+                                    ],
+                                    "availability": {
+                                        "status": 1,
+                                        "isPreview": false
+                                    },
+                                    "permissions": {
+                                        "resourceProvider": [
+                                            {
+                                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                                "providerDisplayName": "Workspace",
+                                                "scope": "Workspace",
+                                                "requiredPermissions": {
+                                                    "read": true,
+                                                    "write": true,
+                                                    "delete": true,
+                                                    "action": false
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "instructionSteps": [
+										{
+										"instructions": [
+											{
+											"type": "DataConnectorsGrid",
+											"parameters": {
+												"mapping": [
+												{
+												"columnName": "Connection Name",
+												"columnValue": "properties.addOnAttributes.connectionName"
+												},
+												{
+												"columnName": "Connection Type",
+												"columnValue": "properties.addOnAttributes.connectionType"
+												}
+												],
+												"menuItems": [
+												"DeleteConnector"
+												]
+											}
+											},
+											{
+												"type": "ContextPane",
+												"parameters": {
+													"isPrimary": true,
+													"label": "Add",
+													"title": "Add Crowdstrike Tenant",
+													"subtitle": "Add Crowdstrike Tenant",
+													"contextPaneType": "DataConnectorsContextPane",
+													"instructionSteps": [
+														{
+														"instructions": [
+															{
+																"type": "Textbox",
+																"parameters": {
+																	"label": "Name",
+																	"placeholder": "Name of the config.",
+																	"type": "string",
+																	"name": "connectionName"
+																}
+															},
+															{
+																"type": "Textbox",
+																"parameters": {
+																	"label": "Base API URL",
+																	"placeholder": "https://api.us-2.crowdstrike.com",
+																	"type": "string",
+																	"name": "apiUrl"
+																}
+															},
+															{
+																"type": "Textbox",
+																"parameters": {
+																	"label": "Client ID",
+																	"placeholder": "Your Client ID",
+																	"type": "string",
+																	"name": "clientId"
+																}
+															},
+															{
+																"type": "Textbox",
+																"parameters": {
+																	"label": "Client Secret",
+																	"placeholder": "Your Client Secret",
+																	"type": "password",
+																	"name": "clientSecret"
+																}
+															}
+														]
+													}
+												]
+											}
+										},
+										{
+										"parameters": {
+											"label": "toggle",
+											"name": "toggle"
+										},
+										"type": "ConnectionToggleButton"
+										}
+									],
+									"innerSteps": null
+									}
+								],
+								"isConnectivityCriteriasMatchSome": false
+								}
+							}
+						},
+                        {
+                            "name": "CrowdStrikeDCR",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties": {
+                              "streamDeclarations": {
+                                "Custom-CrowdStrikeVulnerabilities": {
+                                  "columns": [
+                                    { "name": "TimeGenerated", "type": "datetime" },
+                                    { "name": "id", "type": "string" },
+                                    { "name": "cid", "type": "string" },
+                                    { "name": "aid", "type": "string" },
+                                    { "name": "vulnerability_id", "type": "string" },
+                                    { "name": "data_providers", "type": "dynamic" },
+                                    { "name": "created_timestamp", "type": "datetime" },
+                                    { "name": "updated_timestamp", "type": "datetime" },
+                                    { "name": "status", "type": "string" },
+                                    { "name": "apps", "type": "dynamic" },
+                                    { "name": "suppression_info", "type": "dynamic" },
+                                    { "name": "confidence", "type": "string" },
+                                    { "name": "app", "type": "dynamic" },
+                                    { "name": "cve", "type": "dynamic" },
+                                    { "name": "host_info", "type": "dynamic" },
+                                    { "name": "remediation", "type": "dynamic" },
+									{ "name": "connectionName", "type": "string" }
+                                  ]
+                                },
+                                "Custom-CrowdStrikeAlerts": {
+                                  "columns": [
+                                    { "name": "TimeGenerated", "type": "datetime" },
+                                    { "name": "agent_id", "type": "string" },
+                                    { "name": "aggregate_id", "type": "string" },
+                                    { "name": "assigned_to_name", "type": "string" },
+                                    { "name": "assigned_to_uid", "type": "string" },
+                                    { "name": "assigned_to_uuid", "type": "string" },
+                                    { "name": "cid", "type": "string" },
+                                    { "name": "composite_id", "type": "string" },
+                                    { "name": "confidence", "type": "int" },
+                                    { "name": "crawled_timestamp", "type": "datetime" },
+                                    { "name": "created_timestamp", "type": "datetime" },
+                                    { "name": "data_domains", "type": "dynamic" },
+                                    { "name": "description", "type": "string" },
+                                    { "name": "display_name", "type": "string" },
+                                    { "name": "email_sent", "type": "boolean" },
+                                    { "name": "external", "type": "boolean" },
+                                    { "name": "id", "type": "string" },
+                                    { "name": "name", "type": "string" },
+                                    { "name": "objective", "type": "string" },
+                                    { "name": "pattern_id", "type": "int" },
+                                    { "name": "platform", "type": "string" },
+                                    { "name": "product", "type": "string" },
+                                    { "name": "scenario", "type": "string" },
+                                    { "name": "seconds_to_resolved", "type": "int" },
+                                    { "name": "seconds_to_triaged", "type": "int" },
+                                    { "name": "severity", "type": "int" },
+                                    { "name": "severity_name", "type": "string" },
+                                    { "name": "show_in_ui", "type": "boolean" },
+                                    { "name": "source_products", "type": "dynamic" },
+                                    { "name": "source_vendors", "type": "dynamic" },
+                                    { "name": "status", "type": "string" },
+                                    { "name": "tactic", "type": "string" },
+                                    { "name": "tactic_id", "type": "string" },
+                                    { "name": "tags", "type": "dynamic" },
+                                    { "name": "technique", "type": "string" },
+                                    { "name": "technique_id", "type": "string" },
+                                    { "name": "timestamp", "type": "datetime" },
+                                    { "name": "type", "type": "string" },
+                                    { "name": "updated_timestamp", "type": "datetime" },
+									{ "name": "cloud_indicator", "type": "string" },
+	                                { "name": "cmdline", "type": "string" },
+	                                { "name": "context_timestamp", "type": "datetime" },
+	                                { "name": "control_graph_id", "type": "string" },
+	                                { "name": "device", "type": "dynamic" },
+	                                { "name": "falcon_host_link", "type": "string" },
+	                                { "name": "filename", "type": "string" },
+	                                { "name": "filepath", "type": "string" },
+	                                { "name": "global_prevalence", "type": "string" },
+	                                { "name": "grandparent_details", "type": "dynamic" },
+	                                { "name": "host_names", "type": "dynamic" },
+	                                { "name": "indicator_id", "type": "string" },
+	                                { "name": "ioc_context", "type": "dynamic" },
+	                                { "name": "local_prevalence", "type": "string" },
+	                                { "name": "local_process_id", "type": "string" },
+	                                { "name": "md5", "type": "string" },
+	                                { "name": "mitre_attack", "type": "dynamic" },
+	                                { "name": "parent_details", "type": "dynamic" },
+	                                { "name": "parent_process_id", "type": "string" },
+	                                { "name": "pattern_disposition", "type": "int" },
+	                                { "name": "pattern_disposition_description", "type": "string" },
+	                                { "name": "pattern_disposition_details", "type": "dynamic" },
+	                                { "name": "poly_id", "type": "string" },
+	                                { "name": "priority_details", "type": "dynamic" },
+	                                { "name": "priority_explanation", "type": "dynamic" },
+	                                { "name": "priority_value", "type": "int" },
+	                                { "name": "process_end_time", "type": "string" },
+	                                { "name": "process_id", "type": "string" },
+	                                { "name": "process_start_time", "type": "string" },
+	                                { "name": "rule_group_id", "type": "string" },
+	                                { "name": "rule_group_name", "type": "string" },
+	                                { "name": "rule_instance_created_by", "type": "string" },
+	                                { "name": "rule_instance_id", "type": "string" },
+	                                { "name": "rule_instance_name", "type": "string" },
+	                                { "name": "rule_instance_version", "type": "string" },
+	                                { "name": "sha1", "type": "string" },
+	                                { "name": "sha256", "type": "string" },
+	                                { "name": "source_hosts", "type": "dynamic" },
+  	                                { "name": "template_instance_version", "type": "string" },
+	                                { "name": "tree_id", "type": "string" },
+	                                { "name": "tree_root", "type": "string" },
+	                                { "name": "triggering_process_graph_id", "type": "string" },
+	                                { "name": "template_instance_id", "type": "string" },
+									{ "name": "user_id", "type": "string" },
+									{ "name": "user_principal", "type": "string" },
+									{ "name": "child_process_ids", "type": "dynamic" },
+	                                { "name": "user_name", "type": "string" },
+									{ "name": "connectionName", "type": "string" }
+                                  ]                                  
+                                },
+                                "Custom-CrowdStrikeCases": {
+                                  "columns": [
+                                    { "name": "TimeGenerated", "type": "datetime" },
+                                    { "name": "id", "type": "string" },
+                                    { "name": "cid", "type": "string" },
+                                    { "name": "version", "type": "int" },
+                                    { "name": "consistency", "type": "dynamic" },
+                                    { "name": "created_timestamp", "type": "datetime" },
+                                    { "name": "created_by", "type": "dynamic" },
+                                    { "name": "updated_timestamp", "type": "datetime" },
+                                    { "name": "last_updated_by", "type": "dynamic" },
+                                    { "name": "start_timestamp", "type": "datetime" },
+                                    { "name": "end_timestamp", "type": "datetime" },
+                                    { "name": "name", "type": "string" },
+                                    { "name": "description", "type": "string" },
+                                    { "name": "severity_info", "type": "dynamic" },
+                                    { "name": "severity", "type": "int" },
+                                    { "name": "status", "type": "string" },
+                                    { "name": "assigned_to", "type": "string" },
+                                    { "name": "tags", "type": "dynamic" },
+                                    { "name": "evidence", "type": "dynamic" },
+                                    { "name": "analysis_results", "type": "dynamic" }
+                                  ]
+                                },
+                                "Custom-CrowdStrikeHostsGroups": {
+                                  "columns": [
+                                    { "name": "TimeGenerated", "type": "datetime" },
+									{ "name": "id", "type": "string" },
+									{ "name": "group_type", "type": "string" },
+									{ "name": "name", "type": "string" },
+									{ "name": "description", "type": "string" },
+									{ "name": "assignment_rule", "type": "string" },
+									{ "name": "created_by", "type": "string" },
+									{ "name": "created_timestamp", "type": "datetime" },
+									{ "name": "modified_by", "type": "string" },
+									{ "name": "modified_timestamp", "type": "datetime" },
+									{ "name": "connectionName", "type": "string" }
+                                  ]
+                                },
+                                "Custom-CrowdStrikeHosts": {
+                                  "columns": [
+                                    { "name": "TimeGenerated", "type": "datetime" },
+                                    { "name": "agent_load_flags", "type": "string" },
+                                    { "name": "agent_local_time", "type": "string" },
+                                    { "name": "agent_version", "type": "string" },
+                                    { "name": "base_image_version", "type": "string" },
+                                    { "name": "bios_manufacturer", "type": "string" },
+                                    { "name": "bios_version", "type": "string" },
+                                    { "name": "build_number", "type": "string" },
+                                    { "name": "chassis_type", "type": "string" },
+                                    { "name": "chassis_type_desc", "type": "string" },
+                                    { "name": "cid", "type": "string" },
+                                    { "name": "config_id_base", "type": "string" },
+                                    { "name": "config_id_build", "type": "string" },
+                                    { "name": "config_id_platform", "type": "string" },
+                                    { "name": "connection_ip", "type": "string" },
+                                    { "name": "connection_mac_address", "type": "string" },
+                                    { "name": "cpu_signature", "type": "string" },
+                                    { "name": "cpu_vendor", "type": "string" },
+                                    { "name": "default_gateway_ip", "type": "string" },
+                                    { "name": "deployment_type", "type": "string" },
+                                    { "name": "detection_suppression_status", "type": "string" },
+                                    { "name": "device_id", "type": "string" },
+                                    { "name": "device_policies", "type": "dynamic" },
+                                    { "name": "email", "type": "string" },
+                                    { "name": "external_ip", "type": "string" },
+                                    { "name": "filesystem_containment_status", "type": "string" },
+                                    { "name": "first_login_timestamp", "type": "string" },
+                                    { "name": "first_seen", "type": "string" },
+                                    { "name": "group_hash", "type": "string" },
+                                    { "name": "groups", "type": "dynamic" },
+                                    { "name": "host_hidden_status", "type": "string" },
+                                    { "name": "host_utc_offset", "type": "string" },
+                                    { "name": "hostname", "type": "string" },
+                                    { "name": "instance_id", "type": "string" },
+                                    { "name": "internet_exposure", "type": "string" },
+                                    { "name": "k8s_cluster_git_version", "type": "string" },
+                                    { "name": "k8s_cluster_id", "type": "string" },
+                                    { "name": "k8s_cluster_version", "type": "string" },
+                                    { "name": "kernel_version", "type": "string" },
+                                    { "name": "last_login_timestamp", "type": "string" },
+                                    { "name": "last_login_uid", "type": "string" },
+                                    { "name": "last_login_user", "type": "string" },
+                                    { "name": "last_login_user_sid", "type": "string" },
+                                    { "name": "last_reboot", "type": "string" },
+                                    { "name": "last_seen", "type": "string" },
+                                    { "name": "linux_sensor_mode", "type": "string" },
+                                    { "name": "local_ip", "type": "string" },
+                                    { "name": "mac_address", "type": "string" },
+                                    { "name": "machine_domain", "type": "string" },
+                                    { "name": "major_version", "type": "string" },
+                                    { "name": "managed_apps", "type": "dynamic" },
+                                    { "name": "meta", "type": "dynamic" },
+                                    { "name": "migration_completed_time", "type": "string" },
+                                    { "name": "minor_version", "type": "string" },
+                                    { "name": "modified_timestamp", "type": "string" },
+                                    { "name": "notes", "type": "dynamic" },
+                                    { "name": "os_build", "type": "string" },
+                                    { "name": "os_product_name", "type": "string" },
+                                    { "name": "os_version", "type": "string" },
+                                    { "name": "ou", "type": "dynamic" },
+                                    { "name": "platform_id", "type": "string" },
+                                    { "name": "platform_name", "type": "string" },
+                                    { "name": "pod_annotations", "type": "dynamic" },
+                                    { "name": "pod_host_ip4", "type": "string" },
+                                    { "name": "pod_host_ip6", "type": "string" },
+                                    { "name": "pod_hostname", "type": "string" },
+                                    { "name": "pod_id", "type": "string" },
+                                    { "name": "pod_ip4", "type": "string" },
+                                    { "name": "pod_ip6", "type": "string" },
+                                    { "name": "pod_labels", "type": "dynamic" },
+                                    { "name": "pod_name", "type": "string" },
+                                    { "name": "pod_namespace", "type": "string" },
+                                    { "name": "pod_service_account_name", "type": "string" },
+                                    { "name": "pointer_size", "type": "string" },
+                                    { "name": "policies", "type": "dynamic" },
+                                    { "name": "product_type", "type": "string" },
+                                    { "name": "product_type_desc", "type": "string" },
+                                    { "name": "provision_status", "type": "string" },
+                                    { "name": "reduced_functionality_mode", "type": "string" },
+                                    { "name": "release_group", "type": "string" },
+                                    { "name": "rtr_state", "type": "string" },
+                                    { "name": "serial_number", "type": "string" },
+                                    { "name": "service_pack_major", "type": "string" },
+                                    { "name": "service_pack_minor", "type": "string" },
+                                    { "name": "service_provider", "type": "string" },
+                                    { "name": "service_provider_account_id", "type": "string" },
+                                    { "name": "site_name", "type": "string" },
+                                    { "name": "status", "type": "string" },
+                                    { "name": "system_manufacturer", "type": "string" },
+                                    { "name": "system_product_name", "type": "string" },
+                                    { "name": "tags", "type": "dynamic" },
+									{ "name": "connectionName", "type": "string" }
+                                  ]
+                                }
+                              },
+                              "destinations": {
+                                "logAnalytics": [
+                                  {
+                                    "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                    "name": "clv2ws1"
+                                  }
+                                ]
+                              },
+                              "dataFlows": [
+                                {
+                                  "streams": [
+                                    "Custom-CrowdStrikeVulnerabilities"
+                                  ],
+                                  "destinations": [
+                                    "clv2ws1"
+                                  ],
+                                  "transformKql": "source | project TimeGenerated = created_timestamp, Id = id, Cid = cid, Aid = aid, VulnerabilityId = vulnerability_id, DataProviders = todynamic(data_providers), CreatedTimestamp = created_timestamp, UpdatedTimestamp = updated_timestamp, Status = status, Apps = todynamic(apps), SuppressionInfo = todynamic(suppression_info), Confidence = confidence, App = todynamic(app), Cve = todynamic(cve), HostInfo = todynamic(host_info), Remediation = todynamic(remediation), ConnectionName = connectionName",
+                                  "outputStream": "Custom-CrowdStrikeVulnerabilities_CL"
+                                },
+                                {
+                                    "streams": [
+                                      "Custom-CrowdStrikeAlerts"
+                                    ],
+                                    "destinations": [
+                                      "clv2ws1"
+                                    ],
+                                    "transformKql": "source | project TimeGenerated = created_timestamp, AgentId = agent_id, AggregateId = aggregate_id, AssignedToName = assigned_to_name, AssignedToUid = assigned_to_uid, AssignedToUuid = assigned_to_uuid, Cid = cid, CompositeId = composite_id, Confidence = confidence, CrawledTimestamp = crawled_timestamp, CreatedTimestamp = created_timestamp, DataDomains = todynamic(data_domains), Description = description, DisplayName = display_name, EmailSent = email_sent, External = external, Id = id, Name = name, Objective = objective, PatternId = pattern_id, Platform = platform, Product = product, Scenario = scenario, SecondsToResolved = seconds_to_resolved, SecondsToTriaged = seconds_to_triaged, Severity = severity, SeverityName = severity_name, ShowInUi = show_in_ui, SourceProducts = todynamic(source_products), SourceVendors = todynamic(source_vendors), Status = status, Tactic = tactic, TacticId = tactic_id, Tags = todynamic(tags), Technique = technique, TechniqueId = technique_id, Timestamp = timestamp, AlertType = type, UpdatedTimestamp = updated_timestamp,CloudIndicator=cloud_indicator, Cmdline=cmdline, ContextTimestamp=context_timestamp, ControlGraphId=control_graph_id, Device=device, FalconHostLink=falcon_host_link, Filename=filename, Filepath=filepath, GlobalPrevalence=global_prevalence, GrandparentDetails=grandparent_details, HostNames=host_names, IndicatorId=indicator_id, IocContext=ioc_context, LocalPrevalence=local_prevalence, LocalProcessId=local_process_id, Md5=md5, MitreAttack=mitre_attack, ParentDetails=parent_details, ParentProcessId=parent_process_id,PatternDisposition=pattern_disposition, PatternDispositionDescription=pattern_disposition_description, PatternDispositionDetails=pattern_disposition_details, PolyId=poly_id, PriorityDetails=priority_details, PriorityExplanation=priority_explanation, PriorityValue=priority_value, ProcessEndTime=process_end_time, ProcessId=process_id, ProcessStartTime=process_start_time, RuleGroupId=rule_group_id, RuleGroupName=rule_group_name, RuleInstanceCreatedBy=rule_instance_created_by,RuleInstanceId=rule_instance_id, RuleInstanceName=rule_instance_name, RuleInstanceVersion=rule_instance_version, Sha1=sha1, Sha256=sha256, SourceHosts=source_hosts, TemplateInstanceId=template_instance_id, TemplateInstanceVersion=template_instance_version, TreeId=tree_id, TreeRoot=tree_root, TriggeringProcessGraphId=triggering_process_graph_id, UserName=user_name, UserId=user_id,UserPrincipal=user_principal,ChildProcessIds=child_process_ids, ConnectionName = connectionName",
+                                    "outputStream": "Custom-CrowdStrikeAlerts_CL"
+                                },
+                                {
+                                    "streams": [
+                                      "Custom-CrowdStrikeCases"
+                                    ],
+                                    "destinations": [
+                                      "clv2ws1"
+                                    ],
+                                    "transformKql": "source | project TimeGenerated = now(), Id = id, Cid = cid, Version = version, Consistency = consistency, CreatedTimestamp = created_timestamp, CreatedBy = created_by, UpdatedTimestamp = updated_timestamp, LastUpdatedBy = last_updated_by, StartTimestamp = start_timestamp, EndTimestamp = end_timestamp, Name = name, Description = description, SeverityInfo = severity_info, Severity = severity, Status = status, AssignedTo = assigned_to, Tags = tags, Evidence = evidence, AnalysisEesults = analysis_results",
+                                    "outputStream": "Custom-CrowdStrikeCases_CL"
+                                },
+                                {
+                                    "streams": [
+                                      "Custom-CrowdStrikeHostsGroups"
+                                    ],
+                                    "destinations": [
+                                      "clv2ws1"
+                                    ],
+                                    "transformKql": "source | project TimeGenerated = now(), Id=id, GroupType = group_type, Name = name, Description = description,AssignmentRule = assignment_rule, CreatedBy = created_by, CreatedTimestamp = created_timestamp, ModifiedBy = modified_by, ModifiedTimestamp = modified_timestamp, ConnectionName = connectionName",
+                                    "outputStream": "Custom-CrowdStrikeHostsGroups_CL"
+                                },
+                                {
+                                    "streams": [
+                                      "Custom-CrowdStrikeHosts"
+                                    ],
+                                    "destinations": [
+                                      "clv2ws1"
+                                    ],
+                                    "transformKql": "source | project TimeGenerated = now(), AgentLoadFlags = agent_load_flags, AgentLocalTime = agent_local_time, AgentVersion = agent_version, BaseImageVersion = base_image_version, BiosManufacturer = bios_manufacturer, BiosVersion = bios_version, BuildNumber = build_number, ChassisType = chassis_type, ChassisTypeDesc = chassis_type_desc, Cid = cid, ConfigIdBase = config_id_base, ConfigIdBuild = config_id_build, ConfigIdPlatform = config_id_platform, ConnectionIp = connection_ip, ConnectionMacAddress = connection_mac_address, CpuSignature = cpu_signature, CpuVendor = cpu_vendor, DefaultGatewayIp = default_gateway_ip, DeploymentType = deployment_type, DetectionSuppressionStatus = detection_suppression_status, DeviceId = device_id, DevicePolicies = device_policies, Email = email, ExternalIp = external_ip, FilesystemContainmentStatus = filesystem_containment_status, FirstLoginTimestamp = first_login_timestamp, FirstSeen = first_seen, GroupHash = group_hash, Groups = groups, HostHiddenStatus = host_hidden_status, HostUtcOffset = host_utc_offset, Hostname = hostname, InstanceId = instance_id, InternetExposure = internet_exposure, K8sClusterGitVersion = k8s_cluster_git_version, K8sClusterId = k8s_cluster_id, K8sClusterVersion = k8s_cluster_version, KernelVersion = kernel_version, LastLoginTimestamp = last_login_timestamp, LastLoginUid = last_login_uid, LastLoginUser = last_login_user, LastLoginUserSid = last_login_user_sid, LastReboot = last_reboot, LastSeen = last_seen, LinuxSensorMode = linux_sensor_mode, LocalIp = local_ip, MacAddress = mac_address, MachineDomain = machine_domain, MajorVersion = major_version, ManagedApps = managed_apps, Meta = meta, MigrationCompletedTime = migration_completed_time, MinorVersion = minor_version, ModifiedTimestamp = modified_timestamp, Notes = notes, OsBuild = os_build, OsProductName = os_product_name, OsVersion = os_version, Ou = ou, PlatformId = platform_id, PlatformName = platform_name, PodAnnotations = pod_annotations, PodHostIp4 = pod_host_ip4, PodHostIp6 = pod_host_ip6, PodHostname = pod_hostname, PodId = pod_id, PodIp4 = pod_ip4, PodIp6 = pod_ip6, PodLabels = pod_labels, PodName = pod_name, PodNamespace = pod_namespace, PodServiceAccountName = pod_service_account_name, PointerSize = pointer_size, Policies = policies, ProductType = product_type, ProductTypeDesc = product_type_desc, ProvisionStatus = provision_status, ReducedFunctionalityMode = reduced_functionality_mode, ReleaseGroup = release_group, RtrState = rtr_state, SerialNumber = serial_number, ServicePackMajor = service_pack_major, ServicePackMinor = service_pack_minor, ServiceProvider = service_provider, ServiceProviderAccountId = service_provider_account_id, SiteName = site_name, Status = status, SystemManufacturer = system_manufacturer, SystemProductName = system_product_name, Tags = tags, ConnectionName = connectionName",
+                                    "outputStream": "Custom-CrowdStrikeHosts_CL"
+                                }
+                              ],
+                              "dataCollectionEndpointId": "[concat('/subscriptions/', parameters('subscription'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Insights/dataCollectionEndpoints/', parameters('workspace'))]"
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('_logAnalyticsTableId1')]",
+                                    "columns": [
+                                      { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "Ingestion time (using 'created_timestamp')." },
+                                      { "name": "Id", "type": "string", "description": "Unique vulnerability identifier." },
+                                      { "name": "Cid", "type": "string", "description": "CID value." },
+                                      { "name": "Aid", "type": "string", "description": "AID value." },
+                                      { "name": "VulnerabilityId", "type": "string", "description": "Vulnerability ID (e.g. CVE identifier)." },
+                                      { "name": "DataProviders", "type": "dynamic", "description": "Data providers information." },
+                                      { "name": "CreatedTimestamp", "type": "datetime", "description": "Creation timestamp." },
+                                      { "name": "UpdatedTimestamp", "type": "datetime", "description": "Last update timestamp." },
+                                      { "name": "Status", "type": "string", "description": "Current status." },
+                                      { "name": "Apps", "type": "dynamic", "description": "Application details." },
+                                      { "name": "SuppressionInfo", "type": "dynamic", "description": "Suppression information." },
+                                      { "name": "Confidence", "type": "string", "description": "Confidence level." },
+                                      { "name": "App", "type": "dynamic", "description": "Application metadata." },
+                                      { "name": "Cve", "type": "dynamic", "description": "CVE details." },
+                                      { "name": "HostInfo", "type": "dynamic", "description": "Host information." },
+                                      { "name": "Remediation", "type": "dynamic", "description": "Remediation actions." },
+									  { "name": "ConnectionName", "type": "string", "description": "Connection name." }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId2')]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                              "schema": {
+                                "name": "[variables('_logAnalyticsTableId2')]",
+                                "columns": [
+                                  { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "The timestamp (UTC) when the event was generated (from the 'timestamp' field)." },
+                                  { "name": "AgentId", "type": "string", "description": "Agent ID." },
+                                  { "name": "AggregateId", "type": "string", "description": "Aggregate ID." },
+                                  { "name": "AssignedToName", "type": "string", "description": "Name of the assignee." },
+                                  { "name": "AssignedToUid", "type": "string", "description": "UID of the assignee." },
+                                  { "name": "AssignedToUuid", "type": "string", "description": "UUID of the assignee." },
+                                  { "name": "Cid", "type": "string", "description": "CID value." },
+                                  { "name": "CompositeId", "type": "string", "description": "Composite ID." },
+                                  { "name": "Confidence", "type": "int", "description": "Confidence score." },
+                                  { "name": "CrawledTimestamp", "type": "datetime", "description": "Crawled timestamp." },
+                                  { "name": "CreatedTimestamp", "type": "datetime", "description": "Created timestamp." },
+                                  { "name": "DataDomains", "type": "dynamic", "description": "List of data domains." },
+                                  { "name": "Description", "type": "string", "description": "Description text." },
+                                  { "name": "DisplayName", "type": "string", "description": "Display name." },
+                                  { "name": "EmailSent", "type": "boolean", "description": "Email sent flag." },
+                                  { "name": "External", "type": "boolean", "description": "External flag." },
+                                  { "name": "Id", "type": "string", "description": "Unique identifier." },
+                                  { "name": "Name", "type": "string", "description": "Name." },
+                                  { "name": "Objective", "type": "string", "description": "Objective description." },
+                                  { "name": "PatternId", "type": "int", "description": "Pattern ID." },
+                                  { "name": "Platform", "type": "string", "description": "Platform." },
+                                  { "name": "Product", "type": "string", "description": "Product." },
+                                  { "name": "Scenario", "type": "string", "description": "Scenario." },
+                                  { "name": "SecondsToResolved", "type": "int", "description": "Time in seconds to resolution." },
+                                  { "name": "SecondsToTriaged", "type": "int", "description": "Time in seconds to triage." },
+                                  { "name": "Severity", "type": "int", "description": "Severity value." },
+                                  { "name": "SeverityName", "type": "string", "description": "Severity name." },
+                                  { "name": "ShowInUi", "type": "boolean", "description": "Show in UI flag." },
+                                  { "name": "SourceProducts", "type": "dynamic", "description": "List of source products." },
+                                  { "name": "SourceVendors", "type": "dynamic", "description": "List of source vendors." },
+                                  { "name": "Status", "type": "string", "description": "Status." },
+                                  { "name": "Tactic", "type": "string", "description": "Tactic." },
+                                  { "name": "TacticId", "type": "string", "description": "Tactic ID." },
+                                  { "name": "Tags", "type": "dynamic", "description": "Tags." },
+                                  { "name": "Technique", "type": "string", "description": "Technique." },
+                                  { "name": "TechniqueId", "type": "string", "description": "Technique ID." },
+                                  { "name": "Timestamp", "type": "datetime", "description": "Event timestamp." },
+                                  { "name": "AlertType", "type": "string", "description": "Alert Type."},
+                                  { "name": "UpdatedTimestamp", "type": "datetime", "description": "Updated timestamp." },
+								  { "name": "CloudIndicator", "type": "string" },
+	                              { "name": "Cmdline", "type": "string" },
+	                              { "name": "ContextTimestamp", "type": "datetime" },
+	                              { "name": "ControlGraphId", "type": "string" },
+	                              { "name": "Device", "type": "dynamic" },
+	                              { "name": "FalconHostLink", "type": "string" },
+	                              { "name": "Filename", "type": "string" },
+	                              { "name": "Filepath", "type": "string" },
+	                              { "name": "GlobalPrevalence", "type": "string" },
+	                              { "name": "GrandparentDetails", "type": "dynamic" },
+	                              { "name": "HostNames", "type": "dynamic" },
+	                              { "name": "IndicatorId", "type": "string" },
+	                              { "name": "IocContext", "type": "dynamic" },
+	                              { "name": "LocalPrevalence", "type": "string" },
+	                              { "name": "LocalProcessId", "type": "string" },
+	                              { "name": "Md5", "type": "string" },
+	                              { "name": "MitreAttack", "type": "dynamic" },
+	                              { "name": "ParentDetails", "type": "dynamic" },
+	                              { "name": "ParentProcessId", "type": "string" },
+	                              { "name": "PatternDisposition", "type": "int" },
+	                              { "name": "PatternDispositionDescription", "type": "string" },
+	                              { "name": "PatternDispositionDetails", "type": "dynamic" },
+	                              { "name": "PolyId", "type": "string" },
+	                              { "name": "PriorityDetails", "type": "dynamic" },
+	                              { "name": "PriorityExplanation", "type": "dynamic" },
+	                              { "name": "PriorityValue", "type": "int" },
+	                              { "name": "ProcessEndTime", "type": "string" },
+	                              { "name": "ProcessId", "type": "string" },
+	                              { "name": "ProcessStartTime", "type": "string" },
+	                              { "name": "RuleGroupId", "type": "string" },
+	                              { "name": "RuleGroupName", "type": "string" },
+	                              { "name": "RuleInstanceCreatedBy", "type": "string" },
+	                              { "name": "RuleInstanceId", "type": "string" },
+	                              { "name": "RuleInstanceName", "type": "string" },
+	                              { "name": "RuleInstanceVersion", "type": "string" },
+	                              { "name": "Sha1", "type": "string" },
+	                              { "name": "Sha256", "type": "string" },
+	                              { "name": "SourceHosts", "type": "dynamic" },
+  	                              { "name": "TemplateInstanceVersion", "type": "string" },
+	                              { "name": "TreeId", "type": "string" },
+	                              { "name": "TreeRoot", "type": "string" },
+	                              { "name": "TriggeringProcessGraphId", "type": "string" },
+	                              { "name": "TemplateInstanceId", "type": "string" },
+								  { "name": "UserId", "type": "string" },
+								  { "name": "UserPrincipal", "type": "string" },
+								  { "name": "ChildProcessIds", "type": "dynamic" },
+	                              { "name": "UserName", "type": "string" },
+							      { "name": "ConnectionName", "type": "string", "description": "Connection name." }
+                                ]
+                              }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId3')]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                              "schema": {
+                                "name": "[variables('_logAnalyticsTableId3')]",
+                                "columns": [
+								  { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "Ingestion time (using 'created')." },
+								  { "name": "id", "type": "string", "description": "ID." },
+                                  { "name": "cid", "type": "string", "description": "CID." },
+                                  { "name": "version", "type": "int", "description": "Version." },
+                                  { "name": "consistency", "type": "dynamic", "description": "Consistency." },
+                                  { "name": "created_timestamp", "type": "datetime", "description": "Created Timestamp." },
+                                  { "name": "created_by", "type": "dynamic", "description": "Created by." },
+                                  { "name": "updated_timestamp", "type": "datetime", "description": "Updated timestamp." },
+                                  { "name": "last_updated_by", "type": "dynamic", "description": "Last updated by." },
+                                  { "name": "start_timestamp", "type": "datetime", "description": "Start timestanp." },
+                                  { "name": "end_timestamp", "type": "datetime", "description": "End timestamp." },
+                                  { "name": "name", "type": "string", "description": "Name" },
+                                  { "name": "description", "type": "string", "description": "Description." },
+                                  { "name": "severity_info", "type": "dynamic", "description": "Severity info." },
+                                  { "name": "severity", "type": "int", "description": "Severity." },
+                                  { "name": "status", "type": "string", "description": "Status." },
+                                  { "name": "assigned_to", "type": "string", "description": "Assigned to ID." },
+                                  { "name": "tags", "type": "dynamic", "description": "Tags." },
+                                  { "name": "evidence", "type": "dynamic", "description": "Evidence." },
+                                  { "name": "analysis_results", "type": "dynamic", "description": "Analysis results." }
+                                ]
+                              }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId4')]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                              "schema": {
+                                "name": "[variables('_logAnalyticsTableId4')]",
+                                "columns": [
+                                  { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "Ingestion time (using 'created_timestamp')." },
+								  { "name": "Id", "type": "string", "description": "Hosts groups IDs." },
+								  { "name": "GroupType", "type": "string", "description": "Group type." },
+								  { "name": "Name", "type": "string", "description": "Name of group." },
+								  { "name": "Description", "type": "string", "description": "Decription of group." },
+								  { "name": "AssignmentRule", "type": "string", "description": "Assignment rule." },
+								  { "name": "CreatedBy", "type": "string", "description": "Created by." },
+								  { "name": "CreatedTimestamp", "type": "datetime", "description": "Created timestamp." },
+								  { "name": "ModifiedBy", "type": "string", "description": "Modified by." },
+								  { "name": "ModifiedTimestamp", "type": "datetime", "description": "Modified timestamp." },
+								  { "name": "ConnectionName", "type": "string", "description": "Connection name." }
+                                ]
+                              }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId5')]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                              "schema": {
+                                "name": "[variables('_logAnalyticsTableId5')]",
+                                "columns": [
+                                  { "name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": true, "description": "Ingestion time." },
+                                  { "name": "AgentLoadFlags", "type": "string", "description": "Agent load flags." },
+                                  { "name": "AgentLocalTime", "type": "string", "description": "Agent local time." },
+                                  { "name": "AgentVersion", "type": "string", "description": "Agent version." },
+                                  { "name": "BaseImageVersion", "type": "string", "description": "Base image version." },
+                                  { "name": "BiosManufacturer", "type": "string", "description": "BIOS manufacturer." },
+                                  { "name": "BiosVersion", "type": "string", "description": "BIOS version." },
+                                  { "name": "BuildNumber", "type": "string", "description": "Build number." },
+                                  { "name": "ChassisType", "type": "string", "description": "Chassis type." },
+                                  { "name": "ChassisTypeDesc", "type": "string", "description": "Chassis type description." },
+                                  { "name": "Cid", "type": "string", "description": "CID value." },
+                                  { "name": "ConfigIdBase", "type": "string", "description": "Base config ID." },
+                                  { "name": "ConfigIdBuild", "type": "string", "description": "Build config ID." },
+                                  { "name": "ConfigIdPlatform", "type": "string", "description": "Platform config ID." },
+                                  { "name": "ConnectionIp", "type": "string", "description": "Connection IP address." },
+                                  { "name": "ConnectionMacAddress", "type": "string", "description": "Connection MAC address." },
+                                  { "name": "CpuSignature", "type": "string", "description": "CPU signature." },
+                                  { "name": "CpuVendor", "type": "string", "description": "CPU vendor." },
+                                  { "name": "DefaultGatewayIp", "type": "string", "description": "Default gateway IP." },
+                                  { "name": "DeploymentType", "type": "string", "description": "Deployment type." },
+                                  { "name": "DetectionSuppressionStatus", "type": "string", "description": "Detection suppression status." },
+                                  { "name": "DeviceId", "type": "string", "description": "Device ID." },
+                                  { "name": "DevicePolicies", "type": "dynamic", "description": "Device policies." },
+                                  { "name": "Email", "type": "string", "description": "Email address." },
+                                  { "name": "ExternalIp", "type": "string", "description": "External IP." },
+                                  { "name": "FilesystemContainmentStatus", "type": "string", "description": "Filesystem containment status." },
+                                  { "name": "FirstLoginTimestamp", "type": "string", "description": "First login timestamp." },
+                                  { "name": "FirstSeen", "type": "string", "description": "First seen timestamp." },
+                                  { "name": "GroupHash", "type": "string", "description": "Group hash." },
+                                  { "name": "Groups", "type": "dynamic", "description": "Groups." },
+                                  { "name": "HostHiddenStatus", "type": "string", "description": "Host hidden status." },
+                                  { "name": "HostUtcOffset", "type": "string", "description": "Host UTC offset." },
+                                  { "name": "Hostname", "type": "string", "description": "Hostname." },
+                                  { "name": "InstanceId", "type": "string", "description": "Instance ID." },
+                                  { "name": "InternetExposure", "type": "string", "description": "Internet exposure." },
+                                  { "name": "K8sClusterGitVersion", "type": "string", "description": "K8s cluster git version." },
+                                  { "name": "K8sClusterId", "type": "string", "description": "K8s cluster ID." },
+                                  { "name": "K8sClusterVersion", "type": "string", "description": "K8s cluster version." },
+                                  { "name": "KernelVersion", "type": "string", "description": "Kernel version." },
+                                  { "name": "LastLoginTimestamp", "type": "string", "description": "Last login timestamp." },
+                                  { "name": "LastLoginUid", "type": "string", "description": "Last login UID." },
+                                  { "name": "LastLoginUser", "type": "string", "description": "Last login user." },
+                                  { "name": "LastLoginUserSid", "type": "string", "description": "Last login user SID." },
+                                  { "name": "LastReboot", "type": "string", "description": "Last reboot time." },
+                                  { "name": "LastSeen", "type": "string", "description": "Last seen timestamp." },
+                                  { "name": "LinuxSensorMode", "type": "string", "description": "Linux sensor mode." },
+                                  { "name": "LocalIp", "type": "string", "description": "Local IP address." },
+                                  { "name": "MacAddress", "type": "string", "description": "MAC address." },
+                                  { "name": "MachineDomain", "type": "string", "description": "Machine domain." },
+                                  { "name": "MajorVersion", "type": "string", "description": "Major version." },
+                                  { "name": "ManagedApps", "type": "dynamic", "description": "Managed apps." },
+                                  { "name": "Meta", "type": "dynamic", "description": "Metadata." },
+                                  { "name": "MigrationCompletedTime", "type": "string", "description": "Migration completed time." },
+                                  { "name": "MinorVersion", "type": "string", "description": "Minor version." },
+                                  { "name": "ModifiedTimestamp", "type": "string", "description": "Modified timestamp." },
+                                  { "name": "Notes", "type": "dynamic", "description": "Notes." },
+                                  { "name": "OsBuild", "type": "string", "description": "OS build." },
+                                  { "name": "OsProductName", "type": "string", "description": "OS product name." },
+                                  { "name": "OsVersion", "type": "string", "description": "OS version." },
+                                  { "name": "Ou", "type": "dynamic", "description": "Organizational unit." },
+                                  { "name": "PlatformId", "type": "string", "description": "Platform ID." },
+                                  { "name": "PlatformName", "type": "string", "description": "Platform name." },
+                                  { "name": "PodAnnotations", "type": "dynamic", "description": "Pod annotations." },
+                                  { "name": "PodHostIp4", "type": "string", "description": "Pod host IP4." },
+                                  { "name": "PodHostIp6", "type": "string", "description": "Pod host IP6." },
+                                  { "name": "PodHostname", "type": "string", "description": "Pod hostname." },
+                                  { "name": "PodId", "type": "string", "description": "Pod ID." },
+                                  { "name": "PodIp4", "type": "string", "description": "Pod IP4." },
+                                  { "name": "PodIp6", "type": "string", "description": "Pod IP6." },
+                                  { "name": "PodLabels", "type": "dynamic", "description": "Pod labels." },
+                                  { "name": "PodName", "type": "string", "description": "Pod name." },
+                                  { "name": "PodNamespace", "type": "string", "description": "Pod namespace." },
+                                  { "name": "PodServiceAccountName", "type": "string", "description": "Pod service account name." },
+                                  { "name": "PointerSize", "type": "string", "description": "Pointer size." },
+                                  { "name": "Policies", "type": "dynamic", "description": "Policies." },
+                                  { "name": "ProductType", "type": "string", "description": "Product type." },
+                                  { "name": "ProductTypeDesc", "type": "string", "description": "Product type description." },
+                                  { "name": "ProvisionStatus", "type": "string", "description": "Provision status." },
+                                  { "name": "ReducedFunctionalityMode", "type": "string", "description": "Reduced functionality mode." },
+                                  { "name": "ReleaseGroup", "type": "string", "description": "Release group." },
+                                  { "name": "RtrState", "type": "string", "description": "RTR state." },
+                                  { "name": "SerialNumber", "type": "string", "description": "Serial number." },
+                                  { "name": "ServicePackMajor", "type": "string", "description": "Service pack major." },
+                                  { "name": "ServicePackMinor", "type": "string", "description": "Service pack minor." },
+                                  { "name": "ServiceProvider", "type": "string", "description": "Service provider." },
+                                  { "name": "ServiceProviderAccountId", "type": "string", "description": "Service provider account ID." },
+                                  { "name": "SiteName", "type": "string", "description": "Site name." },
+                                  { "name": "Status", "type": "string", "description": "Status." },
+                                  { "name": "SystemManufacturer", "type": "string", "description": "System manufacturer." },
+                                  { "name": "SystemProductName", "type": "string", "description": "System product name." },
+                                  { "name": "Tags", "type": "dynamic", "description": "Tags." },
+								  { "name": "ConnectionName", "type": "string", "description": "Connection name." }
+                                ]
+                              }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2025-09-01",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "CrowdStrikeAPIDataConnector",
+                    "title": "CrowdStrike API Data Connector",
+                    "publisher": "Microsoft",
+                    "descriptionMarkdown": "The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting logs from the CrowdStrike API into Microsoft Sentinel. This connector is built on the Microsoft Sentinel Codeless Connector Platform and uses the CrowdStrike API to fetch logs for Alerts, Detections, Hosts, Cases, and Vulnerabilities. It supports DCR-based ingestion time transformations so that queries can run more efficiently.",
+                    "graphQueries": [
+                      {
+                        "metricName": "Total Vulnerability logs received",
+                        "legend": "CrowdStrike Vulnerability Logs",
+                        "baseQuery": "CrowdStrikeVulnerabilities_CL"
+                      },
+                      {
+                        "metricName": "Total Alert logs received",
+                        "legend": "CrowdStrike Alert Logs",
+                        "baseQuery": "CrowdStrikeAlerts_CL"
+                      },
+                      {
+                        "metricName": "Total Case logs received",
+                        "legend": "CrowdStrike Case Logs",
+                        "baseQuery": "CrowdStrikeCases_CL"
+                      },
+                      {
+                        "metricName": "Total Hosts Groups logs received",
+                        "legend": "CrowdStrike Hosts Groups Logs",
+                        "baseQuery": "CrowdStrikeHostsGroups_CL"
+                      },
+                      {
+                        "metricName": "Total Host logs received",
+                        "legend": "CrowdStrike Host Logs",
+                        "baseQuery": "CrowdStrikeHosts_CL"
+                      }
+                    ],
+                    "sampleQueries": [
+                      {
+                        "description": "Get sample of CrowdStrike Vulnerability logs",
+                        "query": "CrowdStrikeVulnerabilities_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Alert logs",
+                        "query": "CrowdStrikeAlerts_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Case logs",
+                        "query": "CrowdStrikeCases_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Hosts Groups logs",
+                        "query": "CrowdStrikeHostsGroups_CL | take 10"
+                      },
+                      {
+                        "description": "Get sample of CrowdStrike Host logs",
+                        "query": "CrowdStrikeHosts_CL | take 10"
+                      }
+                    ],
+                    "dataTypes": [
+                      {
+                        "name": "CrowdStrikeVulnerabilities_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeVulnerabilities_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeAlerts_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeAlerts_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeCases_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeCases_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeHostsGroups_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeHostsGroups_CL | where TimeGenerated > ago(26h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      },
+                      {
+                        "name": "CrowdStrikeHosts_CL",
+                        "lastDataReceivedQuery": "CrowdStrikeHosts_CL | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                      }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors",
+                            "value": null
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": true,
+                                    "write": true,
+                                    "delete": true,
+                                    "action": false
+                                }
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+            {
+              "instructions": [
+			  {
+			    "type": "DataConnectorsGrid",
+                    "parameters": {
+                    "mapping": [
+					{
+                        "columnName": "Connection Name",
+                        "columnValue": "properties.addOnAttributes.connectionName"
+                    },
+					{
+                        "columnName": "Connection Type",
+                        "columnValue": "properties.addOnAttributes.connectionType"
+                    }
+                    ],
+                    "menuItems": [
+                        "DeleteConnector"
+                    ]
+                    }
+			  },
+			  {
+                "type": "ContextPane",
+                    "parameters": {
+                        "isPrimary": true,
+                        "label": "Add",
+                        "title": "Add Crowdstrike Tenant",
+                        "subtitle": "Add Crowdstrike Tenant",
+                        "contextPaneType": "DataConnectorsContextPane",
+                        "instructionSteps": [
+                        {
+                            "instructions": [
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Name",
+                                    "placeholder": "Name of the config.",
+                                    "type": "string",
+                                    "name": "connectionName"
+                                }
+                            },
+							{
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Base API URL",
+                                    "placeholder": "https://api.us-2.crowdstrike.com",
+                                    "type": "string",
+                                    "name": "apiUrl"
+                                }
+                            },
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Client ID",
+                                    "placeholder": "Your Client ID",
+                                    "type": "string",
+                                    "name": "clientId"
+                                }
+                            },
+                            {
+                                "type": "Textbox",
+                                "parameters": {
+                                    "label": "Client Secret",
+                                    "placeholder": "Your Client Secret",
+                                    "type": "password",
+                                    "name": "clientSecret"
+                                }
+                            }
+                            ]
+                        }
+                        ]
+                    }
+                }
+              ],
+              "innerSteps": null
+            }
+			],
+			"isConnectivityCriteriasMatchSome": false
+			}
+		}
+		},
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2025-09-01",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2025-09-01",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "connectorDefinitionName",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+						"workspace-temp": {
+							"defaultValue": "[parameters('workspace')]",
+							"type": "string"
+						},
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        },
+						"connectionName": {
+							"defaultValue": "name",
+							"type": "string",
+							"minLength": 1
+						},
+                        "apiUrl": {
+                            "defaultValue": "apiUrl",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "clientId": {
+                            "defaultValue": "clientId",
+                            "type": "securestring",
+                            "minLength": 1
+                        },
+                        "clientSecret": {
+                            "defaultValue": "clientSecret",
+                            "type": "securestring",
+                            "minLength": 1
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeVulnerabilities', parameters('connectionName'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+							  "addOnAttributes": {
+								"connectionName": "[[parameters('connectionName')]",
+								"connectionType": "Vulnerabilities"
+							  },
+                              "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                              "dataType": "CrowdStrikeVulnerabilities_CL",
+                              "auth": {
+                                "type": "OAuth2",
+                                "ClientId": "[[parameters('ClientId')]",
+                                "ClientSecret": "[[parameters('ClientSecret')]",
+                                "GrantType": "client_credentials",
+                                "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                                "tokenEndpointHeaders": {
+                                  "Accept": "application/json",
+                                  "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                              },
+							  "request": {
+                                "apiEndpoint": "[[concat(parameters('apiUrl'),'/spotlight/combined/vulnerabilities/v1')]",
+                                "httpMethod": "GET",
+                                "rateLimitQPS": 1,
+                                "queryWindowInMin": 15,
+                                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                                "retryCount": 5,
+                                "timeoutInSeconds": 90,
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "Accept": "application/json",
+                                  "User-Agent": "Scuba"
+                                },
+                                "queryParameters": {
+                                    "filter": "updated_timestamp:>'{_QueryWindowStartTime}'+updated_timestamp:<='{_QueryWindowEndTime}'",
+                                    "sort": "updated_timestamp.asc",
+									"facet":"host_info"
+                                }
+                              },
+							  "response": {
+                                "eventsJsonPaths": [
+                                   "$.resources"
+                                ],
+                                "format": "json"
+                              },
+                              "dcrConfig": {
+                                "streamName": "Custom-CrowdStrikeVulnerabilities",
+                                "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                              },
+                              "paging": {
+								"pagingType": "NextPageToken",
+								"nextPageTokenJsonPath": "$.meta.pagination.after",
+								"NextPageParaName": "after",
+								"pageSize": 50,
+								"pageSizeParameterName": "limit"
+							  }
+                            }
+                        },
+                        {
+                            "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeAlerts', parameters('connectionName'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "kind": "RestApiPoller",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+							  "addOnAttributes": {
+								"connectionName": "[[parameters('connectionName')]",
+								"connectionType": "Alerts"
+							  },
+                              "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                              "dataType": "CrowdStrikeAlerts_CL",
+                              "auth": {
+                                "type": "OAuth2",
+                                "ClientId": "[[parameters('ClientId')]",
+                                "ClientSecret": "[[parameters('ClientSecret')]",
+                                "GrantType": "client_credentials",
+                                "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                                "tokenEndpointHeaders": {
+                                  "Accept": "application/json",
+                                  "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                              },
+                              "request": {
+                                "apiEndpoint": "[[concat(parameters('apiUrl'),'/alerts/combined/alerts/v1')]",
+                                "httpMethod": "POST",
+                                "rateLimitQPS": 1,
+                                "queryWindowInMin": 15,
+                                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                                "retryCount": 5,
+                                "timeoutInSeconds": 120,
+                                "isPostPayloadJson": true,
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "Accept": "application/json",
+                                  "User-Agent": "Scuba"
+                                },
+                                "queryParametersTemplate": "{\r\n                    \"filter\": \"created_timestamp:>'{_QueryWindowStartTime}'+created_timestamp:<='{_QueryWindowEndTime}'\",\r\n                    \"sort\": \"created_timestamp.asc\"\r\n                }"
+                              },
+                              "response": {
+                                "eventsJsonPaths": [
+                                   "$.resources"
+                                ],
+                                "format": "json"
+                              },
+                              "dcrConfig": {
+                                "streamName": "Custom-CrowdStrikeAlerts",
+                                "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                              },
+                              "Paging": {
+                                "pagingType": "PersistentToken",
+                                "nextPageTokenJsonPath": "$.meta.pagination.after",
+                                "nextPageParaName": "after",
+                                "pageSize": 100
+                              }
+                            }
+                        },
+                        {
+                            "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeCases', parameters('connectionName'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+							  "addOnAttributes": {
+								"connectionName": "[[parameters('connectionName')]",
+								"connectionType": "Cases"
+							  },
+                              "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                              "dataType": "CrowdStrikeCases_CL",
+                              "auth": {
+                                "type": "OAuth2",
+                                "ClientId": "[[parameters('clientId')]",
+                                "ClientSecret": "[[parameters('clientSecret')]",
+                                "GrantType": "client_credentials",
+                                "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                                "tokenEndpointHeaders": {
+                                  "Accept": "application/json",
+                                  "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                              },
+                              "request": {
+                                "httpMethod": "Get",
+                                "apiEndpoint": "[[concat(parameters('apiUrl'),'/cases/queries/cases/v1')]",
+								"rateLimitQPS": 1,
+                                "rateLimitConfig": {
+                                "evaluation": {
+                                   "checkMode": "OnlyWhen429"
+                                },
+								"extraction": {
+                                   "source": "CustomHeaders",
+                                   "headers": {
+                                      "limit": {
+                                         "name": "X-RateLimit-Limit",
+                                         "format": "Integer"
+                                      },
+                                      "remaining": {
+                                         "name": "X-RateLimit-Remaining",
+                                         "format": "Integer"
+                                      },
+                                      "reset": {
+                                         "name": "X-RateLimit-RetryAfter",
+                                         "format": "UnixTimeSeconds"
+                                      }
+                                   }
+                                },
+								"retryStrategy": {
+                                   "useResetOrRetryAfterHeaders": true
+                                  }
+                                },
+								
+								"queryWindowInMin": 15,
+                                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                                "retryCount": 5,
+                                "timeoutInSeconds": 90,
+                                "headers": {
+                                   "Content-Type": "application/json",
+                                   "Accept": "application/json",
+                                   "User-Agent": "Scuba"
+                                },
+                                "queryParameters": {
+                                   "filter": "updated_timestamp:>'{_QueryWindowStartTime}'+updated_timestamp:<='{_QueryWindowEndTime}'",
+                                   "sort": "updated_timestamp.asc"
+                                }
+                              },
+                              "response": {
+                                "eventsJsonPaths": [ "" ],
+								"format": "json"
+                              },
+                              "stepInfo": {
+                                "stepType": "Nested",
+                                "nextSteps": [
+                                  {
+                                    "stepId": "case_details",
+                                    "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project resources = res['resources'] | mvexpand resources | project Url_PlaceHolder = resources"
+                                  }
+                                ]
+                              },
+                              "stepCollectorConfigs": {
+                                "Cases_details": {
+                                  "shouldJoinNestedData": false,
+                                  "request": {
+                                    "httpMethod": "Post",
+                                    "apiEndpoint": "[[concat(parameters('apiUrl'),'/cases/entities/cases/v2')]",
+                                    "queryParametersTemplate": "{'ids': ['$Url_PlaceHolder$']}",
+                                    "logResponseContent": true,
+									"rateLimitQPS": 1,
+                                    "queryWindowInMin": 5,
+                                    "retryCount": 5,
+                                    "timeoutInSeconds": 90,
+                                    "logResponseContent": true,
+                                    "isPostPayloadJson": true,
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Accept": "application/json",
+                                      "User-Agent": "scuba"
+                                    },
+									"queryParametersTemplate": "{'ids': ['$Url_PlaceHolder$']}"
+                                  },
+                                  "response": {
+                                    "eventsJsonPaths": [ "$.resources" ],
+									"format": "json"
+                                  }
+                                }
+                              },
+                              "dcrConfig": {
+                                "streamName": "Custom-CrowdStrikeCases",
+                                "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                              },
+                              "Paging": {
+                                "pagingType": "Offset",
+                                "offsetParaName": "offset",
+                                "PageSizeParameterName": "limit",
+                                "PageSize": 500
+                              }
+                            }
+                        },
+                        {
+                            "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeHostsGroups', parameters('connectionName'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+							  "addOnAttributes": {
+								"connectionName": "[[parameters('connectionName')]",
+								"connectionType": "HostsGroups"
+							  },
+                              "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                              "dataType": "CrowdStrikeHostsGroups_CL",
+                              "auth": {
+                                "type": "OAuth2",
+                                "ClientId": "[[parameters('clientId')]",
+                                "ClientSecret": "[[parameters('clientSecret')]",
+                                "GrantType": "client_credentials",
+                                "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                                "tokenEndpointHeaders": {
+                                  "Accept": "application/json",
+                                  "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                              },
+                              "request": {
+                                "apiEndpoint": "[[concat(parameters('apiUrl'),'/devices/combined/host-groups/v1')]",
+                                "httpMethod": "GET",
+                                "rateLimitQPS": 10,
+                                "queryWindowInMin": 1440,
+                                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                                "retryCount": 3,
+                                "timeoutInSeconds": 91,
+                                "isPostPayloadJson": true,
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "Accept": "application/json",
+                                  "User-Agent": "Scuba"
+                                },
+                                "queryParametersTemplate": ""
+                              },
+                              "response": {
+                                "eventsJsonPaths": [
+                                   "$.resources"
+                                ],
+                                "format": "json"
+                              },
+                              "dcrConfig": {
+                                "streamName": "Custom-CrowdStrikeHostsGroups",
+                                "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                              },
+                              "Paging": {
+                                "pagingType": "PersistentToken",
+                                "nextPageTokenJsonPath": "$.meta.pagination.after",
+                                "nextPageParaName": "after",
+                                "pageSize": 100
+                              }
+                            }
+                        },
+                        {
+                            "name": "[[concat(parameters('workspace-temp'),'/Microsoft.SecurityInsights/', 'CrowdStrikeHosts', parameters('connectionName'))]",
+                            "apiVersion": "2025-09-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+							  "addOnAttributes": {
+								"connectionName": "[[parameters('connectionName')]",
+								"connectionType": "Hosts"
+							  },
+                              "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                              "dataType": "CrowdStrikeHosts_CL",
+                              "auth": {
+                                "type": "OAuth2",
+                                "ClientId": "[[parameters('clientId')]",
+                                "ClientSecret": "[[parameters('clientSecret')]",
+                                "GrantType": "client_credentials",
+                                "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+                                "tokenEndpointHeaders": {
+                                  "Accept": "application/json",
+                                  "Content-Type": "application/x-www-form-urlencoded"
+                                }
+                              },
+                              "request": {
+                                "httpMethod": "Get",
+                                "apiEndpoint": "[[concat(parameters('apiUrl'),'/devices/queries/devices/v1')]",
+                                "headers": {
+                                  "Content-Type": "application/json",
+                                  "Accept": "application/json",
+                                  "User-Agent": "Scuba"
+                                }
+                              },
+                              "response": {
+                                "eventsJsonPaths": [ "" ]
+                              },
+                              "stepInfo": {
+                                "stepType": "Nested",
+                                "nextSteps": [
+                                  {
+                                    "stepId": "hosts_details",
+                                    "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project resources = res['resources'] | mvexpand resources | project Url_PlaceHolder = resources"
+                                  }
+                                ]
+                              },
+                              "stepCollectorConfigs": {
+                                "hosts_details": {
+                                  "shouldJoinNestedData": false,
+                                  "request": {
+                                    "httpMethod": "Post",
+                                    "apiEndpoint": "[[concat(parameters('apiUrl'),'/devices/entities/devices/v2')]",
+                                    "queryParametersTemplate": "{'ids': ['$Url_PlaceHolder$']}",
+                                    "logResponseContent": true,
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Accept": "application/json",
+                                      "User-Agent": "scuba"
+                                    }
+                                  },
+                                  "response": {
+                                    "eventsJsonPaths": [ "$.resources" ]
+                                  }
+                                }
+                              },
+                              "dcrConfig": {
+                                "streamName": "Custom-CrowdStrikeHosts",
+                                "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                              },
+                              "Paging": {
+                                "pagingType": "Offset",
+                                "offsetParaName": "offset",
+                                "PageSizeParameterName": "limit",
+                                "PageSize": 400
+                              }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspace-location')]",
+            "apiVersion": "2025-09-01",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2022-06-24",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "test",
+                "icon": "[variables('_packageIcon')]"
+            }
+        }
+    ]
+}
