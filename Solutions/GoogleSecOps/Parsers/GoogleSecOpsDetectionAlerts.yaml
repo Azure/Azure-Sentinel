@@ -1,0 +1,182 @@
+id: a7c9d8f2-4e1b-4a2f-9c3d-5e8f7a2b9c1d
+Function:
+  Title: Google SecOps Detection Alerts
+  Version: '1.0.0'
+  LastUpdated: '2026-04-24'
+Category: Microsoft Sentinel Parser
+FunctionName: GoogleSecOpsDetectionAlerts
+FunctionAlias: GoogleSecOpsDetectionAlerts
+FunctionQuery: |
+    let SeverityLookup = datatable(
+        severity: string,
+        severity_level: int
+    )[
+        "CRITICAL", 5,
+        "HIGH", 4,
+        "MEDIUM", 3,
+        "LOW", 2,
+        "INFO", 1
+    ];
+    let dummy_table = datatable(TimeGenerated: datetime, id: string) [];
+    let GoogleSecOpsDetectionAlerts = view () {
+        union isfuzzy=true dummy_table,
+        DetectionAlerts_CL
+        | extend
+            detection_array=column_ifexists("detection", dynamic([]))
+        | where isnotnull(detection_array) and array_length(detection_array) > 0
+        | mv-expand detection=detection_array
+        | extend
+            DetectionType=column_ifexists("DetectionType", ""),
+            createdTime=todatetime(column_ifexists("createdTime [UTC]", "")),
+            id=column_ifexists("id", ""),
+            timeWindow=column_ifexists("timeWindow", dynamic(null)),
+            timeWindow_startTime=todatetime(column_ifexists("timeWindow_startTime [UTC]", "")),
+            timeWindow_endTime=todatetime(column_ifexists("timeWindow_endTime [UTC]", "")),
+            collectionElements=column_ifexists("collectionElements", dynamic(null)),
+            detectionTime=todatetime(column_ifexists("detectionTime [UTC]", "")),
+            detectionTimingDetails=column_ifexists("detectionTimingDetails", dynamic(null)),
+            latencyMetrics=column_ifexists("latencyMetrics", dynamic(null)),
+            latencyMetrics_oldestIngestionTime=todatetime(column_ifexists("latencyMetrics_oldestIngestionTime [UTC]", "")),
+            latencyMetrics_newestIngestionTime=todatetime(column_ifexists("latencyMetrics_newestIngestionTime [UTC]", "")),
+            latencyMetrics_oldestEventTime=todatetime(column_ifexists("latencyMetrics_oldestEventTime [UTC]", "")),
+            latencyMetrics_newestEventTime=todatetime(column_ifexists("latencyMetrics_newestEventTime [UTC]", "")),
+            latencyMetrics_ingestionLatency=column_ifexists("latencyMetrics_ingestionLatency", ""),
+            ruleName=tostring(detection.ruleName),
+            ruleId=tostring(detection.ruleId),
+            ruleVersion=tostring(detection.ruleVersion),
+            ruleType=tostring(detection.ruleType),
+            severity=tostring(detection.severity),
+            alertState=tostring(detection.alertState),
+            urlBackToProduct=tostring(detection.urlBackToProduct),
+            description=tostring(detection.description),
+            detectionFields=detection.detectionFields,
+            ruleLabels=detection.ruleLabels,
+            outcomes=detection.outcomes
+        | lookup SeverityLookup on severity
+        | extend
+            EventVendor="Google Chronicle Security",
+            EventProduct="Chronicle",
+            EventType="Detection",
+            ts=createdTime,
+            detection_id=id,
+            alert_state=alertState,
+            rule_type=ruleType,
+            alert_severity=severity
+        | extend
+            severity_level=coalesce(severity_level, 0),
+            detection_window_duration_seconds=iff(
+                isnotnull(timeWindow_startTime) and isnotnull(timeWindow_endTime),
+                datetime_diff('second', timeWindow_endTime, timeWindow_startTime),
+                int(null)
+            ),
+            ingestion_latency_seconds=iff(
+                isnotnull(latencyMetrics_oldestEventTime) and isnotnull(latencyMetrics_newestIngestionTime),
+                datetime_diff('second', latencyMetrics_newestIngestionTime, latencyMetrics_oldestEventTime),
+                int(null)
+            )
+        | extend
+            is_high_severity=iff(severity in ("HIGH", "CRITICAL"), "true", "false"),
+            is_active_alert=iff(alertState == "ALERTING", "true", "false")
+        | extend
+            variables=detection.variables,
+            risk_score=toint(detection.riskScore)
+        | extend
+            var_adversary_name=tostring(variables.adversary_name.value),
+            var_adversary_netid=tostring(variables.adversary_netid.value),
+            var_adversary_uid=tostring(variables.adversary_uid.value),
+            var_correlation_domain=tostring(variables.correlation_domain.value),
+            var_correlation_ip=tostring(variables.correlation_ip.value),
+            var_cyware_confidence_score=tostring(variables.cyware_confidence_score.value),
+            var_e1_email_address=tostring(variables.e1_email_address.value),
+            var_e1_ip=tostring(variables.e1_ip.value),
+            var_e1_resource_name=tostring(variables.e1_resource_name.value),
+            var_e2_email_address=tostring(variables.e2_email_address.value),
+            var_e2_ip=tostring(variables.e2_ip.value),
+            var_e2_resource_name=tostring(variables.e2_resource_name.value),
+            var_email_address=tostring(variables.email_address.value),
+            var_event_count=tostring(variables.event_count.value),
+            var_ip=tostring(variables.ip.value),
+            var_principal_asset_hostname=tostring(variables.principal_asset_hostname.value),
+            var_principal_hostname=tostring(variables.principal_hostname.value),
+            var_principal_ip=tostring(variables.principal_ip.value),
+            var_principal_ip_count=tostring(variables.principal_ip_count.value),
+            var_principal_mac=tostring(variables.principal_mac.value),
+            var_principal_user_userid=tostring(variables.principal_user_userid.value),
+            var_product_name=tostring(variables.product_name.value),
+            var_resource_name=tostring(variables.resource_name.value),
+            var_result=tostring(variables.result.value),
+            var_result_time=tostring(variables.result_time.value),
+            var_risk_score=tostring(variables.risk_score.value),
+            var_service_account=tostring(variables.service_account.value),
+            var_serviceaccount=tostring(variables.serviceaccount.value),
+            var_source_hostname=tostring(variables.source_hostname.value),
+            var_source_ip=tostring(variables.source_ip.value),
+            var_source_ip_count=tostring(variables.source_ip_count.value),
+            var_source_mac=tostring(variables.source_mac.value),
+            var_source_user_userid=tostring(variables.source_user_userid.value),
+            var_target_hostname=tostring(variables.target_hostname.value),
+            var_target_ip=tostring(variables.target_ip.value),
+            var_target_mac=tostring(variables.target_mac.value),
+            var_target_user_userid=tostring(variables.target_user_userid.value),
+            var_user=tostring(variables.user.value),
+            var_vendor_name=tostring(variables.vendor_name.value),
+            var_victim_name=tostring(variables.victim_name.value),
+            var_victim_uid=tostring(variables.victim_uid.value)
+        | project
+            TimeGenerated,
+            detectionType = DetectionType,
+            detection,
+            createdTime,
+            id,
+            timeWindow,
+            timeWindowStartTime = timeWindow_startTime,
+            timeWindowEndTime = timeWindow_endTime,
+            collectionElements,
+            detectionTime,
+            detectionTimingDetails,
+            latencyMetrics,
+            latencyMetricsOldestIngestionTime = latencyMetrics_oldestIngestionTime,
+            latencyMetricsNewestIngestionTime = latencyMetrics_newestIngestionTime,
+            latencyMetricsOldestEventTime = latencyMetrics_oldestEventTime,
+            latencyMetricsNewestEventTime = latencyMetrics_newestEventTime,
+            latencyMetricsIngestionLatency = latencyMetrics_ingestionLatency,
+            eventVendor = EventVendor,
+            eventProduct = EventProduct,
+            eventType = EventType,
+            ts,
+            detectionId = detection_id,
+            ruleName,
+            ruleId,
+            ruleVersion,
+            ruleType,
+            severity,
+            severityLevel = severity_level,
+            alertState = alert_state,
+            isHighSeverity = is_high_severity,
+            isActiveAlert = is_active_alert,
+            description,
+            urlBackToProduct,
+            riskScore = risk_score,
+            detectionFields,
+            ruleLabels,
+            outcomes,
+            variables,
+            varCorrelationIp = var_correlation_ip,
+            varPrincipalIp = var_principal_ip,
+            varPrincipalIpCount = var_principal_ip_count,
+            varSourceIpCount = var_source_ip_count,
+            varTargetIp = var_target_ip,
+            varTargetHostname = var_target_hostname,
+            varTargetUserUserid = var_target_user_userid,
+            varSourceIp = var_source_ip,
+            varSourceHostname = var_source_hostname,
+            varSourceUserUserid = var_source_user_userid,
+            varSourceMac = var_source_mac,
+            varTargetMac = var_target_mac,
+            varPrincipalMac = var_principal_mac,
+            varPrincipalHostname = var_principal_hostname,
+            varPrincipalUserUserid = var_principal_user_userid,
+            detectionWindowDurationSeconds = detection_window_duration_seconds,
+            ingestionLatencySeconds = ingestion_latency_seconds
+    };
+    GoogleSecOpsDetectionAlerts
