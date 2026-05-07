@@ -1,0 +1,727 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Guardicore-EnrichmentRunner",
+    "description": "Recurrence-triggered Logic App that drains the GuardicoreConnectionSlots Azure Table work queue, fetches Guardicore /api/v3.0/connections for each due slot's 5-minute window, and ingests the results into GuardicoreEnrichingConnections_CL via the Logs Ingestion API. Companion to the Guardicore-ProcessIncidentEnrichment playbook. No Azure Function App is deployed.",
+    "mainSteps": [
+      "On each recurrence tick (default every 2 minutes):",
+      "1. Authenticate to Guardicore (POST /api/v3.0/authenticate) and parse the access_token.",
+      "2. Query the GuardicoreConnectionSlots Azure Table for the highest-priority eligible slot (PENDING or RETRY whose slot_start is at least 5 minutes in the past, then stale IN_PROGRESS rows un-touched for >1 hour).",
+      "3. Atomically claim the row by writing status=in_progress with If-Match: <etag>; on 412 the runner exits and lets the next tick try.",
+      "4. Paginate Guardicore /api/v3.0/connections using offset/limit=1000 with the slot's 5-minute time window and the slot's IP set as any_side_subnet, accumulating results.",
+      "5. Stamp slot_identifier on each result row and POST to GuardicoreEnrichingConnections_CL via the Logs Ingestion API (DCE/DCR, MSI auth).",
+      "6. Mark the slot completed on success; on Failed/TimedOut from any Guardicore or DCR call, write status=retry (with attempt_count+1) up to 3 attempts, then status=failed."
+    ],
+    "prerequisites": [
+      "1. Storage Account hosting the GuardicoreConnectionSlots Azure Table (deployed by the AkamaiGuardicoreEnrichment infrastructure ARM template).",
+      "2. Data Collection Endpoint and Data Collection Rule for the GuardicoreEnrichingConnections_CL custom log (deployed by the same infra template).",
+      "3. Appropriate permissions for the runner's system-assigned managed identity (Storage Table Data Contributor on the Storage Account; Monitoring Metrics Publisher on the DCR).",
+      "4. Credentials and FQDN to the Guardicore instance."
+    ],
+    "lastUpdateTime": "2026-04-26T00:00:00.000Z",
+    "entities": [
+      "IP"
+    ],
+    "tags": [
+      "Enrichment",
+      "Guardicore",
+      "Connection Data"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Akamai Guardicore"
+    }
+  },
+  "parameters": {
+    "RunnerName": {
+      "defaultValue": "Guardicore-EnrichmentRunner",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the runner Logic Apps resource which will be created."
+      }
+    },
+    "GuardicoreUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Guardicore management base URL, e.g. https://cust.cloud.guardicore.com (https only, no trailing slash)."
+      },
+      "constraints": {
+        "regex": "^https://[^\\s/$.?#].[^\\s]*$"
+      }
+    },
+    "GuardicoreUser": {
+      "type": "string",
+      "metadata": {
+        "description": "Guardicore username."
+      }
+    },
+    "GuardicorePassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Guardicore password."
+      }
+    },
+    "StorageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage account hosting the GuardicoreConnectionSlots Azure Table (output of the AkamaiGuardicoreEnrichment infrastructure ARM template)."
+      }
+    },
+    "StorageAccountConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Connection string for the Storage Account hosting the GuardicoreConnectionSlots Azure Table; used by the azuretables managed-API connection (which does not support managed identity). The runner's primary CRUD path is direct Tables REST with MSI; this connection is provisioned for Logic Apps Designer convenience."
+      }
+    },
+    "DataCollectionEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Logs ingestion endpoint URL of the Data Collection Endpoint (e.g. https://<dce-name>-<region-suffix>.ingest.monitor.azure.com)."
+      }
+    },
+    "DataCollectionRuleImmutableId": {
+      "type": "string",
+      "metadata": {
+        "description": "Immutable ID of the Data Collection Rule (output of the AkamaiGuardicoreEnrichment infrastructure ARM template)."
+      }
+    }
+  },
+  "variables": {
+    "AzureTablesConnectionName": "[concat('azuretables-', parameters('RunnerName'))]",
+    "TablesEndpoint": "[concat('https://', parameters('StorageAccountName'), '.table.core.windows.net')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureTablesConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureTablesConnectionName')]",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuretables')]"
+        },
+        "parameterValues": {
+          "storageaccount": "[parameters('StorageAccountName')]",
+          "sharedkey": "[parameters('StorageAccountConnectionString')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('RunnerName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "Guardicore-EnrichmentRunner",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureTablesConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "GuardicoreUrl": {
+              "type": "String"
+            },
+            "GuardicoreUser": {
+              "type": "String"
+            },
+            "GuardicorePassword": {
+              "type": "SecureString"
+            },
+            "StorageAccountName": {
+              "type": "String"
+            },
+            "TablesEndpoint": {
+              "type": "String"
+            },
+            "DataCollectionEndpoint": {
+              "type": "String"
+            },
+            "DataCollectionRuleImmutableId": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": 2
+              }
+            }
+          },
+          "actions": {
+            "Init_offset": {
+              "type": "InitializeVariable",
+              "runAfter": {},
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "offset",
+                    "type": "integer",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            "Init_results": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Init_offset": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "results",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "Init_done": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Init_results": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "done",
+                    "type": "boolean",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            "Authenticate_to_Guardicore": {
+              "type": "Http",
+              "runAfter": {
+                "Init_done": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "POST",
+                "uri": "@{concat(parameters('GuardicoreUrl'), '/api/v3.0/authenticate')}",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "username": "@{parameters('GuardicoreUser')}",
+                  "password": "@{parameters('GuardicorePassword')}"
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 4,
+                  "interval": "PT10S",
+                  "maximumInterval": "PT1M"
+                }
+              },
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              }
+            },
+            "Compute_eligibility_cutoff": {
+              "type": "Compose",
+              "runAfter": {
+                "Authenticate_to_Guardicore": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "eligible_before": "@{addMinutes(utcNow(), -5)}",
+                "stale_before": "@{addMinutes(utcNow(), -60)}"
+              }
+            },
+            "Claim_pending_slot": {
+              "type": "Http",
+              "runAfter": {
+                "Compute_eligibility_cutoff": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat(parameters('TablesEndpoint'), '/GuardicoreConnectionSlots()')}",
+                "queries": {
+                  "$filter": "@{concat('((status eq ''pending'' or status eq ''retry'') and slot_start le datetime''', outputs('Compute_eligibility_cutoff')['eligible_before'], ''') or (status eq ''in_progress'' and last_updated lt datetime''', outputs('Compute_eligibility_cutoff')['stale_before'], ''')')}",
+                  "$top": "1"
+                },
+                "headers": {
+                  "Accept": "application/json;odata=minimalmetadata",
+                  "x-ms-version": "2020-12-06",
+                  "x-ms-date": "@{formatDateTime(utcNow(), 'r')}"
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://storage.azure.com"
+                }
+              }
+            },
+            "If_no_slot_to_claim": {
+              "type": "If",
+              "runAfter": {
+                "Claim_pending_slot": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@length(coalesce(body('Claim_pending_slot')?['value'], json('[]')))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Terminate_no_work": {
+                  "type": "Terminate",
+                  "runAfter": {},
+                  "inputs": {
+                    "runStatus": "Succeeded"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Capture_claimed_row": {
+                    "type": "Compose",
+                    "runAfter": {},
+                    "inputs": "@first(body('Claim_pending_slot')['value'])"
+                  },
+                  "Atomic_claim": {
+                    "type": "Http",
+                    "runAfter": {
+                      "Capture_claimed_row": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "method": "PUT",
+                      "uri": "@{concat(parameters('TablesEndpoint'), '/GuardicoreConnectionSlots(PartitionKey=''', outputs('Capture_claimed_row')['PartitionKey'], ''',RowKey=''', outputs('Capture_claimed_row')['RowKey'], ''')')}",
+                      "headers": {
+                        "Accept": "application/json;odata=nometadata",
+                        "Content-Type": "application/json",
+                        "x-ms-version": "2020-12-06",
+                        "x-ms-date": "@{formatDateTime(utcNow(), 'r')}",
+                        "If-Match": "@{outputs('Capture_claimed_row')['odata.etag']}"
+                      },
+                      "body": {
+                        "PartitionKey": "@{outputs('Capture_claimed_row')['PartitionKey']}",
+                        "RowKey": "@{outputs('Capture_claimed_row')['RowKey']}",
+                        "slot_start": "@{outputs('Capture_claimed_row')['slot_start']}",
+                        "ips": "@{outputs('Capture_claimed_row')['ips']}",
+                        "status": "in_progress",
+                        "created": "@{outputs('Capture_claimed_row')['created']}",
+                        "last_updated": "@{utcNow()}",
+                        "attempt_count": "@{coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)}",
+                        "processing_started": "@{utcNow()}"
+                      },
+                      "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://storage.azure.com"
+                      }
+                    }
+                  },
+                  "If_atomic_claim_lost": {
+                    "type": "If",
+                    "runAfter": {
+                      "Atomic_claim": [
+                        "Succeeded",
+                        "Failed"
+                      ]
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "not": {
+                            "equals": [
+                              "@coalesce(outputs('Atomic_claim')?['statusCode'], 0)",
+                              204
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Terminate_lost_race": {
+                        "type": "Terminate",
+                        "runAfter": {},
+                        "inputs": {
+                          "runStatus": "Succeeded"
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {
+                        "Reset_offset": {
+                          "type": "SetVariable",
+                          "runAfter": {},
+                          "inputs": {
+                            "name": "offset",
+                            "value": 0
+                          }
+                        },
+                        "Reset_results": {
+                          "type": "SetVariable",
+                          "runAfter": {
+                            "Reset_offset": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "name": "results",
+                            "value": []
+                          }
+                        },
+                        "Reset_done": {
+                          "type": "SetVariable",
+                          "runAfter": {
+                            "Reset_results": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "name": "done",
+                            "value": false
+                          }
+                        },
+                        "Compute_query_window": {
+                          "type": "Compose",
+                          "runAfter": {
+                            "Reset_done": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "from_time_ms": "@mul(div(sub(ticks(outputs('Capture_claimed_row')['slot_start']), ticks('1970-01-01T00:00:00Z')), 10000000), 1000)",
+                            "to_time_ms": "@mul(div(sub(ticks(addMinutes(outputs('Capture_claimed_row')['slot_start'], 5)), ticks('1970-01-01T00:00:00Z')), 10000000), 1000)",
+                            "ips_subnets": "@join(json(concat('[\"', replace(replace(string(json(outputs('Capture_claimed_row')['ips'])), '[\"', ''), '\"]', ''), '\"]')), '/32,')"
+                          }
+                        },
+                        "Until_paginated_complete": {
+                          "type": "Until",
+                          "runAfter": {
+                            "Compute_query_window": [
+                              "Succeeded"
+                            ]
+                          },
+                          "expression": "@equals(variables('done'), true)",
+                          "limit": {
+                            "count": 100,
+                            "timeout": "PT5M"
+                          },
+                          "actions": {
+                            "Fetch_page": {
+                              "type": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "method": "GET",
+                                "uri": "@{concat(parameters('GuardicoreUrl'), '/api/v3.0/connections')}",
+                                "queries": {
+                                  "from_time": "@{outputs('Compute_query_window')['from_time_ms']}",
+                                  "to_time": "@{outputs('Compute_query_window')['to_time_ms']}",
+                                  "sort": "slot_start_time",
+                                  "any_side_subnet": "@{concat(outputs('Compute_query_window')['ips_subnets'], '/32')}",
+                                  "offset": "@{variables('offset')}",
+                                  "limit": "1000"
+                                },
+                                "headers": {
+                                  "Authorization": "@{concat('Bearer ', body('Authenticate_to_Guardicore')['access_token'])}"
+                                },
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 4,
+                                  "interval": "PT10S",
+                                  "maximumInterval": "PT1M"
+                                }
+                              },
+                              "runtimeConfiguration": {
+                                "secureData": {
+                                  "properties": [
+                                    "inputs"
+                                  ]
+                                }
+                              }
+                            },
+                            "Append_page_results": {
+                              "type": "Foreach",
+                              "runAfter": {
+                                "Fetch_page": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "foreach": "@coalesce(body('Fetch_page')?['objects'], json('[]'))",
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 1
+                                }
+                              },
+                              "actions": {
+                                "Append_one_result": {
+                                  "type": "AppendToArrayVariable",
+                                  "runAfter": {},
+                                  "inputs": {
+                                    "name": "results",
+                                    "value": "@item()"
+                                  }
+                                }
+                              }
+                            },
+                            "Increment_offset": {
+                              "type": "IncrementVariable",
+                              "runAfter": {
+                                "Append_page_results": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": {
+                                "name": "offset",
+                                "value": 1000
+                              }
+                            },
+                            "Check_done": {
+                              "type": "SetVariable",
+                              "runAfter": {
+                                "Increment_offset": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "inputs": {
+                                "name": "done",
+                                "value": "@or(less(length(coalesce(body('Fetch_page')?['objects'], json('[]'))), 1000), equals(outputs('Fetch_page')['statusCode'], 204))"
+                              }
+                            }
+                          }
+                        },
+                        "Stamp_slot_identifier": {
+                          "type": "Select",
+                          "runAfter": {
+                            "Until_paginated_complete": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "from": "@variables('results')",
+                            "select": "@union(item(), json(concat('{\"slot_identifier\":\"', outputs('Capture_claimed_row')['PartitionKey'], '_', outputs('Capture_claimed_row')['RowKey'], '\"}')))"
+                          }
+                        },
+                        "Post_to_enriching_table": {
+                          "type": "Foreach",
+                          "runAfter": {
+                            "Stamp_slot_identifier": [
+                              "Succeeded"
+                            ]
+                          },
+                          "foreach": "@range(0, add(div(sub(length(body('Stamp_slot_identifier')), 1), 200), 1))",
+                          "runtimeConfiguration": {
+                            "concurrency": {
+                              "repetitions": 1
+                            }
+                          },
+                          "actions": {
+                            "Post_chunk": {
+                              "type": "Http",
+                              "runAfter": {},
+                              "inputs": {
+                                "method": "POST",
+                                "uri": "@{concat(parameters('DataCollectionEndpoint'), '/dataCollectionRules/', parameters('DataCollectionRuleImmutableId'), '/streams/Custom-GuardicoreEnrichingConnections_CL?api-version=2023-01-01')}",
+                                "headers": {
+                                  "Content-Type": "application/json"
+                                },
+                                "body": "@take(skip(body('Stamp_slot_identifier'), mul(item(), 200)), 200)",
+                                "authentication": {
+                                  "type": "ManagedServiceIdentity",
+                                  "audience": "https://monitor.azure.com"
+                                },
+                                "retryPolicy": {
+                                  "type": "exponential",
+                                  "count": 4,
+                                  "interval": "PT10S",
+                                  "maximumInterval": "PT1M"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Mark_completed": {
+                          "type": "Http",
+                          "runAfter": {
+                            "Post_to_enriching_table": [
+                              "Succeeded"
+                            ]
+                          },
+                          "inputs": {
+                            "method": "PUT",
+                            "uri": "@{concat(parameters('TablesEndpoint'), '/GuardicoreConnectionSlots(PartitionKey=''', outputs('Capture_claimed_row')['PartitionKey'], ''',RowKey=''', outputs('Capture_claimed_row')['RowKey'], ''')')}",
+                            "headers": {
+                              "Accept": "application/json;odata=nometadata",
+                              "Content-Type": "application/json",
+                              "x-ms-version": "2020-12-06",
+                              "x-ms-date": "@{formatDateTime(utcNow(), 'r')}",
+                              "If-Match": "*"
+                            },
+                            "body": {
+                              "PartitionKey": "@{outputs('Capture_claimed_row')['PartitionKey']}",
+                              "RowKey": "@{outputs('Capture_claimed_row')['RowKey']}",
+                              "slot_start": "@{outputs('Capture_claimed_row')['slot_start']}",
+                              "ips": "@{outputs('Capture_claimed_row')['ips']}",
+                              "status": "completed",
+                              "created": "@{outputs('Capture_claimed_row')['created']}",
+                              "last_updated": "@{utcNow()}",
+                              "completed_at": "@{utcNow()}",
+                              "attempt_count": "@{coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)}"
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "https://storage.azure.com"
+                            }
+                          }
+                        },
+                        "Mark_failed_or_retry_on_pagination_error": {
+                          "type": "Http",
+                          "runAfter": {
+                            "Until_paginated_complete": [
+                              "Failed",
+                              "TimedOut"
+                            ]
+                          },
+                          "inputs": {
+                            "method": "PUT",
+                            "uri": "@{concat(parameters('TablesEndpoint'), '/GuardicoreConnectionSlots(PartitionKey=''', outputs('Capture_claimed_row')['PartitionKey'], ''',RowKey=''', outputs('Capture_claimed_row')['RowKey'], ''')')}",
+                            "headers": {
+                              "Accept": "application/json;odata=nometadata",
+                              "Content-Type": "application/json",
+                              "x-ms-version": "2020-12-06",
+                              "x-ms-date": "@{formatDateTime(utcNow(), 'r')}",
+                              "If-Match": "*"
+                            },
+                            "body": {
+                              "PartitionKey": "@{outputs('Capture_claimed_row')['PartitionKey']}",
+                              "RowKey": "@{outputs('Capture_claimed_row')['RowKey']}",
+                              "slot_start": "@{outputs('Capture_claimed_row')['slot_start']}",
+                              "ips": "@{outputs('Capture_claimed_row')['ips']}",
+                              "status": "@{if(less(add(int(coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)), 1), 3), 'retry', 'failed')}",
+                              "created": "@{outputs('Capture_claimed_row')['created']}",
+                              "last_updated": "@{utcNow()}",
+                              "failed_at": "@{utcNow()}",
+                              "attempt_count": "@{add(int(coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)), 1)}",
+                              "last_error": "@{string(result('Until_paginated_complete'))}"
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "https://storage.azure.com"
+                            }
+                          }
+                        },
+                        "Mark_failed_or_retry_on_post_error": {
+                          "type": "Http",
+                          "runAfter": {
+                            "Post_to_enriching_table": [
+                              "Failed",
+                              "TimedOut"
+                            ]
+                          },
+                          "inputs": {
+                            "method": "PUT",
+                            "uri": "@{concat(parameters('TablesEndpoint'), '/GuardicoreConnectionSlots(PartitionKey=''', outputs('Capture_claimed_row')['PartitionKey'], ''',RowKey=''', outputs('Capture_claimed_row')['RowKey'], ''')')}",
+                            "headers": {
+                              "Accept": "application/json;odata=nometadata",
+                              "Content-Type": "application/json",
+                              "x-ms-version": "2020-12-06",
+                              "x-ms-date": "@{formatDateTime(utcNow(), 'r')}",
+                              "If-Match": "*"
+                            },
+                            "body": {
+                              "PartitionKey": "@{outputs('Capture_claimed_row')['PartitionKey']}",
+                              "RowKey": "@{outputs('Capture_claimed_row')['RowKey']}",
+                              "slot_start": "@{outputs('Capture_claimed_row')['slot_start']}",
+                              "ips": "@{outputs('Capture_claimed_row')['ips']}",
+                              "status": "@{if(less(add(int(coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)), 1), 3), 'retry', 'failed')}",
+                              "created": "@{outputs('Capture_claimed_row')['created']}",
+                              "last_updated": "@{utcNow()}",
+                              "failed_at": "@{utcNow()}",
+                              "attempt_count": "@{add(int(coalesce(outputs('Capture_claimed_row')?['attempt_count'], 0)), 1)}",
+                              "last_error": "@{string(outputs('Post_to_enriching_table'))}"
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "https://storage.azure.com"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuretables": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureTablesConnectionName'))]",
+                "connectionName": "[variables('AzureTablesConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuretables')]"
+              }
+            }
+          },
+          "GuardicoreUrl": {
+            "value": "[parameters('GuardicoreUrl')]"
+          },
+          "GuardicoreUser": {
+            "value": "[parameters('GuardicoreUser')]"
+          },
+          "GuardicorePassword": {
+            "value": "[parameters('GuardicorePassword')]"
+          },
+          "StorageAccountName": {
+            "value": "[parameters('StorageAccountName')]"
+          },
+          "TablesEndpoint": {
+            "value": "[variables('TablesEndpoint')]"
+          },
+          "DataCollectionEndpoint": {
+            "value": "[parameters('DataCollectionEndpoint')]"
+          },
+          "DataCollectionRuleImmutableId": {
+            "value": "[parameters('DataCollectionRuleImmutableId')]"
+          }
+        }
+      }
+    }
+  ]
+}
