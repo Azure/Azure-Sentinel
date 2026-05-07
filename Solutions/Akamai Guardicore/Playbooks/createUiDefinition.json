@@ -1,0 +1,164 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "basics": [
+            {
+                "name": "guardicoreInfoBlock",
+                "type": "Microsoft.Common.InfoBox",
+                "visible": true,
+                "options": {
+                    "icon": "Info",
+                    "text": "This solution deploys the Akamai Guardicore incident-enrichment stack: a Storage Account work queue, a Data Collection Rule (and optionally a Data Collection Endpoint), two custom log tables, two Logic Apps (a Sentinel-incident-triggered playbook plus a recurrence-triggered runner), and the role assignments tying them together. After deploy, you'll authorize one managed-identity connection in the portal and wire the playbook to a Sentinel automation rule.",
+                    "uri": "https://learn.microsoft.com/en-us/azure/sentinel/playbook-recommendations"
+                }
+            }
+        ],
+        "steps": [
+            {
+                "name": "sentinel",
+                "label": "Sentinel workspace",
+                "subLabel": {
+                    "preValidation": "Pick the workspace that will receive enrichment data",
+                    "postValidation": "Done"
+                },
+                "elements": [
+                    {
+                        "name": "WorkspaceName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Log Analytics workspace name",
+                        "toolTip": "The name of the Microsoft Sentinel-enabled Log Analytics workspace. Must already exist.",
+                        "constraints": {
+                            "required": true,
+                            "regex": "^[a-zA-Z0-9][a-zA-Z0-9-]{2,61}[a-zA-Z0-9]$",
+                            "validationMessage": "Enter a valid workspace name (3-63 alphanumerics + dashes)."
+                        }
+                    },
+                    {
+                        "name": "WorkspaceResourceGroupName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Workspace resource group",
+                        "defaultValue": "[resourceGroup().name]",
+                        "toolTip": "Resource group of the Sentinel workspace. Defaults to the deployment resource group; change only if the workspace lives elsewhere.",
+                        "constraints": {
+                            "required": true
+                        }
+                    },
+                    {
+                        "name": "DataCollectionEndpointResourceId",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Existing Data Collection Endpoint resource ID (optional)",
+                        "defaultValue": "",
+                        "toolTip": "Leave blank to provision a new DCE in this resource group. To reuse an existing DCE, paste its full resource ID (e.g. /subscriptions/.../providers/Microsoft.Insights/dataCollectionEndpoints/<name>).",
+                        "constraints": {
+                            "required": false
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "guardicore",
+                "label": "Guardicore credentials",
+                "subLabel": {
+                    "preValidation": "Service-account credentials for Guardicore Centra",
+                    "postValidation": "Done"
+                },
+                "elements": [
+                    {
+                        "name": "GuardicoreUrl",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Guardicore management URL",
+                        "toolTip": "https://<your-tenant>.cloud.guardicore.com - must start with https://, no trailing slash.",
+                        "constraints": {
+                            "required": true,
+                            "regex": "^https://[^\\s/$.?#].[^\\s]*$",
+                            "validationMessage": "Must be an https:// URL with no trailing slash."
+                        }
+                    },
+                    {
+                        "name": "GuardicoreUser",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Guardicore username",
+                        "toolTip": "Service account with the Read-only role; needs access to /api/v3.0/authenticate and /api/v3.0/connections.",
+                        "constraints": {
+                            "required": true
+                        }
+                    },
+                    {
+                        "name": "GuardicorePassword",
+                        "type": "Microsoft.Common.PasswordBox",
+                        "label": {
+                            "password": "Guardicore password",
+                            "confirmPassword": "Confirm password"
+                        },
+                        "toolTip": "Stored as a securestring ARM parameter; never persisted to the deployment history.",
+                        "constraints": {
+                            "required": true
+                        },
+                        "options": {
+                            "hideConfirmation": false
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "advanced",
+                "label": "Advanced (optional)",
+                "subLabel": {
+                    "preValidation": "Override default names if you have a naming convention",
+                    "postValidation": "Done"
+                },
+                "elements": [
+                    {
+                        "name": "PlaybookName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Trigger playbook name",
+                        "defaultValue": "Guardicore-ProcessIncidentEnrichment",
+                        "toolTip": "Name of the incident-triggered Logic App. Default matches the legacy v1 name so existing automation rules continue to match. Override only if you have a strict naming convention.",
+                        "constraints": {
+                            "required": true,
+                            "regex": "^[a-zA-Z0-9][a-zA-Z0-9-]{1,79}$",
+                            "validationMessage": "Logic App names must be 2-80 alphanumerics + dashes."
+                        }
+                    },
+                    {
+                        "name": "RunnerName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Runner Logic App name",
+                        "defaultValue": "Guardicore-EnrichmentRunner",
+                        "toolTip": "Name of the recurrence-triggered runner Logic App.",
+                        "constraints": {
+                            "required": true,
+                            "regex": "^[a-zA-Z0-9][a-zA-Z0-9-]{1,79}$",
+                            "validationMessage": "Logic App names must be 2-80 alphanumerics + dashes."
+                        }
+                    },
+                    {
+                        "name": "StorageAccountName",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Storage account name (optional)",
+                        "defaultValue": "",
+                        "toolTip": "Globally unique 3-24 character lowercase alphanumeric storage account name. If left blank, a unique name is auto-generated.",
+                        "constraints": {
+                            "required": false,
+                            "regex": "^$|^[a-z0-9]{3,24}$",
+                            "validationMessage": "Must be 3-24 lowercase alphanumeric characters, or empty for auto-generation."
+                        }
+                    }
+                ]
+            }
+        ],
+        "outputs": {
+            "WorkspaceName": "[steps('sentinel').WorkspaceName]",
+            "WorkspaceResourceGroupName": "[steps('sentinel').WorkspaceResourceGroupName]",
+            "DataCollectionEndpointResourceId": "[steps('sentinel').DataCollectionEndpointResourceId]",
+            "GuardicoreUrl": "[steps('guardicore').GuardicoreUrl]",
+            "GuardicoreUser": "[steps('guardicore').GuardicoreUser]",
+            "GuardicorePassword": "[steps('guardicore').GuardicorePassword]",
+            "PlaybookName": "[steps('advanced').PlaybookName]",
+            "RunnerName": "[steps('advanced').RunnerName]",
+            "StorageAccountName": "[steps('advanced').StorageAccountName]"
+        }
+    }
+}

@@ -1,0 +1,239 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Policy Enforcement Effectiveness",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id\n| where action contains \"block\"\n| extend RulesetName = case(\n    isempty(ruleset_name) or ruleset_name == \"\", \"default\",\n    ruleset_name\n)\n| summarize TotalHitCount = sum(hit_count) by RulesetName\n| top 10 by TotalHitCount desc\n| project RulesetName, BlockingHits = TotalHitCount",
+              "size": 0,
+              "title": "Top Blocking Rulesets",
+              "noDataMessage": "No blocked traffic found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "customWidth": "50",
+            "name": "top-blocking-rulesets",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let startDate = startofday(ago(7d));\nlet endDate = startofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per application id per day\nlet dailyLatest = GuardicoreApplications_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| extend Status = case(\n    tolower(state) contains \"block\", \"Block\",\n    tolower(state) contains \"alert\", \"Alert\",\n    \"Other\"\n)\n| where Status in (\"Block\", \"Alert\")\n| summarize\n    Block = dcountif(project_name, Status == \"Block\"),\n    Alert = dcountif(project_name, Status == \"Alert\")\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend Block = coalesce(Block, 0),\n         Alert = coalesce(Alert, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), Block, Alert\n| sort by day asc",
+              "size": 0,
+              "title": "Applications in Block vs. Alert Status",
+              "noDataMessage": "No applications with block/alert status found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "unstackedbar",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "day",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Block",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "day",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Block",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "day",
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Block",
+                    "color": "red"
+                  },
+                  {
+                    "seriesName": "Alert",
+                    "color": "orange"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "applications-block-alert-status",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id\n| summarize count = count() by action\n| extend actionFormatted = replace(\"_\", \" \", tolower(action))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
+              "size": 0,
+              "title": "Policy Rules by Action Type",
+              "noDataMessage": "No policy rules found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Allow",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Alert",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Block",
+                    "color": "red"
+                  },
+                  {
+                    "seriesName": "Other",
+                    "color": "gray"
+                  }
+                ]
+              }
+            },
+            "name": "policy-rules-by-action"
+          }
+        ]
+      },
+      "name": "policy-enforcement-container"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "\ud83d\udee1\ufe0f Workload Protection Coverage Dashboard",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "This dashboard provides insights into workload protection status across your environment, including total workloads, protected workloads, and coverage trends over the last 7 days."
+            },
+            "name": "workload-protection-intro",
+            "styleSettings": {
+              "margin": "0 0 20px 0"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let startDate = startofday(ago(7d));\nlet endDate = startofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per agent id per day\nlet dailyLatest = GuardicoreAgents_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| summarize\n    total_agents = count(),\n    protected_agents = countif(tostring(health.enforcement_agent.status) == \"RUNNING\" and is_agent_enforcing == true)\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend total_agents = coalesce(total_agents, 0),\n         protected_agents = coalesce(protected_agents, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), total_agents, protected_agents\n| sort by day asc\n",
+              "size": 1,
+              "title": "\ud83d\udcc8 Protection Coverage Trend (7 Days)",
+              "noDataMessage": "No policy rules found in the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "unstackedbar",
+              "chartSettings": {
+                "xAxis": "day",
+                "yAxis": [
+                  "total_agents",
+                  "protected_agents"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "total_agents",
+                    "label": "Total Agents",
+                    "color": "#0078D4"
+                  },
+                  {
+                    "seriesName": "protected_agents",
+                    "label": "Protected Agents",
+                    "color": "#107C10"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                }
+              }
+            },
+            "customWidth": "60",
+            "name": "active-rules-trend",
+            "styleSettings": {
+              "maxWidth": "60%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let latestAgents = GuardicoreAgents_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id;\nlet agentCount = toscalar(latestAgents | summarize count());\nlet protectedCount = toscalar(\n    latestAgents\n    | where tostring(health.enforcement_agent.status) == \"RUNNING\"\n    | where is_agent_enforcing == true\n    | summarize count()\n);\nprint Category = \"Total Workloads\", Count = agentCount\n| union (print Category = \"Protected Workloads\", Count = protectedCount)",
+              "size": 1,
+              "title": "\ud83d\udd22 Total vs Protected Workloads (Last 24h)",
+              "noDataMessage": "No workload data found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "xAxis": "Category",
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "blue"
+                  }
+                ]
+              }
+            },
+            "customWidth": "40",
+            "name": "workloads-protected-chart",
+            "styleSettings": {
+              "maxWidth": "40%"
+            }
+          }
+        ]
+      },
+      "name": "workload-protection-container"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
