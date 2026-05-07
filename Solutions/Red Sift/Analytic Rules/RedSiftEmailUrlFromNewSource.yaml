@@ -1,0 +1,102 @@
+id: 6084dfd8-830b-4839-9a9c-5f08cc984729
+name: Red Sift - New email with URL from previously unseen source
+description: |
+  'Detects email forensics events that contain one or more URLs where the sender is using a source IP address not seen in the previous 14 days, which may indicate suspicious infrastructure changes or phishing activity.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: RedSiftPush
+    dataTypes:
+      - RedSiftEmailForensics_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let lookback = 14d;
+  let recentWindow = 1h;
+  let historicalSources = RedSiftEmailForensics_CL
+  | extend
+      EmailFrom = tostring(column_ifexists("EmailFrom", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", ""))
+  | where TimeGenerated between (ago(lookback) .. ago(recentWindow))
+  | where isnotempty(EmailFrom) and isnotempty(SrcIp)
+  | summarize by EmailFrom, SrcIp;
+  RedSiftEmailForensics_CL
+  | extend
+      EmailFrom = tostring(column_ifexists("EmailFrom", "")),
+      EmailSubject = tostring(column_ifexists("EmailSubject", "")),
+      EmailReturnPath = tostring(column_ifexists("EmailReturnPath", "")),
+      EmailMessageUid = tostring(column_ifexists("EmailMessageUid", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", "")),
+      DstHostname = tostring(column_ifexists("DstHostname", "")),
+      Severity = tostring(column_ifexists("Severity", "")),
+      Message = tostring(column_ifexists("Message", "")),
+      CorrelationUid = tostring(column_ifexists("CorrelationUid", "")),
+      EmailUrls = todynamic(column_ifexists("EmailUrls", "[]"))
+  | where TimeGenerated >= ago(recentWindow)
+  | where isnotempty(EmailFrom) and isnotempty(SrcIp)
+  | extend UrlCount = array_length(EmailUrls)
+  | where UrlCount > 0
+  | mv-apply Url = EmailUrls on (
+      summarize UrlSet = make_set(tostring(Url.url_string), 50)
+    )
+  | extend UrlList = strcat_array(UrlSet, ", ")
+  | join kind=leftanti (historicalSources) on EmailFrom, SrcIp
+  | project
+      TimeGenerated,
+      EmailFrom,
+      EmailSubject,
+      EmailReturnPath,
+      EmailMessageUid,
+      SrcIp,
+      DstHostname,
+      UrlCount,
+      UrlList,
+      Severity,
+      Message,
+      CorrelationUid
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: EmailFrom
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DstHostname
+customDetails:
+  EmailSubject: EmailSubject
+  ReturnPath: EmailReturnPath
+  UrlCount: UrlCount
+  UrlList: UrlList
+  CorrelationUid: CorrelationUid
+alertDetailsOverride:
+  alertDisplayNameFormat: "RedSift - New URL-bearing email source for {{EmailFrom}}"
+  alertDescriptionFormat: "Email from {{EmailFrom}} contains {{UrlCount}} URL(s) and originated from previously unseen source IP {{SrcIp}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+      - IP
+    groupByCustomDetails:
+      - EmailSubject
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionEnabled: false
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled
