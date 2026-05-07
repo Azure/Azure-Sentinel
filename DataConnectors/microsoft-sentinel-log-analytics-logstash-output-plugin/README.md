@@ -100,7 +100,7 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
       --scope "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Insights/dataCollectionRules/<dcr-name>"
 
 
-## 4. Configure the Output Plugin
+## 4. Configure Logstash configuration file
 
 Add the `microsoft-sentinel-log-analytics-logstash-output-plugin` block to the `output` section of your Logstash configuration file (e.g., `logstash.conf`). The plugin requires three values from your Azure DCR resources plus authentication credentials depending on your method.  
 
