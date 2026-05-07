@@ -1,0 +1,237 @@
+Parser:
+  Title: Alert Event ASIM parser for Cisco Secure Endpoint
+  Version: '0.1.0'
+  LastUpdated: Mar 04, 2026
+Product:
+  Name: Cisco Secure Endpoint
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the Cisco Secure Endpoint logs (via Codeless Connector Framework) to the ASIM Alert normalized schema.
+ParserName: ASimAlertEventCiscoSecureEndpoint
+EquivalentBuiltInParser: _ASim_AlertEvent_CiscoSecureEndpoint
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+    let AttackTacticLookup = datatable(_ta: string, AttackTactic:string)
+        [
+            'TA0043', 'Reconnaissance (TA0043)',
+            'TA0042', 'Resource Development (TA0042)',
+            'TA0001', 'Initial Access (TA0001)',
+            'TA0002', 'Execution (TA0002)',
+            'TA0003', 'Persistence (TA0003)',
+            'TA0004', 'Privilege Escalation (TA0004)',
+            'TA0005', 'Defense Evasion (TA0005)',
+            'TA0006', 'Credential Access (TA0006)',
+            'TA0007', 'Discovery (TA0007)',
+            'TA0008', 'Lateral Movement (TA0008)',
+            'TA0009', 'Collection (TA0009)',
+            'TA0011', 'Command and Control (TA0011)',
+            'TA0010', 'Exfiltration (TA0010)',
+            'TA0040', 'Impact (TA0040)'
+        ]
+    ;
+    let CiscoSEParser = (
+        disabled: bool=false,
+        pack: bool=false
+    )
+    {
+        CiscoSecureEndpointEventsV2_CL
+        | where not(disabled)
+        | where isnotempty(Severity) //Filter in only security events and not operational logs
+        | extend
+            EventUid = tostring(Id),
+            EventOriginalType = tostring(EventTypeId)
+        | project-rename
+            EventOriginalSeverity = Severity,
+            EventEndTime = Date,
+            EventReportUrl = ComputerLinksTrajectory,
+            AlertName = EventType
+        | extend
+            EventMessage = coalesce(CloudIocDescription, CloudIocShortDescription, BpDataName, Detection),
+            EventProductVersion = coalesce(BpDataDetailsEngVer, 'Cloud'),
+            EventStartTime = unixtime_seconds_todatetime(Timestamp),
+            EventOriginalUid = coalesce(BpDataId, DetectionId, ""),
+            EventSeverity = case(
+                EventOriginalSeverity in ('Critical', 'High'), 'High',
+                EventOriginalSeverity == 'Medium', 'Medium',
+                EventOriginalSeverity == 'Low', 'Low',
+                'Informational'
+            ),
+            DvcOriginalAction = coalesce(FileParentDisposition, ""),
+            DvcId = coalesce(BpDataDeviceOsMachineUuid, ComputerConnectorGuid),
+            DvcOs = coalesce(strcat(BpDataDeviceOsName, ' ', BpDataDeviceOsEdition), ""),
+            DvcOsVersion = coalesce(BpDataDeviceOsBuild, ""),
+            DvcDescription = coalesce(BpDataDeviceHwInfoVendorName, ""),
+            RuleName = coalesce(Detection, BpDataDetection, ""),
+            ThreatId = coalesce(BpDataDetection, ""),
+            Hostname = coalesce(ComputerHostname, Hostname),
+            DvcIdType = 'Other',
+            DvcIpAddr = extract_json('$[0].ip', tostring(ComputerNetworkAddresses), typeof(string)),
+            DvcMacAddr = extract_json('$[0].mac', tostring(ComputerNetworkAddresses), typeof(string))
+        | invoke _ASIM_ResolveDvcFQDN("Hostname")
+        | project-away Hostname
+        | mv-apply _a = parse_json(BpDataDetailsMatchedActivityEvents) on (
+            extend
+                DvcDomain = coalesce(tostring(_a.['process:start'].user.domain), tostring(_a.['telemetry:api_invoke'].user.domain)),
+                Username = coalesce(tostring(_a.['process:start'].user.name), tostring(_a.['telemetry:api_invoke'].user.name)),
+                UserId = coalesce(tostring(_a.['process:start'].user.sid), tostring(_a.['telemetry:api_invoke'].user.sid)),
+                FileName = coalesce(tostring(_a.['process:start'].app.original_file_name), tostring(_a.['telemetry:api_invoke'].app.original_file_name)),
+                FilePath = coalesce(tostring(_a.['process:start'].app.path), tostring(_a.['telemetry:api_invoke'].app.path)),
+                ParentFileName = coalesce(tostring(_a.['process:start'].parent_app.original_file_name), tostring(_a.['telemetry:api_invoke'].parent_app.original_file_name)),
+                ParentFilePath = coalesce(tostring(_a.['process:start'].parent_app.path), tostring(_a.['telemetry:api_invoke'].parent_app.path)),
+                ProcessCommandLine = coalesce(tostring(_a.['process:start'].cmd_line), tostring(_a.['telemetry:api_invoke'].cmd_line)),
+                FileSHA256 = coalesce(tostring(_a.['process:start'].app.sha256), tostring(_a.['telemetry:api_invoke'].app.sha256)),
+                FileSize = tolong(coalesce(tostring(_a.['process:start'].app.size), tostring(_a.['telemetry:api_invoke'].app.size))),
+                ParentFileSHA256 = coalesce(tostring(_a.['process:start'].parent_app.sha256), tostring(_a.['telemetry:api_invoke'].parent_app.sha256)),
+                ProcessId = coalesce(tostring(_a.['process:start'].pid), tostring(_a.['telemetry:api_invoke'].pid)),
+                ParentProcessId = coalesce(tostring(_a.['process:start'].parent_pid), tostring(_a.['telemetry:api_invoke'].parent_pid))
+          | project-away _a
+          | project DvcDomain, Username, UserId, FileName, FilePath, ParentFileName, ParentFilePath, ProcessCommandLine, FileSHA256, FileSize, ParentFileSHA256, ProcessId, ParentProcessId
+        )
+        | extend
+            BpDataObservablesFile = parse_json(BpDataObservablesFile),
+            FileName = coalesce(FileFileName, FileName, ""),
+            FilePath = coalesce(FileFilePath, FilePath, ""),
+            ProcessCommandLine = coalesce(ProcessCommandLine, CommandLineArguments, ""),
+            UserIdType = iff(isnotempty(UserId), 'Other', ""),
+            DvcAction = case(
+                DvcOriginalAction == 'Clean', 'Allow',
+                DvcOriginalAction == 'Unknown', 'Unknown',
+                'Unknown'
+            ),
+            Username = coalesce(IsolationUser, ComputerUser, Username)
+        | extend
+            FileSHA1 = coalesce(FileIdentitySha1, tostring(BpDataObservablesFile.[0].sha1), ""),//orginal file always first item in array
+            FileSHA256 = coalesce(FileIdentitySha256, tostring(BpDataObservablesFile.[0].sha256), ""),
+            FileMD5 = coalesce(FileIdentityMd5, tostring(BpDataObservablesFile.[0].md5), ""),
+            ParentFileSHA1 = coalesce(FileParentIdentityMd5, tostring(BpDataObservablesFile.[1].sha1), ""),//parent file always first item in array
+            ParentFileSHA256 = coalesce(FileParentIdentityMd5, tostring(BpDataObservablesFile.[1].sha256), ""),
+            ParentFileMD5 = coalesce(FileParentIdentityMd5, tostring(BpDataObservablesFile.[1].md5), ""),
+            UsernameType = iff(isnotempty(Username), 'Simple', "")
+        | extend
+            Tactics = iif(isempty(todynamic(Tactics)), dynamic([""]), todynamic(Tactics)),
+            Techniques = iif(isempty(todynamic(Techniques)), dynamic([""]), todynamic(Techniques))
+        | as T
+            | mv-expand
+                _ta = parse_json(Tactics) to typeof(string),
+                _t = parse_json(Techniques) to typeof(string)
+            | extend AttackTechnique = iff(isnotempty(_t), strcat('(', _t,')'), "")
+            | lookup AttackTacticLookup on _ta
+            | summarize
+                AttackTactics = strcat_array(make_set_if(AttackTactic, isnotempty(AttackTactic)), ', '),
+                AttackTechniques = strcat_array(make_set_if(AttackTechnique, isnotempty(AttackTechnique)), ', ')
+                by _ItemId
+        | lookup T on _ItemId
+        | extend
+            EventProduct = 'Secure Endpoint',
+            EventVendor = 'Cisco',
+            EventSchema = 'AlertEvent',
+            EventSchemaVersion = '0.1',
+            EventType = 'Alert',
+            EventSubType = 'Threat',
+            EventCount = int(1),
+            IndicatorType = 'File'
+        | extend AdditionalFields = iff (
+            pack,
+            bag_pack(
+                'ComputerExternalIp', ComputerExternalIp,
+                'ComputerActive', ComputerActive,
+                'ComputerNetworkAddresses', ComputerNetworkAddresses,
+                'CloudIocShortDescription', CloudIocShortDescription,
+                'BpDataRemediated', BpDataRemediated,
+                'BpDataSilent', BpDataSilent,
+                'BpDataType', BpDataType,
+                'BpDataDetailsActions', BpDataDetailsActions,
+                'BpDataDetailsSigId', BpDataDetailsSigId,
+                'BpDataDetailsSigRev', BpDataDetailsSigRev,
+                'BpDataDetailsSigSetVersion', BpDataDetailsSigSetVersion,
+                'BpDataNormalizedObservablesAll', BpDataNormalizedObservablesAll,
+                'BpDataDetailsMatchedActivityEvents', BpDataDetailsMatchedActivityEvents //full raw
+            ),
+            dynamic([])
+        )
+        | extend
+            AlertId = EventUid,
+            AlertDescription = EventMessage,
+            Rule = RuleName,
+            Hostname = DvcHostname,
+            IpAddr = DvcIpAddr,
+            User = Username
+        | project
+            EventUid,
+            EventOriginalType,
+            EventOriginalSeverity,
+            EventEndTime,
+            EventReportUrl,
+            AlertName,
+            EventMessage,
+            EventProductVersion,
+            EventStartTime,
+            EventOriginalUid,
+            EventSeverity,
+            DvcOriginalAction,
+            DvcId,
+            DvcOs,
+            DvcOsVersion,
+            DvcDescription,
+            RuleName,
+            ThreatId,
+            Hostname,
+            DvcIdType,
+            DvcIpAddr,
+            DvcMacAddr,
+            DvcDomain,
+            Username,
+            UserId,
+            FileName,
+            FilePath,
+            ParentFileName,
+            ParentFilePath,
+            ProcessCommandLine,
+            FileSHA256,
+            FileSize,
+            ParentFileSHA256,
+            ProcessId,
+            ParentProcessId,
+            UserIdType,
+            DvcAction,
+            FileSHA1,
+            FileMD5,
+            ParentFileSHA1,
+            ParentFileMD5,
+            UsernameType,
+            AttackTechniques,
+            AttackTactics,
+            EventProduct,
+            EventVendor,
+            EventSchema,
+            EventSchemaVersion,
+            EventType,
+            EventSubType,
+            EventCount,
+            IndicatorType,
+            AdditionalFields,
+            AlertId,
+            AlertDescription,
+            Rule,
+            IpAddr,
+            User
+    };
+    CiscoSEParser(
+        disabled = disabled,
+        pack = pack
+    )
