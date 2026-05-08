@@ -1,0 +1,102 @@
+id: 8a1fb81a-b672-4e8c-9799-9c7fd2431688
+name: Privileged Identity Management role activation outside business hours
+description: |
+  Hunting query that identifies Privileged Identity Management (PIM) role activations
+  that occur outside standard business hours or on weekends. PIM is designed to provide
+  just-in-time privileged access with approval workflows, time limits, and audit trails.
+  An attacker who has compromised a user account that is eligible for a privileged PIM
+  role, or who has obtained a valid refresh token for such an account, can activate the
+  role without additional credentials if the activation policy does not require MFA or
+  approval. Activations performed outside business hours reduce the likelihood of
+  immediate detection by the security team and are a known indicator in post-compromise
+  activity associated with nation-state operators and sophisticated ransomware affiliates.
+  Business hours are defined in this query as 07:00 to 20:00 UTC Monday through Friday.
+  Analysts should adjust the BusinessHourStart, BusinessHourEnd, and weekend day logic
+  to reflect their organization's actual working hours and timezone offset before
+  deploying this query.
+  Analysts must validate every result. Benign matches include on-call administrators
+  handling after-hours incidents, authorized global administrators working across time
+  zones, and automated runbooks that activate PIM roles via service principals.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/privileged-identity-management/pim-how-to-activate-role
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1078/004/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let BusinessHourStart = 7;   // 07:00 UTC — adjust to your organization's timezone
+  let BusinessHourEnd   = 20;  // 20:00 UTC
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where Category =~ "RoleManagement"
+  | where OperationName has_any (
+        "Add member to role (PIM activation)",
+        "Add member to role. (PIM activation)",
+        "Add eligible member to role. (PIM activation)"
+    )
+  | where Result =~ "success"
+  // Extract the activating user from TargetResources — PIM logs the subject as target
+  | extend ActivatingUserUpn = tostring(TargetResources[0].userPrincipalName)
+  | extend ActivatingUserId  = tostring(TargetResources[0].id)
+  // Extract role name from the second target resource entry
+  | extend RoleName = iff(
+        isnotempty(tostring(TargetResources[1].displayName)),
+        tostring(TargetResources[1].displayName),
+        tostring(TargetResources[0].displayName))
+  | extend ActorUpn = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorIp  = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend HourOfDay   = hourofday(TimeGenerated)
+  | extend DayOfWeekNum = toint(dayofweek(TimeGenerated) / 1d)
+  | extend IsWeekend              = DayOfWeekNum == 0 or DayOfWeekNum == 6
+  | extend IsOutsideBusinessHours = HourOfDay < BusinessHourStart or HourOfDay >= BusinessHourEnd
+  | where IsWeekend or IsOutsideBusinessHours
+  | extend AccountName      = iff(ActivatingUserUpn has "@",
+        tostring(split(ActivatingUserUpn, "@")[0]), ActivatingUserUpn)
+  | extend AccountUPNSuffix = iff(ActivatingUserUpn has "@",
+        tostring(split(ActivatingUserUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      RoleName,
+      ActivatingUserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      ActivatingUserId,
+      ActorIp,
+      HourOfDay,
+      DayOfWeekNum,
+      IsWeekend,
+      IsOutsideBusinessHours,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActivatingUserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
