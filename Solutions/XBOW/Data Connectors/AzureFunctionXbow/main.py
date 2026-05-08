@@ -221,6 +221,17 @@ def _fetch_asset_detail(asset_id: str) -> dict:
     return resp.json()
 
 
+def _fetch_assessment_detail(assessment_id: str) -> dict:
+    """Fetch the full assessment record including attackCredits and recentEvents."""
+    resp = requests.get(
+        f"{XBOW_API_BASE}/assessments/{assessment_id}",
+        headers=_xbow_headers(),
+        timeout=30,
+    )
+    _check_response(resp)
+    return resp.json()
+
+
 def _list_assets(org_id: str) -> list[dict]:
     """Return all assets for the organization."""
     return list(_paginate(f"{XBOW_API_BASE}/organizations/{org_id}/assets"))
@@ -385,23 +396,35 @@ def collect_assessment_events(
         asset_max_ts = asset_last
 
         for assessment in _paginate(f"{XBOW_API_BASE}/assets/{asset_id}/assessments"):
+            assessment_id = assessment["id"]
             record_ts = assessment.get("updatedAt") or assessment.get("createdAt")
 
             if not _is_newer(record_ts, asset_last):
                 continue
 
+            try:
+                detail = _fetch_assessment_detail(assessment_id)
+            except RuntimeError:
+                raise
+            except Exception as exc:
+                logging.warning(
+                    f"{logs_prefix}: Could not enrich assessment {assessment_id}: {exc}. "
+                    "Using summary record."
+                )
+                detail = assessment
+
             events.append({
-                "TimeGenerated":   assessment.get("updatedAt") or assessment.get("createdAt"),
-                "AssessmentId":    assessment.get("id", ""),
-                "AssessmentName":  assessment.get("name", ""),
-                "State":           assessment.get("state", ""),
-                "Progress":        assessment.get("progress", 0),
-                "AttackCredits":   assessment.get("attackCredits", 0),
-                "RecentEvents":    json.dumps(assessment.get("recentEvents") or []),
+                "TimeGenerated":   detail.get("updatedAt") or detail.get("createdAt"),
+                "AssessmentId":    detail.get("id", ""),
+                "AssessmentName":  detail.get("name", ""),
+                "State":           detail.get("state", ""),
+                "Progress":        detail.get("progress", 0),
+                "AttackCredits":   detail.get("attackCredits", 0),
+                "RecentEvents":    json.dumps(detail.get("recentEvents") or []),
                 "AssetId":         asset_id,
                 "AssetName":       asset_name,
-                "OrganizationId":  org_id,
-                "CreatedAt":       assessment.get("createdAt", ""),
+                "OrganizationId":  detail.get("organizationId", org_id),
+                "CreatedAt":       detail.get("createdAt", ""),
             })
 
             asset_max_ts = _max_ts(asset_max_ts, record_ts)
