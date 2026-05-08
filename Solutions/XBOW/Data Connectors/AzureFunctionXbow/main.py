@@ -31,6 +31,7 @@ Application Settings (configured automatically by the ARM template):
 import json
 import os
 import logging
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Generator
 
@@ -73,41 +74,52 @@ function_name = "main"
 # State persistence helpers (Azure Blob Storage)
 # ---------------------------------------------------------------------------
 
-SyncState = dict  # {"assets": {asset_id: last_updated_at}, "findings": {...}, "assessments": {...}}
 
+@dataclass
+class SyncState:
+    """State persistence helpers (Azure Blob Storage)"""
 
-def _get_blob_client() -> BlobClient:
-    """Return a BlobClient for the sync state blob."""
-    svc = BlobServiceClient.from_connection_string(STORAGE_CONN_STR)
-    container = svc.get_container_client(STATE_CONTAINER)
-    try:
-        container.create_container()
-    except Exception:
-        pass  # already exists
-    return svc.get_blob_client(container=STATE_CONTAINER, blob=STATE_BLOB)
+    assets: dict[str, str] = field(default_factory=dict)
+    """asset_id → last_seen_updatedAt for asset list fetch"""
+    findings: dict[str, str] = field(default_factory=dict)
+    """asset_id → last_seen_updatedAt for findings list fetch"""
+    assessments: dict[str, str] = field(default_factory=dict)
+    """asset_id → last_seen_updatedAt for assessments list fetch"""
 
+    def _get_blob_client() -> BlobClient:
+        """Return a BlobClient for the sync state blob."""
+        svc = BlobServiceClient.from_connection_string(STORAGE_CONN_STR)
+        container = svc.get_container_client(STATE_CONTAINER)
+        try:
+            container.create_container()
+        except Exception:
+            pass  # already exists
+        return svc.get_blob_client(container=STATE_CONTAINER, blob=STATE_BLOB)
 
-def load_state() -> SyncState:
-    """Load sync state from blob storage. Returns empty state on first run."""
-    try:
-        blob = _get_blob_client()
-        data = blob.download_blob().readall()
-        state = json.loads(data)
-        logging.info(f"{logs_prefix}: Loaded sync state from blob storage.")
-        return state
-    except Exception as exc:
-        logging.info(f"{logs_prefix}: No existing sync state found (first run or error: {exc}). Starting fresh.")
-        return {"assets": {}, "findings": {}, "assessments": {}}
+    def load_state() -> "SyncState":
+        """Load sync state from blob storage. Returns empty state on first run."""
+        try:
+            blob = SyncState._get_blob_client()
+            data = blob.download_blob().readall()
+            raw = json.loads(data)
+            logging.info(f"{logs_prefix}: Loaded sync state from blob storage.")
+            return SyncState(
+                assets=raw.get("assets", {}),
+                findings=raw.get("findings", {}),
+                assessments=raw.get("assessments", {}),
+            )
+        except Exception as exc:
+            logging.info(f"{logs_prefix}: No existing sync state found (first run or error: {exc}). Starting fresh.")
+            return SyncState()
 
-
-def save_state(state: SyncState) -> None:
-    """Persist sync state to blob storage."""
-    try:
-        blob = _get_blob_client()
-        blob.upload_blob(json.dumps(state, indent=2), overwrite=True)
-        logging.info(f"{logs_prefix}: Sync state saved to blob storage.")
-    except Exception as exc:
-        logging.error(f"{logs_prefix}: Failed to save sync state: {exc}. State will not persist across runs.")
+    def save_state(self) -> None:
+        """Persist sync state to blob storage."""
+        try:
+            blob = SyncState._get_blob_client()
+            blob.upload_blob(json.dumps(asdict(self), indent=2), overwrite=True)
+            logging.info(f"{logs_prefix}: Sync state saved to blob storage.")
+        except Exception as exc:
+            logging.error(f"{logs_prefix}: Failed to save sync state: {exc}. State will not persist across runs.")
 
 
 def _parse_ts(ts: str | None) -> datetime | None:
@@ -233,33 +245,30 @@ def collect_finding_events(
     """
     For each asset, fetch findings where updatedAt > last_seen[asset_id].
     Returns (new_events, updated_last_seen).
-
-    Each finding is enriched with the full detail record (evidence, PoC recipe,
-    impact statement, and mitigation guidance) from GET /findings/{findingId}.
     """
     events: list[dict] = []
-    new_last_seen: dict[str, str] = dict(last_seen)  # copy; update as we go
+    new_last_seen: dict[str, str] = dict(last_seen)
 
     for asset in assets:
         asset_id   = asset["id"]
         asset_name = asset["name"]
         asset_last = last_seen.get(asset_id)
-        asset_max_ts = asset_last  # track highest updatedAt we see this run
+        asset_max_ts = asset_last
 
         for finding in _paginate(f"{XBOW_API_BASE}/assets/{asset_id}/findings"):
-            record_ts = finding.get("updatedAt") or finding.get("createdAt")
+            finding_id = finding["id"]
+            record_ts  = finding.get("updatedAt") or finding.get("createdAt")
 
             if not _is_newer(record_ts, asset_last):
                 continue  # already ingested on a previous run
 
-            # Enrich with full detail (evidence, recipe, impact, mitigations)
             try:
-                detail = _fetch_finding_detail(finding["id"])
+                detail = _fetch_finding_detail(finding_id)
             except RuntimeError:
                 raise
             except Exception as exc:
                 logging.warning(
-                    f"{logs_prefix}: Could not enrich finding {finding['id']}: {exc}. "
+                    f"{logs_prefix}: Could not enrich finding {finding_id}: {exc}. "
                     "Using summary record."
                 )
                 detail = finding
@@ -270,7 +279,7 @@ def collect_finding_events(
                 "FindingName":    detail.get("name", ""),
                 "Severity":       detail.get("severity", ""),
                 "State":          detail.get("state", ""),
-                "Summary":        (detail.get("summary") or "")[:32000],  # guard oversized fields
+                "Summary":        (detail.get("summary") or "")[:32000],
                 "Evidence":       (detail.get("evidence") or "")[:32000],
                 "Impact":         (detail.get("impact") or "")[:8000],
                 "Mitigations":    (detail.get("mitigations") or "")[:8000],
@@ -297,6 +306,7 @@ def collect_asset_events(
     """
     For each asset from the organization list endpoint, fetch GET /assets/{assetId}
     when updatedAt > last_seen[asset_id], and emit a sanitized JSON snapshot event.
+    Returns (new_events, updated_last_seen).
     """
     events: list[dict] = []
     new_last_seen: dict[str, str] = dict(last_seen)
@@ -466,16 +476,13 @@ def main(mytimer: func.TimerRequest) -> None:
     # ------------------------------------------------------------------
     # 2. Load persisted sync state
     # ------------------------------------------------------------------
-    state = load_state()
-    assets_last_seen:      dict[str, str] = state.get("assets", {})
-    findings_last_seen:    dict[str, str] = state.get("findings", {})
-    assessments_last_seen: dict[str, str] = state.get("assessments", {})
+    state = SyncState.load_state()
 
     logging.info(
         f"{logs_prefix}: State loaded — "
-        f"{len(assets_last_seen)} asset(s) tracked for assets, "
-        f"{len(findings_last_seen)} asset(s) tracked for findings, "
-        f"{len(assessments_last_seen)} for assessments."
+        f"{len(state.assets)} asset(s) tracked for assets, "
+        f"{len(state.findings)} asset(s) tracked for findings, "
+        f"{len(state.assessments)} for assessments."
     )
 
     # ------------------------------------------------------------------
@@ -490,7 +497,7 @@ def main(mytimer: func.TimerRequest) -> None:
     # ------------------------------------------------------------------
     logging.info(f"{logs_prefix}: Collecting new/changed asset snapshots...")
     asset_events, new_assets_last_seen = collect_asset_events(
-        XBOW_ORG_ID, assets, assets_last_seen
+        XBOW_ORG_ID, assets, state.assets
     )
     logging.info(f"{logs_prefix}: {len(asset_events)} new/changed asset snapshot(s) to ingest.")
 
@@ -499,7 +506,7 @@ def main(mytimer: func.TimerRequest) -> None:
     # ------------------------------------------------------------------
     logging.info(f"{logs_prefix}: Collecting new/changed findings...")
     finding_events, new_findings_last_seen = collect_finding_events(
-        XBOW_ORG_ID, assets, findings_last_seen
+        XBOW_ORG_ID, assets, state.findings
     )
     logging.info(f"{logs_prefix}: {len(finding_events)} new/changed finding(s) to ingest.")
 
@@ -508,7 +515,7 @@ def main(mytimer: func.TimerRequest) -> None:
     # ------------------------------------------------------------------
     logging.info(f"{logs_prefix}: Collecting new/changed assessments...")
     assessment_events, new_assessments_last_seen = collect_assessment_events(
-        XBOW_ORG_ID, assets, assessments_last_seen
+        XBOW_ORG_ID, assets, state.assessments
     )
     logging.info(f"{logs_prefix}: {len(assessment_events)} new/changed assessment(s) to ingest.")
 
@@ -556,11 +563,7 @@ def main(mytimer: func.TimerRequest) -> None:
     # ------------------------------------------------------------------
     # 9. Persist updated state (only after successful ingest)
     # ------------------------------------------------------------------
-    save_state({
-        "assets":      new_assets_last_seen,
-        "findings":    new_findings_last_seen,
-        "assessments": new_assessments_last_seen,
-    })
+    state.save_state()
 
     elapsed = (datetime.now(timezone.utc) - run_start).total_seconds()
     logging.info(
