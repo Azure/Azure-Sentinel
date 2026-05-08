@@ -1,0 +1,98 @@
+id: 0364b6b6-65cf-4ba2-ad0d-9ce80e0ae71e
+name: Admin consent granted to application
+description: |
+  Hunting query that identifies admin consent grants to Entra ID applications. Admin
+  consent (also referred to as tenant-wide consent) allows an administrator to authorize
+  an application to access resources on behalf of all users in the tenant, without
+  requiring individual user consent. This is identified in AuditLogs by the presence of
+  the AllPrincipals principal type in the ConsentAction.Permissions modified property.
+  Admin consent grants are a high-value persistence mechanism. Once granted, the
+  application retains access even if the user who performed the grant changes their
+  password or has their account disabled, because the permission is attached to the
+  service principal and not to the user session. This technique was used in the
+  Midnight Blizzard and Storm-0558 campaigns to maintain persistent access to
+  Microsoft 365 environments via OAuth applications after initial access was established.
+  This query is complementary to OAuthConsentToHighRiskPermission.yaml, which focuses
+  on user-level consents to newly observed applications with high-risk scopes. This
+  query focuses exclusively on the tenant-wide admin consent signal regardless of the
+  application age or specific scope, because AllPrincipals grants carry elevated risk
+  by nature.
+  Analysts must validate every result. Benign matches include authorized enterprise
+  application deployments, ISV integrations performed by IT administrators, and
+  Microsoft-published first-party applications onboarded by a global administrator.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/manage-apps/grant-admin-consent
+  - https://learn.microsoft.com/azure/active-directory/manage-apps/protect-against-consent-phishing
+  - https://attack.mitre.org/techniques/T1528/
+  - https://attack.mitre.org/techniques/T1098/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1528
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Consent to application"
+  | where Result =~ "success"
+  | extend AppName  = tolower(tostring(TargetResources[0].displayName))
+  | extend AppId    = tostring(TargetResources[0].id)
+  | extend ActorUpn = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | extend PropName = tostring(ModProp.displayName)
+  | extend NewValue = replace_string(tostring(ModProp.newValue), '"', "")
+  | where PropName =~ "ConsentAction.Permissions"
+  // Admin consent sets the principal type to AllPrincipals (tenant-wide grant)
+  // User consent uses the individual user's object ID as the principal
+  | where NewValue has "AllPrincipals"
+  | extend ScopeRaw = extract(@'Scope:\s*([^,\]]*)', 1, NewValue)
+  | extend Scopes   = split(trim(" ", ScopeRaw), " ")
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | summarize
+      FirstSeen     = min(TimeGenerated),
+      LastSeen      = max(TimeGenerated),
+      GrantedScopes = make_set(Scopes),
+      EventCount    = count()
+      by AppName, AppId, Actor, AccountName, AccountUPNSuffix, ActorIp, CorrelationId
+  | sort by FirstSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppName
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
