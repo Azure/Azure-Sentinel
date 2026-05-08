@@ -1,0 +1,91 @@
+id: ef54a29b-136c-42a3-9d37-49fd67e2598b
+name: Entra ID named location deleted or modified
+description: |
+  Hunting query that identifies deletion or modification of named locations in Entra ID.
+  Named locations are IP range or country definitions used as conditions in Conditional
+  Access policies. A CA policy that restricts sign-in to trusted IP ranges or known
+  countries becomes ineffective if its referenced named location is deleted or its
+  IP ranges are modified to include attacker-controlled addresses. This is a less
+  obvious defense weakening technique than disabling a CA policy directly, because
+  the policy itself remains in the enabled state and may not trigger monitoring rules
+  that only watch for policy state changes.
+  An attacker with Conditional Access Administrator or Global Administrator privileges
+  can delete or modify named locations to effectively neutralize IP-based or
+  country-based CA conditions while leaving the policy object intact. This technique
+  is complementary to disabling or deleting the CA policy itself.
+  This query surfaces all Add, Update, and Delete operations on named locations and
+  includes the actor identity and source IP for analyst correlation.
+  Analysts must validate every result. Benign matches include authorized IP range
+  updates to reflect network changes, consolidation of named location objects, and
+  routine administrative maintenance of CA policy conditions.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/conditional-access/location-condition
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1562/001/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where Category =~ "Policy"
+  | where OperationName in~ (
+        "Add named location",
+        "Update named location",
+        "Delete named location"
+    )
+  | where Result =~ "success"
+  | extend LocationName = tostring(TargetResources[0].displayName)
+  | extend LocationId   = tostring(TargetResources[0].id)
+  | extend ActorUpn     = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp     = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp      = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend AccountName      = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      OperationName,
+      LocationName,
+      LocationId,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
