@@ -1,0 +1,105 @@
+id: 902e4b5a-4e6a-46e1-a897-4cdbda0693b3
+name: Federated domain added to Entra ID tenant
+description: |
+  Hunting query that identifies changes to domain authentication that convert a managed
+  domain to federated authentication. When a domain is federated, Entra ID delegates
+  authentication for that domain to an external Identity Provider (IdP) such as
+  Active Directory Federation Services (ADFS) or a third-party SAML provider. An
+  attacker who has obtained Global Administrator access can add a new domain or convert
+  an existing managed domain to federated authentication, configure a malicious IdP
+  under their control, and then issue valid SAML tokens for any user in the tenant
+  without knowing the user's password. This technique bypasses MFA because the
+  assertion comes from the trusted IdP, not from Entra ID itself.
+  This technique was described publicly as the Golden SAML attack and has been observed
+  in the wild in nation-state intrusions targeting hybrid identity environments. It
+  allows persistent, hard-to-detect access that survives password resets and can be
+  maintained even after the attacker loses access to the compromised admin account,
+  as long as the federated trust relationship remains active.
+  This query surfaces Set domain authentication audit events where the domain
+  authentication type transitions to Federated. Analysts should treat any unexpected
+  result as high priority and immediately verify the legitimacy of the federation
+  configuration and the identity of the administrator who performed the action.
+  Analysts must validate every result. Benign matches include authorized migrations
+  from cloud-only to hybrid identity, ISV SSO integrations, and authorized ADFS
+  federation setups performed as part of documented infrastructure changes.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/hybrid/connect/whatis-fed
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1484/002/
+  - https://www.semperis.com/blog/golden-saml-newly-discovered-attack-technique-forges-authentication-to-cloud-apps/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1484.002
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Set domain authentication"
+  | where Result =~ "success"
+  | extend DomainName = tostring(TargetResources[0].displayName)
+  | extend DomainId   = tostring(TargetResources[0].id)
+  | extend ActorUpn   = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp   = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp    = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | extend PropName = tostring(ModProp.displayName)
+  | extend OldValue = tostring(ModProp.oldValue)
+  | extend NewValue = tostring(ModProp.newValue)
+  // Surface transitions to federated authentication only
+  | where NewValue has_any ("Federated", "federated")
+  | extend AccountName      = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      DomainName,
+      DomainId,
+      PropName,
+      OldValue,
+      NewValue,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
