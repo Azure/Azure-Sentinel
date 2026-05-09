@@ -26,7 +26,10 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 | `description` | Table description | `tables_reference.csv` (Azure Monitor pages) |
 | `category` | Table category (e.g., Security, Audit, Azure Resources) | `tables_reference.csv` |
 | `support_tier` | Rolled-up support tier across solutions using this table; `Various` if mixed | Derived from `solution_support_tier` |
-| `collection_method` | Data collection method | `tables_reference.csv` + override system |
+| `collection_method` | Data collection method | `tables_reference.csv` + back-propagation from feeding connectors (see [resolution order](../map_solutions_connectors_tables.md#table-level-collection_method-resolution)) |
+| `collection_method_source` | How `collection_method` was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence({rule trail})` | Computed |
+| `collection_method_candidates` | Comma-separated distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables) | Computed |
+| `feeding_connector_ids` | Comma-separated IDs of every connector that ingests the table | Computed |
 | `resource_types` | Azure resource types that emit to this table | `tables_reference.csv` |
 | `source_azure_monitor` | `true` if documented in Azure Monitor reference | `tables_reference.csv` |
 | `source_defender_xdr` | `true` if documented in Defender XDR schema | `tables_reference.csv` |

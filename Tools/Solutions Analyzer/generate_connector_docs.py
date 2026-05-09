@@ -4078,7 +4078,30 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         f.write("---\n\n")
         f.write(DEPRECATED_FOOTNOTE + "\n\n")
         f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
-        
+
+        # ===================== HOW TABLE COLLECTION METHODS ARE DETERMINED =====================
+        f.write("## How collection methods are assigned to tables\n\n")
+        f.write(
+            "Each table's `collection_method` is resolved in this order:\n\n"
+            "1. **ASIM short-circuit** — tables whose name starts with `ASim` (case-insensitive) are classified as **`Various`**, since ASIM is a normalization layer that aggregates events from many heterogeneous sources.\n"
+            "2. **Intrinsic value** from `tables_reference.csv` (e.g. `AMA` for tables with VM resource types). "
+            "The shared agent-collected tables — `Syslog`, `CommonSecurityLog`, `SecurityEvent`, and `Event` — are intrinsically classified as **`AMA`** since AMA is the supported modern collection path, even though some legacy connectors that feed them still use MMA.\n"
+            "3. **Defender XDR override** — tables flagged `source_defender_xdr=Yes` are classified as `Defender`.\n"
+            "4. **Azure Resources override** — tables in the `Azure Resources` category are classified as `Azure Diagnostics`.\n"
+            "5. **Inherited from feeding connectors** when all of them use the same atomized method (1:1). Connector `collection_method` values are split on `|` before comparison.\n"
+            "6. **Published-connector trump** — when feeding connectors disagree but only some are published in the marketplace, the unpublished connectors are dropped from inference. If that yields a single method, it is used.\n"
+            "7. **Precedence collapse** when feeding connectors still disagree and the disagreement is a known generation overlap. "
+            "Newer / canonical technology wins:\n\n"
+            "   | Co-feeding methods | Inferred method |\n"
+            "   |:-------------------|:----------------|\n"
+            "   | `AMA` + `MMA` | `AMA` |\n"
+            "   | `CCF` + `CCF (Legacy)` | `CCF` |\n"
+            "   | `Azure Function` + `CCF` | `CCF` |\n\n"
+            "If steps 2–4 produced an intrinsic value that disagrees with what step 5–7 would infer, the intrinsic value wins and the disagreement is logged in the analyzer's exceptions report with `reason=table_method_conflict`. "
+            "If feeding connectors still disagree after the published-trump filter and precedence collapse, no method is back-propagated and the table is logged with `reason=table_method_ambiguity` (only when no intrinsic value was set).\n\n"
+            "`tables.csv` records the resolution path on every row via the `collection_method_source`, `collection_method_candidates`, and `feeding_connector_ids` columns.\n\n"
+        )
+
         # ===================== INGESTION API BY COLLECTION METHOD TABLE =====================
         # Build ingestion API stats per (collection_method, ingestion_api)
         api_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))

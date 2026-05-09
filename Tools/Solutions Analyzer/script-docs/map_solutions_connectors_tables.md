@@ -446,6 +446,41 @@ After all patterns are detected, the final method is selected using this priorit
 > - **Title-based AMA/MMA is strongest**: When a connector title explicitly includes "AMA" or "Legacy Agent", it overrides all other patterns
 > - **MMA content patterns override AMA metadata**: MMA-era patterns like `OmsSolutions` and `InstallAgent*` take precedence over AMA detection from table metadata
 
+#### Table-Level `collection_method` Resolution
+
+`tables.csv` has its own `collection_method` column, resolved per table in this order:
+
+1. **ASIM short-circuit** — any table whose name starts with `ASim` (case-insensitive) is classified as `Various`. ASIM is a normalization layer that aggregates events from many heterogeneous sources, so a single "collection method" is not meaningful.
+2. **Intrinsic value** from `tables_reference.csv` (e.g. `AMA` for tables with VM resource types).
+3. **Defender XDR override** — `source_defender_xdr=Yes` → `Defender`.
+4. **Azure Resources override** — table category `Azure Resources` → `Azure Diagnostics`.
+5. **Inherited from feeding connectors** when all of them use a single distinct informative method (1:1 method relationship across all connectors that ingest the table). Connector `collection_method` values are atomized on `|` before set comparison, so a connector declaring `CCF|Azure Function` contributes both methods.
+6. **Published-connector trump** — if step 5 finds disagreement but the table is fed by both published (marketplace) and unpublished connectors, only the published connectors’ methods are kept. If that yields a single distinct method, it is used.
+7. **Precedence collapse** when feeding connectors still disagree and the disagreement is a known generation overlap. Newer / canonical technology wins, applied iteratively until no further collapse is possible:
+
+   | Co-feeding methods | Inferred method |
+   |:-------------------|:----------------|
+   | `AMA` + `MMA` | `AMA` |
+   | `CCF` + `CCF (Legacy)` | `CCF` |
+   | `Azure Function` + `CCF` | `CCF` |
+
+Comparisons are case-insensitive throughout.
+
+**Diagnostic columns recorded on every row of `tables.csv`:**
+
+| Column | Description |
+|--------|-------------|
+| `collection_method_source` | How the value was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence({rule trail})`. |
+| `collection_method_candidates` | Comma-separated set of distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables). |
+| `feeding_connector_ids` | Comma-separated IDs of every connector that ingests the table, for traceability. |
+
+**Findings are surfaced in the unified exceptions report.** Disagreements and unresolved cases are written to [`solutions_connectors_tables_issues_and_exceptions_report.csv`](csv/solutions_connectors_tables_issues_and_exceptions_report.md) (no separate CSVs):
+
+| `reason` | Trigger |
+|----------|---------|
+| `table_method_conflict` | Intrinsic value disagrees with the connector-inferred (or precedence-collapsed) method. Intrinsic always wins; the disagreement is logged for visibility. The `details` column lists the intrinsic value, its source, the connector-inferred method, and the feeding connector IDs. |
+| `table_method_ambiguity` | Feeding connectors still disagree after the published-trump filter and precedence collapse, **and** no intrinsic value was set. The `details` column lists the candidate methods and a `method:[connector_id,...]` breakdown. Tables that already have an intrinsic value (e.g. `Syslog`, `CommonSecurityLog` → `AMA`) are not reported here since the intrinsic wins. |
+
 ### CCF Configuration and Capabilities
 
 For connectors detected as **CCF** or **CCF Push**, the analyzer locates the CCF configuration file and extracts capabilities from it. For **CCF (Legacy)** connectors, capabilities are extracted from the embedded `pollingConfig`.

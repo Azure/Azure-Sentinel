@@ -6,7 +6,7 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 613 | 198 | 32.3% |
+| Connectors | 612 | 197 | 32.2% |
 | Content Items | 6531 | 2463 | 37.7% |
 | ASIM Parsers | 210 | 119 | 56.7% |
 
@@ -138,7 +138,6 @@ The following table.field combinations were detected in queries:
 | AzureActivity.CategoryValue | 13 |
 | GCPAuditLogs.ServiceName | 13 |
 | AzureDiagnostics.Message | 12 |
-| AzureDiagnostics.Resource | 12 |
 | CloudAppEvents.Application | 12 |
 | EmailEvents.SenderFromAddress | 12 |
 | MessageEvents.RecipientDetails | 12 |
@@ -147,6 +146,7 @@ The following table.field combinations were detected in queries:
 | _Computed.UserName | 12 |
 | AWSSecurityHubFindings.ComplianceStatus | 11 |
 | AWSSecurityHubFindings.RecordState | 11 |
+| AzureDiagnostics.Resource | 11 |
 | IdentityQueryEvents.ActionType | 11 |
 | SecurityBaseline.AnalyzeResult | 11 |
 | ThreatIntelligenceIndicator.SourceSystem | 11 |
@@ -370,7 +370,6 @@ The following table.field combinations were detected in queries:
 | AADNonInteractiveUserSignInLogs.ResultType | 3 |
 | AADServicePrincipalSignInLogs.ResultType | 3 |
 | AIAgentsInfo.IsBlocked | 3 |
-| ASimAuditEventLogs.EventVendor | 3 |
 | ASimNetworkSessionSonicWallFirewall.NetworkDirection | 3 |
 | AWSCloudTrail.UserAgent | 3 |
 | AWSSecurityHubFindings.AwsSecurityFindingGeneratorId | 3 |
@@ -452,10 +451,12 @@ The following table.field combinations were detected in queries:
 | AADSignInEventsBeta.IsCompliant | 2 |
 | AADSignInEventsBeta.IsManaged | 2 |
 | ADXTableDetails.TableName | 2 |
-| ASimAuditEventLogs.EventProduct | 2 |
+| ASimAuditEventLogs.EventVendor | 2 |
 | ASimNetworkSessionLogs.EventProduct | 2 |
 | ASimNetworkSessionSonicWallFirewall.EventResult | 2 |
 | ASimNetworkSessionSonicWallFirewall.SrcZone | 2 |
+| ASimRegistryEventLogs.EventProduct | 2 |
+| ASimRegistryEventLogs.EventVendor | 2 |
 | AWSCloudTrail.ErrorMessage | 2 |
 | AWSCloudTrail.RequestParameters | 2 |
 | AWSCloudTrail.SessionIssuerUserName | 2 |
@@ -466,7 +467,6 @@ The following table.field combinations were detected in queries:
 | AzureActivity.ResourceGroup | 2 |
 | AzureActivity.ResourceProvider | 2 |
 | AzureDiagnostics.instanceId_s | 2 |
-| AzureMetrics.MetricName | 2 |
 | CloudAppEvents.AccountId | 2 |
 | CloudAppEvents.ApplicationId | 2 |
 | CloudAppEvents.ObjectType | 2 |
@@ -686,6 +686,7 @@ The following table.field combinations were detected in queries:
 | AIAgentsInfo.AuthenticationTrigger | 1 |
 | AIAgentsInfo.Instructions | 1 |
 | AIAgentsInfo.UserAuthenticationType | 1 |
+| ASimAuditEventLogs.EventProduct | 1 |
 | ASimDnsActivityLogs.EventProduct | 1 |
 | ASimDnsActivityLogs.EventResult | 1 |
 | ASimDnsActivityLogs.EventResultDetails | 1 |
@@ -701,12 +702,10 @@ The following table.field combinations were detected in queries:
 | ASimNetworkSessionSonicWallFirewall.EventMessage | 1 |
 | ASimNetworkSessionSonicWallFirewall.EventOriginalType | 1 |
 | ASimNetworkSessionSonicWallFirewall.NetworkProtocol | 1 |
-| ASimProcessEventLogs.EventProduct | 1 |
-| ASimProcessEventLogs.EventVendor | 1 |
 | ASimProcessEventLogs.Type | 1 |
-| ASimRegistryEventLogs.EventProduct | 1 |
-| ASimRegistryEventLogs.EventVendor | 1 |
+| ASimWebSessionLogs.EventProduct | 1 |
 | ASimWebSessionLogs.EventType | 1 |
+| ASimWebSessionLogs.EventVendor | 1 |
 | AWSCloudTrail.ErrorCode | 1 |
 | AWSCloudTrail.Resources | 1 |
 | AWSCloudTrail.UserIdentityAccountId | 1 |
@@ -723,6 +722,7 @@ The following table.field combinations were detected in queries:
 | AzureDiagnostics.conditions_sourceIP_s | 1 |
 | AzureDiagnostics.conditions_sourcePortRange_s | 1 |
 | AzureDiagnostics.direction_s | 1 |
+| AzureMetrics.MetricName | 1 |
 | CommonSecurityLog.DeviceCustomString4 | 1 |
 | CommonSecurityLog.EventOutcome | 1 |
 | CommonSecurityLog.RequestContext | 1 |
@@ -1178,7 +1178,7 @@ The following fields are extracted from queries:
 
 ## Connectors with Filter Fields
 
-Total: 198 connectors
+Total: 197 connectors
 
 | Connector ID | Title | Filter Fields | File |
 |--------------|-------|---------------|------|
@@ -1222,7 +1222,7 @@ Total: 198 connectors
 | CiscoISE | [Deprecated] Cisco Identity Services Engine | Syslog.ProcessName has_any "CISE,CSCO" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ISE/Data%20Connectors/Connector_Cisco_ISE.json) |
 | CiscoMeraki | [Deprecated] Cisco Meraki | _Computed.Action == "block"  \|  _Computed.EventOriginalType == "IDS Alert"  \|  _Computed.LogType in "bridge_anyconnect_client_vpn_firewall,cellular_firewall,firewall,flows,vpn_firewall"  \|  _Computed.LogType !contains "firewall"  \|  _Computed.LogType !contains "flows"  \|  _Computed.LogType !in "urls,airmarshal_events,security_event,ids-alerts,events"  \|  _Computed.LogType has "airmarshal_events"  \|  _Computed.LogType has "events"  \|  _Computed.LogType has "flows"  \|  _Computed.LogType has "ids-alerts"  \|  _Computed.LogType has "security_event"  \|  _Computed.LogType has "urls"  \|  _Computed.LogType has_any "flows"  \|  _Computed.NetworkProtocol has "tcp"  \|  _Computed.NetworkProtocol has "udp"  \|  _Computed.Priority in "1,2,3,4" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/Connector_Syslog_CiscoMeraki.json) |
 | CiscoMeraki(usingRESTAPI) | Cisco Meraki (using REST API) | _Computed.Action == "block"  \|  _Computed.EventOriginalType == "IDS Alert"  \|  _Computed.LogType in "bridge_anyconnect_client_vpn_firewall,cellular_firewall,firewall,flows,vpn_firewall"  \|  _Computed.LogType !contains "firewall"  \|  _Computed.LogType !contains "flows"  \|  _Computed.LogType !in "urls,airmarshal_events,security_event,ids-alerts,events"  \|  _Computed.LogType has "airmarshal_events"  \|  _Computed.LogType has "events"  \|  _Computed.LogType has "flows"  \|  _Computed.LogType has "ids-alerts"  \|  _Computed.LogType has "security_event"  \|  _Computed.LogType has "urls"  \|  _Computed.LogType has_any "flows"  \|  _Computed.NetworkProtocol has "tcp"  \|  _Computed.NetworkProtocol has "udp"  \|  _Computed.Priority in "1,2,3,4" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
-| CiscoMerakiMultiRule | Cisco Meraki (using REST API) | ASimAuditEventLogs.EventProduct == "Meraki"  \|  ASimAuditEventLogs.EventVendor == "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json) |
+| CiscoMerakiMultiRule | Cisco Meraki (using REST API) | ASimWebSessionLogs.EventProduct == "Meraki"  \|  ASimWebSessionLogs.EventVendor == "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json) |
 | CiscoMerakiNativePoller | Cisco Meraki (using REST API) | _Computed.Action == "block"  \|  _Computed.EventOriginalType == "IDS Alert"  \|  _Computed.LogType in "bridge_anyconnect_client_vpn_firewall,cellular_firewall,firewall,flows,vpn_firewall"  \|  _Computed.LogType !contains "firewall"  \|  _Computed.LogType !contains "flows"  \|  _Computed.LogType !in "urls,airmarshal_events,security_event,ids-alerts,events"  \|  _Computed.LogType has "airmarshal_events"  \|  _Computed.LogType has "events"  \|  _Computed.LogType has "flows"  \|  _Computed.LogType has "ids-alerts"  \|  _Computed.LogType has "security_event"  \|  _Computed.LogType has "urls"  \|  _Computed.LogType has_any "flows"  \|  _Computed.NetworkProtocol has "tcp"  \|  _Computed.NetworkProtocol has "udp"  \|  _Computed.Priority in "1,2,3,4" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
 | CiscoSEG | [Deprecated] Cisco Secure Email Gateway via Legacy Agent | CommonSecurityLog.DeviceEventClassID =~ "ESA_CONSOLIDATED_LOG_EVENT" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/Connector_Cisco_SEG_CEF.json) |
 | CiscoSEGAma | [Deprecated] Cisco Secure Email Gateway via AMA | CommonSecurityLog.DeviceEventClassID =~ "ESA_CONSOLIDATED_LOG_EVENT"  \|  CommonSecurityLog.DeviceProduct =~ "ESA_CONSOLIDATED_LOG_EVENT"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/template_CiscoSEGAMA.json) |
@@ -1258,7 +1258,7 @@ Total: 198 connectors
 | CrowdstrikeReplicatorv2 | CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS- | ASimRegistryEventLogs.EventProduct == "Falcon Data Replicator"  \|  ASimRegistryEventLogs.EventVendor == "CrowdStrike" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdstrikeReplicatorCLv2/CrowdstrikeReplicatorV2_ConnectorUI.json) |
 | CyberArk | [Deprecated] CyberArk Enterprise Password Vault (EPV) Events | CommonSecurityLog.DeviceProduct == "Vault"  \|  CommonSecurityLog.DeviceVendor == "Cyber-Ark"  \|  CommonSecurityLog.LogSeverity in "10,7" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArk%20Enterprise%20Password%20Vault%20%28EPV%29%20Events/Data%20Connectors/CyberArk%20Data%20Connector.json) |
 | CyberArkAma | [Deprecated] CyberArk Privilege Access Manager (PAM) Events  | CommonSecurityLog.DeviceProduct =~ "Vault"  \|  CommonSecurityLog.DeviceVendor =~ "Cyber-Ark"  \|  CommonSecurityLog.LogSeverity in "10,7" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArk%20Enterprise%20Password%20Vault%20%28EPV%29%20Events/Data%20Connectors/template_CyberArkAMA.json) |
-| CyberArkEPM | CyberArkEPM | _Computed.event_type_s == "raw_event" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkEPM/Data%20Connectors/CyberArkEPM_API_FunctionApp.json) |
+| CyberArkEPM | CyberArkEPM | _Computed.event_type_s == "raw_event" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkEPM/DataConnectors/CyberArkEPM_API_FunctionApp.json) |
 | CyjaxIOCAPI | Cyjax Threat Intelligence IOC Connector | ThreatIntelIndicators.SourceSystem == "Cyjax-IOCs" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyjax/Data%20Connectors/CyjaxIOC_API_FunctionApp.json) |
 | DDOS | Azure DDoS Protection | AzureDiagnostics.Category == "DDoSMitigationReports"  \|  AzureDiagnostics.ResourceType == "PUBLICIPADDRESSES" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Data%20Connectors/DDOS.JSON) |
 | Darktrace | [Deprecated] AI Analyst Darktrace via Legacy Agent | CommonSecurityLog.DeviceVendor == "Darktrace" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AI%20Analyst%20Darktrace/Data%20Connectors/AIA-Darktrace.json) |
@@ -1302,8 +1302,8 @@ Total: 198 connectors
 | InfobloxNIOS | [Deprecated] Infoblox NIOS | Syslog.SyslogMessage !has "response:"  \|  Syslog.SyslogMessage has_all "client" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Data%20Connectors/Connector_Syslog_Infoblox.json) |
 | InfobloxSOCInsightsDataConnector_AMA | [Recommended] Infoblox SOC Insight Data Connector via AMA | CommonSecurityLog.DeviceEventClassID =~ "BloxOne-InsightsNotification-Log"  \|  CommonSecurityLog.DeviceProduct =~ "Data Connector"  \|  CommonSecurityLog.DeviceVendor =~ "Infoblox"  \|  _Computed.ThreatConfidence_Score in "0,1,2"  \|  _Computed.ThreatLevel_Score in "0,1,2" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Data%20Connectors/InfobloxSOCInsights/InfobloxSOCInsightsDataConnector_AMA.json) |
 | InfobloxSOCInsightsDataConnector_Legacy | [Deprecated] Infoblox SOC Insight Data Connector via Legacy  | CommonSecurityLog.DeviceEventClassID == "BloxOne-InsightsNotification-Log"  \|  CommonSecurityLog.DeviceProduct == "Data Connector"  \|  CommonSecurityLog.DeviceVendor == "Infoblox"  \|  _Computed.ThreatConfidence_Score in "0,1,2"  \|  _Computed.ThreatLevel_Score in "0,1,2" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Data%20Connectors/InfobloxSOCInsights/InfobloxSOCInsightsDataConnector_Legacy.json) |
-| IoT | Microsoft Defender for IoT | SecurityAlert.ProductName == "Azure Security Center for IoT" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Data%20Connectors/template_IoT.JSON) |
-| IronNetIronDefense | IronNet IronDefense | CommonSecurityLog.DeviceProduct in "IronDefense,IronDome"  \|  CommonSecurityLog.DeviceVendor == "IronNet" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IronNet%20IronDefense/Data%20Connectors/IronNetIronDefense.json) |
+| IoT | Microsoft Defender for IoT | SecurityAlert.ProductName == "Azure Security Center for IoT" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Data%20Connector/template_IoT.JSON) |
+| IronNetIronDefense | IronNet IronDefense | CommonSecurityLog.DeviceProduct in "IronDefense,IronDome"  \|  CommonSecurityLog.DeviceVendor == "IronNet" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IronNet%20IronDefense/DataConnectors/IronNetIronDefense.json) |
 | IvantiUEM | [Deprecated] Ivanti Unified Endpoint Management | Syslog.SyslogMessage has_all "Alert" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ivanti%20Unified%20Endpoint%20Management/Data%20Connectors/Ivanti_UEM_Syslog.json) |
 | JoeSandbox | JoeSandboxThreatIntelligence | ThreatIntelligenceIndicator.SourceSystem !contains "JoeSandbox"  \|  ThreatIntelligenceIndicator.SourceSystem contains "JoeSandbox" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/JoeSandbox/Data%20Connectors/JoeSandboxThreatIntelligence_FunctionApp.json) |
 | JuniperSRX | [Deprecated] Juniper SRX | Syslog.ProcessName == "RT_FLOW"  \|  Syslog.ProcessName in~ "RT_IDS,sshd"  \|  Syslog.ProcessName !in "sshd,RT_IDS,RT_FLOW" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Juniper%20SRX/Data%20Connectors/Connector_Syslog_JuniperSRX.json) |
@@ -1348,7 +1348,6 @@ Total: 198 connectors
 | RidgeBotDataConnector | [Deprecated] RIDGEBOT - data connector for Microsoft Sentine | CommonSecurityLog.DeviceEventClassID == "4001"  \|  CommonSecurityLog.DeviceVendor == "RidgeSecurity" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
 | SemperisDSP | Semperis Directory Services Protector | SecurityEvent.EventID in "9208,9211,9212"  \|  SecurityEvent.EventSourceName == "Semperis-DSP-Security" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 | SilverfortAma | Silverfort Admin Console | CommonSecurityLog.DeviceEventClassID == "NewIncident"  \|  CommonSecurityLog.DeviceProduct == "Admin Console"  \|  CommonSecurityLog.DeviceProduct has "Admin Console"  \|  CommonSecurityLog.DeviceVendor == "Silverfort"  \|  CommonSecurityLog.DeviceVendor has "Silverfort"  \|  CommonSecurityLog.Message has "UserBruteForce" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
-| SlashNextFunctionApp | SlashNext Function App | AzureDiagnostics.Resource == "SlashnextFunctionApp"  \|  AzureMetrics.MetricName == "FunctionExecutionCount" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/Data%20Connectors/SlashNext_FunctionApp.json) |
 | SonicWallFirewall | [Deprecated] SonicWall Firewall via Legacy Agent | CommonSecurityLog.AdditionalExtensions contains "fw_action="  \|  CommonSecurityLog.DeviceVendor == "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/SonicwallFirewall.json) |
 | SonicWallFirewallAma | [Deprecated] SonicWall Firewall via AMA | CommonSecurityLog.AdditionalExtensions contains "fw_action="  \|  CommonSecurityLog.DeviceVendor =~ "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/template_SonicwallFirewallAMA.json) |
 | SophosXGFirewall | [Deprecated] Sophos XG Firewall | Syslog.Facility == "local0" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Data%20Connectors/Connector_Syslog_SophosXGFirewall.json) |
@@ -1373,7 +1372,7 @@ Total: 198 connectors
 | WireX_Systems_NFPAma | [Deprecated] WireX Network Forensics Platform via AMA | CommonSecurityLog.ApplicationProtocol in "DNS,HTTP,TDS"  \|  CommonSecurityLog.DeviceProduct =~ "WireX NFP"  \|  CommonSecurityLog.DeviceVendor =~ "WireX" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WireX%20Network%20Forensics%20Platform/Data%20Connectors/template_WireXsystemsNFPAMA.json) |
 | WithSecureElementsViaConnector | [Deprecated] WithSecure Elements via Connector | CommonSecurityLog.DeviceVendor == "WithSecure™" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaConnector/Data%20Connectors/WithSecureElementsViaConnector.json) |
 | WorkdayCCPDefinition | Workday User Activity | ASimAuditEventLogs.EventProduct == "Workday" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workday/Data%20Connectors/Workday_ccp/Workday_DataConnectorDefinition.json) |
-| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 | ASimProcessEventLogs.EventProduct == "Carbon Black Cloud"  \|  ASimProcessEventLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/CarbonBlackViaAWSS3_ConnectorDefinition.json) |
+| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 | ASimRegistryEventLogs.EventProduct == "Carbon Black Cloud"  \|  ASimRegistryEventLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/CarbonBlackViaAWSS3_ConnectorDefinition.json) |
 | iboss | [Deprecated] iboss via Legacy Agent | CommonSecurityLog.AdditionalExtensions !contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/iboss_cef.json) |
 | ibossAma | iboss via AMA | CommonSecurityLog.AdditionalExtensions contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/template_ibossAMA.json) |
 | illusiveAttackManagementSystem | [Deprecated] Illusive Platform via Legacy Agent | CommonSecurityLog.DeviceEventClassID in "illusive:access,illusive:login,illusive:suspicious"  \|  CommonSecurityLog.DeviceProduct == "illusive"  \|  CommonSecurityLog.DeviceVendor == "illusive"  \|  CommonSecurityLog.Message !contains "hasForensics"  \|  CommonSecurityLog.SourceHostName != "Failed to obtain" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Data%20Connectors/illusive%20Attack%20Management%20System.json) |

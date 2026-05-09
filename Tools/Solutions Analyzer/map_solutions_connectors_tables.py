@@ -32,6 +32,39 @@ AZURE_MARKETPLACE_API_VERSION = "2018-08-01-beta"
 # Icons for documentation output
 NOT_PUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions
 
+# Multi-valued collection_method and ingestion_api precedence orders
+# (most preferred → least preferred; used for sorting when a connector has multiple methods/APIs)
+COLLECTION_METHOD_PRECEDENCE = (
+    "Azure Function (TI Upload API)",
+    "Native",
+    "Defender",
+    "Codeless Connector (CCF Push)",
+    "CCF Push",
+    "Codeless Connector (CCF)",
+    "CCF",
+    "Azure Function",
+    "Logic App",
+    "REST Pull API",
+    "AMA",
+    "Azure Diagnostics",
+    "Syslog",
+    "CEF",
+    "MMA",
+    "CCF (Legacy)",
+    "HTTP Data Collector API",
+    "Unknown (Custom Log)",
+    "Unknown",
+)
+
+INGESTION_API_PRECEDENCE = (
+    "STIX 2.1 Upload Indicators API",
+    "Log Ingestion API",
+    "Microsoft Graph tiIndicators API",
+    "Sentinel REST createIndicator API",
+    "STIX 2.0 Upload Indicators API",
+    "HTTP Data Collector API",
+)
+
 # Regex patterns for query parsing
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([^}]+?)\s*\}\}")
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_.]+")
@@ -126,6 +159,82 @@ _KQL_RESERVED_NAMES: Set[str] = {
     'isnotnull', 'isnull', 'ago', 'now', 'bin', 'tolower', 'toupper', 'split',
     'strcat', 'extract', 'parse_json', 'parse_url', 'parse_csv', 'if',
 }
+
+
+# Multi-valued field helpers
+def _sort_by_precedence(values: Iterable[str], precedence: Tuple[str, ...]) -> List[str]:
+    """Sort values by their precedence order (defined in the precedence tuple).
+    
+    Values appearing in the precedence tuple are sorted by their order in the
+    tuple (earlier = higher priority). Values not in the tuple are appended
+    after in their original encounter order. Deduplicates and preserves order.
+    
+    Args:
+        values: Iterable of method/API names
+        precedence: Precedence tuple (e.g., COLLECTION_METHOD_PRECEDENCE)
+    
+    Returns:
+        Sorted deduplicated list
+    """
+    seen: Set[str] = set()
+    known: List[str] = []
+    unknown: List[str] = []
+    
+    for val in values:
+        if val in seen:
+            continue
+        seen.add(val)
+        if val in precedence:
+            known.append(val)
+        else:
+            unknown.append(val)
+    
+    # Sort known by precedence order
+    known.sort(key=lambda x: precedence.index(x))
+    return known + unknown
+
+
+def _join_multi(
+    values: List[str],
+    reasons: List[str],
+    precedence: Tuple[str, ...]
+) -> Tuple[str, str]:
+    """Join multiple values/reasons into pipe-separated strings sorted by precedence.
+    
+    Values are sorted by precedence order and joined with '|'. Reasons are
+    reordered to match the sorted values.
+    
+    Args:
+        values: List of method/API names
+        reasons: List of corresponding reason strings (must match values length)
+        precedence: Precedence tuple
+    
+    Returns:
+        Tuple of (joined_values, joined_reasons) with values sorted by precedence
+    """
+    if not values:
+        return "", ""
+
+    # Pad/truncate reasons to match values length so positional alignment is
+    # well-defined even when the caller appended a value without a reason.
+    padded_reasons = list(reasons) + [""] * max(0, len(values) - len(reasons))
+    padded_reasons = padded_reasons[:len(values)]
+
+    # Build value->reason mapping. Last occurrence wins for duplicates so
+    # callers that re-set a value with a richer reason don't lose it.
+    reason_map: Dict[str, str] = {}
+    for v, r in zip(values, padded_reasons):
+        if v in reason_map and not r:
+            continue
+        reason_map[v] = r
+
+    # Sort values by precedence
+    sorted_values = _sort_by_precedence(values, precedence)
+
+    # Reorder reasons to match (default to empty for unknown keys)
+    sorted_reasons = [reason_map.get(v, "") for v in sorted_values]
+
+    return "|".join(sorted_values), "|".join(sorted_reasons)
 
 
 def _load_valid_columns() -> None:
@@ -267,6 +376,28 @@ CONTENT_ONLY_CONNECTORS = {
 CONNECTOR_EXCLUDE_TABLES = {
     'threatintelligence': {'commonsecuritylog', 'signinlogs'},  # Sample queries show JOIN examples with these tables
 }
+
+# Tables referenced in a connector's graphQueries/sampleQueries/dataTypes that are
+# NOT actually ingested by the connector. Common cause: Function App connectors that
+# reference AzureDiagnostics / AzureMetrics for health-monitoring queries while their
+# real ingestion target is a custom or built-in workspace table.
+# These tables are removed from the connector's reported table list (and thus from the
+# connector page "Tables Ingested" section).
+# Format: connector_id (lowercase) -> set of table names (lowercase) to drop
+CONNECTOR_REPORTED_TABLE_EXCLUSIONS: Dict[str, Set[str]] = {
+    'slashnextfunctionapp': {'azurediagnostics', 'azuremetrics'},  # Sample/lastDataReceived queries inspect Function App diagnostic/metrics logs, not an ingestion target
+}
+
+# Precedence rules used to collapse a table's ambiguous set of feeding-connector
+# collection methods into a single inferred method that can be back-propagated
+# onto the table. Each rule pairs a set of normalized (lowercase) method names
+# that may legitimately co-feed the same table with the preferred winner.
+# Newer / canonical technology wins. Applied repeatedly until no rule fires.
+METHOD_PRECEDENCE_RULES: List[Tuple[Set[str], str]] = [
+    ({'ama', 'mma'}, 'AMA'),                 # MMA is being retired in favor of AMA
+    ({'ccf', 'ccf (legacy)'}, 'CCF'),        # Modern CCF supersedes legacy CCF
+    ({'azure function', 'ccf'}, 'CCF'),      # CCF is the preferred replacement for Azure Function ingestion
+]
 
 # ASim tables use EventVendor/EventProduct
 ASIM_TABLE_PREFIXES = ('asim', '_asim', '_im_')
@@ -5777,6 +5908,173 @@ def is_connector_deprecated_from_json(entry: Dict[str, Any]) -> bool:
     return False
 
 
+# ===================== TI UPLOAD API DETECTION =====================
+# Patterns indicating that solution code POSTs threat-intelligence indicators
+# to ANY Sentinel TI ingestion management-plane API. We deliberately group
+# all such Azure Functions under a single "Azure Function (TI Upload API)"
+# bucket regardless of which API generation they target, because functionally
+# they all feed the Sentinel TI system rather than writing to a regular Log
+# Analytics table directly.
+#
+# Recognised endpoints:
+#   * Current  — api.ti.sentinel.azure.com / threat-intelligence-stix-objects:upload
+#                (STIX 2.1; data lands in `ThreatIntelIndicators` + `ThreatIntelObjects`)
+#   * Variant  — sentinelus.azure-api.net/.../threatintelligenceindicators:upload
+#                (STIX 2.0 Upload Indicators API; same destination tables)
+#   * Legacy A — graph.microsoft.com/.../tiIndicators/submitTiIndicators
+#                (deprecated; lands in legacy `ThreatIntelligenceIndicator`)
+#   * Legacy B — Microsoft.SecurityInsights/threatIntelligence/main/createIndicator
+#                (deprecated; lands in legacy `ThreatIntelligenceIndicator`)
+TI_UPLOAD_API_PATTERNS = [
+    # Current STIX 2.1 endpoint
+    "api.ti.sentinel.azure.com",
+    "threat-intelligence-stix-objects:upload",
+    "stixobjects",
+    # STIX 2.0 Upload Indicators API variant (e.g. CrowdStrike Falcon Adversary Intel)
+    "threatintelligenceindicators:upload",
+    "sentinelus.azure-api.net",
+    # Legacy MS Graph tiIndicators API
+    "tiindicators/submittiindicators",
+    # Legacy Sentinel REST createIndicator API. Two substrings are checked
+    # because the path is sometimes split across multiple string literals
+    # in the source (e.g. CofenseTriage's consts.py). The shorter
+    # `/main/createindicator` substring is sufficient to identify the API
+    # without requiring the preceding `threatintelligence/` segment.
+    "threatintelligence/main/createindicator",
+    "/main/createindicator",
+]
+# Subset of patterns whose data lands in the new `ThreatIntelIndicators` /
+# `ThreatIntelObjects` tables (STIX 2.x Upload Indicators API family). The
+# remaining patterns are legacy APIs that still write to the deprecated
+# `ThreatIntelligenceIndicator` table; we group them under the same method
+# bucket but DO NOT rewrite their table associations.
+TI_UPLOAD_NEW_TABLE_PATTERNS = {
+    "api.ti.sentinel.azure.com",
+    "threat-intelligence-stix-objects:upload",
+    "stixobjects",
+    "threatintelligenceindicators:upload",
+    "sentinelus.azure-api.net",
+}
+TI_UPLOAD_METHOD = "Azure Function (TI Upload API)"
+TI_UPLOAD_TABLES: Tuple[str, ...] = ("ThreatIntelIndicators", "ThreatIntelObjects")
+_TI_UPLOAD_SKIP_DIRS = {".python_packages", "__pycache__", "node_modules", ".venv", "venv"}
+
+# Friendly API name per matched URL substring. Stored in the `ingestion_api`
+# field, alongside the existing `Log Ingestion API` / `HTTP Data Collector API`
+# values used for non-TI Azure Function connectors.
+TI_UPLOAD_API_NAME_BY_PATTERN: Dict[str, str] = {
+    "api.ti.sentinel.azure.com": "STIX 2.1 Upload Indicators API",
+    "threat-intelligence-stix-objects:upload": "STIX 2.1 Upload Indicators API",
+    "stixobjects": "STIX 2.1 Upload Indicators API",
+    "threatintelligenceindicators:upload": "STIX 2.0 Upload Indicators API",
+    "sentinelus.azure-api.net": "STIX 2.0 Upload Indicators API",
+    "tiindicators/submittiindicators": "Microsoft Graph tiIndicators API",
+    "threatintelligence/main/createindicator": "Sentinel REST createIndicator API",
+    "/main/createindicator": "Sentinel REST createIndicator API",
+}
+# Default API name to assume for connectors classified into TI_UPLOAD_METHOD
+# without a pattern match (e.g. via the `_UploadIndicatorsAPI` filename
+# heuristic or via overrides such as Datalake2SentinelConnector).
+TI_UPLOAD_DEFAULT_API_NAME = "STIX 2.1 Upload Indicators API"
+
+
+def solution_uses_ti_upload_api(solution_dir: Optional[Path]) -> Optional[str]:
+    """Return the matching pattern if any Python file under the solution's
+    Data Connectors folder references a Sentinel TI ingestion management-plane
+    API (current STIX 2.1, STIX 2.0 variant, or legacy createIndicator /
+    tiIndicators). Returns None if no pattern matches.
+
+    Scoped to Data Connectors folders (matching how Azure Function code is
+    located elsewhere in the mapper) and skips vendored/build directories.
+
+    NOTE: This is solution-wide; for connector-scoped detection (which avoids
+    cross-connector false positives within multi-connector solutions) use
+    `connector_uses_ti_upload_api()` instead.
+    """
+    if solution_dir is None or not solution_dir.exists():
+        return None
+    for dc_name in ("Data Connectors", "DataConnectors", "Data Connector"):
+        dc = solution_dir / dc_name
+        if not dc.exists():
+            continue
+        for py in dc.rglob("*.py"):
+            if any(part in _TI_UPLOAD_SKIP_DIRS for part in py.parts):
+                continue
+            try:
+                text = py.read_text(encoding="utf-8", errors="ignore").lower()
+            except OSError:
+                continue
+            for pat in TI_UPLOAD_API_PATTERNS:
+                if pat in text:
+                    return pat
+    return None
+
+
+def _connector_folders_from_files(
+    connector_files: str, repo_root: Path
+) -> List[Path]:
+    """Derive on-disk folders that contain a connector's source files from
+    the GitHub URLs stored in the connector_files field.
+
+    Each URL is converted to a repo-relative path and its parent folder is
+    used as the search root. Returns an empty list if no usable URLs are
+    found.
+    """
+    if not connector_files:
+        return []
+    folders: List[Path] = []
+    seen: Set[Path] = set()
+    prefix = f"{GITHUB_REPO_URL}/"
+    for url in connector_files.split(";"):
+        url = url.strip()
+        if not url.startswith(prefix):
+            continue
+        rel = url[len(prefix):]
+        # Decode percent-encoding (e.g. %20 -> space).
+        try:
+            from urllib.parse import unquote
+            rel = unquote(rel)
+        except Exception:
+            pass
+        path = repo_root / rel
+        parent = path.parent
+        if parent in seen:
+            continue
+        seen.add(parent)
+        if parent.exists():
+            folders.append(parent)
+    return folders
+
+
+def connector_uses_ti_upload_api(
+    connector_files: str, repo_root: Path
+) -> Optional[str]:
+    """Return the matching pattern if any Python file under any folder
+    derived from `connector_files` references a Sentinel TI ingestion API.
+    Returns None if no pattern matches or no usable folders are found.
+
+    This is the connector-scoped variant of `solution_uses_ti_upload_api`,
+    used to avoid false positives where a multi-connector solution contains
+    one TI connector and one unrelated connector that happen to share the
+    same `Data Connectors/` parent folder.
+    """
+    folders = _connector_folders_from_files(connector_files, repo_root)
+    if not folders:
+        return None
+    for folder in folders:
+        for py in folder.rglob("*.py"):
+            if any(part in _TI_UPLOAD_SKIP_DIRS for part in py.parts):
+                continue
+            try:
+                text = py.read_text(encoding="utf-8", errors="ignore").lower()
+            except OSError:
+                continue
+            for pat in TI_UPLOAD_API_PATTERNS:
+                if pat in text:
+                    return pat
+    return None
+
+
 # ===================== INGESTION API DETECTION =====================
 # Patterns for detecting Log Ingestion API vs HTTP Data Collector API
 
@@ -5993,6 +6291,121 @@ def determine_ingestion_api(
     return "", "Could not determine ingestion API"
 
 
+def _scan_arm_template_for_function_dcr(
+    connector_folder: Path,
+) -> Optional[Tuple[str, str, List[str]]]:
+    """Scan sibling ARM templates for Azure Function App + DCR/Log Ingestion API pattern.
+    
+    Detects the "NordPass pattern": an azuredeploy*.json containing both a Function App
+    resource and DCR/Log Ingestion API resources. Returns the detected method, API, and
+    table names declared in the ARM template.
+    
+    Args:
+        connector_folder: Path to the connector folder (e.g., Solutions/X/Data Connectors/Y)
+    
+    Returns:
+        Tuple of (method, api, table_names) if pattern detected, else None
+        - method: "Azure Function"
+        - api: "Log Ingestion API"
+        - table_names: List of table names from Microsoft.OperationalInsights/workspaces/tables resources
+    """
+    if not connector_folder or not connector_folder.exists():
+        return None
+
+    # Collect ARM template candidates from:
+    #   1. The connector folder itself (azuredeploy*.json)
+    #   2. The parent Data Connectors/ folder (NordPass-style flat layout)
+    #   3. Nested template folders the outer ARM links to (deployment/,
+    #      nested/, templates/) so we can see the FunctionApp + DCR resources
+    #      that the outer ARM defers to via Microsoft.Resources/deployments.
+    arm_templates: List[Path] = list(connector_folder.glob("azuredeploy*.json"))
+    parent = connector_folder.parent
+    if parent != connector_folder and parent.exists() and parent.name in ("Data Connectors", "DataConnectors"):
+        for p in parent.glob("azuredeploy*.json"):
+            if p not in arm_templates:
+                arm_templates.append(p)
+
+    # Recurse into nested template folders one level deep
+    nested_dirs: List[Path] = []
+    for base in (connector_folder, parent):
+        if not base or not base.exists():
+            continue
+        for sub_name in ("deployment", "deployments", "nested", "templates", "linkedTemplates"):
+            nested = base / sub_name
+            if nested.exists() and nested.is_dir():
+                nested_dirs.append(nested)
+    for nested in nested_dirs:
+        for p in nested.glob("*.json"):
+            if p not in arm_templates:
+                arm_templates.append(p)
+
+    if not arm_templates:
+        return None
+
+    # Aggregate signals across ALL candidate templates so layouts that split
+    # FunctionApp + DCR resources across linked templates (e.g. NordPass'
+    # outer azuredeploy + nested deployment/*.json files) are detected.
+    has_function_app = False
+    has_dcr = False
+    table_names: List[str] = []
+
+    for arm_path in arm_templates:
+        try:
+            with arm_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        if not isinstance(data, dict):
+            continue
+
+        resources = data.get("resources")
+        if not isinstance(resources, list):
+            resources = []
+
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+
+            rtype = str(resource.get("type", "")).lower()
+
+            if rtype == "microsoft.web/sites":
+                kind = str(resource.get("kind", "")).lower()
+                if "functionapp" in kind:
+                    has_function_app = True
+
+            if rtype in ("microsoft.insights/datacollectionrules",
+                        "microsoft.insights/datacollectionendpoints"):
+                has_dcr = True
+
+            if rtype == "microsoft.operationalinsights/workspaces/tables":
+                name = resource.get("name")
+                if isinstance(name, str):
+                    if "/" in name:
+                        table_name = name.split("/")[-1].strip("'\"[] ")
+                    else:
+                        table_name = name.strip("'\"[] ")
+                    if table_name and not table_name.startswith("["):
+                        if table_name not in table_names:
+                            table_names.append(table_name)
+
+        # Also accept string-pattern evidence of DCR/Log Ingestion plumbing
+        if not has_dcr:
+            content_str = json.dumps(data).lower()
+            if any(pat in content_str for pat in (
+                "logsingestion",
+                "datacollectionendpointid",
+                "immutableid",
+                "datacollectionrule",
+            )):
+                has_dcr = True
+
+    if has_function_app and has_dcr:
+        return ("Azure Function", "Log Ingestion API", table_names)
+
+    return None
+
+
 def determine_collection_method(
     connector_id: str,
     connector_title: str,
@@ -6204,6 +6617,17 @@ def determine_collection_method(
                 all_matches.append(("AMA", f"Table resource_types includes 'virtualmachines'"))
                 break  # Only add once
     
+    # === PRIORITY 10b: Defender (XDR) classification driven by table metadata ===
+    # If every table this connector ingests is documented as a Defender XDR
+    # advanced-hunting table (source_defender_xdr=Yes in tables_reference.csv),
+    # surface the connector as "Defender". This is purely table-driven so the
+    # classification follows the table catalog, not a hardcoded connector list.
+    if table_metadata:
+        xdr_tables = [t for t in table_metadata
+                      if str(t.get('source_defender_xdr', '')).strip().lower() == 'yes']
+        if xdr_tables and len(xdr_tables) == len(table_metadata):
+            all_matches.append(("Defender", "All ingested tables are Defender XDR advanced hunting tables"))
+    
     # === PRIORITY 11: Custom log fallback ===
     if '_CL' in content and not all_matches:
         all_matches.append(("Unknown (Custom Log)", "Custom log table - needs analysis"))
@@ -6212,7 +6636,7 @@ def determine_collection_method(
     # Priority order reflects detection order - higher = selected first
     # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Pull API
     # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
-    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
+    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Defender", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -8420,6 +8844,35 @@ def main() -> None:
                             continue
                         effective_table_entries.append((original_name, table_info))
 
+                    # Drop tables that this connector references in queries but does not
+                    # actually ingest (e.g., Function App health-monitoring queries against
+                    # AzureDiagnostics / AzureMetrics).
+                    reported_exclusions = CONNECTOR_REPORTED_TABLE_EXCLUSIONS.get(
+                        connector_id.lower(), set()
+                    )
+                    if reported_exclusions and effective_table_entries:
+                        filtered_entries: List[Tuple[str, Dict[str, Any]]] = []
+                        for entry_name, entry_info in effective_table_entries:
+                            if isinstance(entry_name, str) and entry_name.lower() in reported_exclusions:
+                                add_issue(
+                                    issues,
+                                    solution_name=solution_info["solution_name"],
+                                    solution_folder=solution_info["solution_folder"],
+                                    connector_id=connector_id,
+                                    connector_title=connector_title,
+                                    connector_publisher=connector_publisher,
+                                    relevant_file=relative_path,
+                                    reason="reported_table_excluded",
+                                    details=(
+                                        f"Table '{entry_name}' dropped from connector tables "
+                                        f"per CONNECTOR_REPORTED_TABLE_EXCLUSIONS "
+                                        f"(referenced in queries but not ingested)."
+                                    ),
+                                )
+                                continue
+                            filtered_entries.append((entry_name, entry_info))
+                        effective_table_entries = filtered_entries
+
                     if (
                         effective_table_entries
                         and log_table_candidates
@@ -8874,6 +9327,16 @@ def main() -> None:
         
         # Convert file paths to GitHub URLs
         github_urls = []
+        # Resolve the actual Data Connectors folder name on disk for this solution.
+        # Solutions use one of three naming conventions; we must use the real one in the
+        # GitHub URL or the link 404s.
+        solution_folder_name = row_key[1]
+        sol_dir = repo_root / "Solutions" / solution_folder_name
+        dc_folder_name = "Data Connectors"
+        for _candidate in ("Data Connectors", "DataConnectors", "Data Connector"):
+            if (sol_dir / _candidate).exists():
+                dc_folder_name = _candidate
+                break
         for file_path in file_list:
             # Convert backslashes to forward slashes
             normalized = str(file_path).replace("\\", "/")
@@ -8884,10 +9347,10 @@ def main() -> None:
             # Paths from Data Connectors scanning are relative to the Data Connectors folder
             if normalized.startswith("Package/") or "/" in normalized.split("/", 1)[0]:
                 # Path includes its own folder prefix
-                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote(normalized)}"
+                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_name)}/{quote(normalized)}"
             else:
-                # Standard Data Connectors path
-                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote('Data Connectors')}/{quote(normalized)}"
+                # Standard Data Connectors path; use the actual folder name on disk
+                github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_name)}/{quote(dc_folder_name)}/{quote(normalized)}"
             github_urls.append(github_url)
         
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
@@ -9060,6 +9523,10 @@ def main() -> None:
     # Build connectors with collection method info
     connectors_data: List[Dict[str, str]] = []
     
+    # Track per-table attribution for multi-method/API connectors
+    # connector_id -> {table_name -> (method, api, reason)}
+    per_connector_table_attribution: Dict[str, Dict[str, Tuple[str, str, str]]] = {}
+    
     for connector_id, info in sorted(connector_info_map.items()):
         json_content, filename = connector_json_content.get(connector_id, ("", ""))
         
@@ -9077,6 +9544,88 @@ def main() -> None:
             filename=filename,
             table_metadata=table_metadata_list if table_metadata_list else None,
         )
+        
+        # Initialize lists for multi-value collection
+        methods: List[str] = [collection_method] if collection_method else []
+        method_reasons: List[str] = [detection_reason] if detection_reason else []
+        apis: List[str] = []
+        api_reasons: List[str] = []
+        
+        # ARM template scan heuristic (NordPass / Dataminr pattern)
+        solution_folder = info.get('solution_folder', '')
+        if solution_folder:
+            solution_dir = solutions_dir / solution_folder
+            # Build candidate connector folders to scan for sibling
+            # azuredeploy*.json templates. Try the per-connector subfolder
+            # first (most solutions), then fall back to the solution-level
+            # Data Connectors/ folder (NordPass-style flat layout).
+            candidate_folders: List[Path] = []
+            connector_files = info.get('connector_files', '')
+            if connector_files:
+                from urllib.parse import unquote
+                first_url = connector_files.split(';')[0]
+                parts = unquote(first_url).split('/')
+                try:
+                    dc_idx = next(i for i, p in enumerate(parts) if p in ('Data Connectors', 'DataConnectors'))
+                    if dc_idx + 1 < len(parts):
+                        connector_folder_name = parts[dc_idx + 1]
+                        # Only treat the next path segment as a folder if it is
+                        # not the JSON file itself (flat layouts have the
+                        # connector JSON directly under Data Connectors/).
+                        if not connector_folder_name.lower().endswith('.json'):
+                            candidate_folders.append(solution_dir / parts[dc_idx] / connector_folder_name)
+                        # Always also consider the parent Data Connectors/
+                        candidate_folders.append(solution_dir / parts[dc_idx])
+                except (StopIteration, IndexError):
+                    pass
+            # Fallback: scan both naming conventions at the solution root
+            for dc_name in ("Data Connectors", "DataConnectors"):
+                dc_path = solution_dir / dc_name
+                if dc_path not in candidate_folders:
+                    candidate_folders.append(dc_path)
+
+            arm_result = None
+            for candidate in candidate_folders:
+                arm_result = _scan_arm_template_for_function_dcr(candidate)
+                if arm_result:
+                    break
+
+            if arm_result:
+                arm_method, arm_api, arm_tables = arm_result
+                if arm_method and arm_method not in methods:
+                    methods.append(arm_method)
+                    method_reasons.append("Sibling ARM template declares Function App + DCR / Log Ingestion API resources")
+                if arm_api and arm_api not in apis:
+                    apis.append(arm_api)
+                    api_reasons.append("Sibling ARM template declares DCR / Log Ingestion API resources")
+                # Record per-table attribution for ARM-discovered tables
+                if connector_id not in per_connector_table_attribution:
+                    per_connector_table_attribution[connector_id] = {}
+                known_tables = list(connector_tables_map.get(connector_id, []))
+                attributed: Set[str] = set()
+                if arm_tables:
+                    for tbl in arm_tables:
+                        # Normalize: drop _CL suffix and surrounding ARM noise
+                        tbl_norm = tbl.rstrip("_CL") if tbl.endswith("_CL") else tbl
+                        # Try exact, suffix-trimmed, and case-insensitive matches
+                        for known in known_tables:
+                            known_norm = known.rstrip("_CL") if known.endswith("_CL") else known
+                            if known == tbl or known_norm == tbl_norm or known.lower() == tbl.lower():
+                                attributed.add(known)
+                # Fallback: when ARM expressions like
+                # `[concat(parameters('AlertsTableName'),'_CL')]` prevented
+                # extracting concrete table names, attribute the ARM-detected
+                # method/API to every custom (`_CL`) table the connector owns.
+                if not attributed:
+                    for known in known_tables:
+                        if known.endswith("_CL"):
+                            attributed.add(known)
+                for matched in attributed:
+                    per_connector_table_attribution[connector_id][matched] = (
+                        arm_method,
+                        arm_api,
+                        "Declared in ARM template DCR / Log Ingestion API resources"
+                    )
         
         # Get vendor/product info for this connector (legacy)
         vp_info = connector_vendor_product.get(connector_id, {'vendor': set(), 'product': set()})
@@ -9122,7 +9671,9 @@ def main() -> None:
         # Get CCF config file and extract capabilities
         ccf_config_url = ''
         ccf_capabilities_str = ''
-        if collection_method in ('CCF', 'CCF Push'):
+        # Check primary method (first in list)
+        primary_method = methods[0] if methods else ''
+        if primary_method in ('CCF', 'CCF Push'):
             ccf_info = connector_ccf_config.get(connector_id)
             if ccf_info:
                 ccf_config_url, ccf_config_path = ccf_info
@@ -9130,10 +9681,27 @@ def main() -> None:
                 ccf_capabilities_str = ';'.join(capabilities) if capabilities else ''
             elif 'pollingConfig' in json_content:
                 # Legacy CCF: pollingConfig embedded in primary connector JSON, no separate config
-                collection_method = 'CCF (Legacy)'
-                detection_reason = 'CCF with embedded pollingConfig (no separate config file)'
+                # Update the primary method in the lists
+                methods[0] = 'CCF (Legacy)'
+                method_reasons[0] = 'CCF with embedded pollingConfig (no separate config file)'
                 capabilities = extract_legacy_ccf_capabilities(json_content)
                 ccf_capabilities_str = ';'.join(capabilities) if capabilities else ''
+        
+        # Drop non-informative collection-method placeholders when at least one
+        # informative value (e.g. real Azure Function detection) is also present.
+        # Without this, NordPass-style connectors end up with both "Azure Function"
+        # and "Unknown (Custom Log)" which clutters downstream rendering.
+        _NON_INFO_METHODS = {"Unknown", "Unknown (Custom Log)"}
+        if methods and any(m not in _NON_INFO_METHODS for m in methods):
+            filtered = [(m, r) for m, r in zip(methods, method_reasons + [""] * (len(methods) - len(method_reasons)))
+                        if m not in _NON_INFO_METHODS]
+            if filtered:
+                methods = [m for m, _ in filtered]
+                method_reasons = [r for _, r in filtered]
+
+        # Join multi-valued fields with precedence sorting
+        final_method, final_method_reason = _join_multi(methods, method_reasons, COLLECTION_METHOD_PRECEDENCE)
+        final_api, final_api_reason = _join_multi(apis, api_reasons, INGESTION_API_PRECEDENCE)
         
         connectors_data.append({
             'connector_id': info['connector_id'],
@@ -9145,8 +9713,10 @@ def main() -> None:
             'connector_id_generated': info['connector_id_generated'],
             'connector_files': info['connector_files'],
             'connector_readme_file': connector_readme_file,
-            'collection_method': collection_method,
-            'collection_method_reason': detection_reason,
+            'collection_method': final_method,
+            'collection_method_reason': final_method_reason,
+            'ingestion_api': final_api,
+            'ingestion_api_reason': final_api_reason,
             'event_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
             'event_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
             'event_vendor_product_by_table': json.dumps(vp_by_table_serialized) if vp_by_table_serialized else '',
@@ -9158,7 +9728,288 @@ def main() -> None:
             'ccf_config_file': ccf_config_url,
             'ccf_capabilities': ccf_capabilities_str,
         })
-    
+
+    # === TI Upload API detection ===
+    # Azure Function connectors whose solution code POSTs indicators to ANY
+    # Sentinel TI ingestion management-plane API (current STIX 2.1, STIX 2.0
+    # Upload Indicators variant, or the deprecated createIndicator /
+    # tiIndicators endpoints) are grouped under a single TI_UPLOAD_METHOD
+    # bucket. They do not feed a regular Log Analytics table directly.
+    #
+    # Table remap: only connectors using the STIX Upload Indicators family
+    # actually populate `ThreatIntelIndicators` / `ThreatIntelObjects`. Legacy
+    # API users still write to the deprecated `ThreatIntelligenceIndicator`
+    # table, so we leave their existing table associations alone.
+    ti_upload_connectors: Set[str] = set()
+    ti_upload_new_connectors: Set[str] = set()
+    repo_root = solutions_dir.parent
+    for connector in connectors_data:
+        # Check if primary method is Azure Function
+        methods_list = connector.get('collection_method', '').split('|')
+        if 'Azure Function' not in methods_list:
+            continue
+        cid = connector.get('connector_id', '')
+        files = connector.get('connector_files', '') or ''
+        match = connector_uses_ti_upload_api(files, repo_root)
+        if match:
+            ti_upload_connectors.add(cid)
+            # Append to existing methods/APIs instead of replacing
+            api_name = TI_UPLOAD_API_NAME_BY_PATTERN.get(match, TI_UPLOAD_DEFAULT_API_NAME)
+            
+            # Parse existing values
+            existing_methods = connector.get('collection_method', '').split('|')
+            existing_method_reasons = connector.get('collection_method_reason', '').split('|')
+            existing_apis = connector.get('ingestion_api', '').split('|') if connector.get('ingestion_api') else []
+            existing_api_reasons = connector.get('ingestion_api_reason', '').split('|') if connector.get('ingestion_api_reason') else []
+            
+            # Add TI Upload method if not already present
+            if TI_UPLOAD_METHOD not in existing_methods:
+                existing_methods.append(TI_UPLOAD_METHOD)
+                if match in TI_UPLOAD_NEW_TABLE_PATTERNS:
+                    ti_upload_new_connectors.add(cid)
+                    existing_method_reasons.append(f"Connector code uses Sentinel TI Upload Indicators API ({match})")
+                else:
+                    existing_method_reasons.append(f"Connector code uses legacy Sentinel TI ingestion API ({match})")
+            
+            # Add TI Upload API if not already present
+            if api_name not in existing_apis:
+                existing_apis.append(api_name)
+                existing_api_reasons.append(f"Connector code references {api_name} endpoint (matched '{match}')")
+            
+            # Re-join with precedence
+            connector['collection_method'], connector['collection_method_reason'] = _join_multi(
+                existing_methods, existing_method_reasons, COLLECTION_METHOD_PRECEDENCE
+            )
+            connector['ingestion_api'], connector['ingestion_api_reason'] = _join_multi(
+                existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
+            )
+
+    # Filename-suffix heuristic for connectors with no in-repo Function code
+    # (e.g. external/doc-only connectors like MISP2Sentinel and the built-in
+    # ThreatIntelligenceUploadIndicatorsAPI). The `_UploadIndicatorsAPI`
+    # suffix on the connector definition JSON is a strong signal that the
+    # connector publishes to the Sentinel STIX Upload Indicators API, which
+    # populates the new `ThreatIntelIndicators` / `ThreatIntelObjects` tables.
+    # Applied regardless of the original collection_method (covers Unknown,
+    # REST Pull API, etc.) but does NOT override an already-detected
+    # TI_UPLOAD_METHOD classification.
+    for connector in connectors_data:
+        cid = connector.get('connector_id', '')
+        if cid in ti_upload_connectors:
+            continue
+        files = connector.get('connector_files', '') or ''
+        if not any('_UploadIndicatorsAPI' in seg for seg in files.split(';')):
+            continue
+        ti_upload_connectors.add(cid)
+        ti_upload_new_connectors.add(cid)
+        
+        # Append to existing lists
+        existing_methods = connector.get('collection_method', '').split('|') if connector.get('collection_method') else []
+        existing_method_reasons = connector.get('collection_method_reason', '').split('|') if connector.get('collection_method_reason') else []
+        existing_apis = connector.get('ingestion_api', '').split('|') if connector.get('ingestion_api') else []
+        existing_api_reasons = connector.get('ingestion_api_reason', '').split('|') if connector.get('ingestion_api_reason') else []
+        
+        if TI_UPLOAD_METHOD not in existing_methods:
+            existing_methods.append(TI_UPLOAD_METHOD)
+            existing_method_reasons.append(
+                "Connector definition filename suffix '_UploadIndicatorsAPI' "
+                "indicates Sentinel STIX Upload Indicators API ingestion"
+            )
+        
+        if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis:
+            existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
+            existing_api_reasons.append(
+                f"Connector definition filename suffix '_UploadIndicatorsAPI' indicates {TI_UPLOAD_DEFAULT_API_NAME}"
+            )
+        
+        # Re-join with precedence
+        connector['collection_method'], connector['collection_method_reason'] = _join_multi(
+            existing_methods, existing_method_reasons, COLLECTION_METHOD_PRECEDENCE
+        )
+        connector['ingestion_api'], connector['ingestion_api_reason'] = _join_multi(
+            existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
+        )
+
+    # Override-driven TI Upload reclassification. Picks up connectors whose
+    # source code lives outside this repo (e.g. Datalake2SentinelConnector,
+    # whose Function App code lives in cert-orangecyberdefense/datalake2sentinel)
+    # and is therefore not visible to the URL-pattern or filename heuristics.
+    # The override CSV must contain a `Connector,<id>,collection_method,Azure
+    # Function (TI Upload API),...` row. We pre-apply that override here so the
+    # table-association rewrite below also covers these connectors. The same
+    # override is applied again later in the normal override pass, which is
+    # idempotent.
+    override_ti_ids: Set[str] = set()
+    for ov in overrides:
+        if (
+            ov.entity == 'connector'
+            and ov.field == 'collection_method'
+            and TI_UPLOAD_METHOD in ov.value.split('|')  # Support multi-value overrides
+        ):
+            for connector in connectors_data:
+                cid = connector.get('connector_id', '')
+                if not cid or cid in ti_upload_connectors:
+                    continue
+                if ov.matches(cid):
+                    override_ti_ids.add(cid)
+    for connector in connectors_data:
+        cid = connector.get('connector_id', '')
+        if cid not in override_ti_ids:
+            continue
+        ti_upload_connectors.add(cid)
+        # Default to the new STIX 2.x API family unless a sibling override
+        # explicitly sets a different ingestion_api value (applied later).
+        ti_upload_new_connectors.add(cid)
+        
+        # Append to existing lists
+        existing_methods = connector.get('collection_method', '').split('|') if connector.get('collection_method') else []
+        existing_method_reasons = connector.get('collection_method_reason', '').split('|') if connector.get('collection_method_reason') else []
+        existing_apis = connector.get('ingestion_api', '').split('|') if connector.get('ingestion_api') else []
+        existing_api_reasons = connector.get('ingestion_api_reason', '').split('|') if connector.get('ingestion_api_reason') else []
+        
+        if TI_UPLOAD_METHOD not in existing_methods:
+            existing_methods.append(TI_UPLOAD_METHOD)
+            if not connector.get('collection_method_reason'):
+                existing_method_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
+        
+        if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis and not connector.get('ingestion_api'):
+            existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
+            existing_api_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
+        
+        # Re-join with precedence
+        connector['collection_method'], connector['collection_method_reason'] = _join_multi(
+            existing_methods, existing_method_reasons, COLLECTION_METHOD_PRECEDENCE
+        )
+        connector['ingestion_api'], connector['ingestion_api_reason'] = _join_multi(
+            existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
+        )
+
+    if ti_upload_connectors:
+        # Replace tables only for connectors using the new STIX Upload API
+        # family. Legacy-API connectors retain their original table mapping
+        # (typically the deprecated `ThreatIntelligenceIndicator`).
+        for cid in ti_upload_new_connectors:
+            connector_tables_map[cid] = list(TI_UPLOAD_TABLES)
+
+        # Rewrite per-(solution,connector,table) rows: drop the legacy table
+        # rows for new-API connectors and emit one row per TI Upload table,
+        # preserving all other fields from the original row(s). Legacy-API
+        # connectors are left untouched.
+        new_rows: List[Dict[str, Any]] = []
+        seen_ti_keys: Set[Tuple[str, str, str]] = set()
+        for row in rows:
+            cid = row.get('connector_id', '')
+            if cid in ti_upload_new_connectors:
+                base = {k: v for k, v in row.items() if k != 'Table'}
+                sol = row.get('solution_name', '')
+                for t in TI_UPLOAD_TABLES:
+                    key = (sol, cid, t)
+                    if key in seen_ti_keys:
+                        continue
+                    seen_ti_keys.add(key)
+                    new_row = dict(base)
+                    new_row['Table'] = t
+                    new_rows.append(new_row)
+            else:
+                new_rows.append(row)
+        rows = new_rows
+        log_print(
+            f"\nReclassified {len(ti_upload_connectors)} connector(s) as "
+            f"'{TI_UPLOAD_METHOD}' "
+            f"({len(ti_upload_new_connectors)} new-API, "
+            f"{len(ti_upload_connectors) - len(ti_upload_new_connectors)} legacy-API): "
+            + ", ".join(sorted(ti_upload_connectors))
+        )
+
+    # === Deprecated-solution duplicate connector pruning ===
+    # When a connector_id ships in BOTH a deprecated solution package and a
+    # non-deprecated one (e.g. legacy "Threat Intelligence" vs. "Threat
+    # Intelligence (NEW)"), the deprecated package's JSON typically still
+    # references retired tables (e.g. ThreatIntelligenceIndicator). Those
+    # references are misleading because the connector itself only ships data
+    # to the tables declared by the active package. Drop the deprecated
+    # package's rows for such connectors and re-attribute the canonical
+    # connector record to its active-solution instance. Connectors that ONLY
+    # exist in deprecated solutions are left untouched.
+    deprecated_solution_names: Set[str] = set()
+    # Auto-detected from solution description text.
+    for sol_name, sol_info in all_solutions_info.items():
+        if is_solution_deprecated(sol_info.get('solution_description', '') or ''):
+            deprecated_solution_names.add(sol_name)
+    # Override-driven (Solution entity, field=is_deprecated, value truthy).
+    for ov in overrides:
+        if ov.entity == 'solution' and ov.field == 'is_deprecated' \
+                and str(ov.value).strip().lower() in ('true', '1', 'yes'):
+            for sol_name in all_solutions_info:
+                if ov.matches(sol_name):
+                    deprecated_solution_names.add(sol_name)
+
+    if deprecated_solution_names:
+        # connector_id -> set of solutions it ships in (from rows)
+        connector_solution_map: Dict[str, Set[str]] = defaultdict(set)
+        for row in rows:
+            cid = row.get('connector_id', '')
+            sol = row.get('solution_name', '')
+            if cid and sol:
+                connector_solution_map[cid].add(sol)
+
+        # Connectors that appear in at least one deprecated AND at least one
+        # non-deprecated solution: prune the deprecated-solution rows.
+        prunable: Dict[str, Set[str]] = {}
+        for cid, sols in connector_solution_map.items():
+            dep = sols & deprecated_solution_names
+            non_dep = sols - deprecated_solution_names
+            if dep and non_dep:
+                prunable[cid] = dep
+
+        if prunable:
+            kept: List[Dict[str, Any]] = []
+            dropped_count = 0
+            for row in rows:
+                cid = row.get('connector_id', '')
+                sol = row.get('solution_name', '')
+                if cid in prunable and sol in prunable[cid]:
+                    dropped_count += 1
+                    continue
+                kept.append(row)
+            rows = kept
+
+            # Re-attribute connector_info_map and connectors_data so the
+            # canonical connector record points at an active-solution
+            # instance (alphabetically first non-deprecated solution).
+            for cid in prunable:
+                active_sols = sorted(connector_solution_map[cid] - deprecated_solution_names)
+                if not active_sols:
+                    continue
+                preferred_sol = active_sols[0]
+                preferred_info = all_solutions_info.get(preferred_sol, {})
+                preferred_folder = preferred_info.get('solution_folder', '')
+                if cid in connector_info_map:
+                    connector_info_map[cid]['solution_name'] = preferred_sol
+                    if preferred_folder:
+                        connector_info_map[cid]['solution_folder'] = preferred_folder
+                for connector in connectors_data:
+                    if connector.get('connector_id') == cid:
+                        connector['solution_name'] = preferred_sol
+
+            # Rebuild connector_tables_map from the pruned rows so downstream
+            # aggregations (table->connector mappings, intrinsic resolution)
+            # see the active-solution view only.
+            connector_tables_map = defaultdict(list)
+            seen_ct: Set[Tuple[str, str]] = set()
+            for row in rows:
+                cid = row.get('connector_id', '')
+                tname = row.get('Table', '')
+                if cid and tname and (cid, tname) not in seen_ct:
+                    seen_ct.add((cid, tname))
+                    connector_tables_map[cid].append(tname)
+
+            log_print(
+                f"\nPruned {dropped_count} row(s) for {len(prunable)} connector(s) "
+                f"shared between deprecated and active solutions: "
+                + ", ".join(sorted(prunable.keys()))
+            )
+
     # Check marketplace availability (always runs, uses cache by default)
     # Use --force-refresh=marketplace to refresh the cache
     marketplace_status: Dict[str, Dict[str, str]] = {}
@@ -9482,6 +10333,40 @@ def main() -> None:
                 table_support_tiers[table] = set()
             table_support_tiers[table].add(support_tier)
     
+    # Build inverted map: table_name -> set of distinct collection methods used by
+    # connectors that ingest into this table. Used below to (a) back-propagate a
+    # connector's collection method onto a table when the relationship is 1:1,
+    # and (b) report conflicts where a table already has an intrinsic
+    # collection_method that disagrees with its single feeding connector.
+    NON_INFORMATIVE_METHODS = {'', 'unknown', 'unknown (custom log)'}
+
+    def _norm_method(m: str) -> str:
+        # Case-insensitive comparison key. Returns lowercased value or '' for None.
+        return (m or '').strip().lower()
+
+    table_connector_methods: Dict[str, Set[str]] = defaultdict(set)
+    table_connector_ids: Dict[str, Set[str]] = defaultdict(set)
+    connector_method_lookup = {c['connector_id']: c.get('collection_method', '') for c in connectors_data}
+    # Per-connector published flag (string 'true'/'false'/''). Used to apply the
+    # "published connectors trump" rule when a table is fed by connectors with
+    # different collection methods.
+    connector_published_lookup = {
+        c['connector_id']: (c.get('is_published', '') or '').strip().lower() == 'true'
+        for c in connectors_data
+    }
+    for conn_id, ctables in connector_tables_map.items():
+        method = connector_method_lookup.get(conn_id, '')
+        if _norm_method(method) in NON_INFORMATIVE_METHODS:
+            continue
+        for tname in ctables:
+            if not tname:
+                continue
+            table_connector_methods[tname].add(method)
+            table_connector_ids[tname].add(conn_id)
+
+    # Conflicts and ambiguities are no longer written to dedicated CSVs;
+    # both are surfaced as rows in the main exceptions/issues report.
+
     # Build tables data with metadata from tables_reference.csv
     tables_data: List[Dict[str, str]] = []
     for table_name in sorted(all_tables):
@@ -9496,15 +10381,179 @@ def main() -> None:
         else:
             support_tier = 'Various'
         
-        # Use collection_method from tables_reference.csv if available
-        collection_method = ref.get('collection_method', '')
-        
+        # === Table collection_method resolution ===
+        # Priority order:
+        #   0. ASim* normalized tables are by definition fed by many parsers/
+        #      sources, so always 'Various' regardless of any other signal.
+        #   1. Intrinsic value from tables_reference.csv (e.g. AMA from VM resource type).
+        #   2. Intrinsic XDR override: source_defender_xdr=Yes -> Defender.
+        #   3. Intrinsic Azure Resources override: category 'Azure Resources' -> Azure Diagnostics.
+        #   4. Inherited from feeding connector when there is exactly one distinct
+        #      informative collection method across all connectors that ingest
+        #      this table (1:1 method relationship, even if multiple connectors).
+        # If (1)/(2)/(3) is set AND the connector-derived method (4 candidate)
+        # disagrees (case-insensitively), a conflict is logged but the intrinsic
+        # value wins. Comparisons are case-insensitive to tolerate stray casing
+        # in tables_reference.csv (e.g. 'native' vs 'Native').
+        if table_name.startswith('ASim'):
+            collection_method = 'Various'
+            method_source = 'asim_table'
+        else:
+            collection_method = ref.get('collection_method', '')
+            method_source = 'tables_reference' if collection_method else ''
+            if not collection_method and ref.get('source_defender_xdr', '').strip().lower() == 'yes':
+                collection_method = 'Defender'
+                method_source = 'source_defender_xdr'
+            if not collection_method and ref.get('category', '') == 'Azure Resources':
+                collection_method = 'Azure Diagnostics'
+                method_source = 'category=Azure Resources'
+
+        connector_methods = table_connector_methods.get(table_name, set())
+        # "Published connectors trump" rule: when a table is fed by multiple
+        # connectors with different collection methods, restrict the candidate
+        # set to methods coming from published connectors only (if any exist).
+        # This lets retired/unpublished legacy connectors stop polluting the
+        # verdict. The original (full) set is still used for diagnostics.
+        feeding_conn_ids = table_connector_ids.get(table_name, set())
+        published_methods: Set[str] = set()
+        for conn_id in feeding_conn_ids:
+            if not connector_published_lookup.get(conn_id, False):
+                continue
+            m = connector_method_lookup.get(conn_id, '')
+            if _norm_method(m) in NON_INFORMATIVE_METHODS:
+                continue
+            published_methods.add(m)
+        published_trumped = False
+        if (
+            len(connector_methods) > 1
+            and published_methods
+            and published_methods != connector_methods
+        ):
+            connector_methods = published_methods
+            published_trumped = True
+        # A connector's collection_method may itself be multi-valued, encoded as
+        # `'A|B'` (the connector ingests via either A or B depending on
+        # packaging). For precedence collapse we atomize on `|` so a rule like
+        # `{azure function, ccf} -> CCF` can fire when one feeding connector is
+        # `'Azure Function'` and another is `'CCF|Azure Function'`.
+        atomic_methods: Set[str] = set()
+        for m in connector_methods:
+            for atom in m.split('|'):
+                atom = atom.strip()
+                if atom:
+                    atomic_methods.add(atom)
+        if len(atomic_methods) == 1:
+            inferred = next(iter(atomic_methods))
+            if not collection_method:
+                collection_method = inferred
+                method_source = 'connector_published_only' if published_trumped else 'connector'
+            elif _norm_method(inferred) != _norm_method(collection_method):
+                conn_ids = sorted(table_connector_ids.get(table_name, set()))
+                add_issue(
+                    issues,
+                    solution_name="",
+                    solution_folder="",
+                    reason="table_method_conflict",
+                    details=(
+                        f"Table '{table_name}' has intrinsic collection_method "
+                        f"'{collection_method}' (source: {method_source}) but its "
+                        f"feeding connectors imply '{inferred}'. Feeding connectors: "
+                        f"{','.join(conn_ids)}."
+                    ),
+                )
+        elif len(atomic_methods) > 1:
+            # Multiple distinct connector methods feed this table. Try precedence
+            # rules to collapse them to a single winner (e.g. {AMA, MMA} -> AMA).
+            # If collapse succeeds, treat the result like the 1:1 case (back-
+            # propagate or log conflict). Otherwise, capture for the ambiguity
+            # report so we can see which tables didn't get an inferred method.
+            norm_to_orig: Dict[str, str] = {}
+            for m in atomic_methods:
+                norm_to_orig.setdefault(_norm_method(m), m)
+            norm_set = set(norm_to_orig.keys())
+            applied_rules: List[str] = []
+            changed = True
+            while changed and len(norm_set) > 1:
+                changed = False
+                for src, winner in METHOD_PRECEDENCE_RULES:
+                    if src.issubset(norm_set):
+                        winner_norm = _norm_method(winner)
+                        norm_set = (norm_set - src) | {winner_norm}
+                        norm_to_orig[winner_norm] = winner
+                        applied_rules.append(f"{{{','.join(sorted(src))}}}->{winner}")
+                        changed = True
+                        break
+
+            if len(norm_set) == 1:
+                inferred = norm_to_orig[next(iter(norm_set))]
+                rule_trail = ';'.join(applied_rules)
+                if not collection_method:
+                    collection_method = inferred
+                    method_source = f'connector_precedence({rule_trail})'
+                elif _norm_method(inferred) != _norm_method(collection_method):
+                    conn_ids = sorted(table_connector_ids.get(table_name, set()))
+                    add_issue(
+                        issues,
+                        solution_name="",
+                        solution_folder="",
+                        reason="table_method_conflict",
+                        details=(
+                            f"Table '{table_name}' has intrinsic collection_method "
+                            f"'{collection_method}' (source: {method_source}) but its "
+                            f"feeding connectors imply '{inferred}' via precedence "
+                            f"({rule_trail}). Feeding connectors: {','.join(conn_ids)}."
+                        ),
+                    )
+            else:
+                # Genuinely ambiguous after precedence collapse.
+                # Only report tables that did NOT receive an intrinsic value:
+                # if `collection_method` is already set, the intrinsic wins anyway,
+                # so the "ambiguity" is not actually blocking back-propagation.
+                # Disagreements between an intrinsic value and connector methods
+                # are surfaced as `table_method_conflict` issues instead.
+                if collection_method:
+                    pass
+                else:
+                    # Build "method:[connector_id,...]" segments so the cause is visible.
+                    method_to_conns: Dict[str, List[str]] = defaultdict(list)
+                    for conn_id in sorted(table_connector_ids.get(table_name, set())):
+                        m = connector_method_lookup.get(conn_id, '')
+                        if _norm_method(m) in NON_INFORMATIVE_METHODS:
+                            continue
+                        method_to_conns[m].append(conn_id)
+                    breakdown = "; ".join(
+                        f"{m}:[{','.join(method_to_conns[m])}]"
+                        for m in sorted(method_to_conns)
+                    )
+                    add_issue(
+                        issues,
+                        solution_name="",
+                        solution_folder="",
+                        reason="table_method_ambiguity",
+                        details=(
+                            f"Table '{table_name}' has multiple distinct feeding-connector "
+                            f"collection methods that could not be reduced via precedence rules: "
+                            f"{','.join(sorted(connector_methods))}. Per-method connectors: {breakdown}"
+                        ),
+                    )
+
         tables_data.append({
             'table_name': table_name,
             'description': ref.get('description', ''),
             'category': ref.get('category', ''),
             'support_tier': support_tier,
             'collection_method': collection_method,
+            'collection_method_source': method_source,
+            # Diagnostic columns: every distinct collection method observed
+            # across all feeding connectors (before precedence/published
+            # filtering), and the connector ids that feed this table. Useful
+            # to audit how `collection_method` was derived.
+            'collection_method_candidates': ','.join(
+                sorted(table_connector_methods.get(table_name, set()))
+            ),
+            'feeding_connector_ids': ','.join(
+                sorted(table_connector_ids.get(table_name, set()))
+            ),
             'resource_types': ref.get('resource_types', ''),
             'source_azure_monitor': ref.get('source_azure_monitor', ''),
             'source_defender_xdr': ref.get('source_defender_xdr', ''),
@@ -9835,7 +10884,10 @@ def main() -> None:
     ingestion_api_counts: Dict[str, int] = defaultdict(int)
     promoted_count = 0
     for connector in connectors_data:
-        collection_method = connector.get('collection_method', '')
+        collection_method_field = connector.get('collection_method', '')
+        collection_methods = collection_method_field.split('|') if collection_method_field else []
+        primary_method = collection_methods[0] if collection_methods else ''
+        
         connector_id = connector.get('connector_id', '')
         json_content, _ = connector_json_content.get(connector_id, ("", ""))
         
@@ -9845,9 +10897,18 @@ def main() -> None:
         
         # Get tables for this connector
         connector_tables = connector_tables_map.get(connector_id, [])
-        
+
+        # Skip if TI Upload Method is present (ingestion_api already set)
+        if TI_UPLOAD_METHOD in collection_methods:
+            api_field = connector.get('ingestion_api', '')
+            apis = api_field.split('|') if api_field else []
+            for api in apis:
+                if api:
+                    ingestion_api_counts[api] += 1
+            continue
+
         ingestion_api, api_reason = determine_ingestion_api(
-            collection_method=collection_method,
+            collection_method=primary_method,  # Pass primary method
             connector_id=connector_id,
             json_content=json_content,
             solution_dir=solution_dir_path,
@@ -9855,19 +10916,44 @@ def main() -> None:
             table_schemas_lookup=table_schemas_lookup,
         )
         
-        connector['ingestion_api'] = ingestion_api
-        connector['ingestion_api_reason'] = api_reason
+        # Append to existing API list if detected and not already present
+        if ingestion_api:
+            existing_apis = connector.get('ingestion_api', '').split('|') if connector.get('ingestion_api') else []
+            existing_api_reasons = connector.get('ingestion_api_reason', '').split('|') if connector.get('ingestion_api_reason') else []
+            
+            if ingestion_api not in existing_apis:
+                existing_apis.append(ingestion_api)
+                existing_api_reasons.append(api_reason)
+                
+                # Re-join with precedence
+                connector['ingestion_api'], connector['ingestion_api_reason'] = _join_multi(
+                    existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
+                )
         
         # Promote Unknown (Custom Log) to REST Pull API if ingestion API was detected from JSON patterns
         # The presence of sharedKeys/WorkspaceId/PrimaryKey in the connector definition proves
         # the connector uses an API-based approach, so it should be classified as REST Pull API
-        if collection_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
-            connector['collection_method'] = "REST Pull API"
-            connector['collection_method_reason'] = f"Promoted from Unknown (Custom Log): {api_reason}"
+        if primary_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
+            # Update all methods in the list
+            updated_methods = [
+                "REST Pull API" if m == "Unknown (Custom Log)" else m
+                for m in collection_methods
+            ]
+            updated_reasons = connector.get('collection_method_reason', '').split('|')
+            if updated_reasons and updated_reasons[0]:
+                updated_reasons[0] = f"Promoted from Unknown (Custom Log): {api_reason}"
+            
+            connector['collection_method'], connector['collection_method_reason'] = _join_multi(
+                updated_methods, updated_reasons, COLLECTION_METHOD_PRECEDENCE
+            )
             promoted_count += 1
         
-        if ingestion_api:
-            ingestion_api_counts[ingestion_api] += 1
+        # Count APIs
+        api_field = connector.get('ingestion_api', '')
+        apis = api_field.split('|') if api_field else []
+        for api in apis:
+            if api:
+                ingestion_api_counts[api] += 1
     
     # Apply overrides after ingestion API detection (e.g., to fix dead code false positives)
     if overrides:
@@ -9876,12 +10962,14 @@ def main() -> None:
     if promoted_count:
         log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Pull API based on ingestion API detection")
     
-    # Recount after overrides
+    # Recount after overrides (split multi-values)
     ingestion_api_counts = defaultdict(int)
     for connector in connectors_data:
-        api = connector.get('ingestion_api', '')
-        if api:
-            ingestion_api_counts[api] += 1
+        api_field = connector.get('ingestion_api', '')
+        apis = api_field.split('|') if api_field else []
+        for api in apis:
+            if api:
+                ingestion_api_counts[api] += 1
     
     # Log summary
     total_api_connectors = sum(ingestion_api_counts.values())
@@ -9889,6 +10977,43 @@ def main() -> None:
         log_print(f"  Detected ingestion API for {total_api_connectors} connectors:")
         for api_name, count in sorted(ingestion_api_counts.items(), key=lambda x: -x[1]):
             log_print(f"    {api_name}: {count}")
+    
+    # ===================== PER-TABLE ATTRIBUTION CSV =====================
+    # Emit connector_table_ingestion.csv for multi-method/API connectors with per-table attribution
+    connector_table_ingestion_path = args.connectors_csv.parent / "connector_table_ingestion.csv"
+    attribution_rows: List[Dict[str, str]] = []
+    
+    for connector in connectors_data:
+        cid = connector.get('connector_id', '')
+        methods = connector.get('collection_method', '').split('|')
+        apis = connector.get('ingestion_api', '').split('|') if connector.get('ingestion_api') else []
+        
+        # Only emit for multi-method or multi-API connectors with attribution data
+        if (len(methods) <= 1 and len(apis) <= 1) or cid not in per_connector_table_attribution:
+            continue
+        
+        solution_name = connector.get('solution_name', '')
+        table_attribution = per_connector_table_attribution[cid]
+        
+        for table_name, (method, api, reason) in sorted(table_attribution.items()):
+            attribution_rows.append({
+                'Solution': solution_name,
+                'ConnectorId': cid,
+                'Table': table_name,
+                'collection_method': method,
+                'ingestion_api': api,
+                'reason': reason,
+            })
+    
+    if attribution_rows:
+        with connector_table_ingestion_path.open("w", encoding="utf-8", newline="") as f:
+            fieldnames = ['Solution', 'ConnectorId', 'Table', 'collection_method', 'ingestion_api', 'reason']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(attribution_rows)
+        log_print(f"  Wrote {len(attribution_rows)} per-table attribution records to {safe_relative(connector_table_ingestion_path, repo_root)}")
+    else:
+        log_print("  No multi-method connectors with per-table attribution found")
 
     # ===================== CUSTOM LOG V1 (CLv1) DETECTION =====================
     # Detect tables using HTTP Data Collector API type suffixes (_s, _d, _b, _t, _g)
@@ -10128,6 +11253,9 @@ def main() -> None:
         'category',
         'support_tier',
         'collection_method',
+        'collection_method_source',
+        'collection_method_candidates',
+        'feeding_connector_ids',
         'resource_types',
         'source_azure_monitor',
         'source_defender_xdr',

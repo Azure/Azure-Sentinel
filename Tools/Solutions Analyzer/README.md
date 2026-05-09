@@ -198,6 +198,31 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.10 - Table Collection Method Back-Propagation and Precedence Rules
+
+**Table-level `collection_method` resolution:**
+- Tables now inherit a `collection_method` from their feeding connectors when there is exactly one distinct informative method across all connectors that ingest the table (1:1 method relationship). Intrinsic values from `tables_reference.csv`, the `source_defender_xdr=Yes` flag (→ `Defender`), and the `Azure Resources` category (→ `Azure Diagnostics`) still take precedence.
+- **ASIM tables short-circuit to `Various`.** Any table whose name starts with `ASim` (case-insensitive) is classified as `Various` regardless of feeding connectors, since ASIM is a normalization layer that aggregates events from many heterogeneous sources.
+- **Published-connector trump.** When a table is fed by both published (marketplace) and unpublished connectors with different methods, only the published connectors’ methods are considered for inference. The `is_published` flag from `connectors.csv` (sourced from the marketplace catalog API) drives this filter.
+- **Atomization of `|`-joined methods.** Connector `collection_method` values are split on `|` before set comparison, so a connector that declares `CCF|Azure Function` no longer appears as a single distinct method that blocks back-propagation.
+- When feeding connectors disagree but the disagreement is a known generation overlap, ordered precedence rules collapse the set to a single winner (newer / canonical wins): `{AMA, MMA} → AMA`, `{CCF, CCF (Legacy)} → CCF`, `{Azure Function, CCF} → CCF`. Rules apply iteratively until no further collapse is possible.
+- Comparisons are case-insensitive to tolerate stray casing in `tables_reference.csv` (e.g. `native` vs `Native`).
+
+**New diagnostic columns in `tables.csv`:**
+- `collection_method_source` — records how the value was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector` (1:1 inheritance), `connector_published_only` (published-trump filter applied), or `connector_precedence({rule trail})`.
+- `collection_method_candidates` — the comma-separated set of distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables).
+- `feeding_connector_ids` — comma-separated IDs of every connector that ingests the table, for traceability.
+
+**Diagnostic CSVs consolidated into the exceptions report:**
+- The standalone `table_method_conflicts.csv` and `table_method_ambiguities.csv` outputs and their `--table-method-conflicts-csv` / `--table-method-ambiguities-csv` CLI flags have been removed.
+- Both classes of finding now appear as rows in `solutions_connectors_tables_issues_and_exceptions_report.csv` with `reason=table_method_conflict` (intrinsic disagrees with connector-inferred method) or `reason=table_method_ambiguity` (feeding connectors still disagree after precedence collapse and no intrinsic value was set). The `details` column carries the same information that the dedicated CSVs used to (intrinsic value, source, candidate methods, per-method connector breakdown).
+
+**SlashNext Function App exclusion extended:**
+- `CONNECTOR_REPORTED_TABLE_EXCLUSIONS['slashnextfunctionapp']` now drops both `AzureDiagnostics` and `AzureMetrics`. Both are referenced only by the connector's `lastDataReceivedQuery` / `sampleQueries` to monitor Function App health, not as ingestion targets.
+
+**Documentation:**
+- `methods-index.md` now includes a "How collection methods are assigned to tables" section that lists the resolution order and the precedence collapse table.
+
 ### v9.9 - Logic Apps Connector Pages and Built-in Action Telemetry
 
 **Logic Apps Connector / Built-in Action Index:**
