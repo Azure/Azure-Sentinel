@@ -9,8 +9,8 @@ Guardian log files are line-delimited JSON written to:
     /opt/guardian/logs/<GUARDIAN_NODE_NAME>/api-<uuid>.transaction.log
     /opt/guardian/logs/<GUARDIAN_NODE_NAME>/api-unknown.transaction.log
 
-Each line is a JSON object. This script tracks the last processed line per
-instance in a state file and resumes from there on restart.
+Each line is a JSON object. This script tracks the last processed byte offset per
+log file in a state file and resumes from there on restart.
 """
 
 import datetime
@@ -172,13 +172,23 @@ def _load_state(instance_name: str, api_filename: str, unknown_filename: str) ->
     path = _state_path(instance_name)
     if path.exists():
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            state = json.loads(path.read_text(encoding="utf-8"))
+            # Migrate legacy line-count state to byte-offset state
+            for key in ("api_log", "unknown_log"):
+                if key in state and "last_line_sent" in state[key] and "byte_offset" not in state[key]:
+                    logger.info(
+                        "Migrating state %s/%s from line count to byte offset — rewinding to start",
+                        instance_name, key,
+                    )
+                    del state[key]["last_line_sent"]
+                    state[key]["byte_offset"] = 0
+            return state
         except Exception as exc:
             logger.warning("Could not read state file %s: %s — resetting", path, exc)
     return {
         "instance_name": instance_name,
-        "api_log": {"filename": api_filename, "last_line_sent": 0},
-        "unknown_log": {"filename": unknown_filename, "last_line_sent": 0},
+        "api_log": {"filename": api_filename, "byte_offset": 0},
+        "unknown_log": {"filename": unknown_filename, "byte_offset": 0},
     }
 
 
@@ -190,27 +200,55 @@ def _save_state(instance_name: str, state: dict) -> None:
 
 # ── Log file processing ────────────────────────────────────────────────────────
 
-def _process_log_file(log_path: Path, last_line_sent: int, log_type: int) -> int:
+def _process_log_file(log_path: Path, byte_offset: int, log_type: int) -> int:
     """
-    Read new lines from log_path starting at last_line_sent, push them,
-    and return the updated last_line_sent. Returns the original value on error
-    so the next tick retries.
+    Read new bytes from log_path starting at byte_offset, push parsed events,
+    and return the updated byte_offset. Returns the original value on error so
+    the next tick retries. Handles truncation and log rotation by resetting the
+    offset when the file is smaller than the stored position.
     """
     if not log_path.exists():
-        return last_line_sent
+        return byte_offset
 
     try:
-        all_lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        file_size = log_path.stat().st_size
+    except OSError as exc:
+        logger.warning("Cannot stat %s: %s", log_path, exc)
+        return byte_offset
+
+    # Detect truncation or log rotation — reset to beginning
+    if file_size < byte_offset:
+        logger.info(
+            "Log file %s was truncated or rotated (size %d < offset %d) — resetting",
+            log_path, file_size, byte_offset,
+        )
+        byte_offset = 0
+
+    if file_size == byte_offset:
+        return byte_offset
+
+    try:
+        with log_path.open("rb") as fh:
+            fh.seek(byte_offset)
+            chunk = fh.read()
     except OSError as exc:
         logger.warning("Cannot read %s: %s", log_path, exc)
-        return last_line_sent
+        return byte_offset
 
-    new_lines = all_lines[last_line_sent:]
-    if not new_lines:
-        return last_line_sent
+    # Only process up to the last complete line; hold back any trailing partial line
+    last_newline = chunk.rfind(b"\n")
+    if last_newline == -1:
+        return byte_offset  # No complete line yet — wait for next tick
+
+    complete_chunk = chunk[: last_newline + 1]
+    new_byte_offset = byte_offset + last_newline + 1
+
+    lines = complete_chunk.decode("utf-8", errors="replace").splitlines()
+    if not lines:
+        return byte_offset
 
     events = []
-    for raw in new_lines:
+    for raw in lines:
         event = map_log_line(raw, log_type)
         if event:
             events.append(event)
@@ -220,38 +258,42 @@ def _process_log_file(log_path: Path, last_line_sent: int, log_type: int) -> int
             push_events(events)
         except Exception as exc:
             logger.error("Failed to push %d event(s): %s — will retry next tick", len(events), exc)
-            return last_line_sent  # do not advance pointer; retry next tick
+            return byte_offset  # do not advance pointer; retry next tick
 
-    return last_line_sent + len(new_lines)
+    return new_byte_offset
 
 
 def _process_instance(instance_dir: Path) -> None:
-    """Process both transaction log files for one guardian instance directory."""
+    """Process all transaction log files for one guardian instance directory."""
     instance_name = instance_dir.name
-
-    # Locate the API-specific log file (api-<uuid>.transaction.log)
-    api_log_path = None
     unknown_log_path = instance_dir / "api-unknown.transaction.log"
 
-    for candidate in instance_dir.glob("api-*.transaction.log"):
-        if candidate.name != "api-unknown.transaction.log":
-            api_log_path = candidate
-            break
+    api_log_paths = sorted(
+        candidate
+        for candidate in instance_dir.glob("api-*.transaction.log")
+        if candidate.name != "api-unknown.transaction.log"
+    )
 
-    if api_log_path is None or not unknown_log_path.exists():
+    if not api_log_paths or not unknown_log_path.exists():
         logger.debug("Skipping %s — log files not ready yet", instance_dir)
         return
 
-    state = _load_state(instance_name, api_log_path.name, unknown_log_path.name)
-
-    state["api_log"]["last_line_sent"] = _process_log_file(
-        api_log_path, state["api_log"]["last_line_sent"], log_type=1
+    # Process the shared unknown log once per instance
+    unknown_state_key = f"{instance_name}__unknown"
+    unknown_state = _load_state(unknown_state_key, "__none__", unknown_log_path.name)
+    unknown_state["unknown_log"]["byte_offset"] = _process_log_file(
+        unknown_log_path, unknown_state["unknown_log"].get("byte_offset", 0), log_type=2
     )
-    state["unknown_log"]["last_line_sent"] = _process_log_file(
-        unknown_log_path, state["unknown_log"]["last_line_sent"], log_type=2
-    )
+    _save_state(unknown_state_key, unknown_state)
 
-    _save_state(instance_name, state)
+    # Process each API-specific log independently with separate state per file
+    for api_log_path in api_log_paths:
+        api_state_key = f"{instance_name}__{api_log_path.name}"
+        state = _load_state(api_state_key, api_log_path.name, unknown_log_path.name)
+        state["api_log"]["byte_offset"] = _process_log_file(
+            api_log_path, state["api_log"].get("byte_offset", 0), log_type=1
+        )
+        _save_state(api_state_key, state)
 
 
 # ── Main loop ──────────────────────────────────────────────────────────────────
