@@ -2,6 +2,59 @@
   "version": "Notebook/1.0",
   "items": [
     {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "3ea263a0-9535-4bae-962e-c928ebd4f62b",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "name": "global-parameters"
+    },
+    {
       "type": 12,
       "content": {
         "version": "NotebookGroup/1.0",
@@ -12,7 +65,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id\n| where action contains \"block\"\n| extend RulesetName = case(\n    isempty(ruleset_name) or ruleset_name == \"\", \"default\",\n    ruleset_name\n)\n| summarize TotalHitCount = sum(hit_count) by RulesetName\n| top 10 by TotalHitCount desc\n| project RulesetName, BlockingHits = TotalHitCount",
+              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id\n| where action contains \"block\"\n| extend RulesetName = case(\n    isempty(ruleset_name) or ruleset_name == \"\", \"default\",\n    ruleset_name\n)\n| summarize TotalHitCount = sum(hit_count) by RulesetName\n| top 10 by TotalHitCount desc\n| project RulesetName, BlockingHits = TotalHitCount",
               "size": 0,
               "title": "Top Blocking Rulesets",
               "noDataMessage": "No blocked traffic found",
@@ -30,7 +83,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let startDate = startofday(ago(7d));\nlet endDate = startofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per application id per day\nlet dailyLatest = GuardicoreApplications_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| extend Status = case(\n    tolower(state) contains \"block\", \"Block\",\n    tolower(state) contains \"alert\", \"Alert\",\n    \"Other\"\n)\n| where Status in (\"Block\", \"Alert\")\n| summarize\n    Block = dcountif(project_name, Status == \"Block\"),\n    Alert = dcountif(project_name, Status == \"Alert\")\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend Block = coalesce(Block, 0),\n         Alert = coalesce(Alert, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), Block, Alert\n| sort by day asc",
+              "query": "let startDate = startofday({TimeRange:start});\nlet endDate = startofday({TimeRange:end});\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per application id per day\nlet dailyLatest = GuardicoreApplications_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| extend Status = case(\n    tolower(state) contains \"block\", \"Block\",\n    tolower(state) contains \"alert\", \"Alert\",\n    \"Other\"\n)\n| where Status in (\"Block\", \"Alert\")\n| summarize\n    Block = dcountif(project_name, Status == \"Block\"),\n    Alert = dcountif(project_name, Status == \"Alert\")\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend Block = coalesce(Block, 0),\n         Alert = coalesce(Alert, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), Block, Alert\n| sort by day asc",
               "size": 0,
               "title": "Applications in Block vs. Alert Status",
               "noDataMessage": "No applications with block/alert status found",
@@ -100,7 +153,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id\n| summarize count = count() by action\n| extend actionFormatted = replace(\"_\", \" \", tolower(action))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
+              "query": "GuardicorePolicyRules_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id\n| summarize count = count() by action\n| extend actionFormatted = replace(\"_\", \" \", tolower(action))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
               "size": 0,
               "title": "Policy Rules by Action Type",
               "noDataMessage": "No policy rules found",
@@ -155,7 +208,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let startDate = startofday(ago(7d));\nlet endDate = startofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per agent id per day\nlet dailyLatest = GuardicoreAgents_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| summarize\n    total_agents = count(),\n    protected_agents = countif(tostring(health.enforcement_agent.status) == \"RUNNING\" and is_agent_enforcing == true)\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend total_agents = coalesce(total_agents, 0),\n         protected_agents = coalesce(protected_agents, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), total_agents, protected_agents\n| sort by day asc\n",
+              "query": "let startDate = startofday({TimeRange:start});\nlet endDate = startofday({TimeRange:end});\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per agent id per day\nlet dailyLatest = GuardicoreAgents_CL\n| where TimeGenerated >= startDate\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| summarize\n    total_agents = count(),\n    protected_agents = countif(tostring(health.enforcement_agent.status) == \"RUNNING\" and is_agent_enforcing == true)\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend total_agents = coalesce(total_agents, 0),\n         protected_agents = coalesce(protected_agents, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), total_agents, protected_agents\n| sort by day asc\n",
               "size": 1,
               "title": "\ud83d\udcc8 Protection Coverage Trend (7 Days)",
               "noDataMessage": "No policy rules found in the specified time range",
@@ -202,7 +255,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let latestAgents = GuardicoreAgents_CL\n| where TimeGenerated >= ago(24h)\n| summarize arg_max(TimeGenerated, *) by id;\nlet agentCount = toscalar(latestAgents | summarize count());\nlet protectedCount = toscalar(\n    latestAgents\n    | where tostring(health.enforcement_agent.status) == \"RUNNING\"\n    | where is_agent_enforcing == true\n    | summarize count()\n);\nprint Category = \"Total Workloads\", Count = agentCount\n| union (print Category = \"Protected Workloads\", Count = protectedCount)",
+              "query": "let latestAgents = GuardicoreAgents_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id;\nlet agentCount = toscalar(latestAgents | summarize count());\nlet protectedCount = toscalar(\n    latestAgents\n    | where tostring(health.enforcement_agent.status) == \"RUNNING\"\n    | where is_agent_enforcing == true\n    | summarize count()\n);\nprint Category = \"Total Workloads\", Count = agentCount\n| union (print Category = \"Protected Workloads\", Count = protectedCount)",
               "size": 1,
               "title": "\ud83d\udd22 Total vs Protected Workloads (Last 24h)",
               "noDataMessage": "No workload data found",
@@ -234,6 +287,6 @@
     }
   ],
   "fallbackResourceIds": [],
-  "fromTemplateId": "sentinel-UserWorkbook",
+  "fromTemplateId": "sentinel-GuardicoreInfo",
   "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
 }
