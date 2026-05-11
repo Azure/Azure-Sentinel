@@ -1,0 +1,23 @@
+id: 8e22eb19-51df-37f7-468f-9d112fff9098
+name: "UniFi Cloud: Console group membership churn"
+description: |
+  Tracks members of `userData.consoleGroupMembers` over time. Additions indicate new admin access; removals indicate revoked access. Both warrant review — additions are an account-creation signal, removals can be a sign of attacker cleanup.
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Hosts_CL
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  Unifi_Cloud_Hosts_CL
+  | where TimeGenerated > ago(30d)
+  | summarize MembersByDay = make_set(tostring(member.mac)) by bin(TimeGenerated, 1d), id, HostName = tostring(reportedState.name)
+  | extend MemberCount = array_length(MembersByDay)
+  | order by id, TimeGenerated asc
+  | extend Prev = prev(MembersByDay), PrevId = prev(id)
+  | where id == PrevId and array_length(set_difference(MembersByDay, coalesce(Prev, dynamic([])))) > 0
+  | project Date=TimeGenerated, HostName, ['New members'] = set_difference(MembersByDay, coalesce(Prev, dynamic([]))), MemberCount
+version: 1.0.0
+kind: HuntingQuery

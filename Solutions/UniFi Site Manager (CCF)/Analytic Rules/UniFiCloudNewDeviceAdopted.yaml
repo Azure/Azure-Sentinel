@@ -1,0 +1,71 @@
+id: e69be544-9476-35bb-2533-fa8c650dcd46
+name: "UniFi Cloud: New Device Adopted"
+description: |
+  Detects when a new device is adopted into the UniFi network. While often legitimate, unexpected device adoptions could indicate unauthorized hardware being added to your network.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Devices_CL
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1200
+  - T1133
+query: |
+  // UniFi New Device Adopted Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  Unifi_Cloud_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(adoptionTime)
+  | extend AdoptionDateTime = todatetime(adoptionTime)
+  | where AdoptionDateTime > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by id
+  | extend
+      DeviceName = coalesce(name, "Unnamed"),
+      DeviceId = id,
+      Model = model,
+      IPAddress = ip,
+      MACAddress = mac,
+      ProductLine = productLine,
+      FirmwareVersion = version,
+      Shortname = shortname
+  | extend hostName = DeviceName
+  | project
+      TimeGenerated,
+      AdoptionTime = AdoptionDateTime,
+      DeviceName,
+      DeviceId,
+      Model,
+      IPAddress,
+      MACAddress,
+      ProductLine,
+      Status = status,
+      FirmwareVersion,
+      Shortname,
+      hostName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: hostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

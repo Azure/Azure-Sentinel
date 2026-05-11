@@ -1,0 +1,220 @@
+{
+  "name": "UniFiSiteManagerConnectorDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "UniFiSiteManagerConnector",
+      "title": "UniFi Site Manager (CCF)",
+      "publisher": "Custom",
+      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNNDk0LjIgMGgtMzEuOHYzMS44aDMxLjh6TTM4My4xIDIyMi40di02My42aDYzLjV2NjMuNWg2My41YzEuMSA1OC45LTMuNCAxMTAuMi0zMy4zIDE2MS42LTg2LjYgMTUyLjQtMzAwLjUgMTcyLjktNDE0IDM5LjJDMzYuMyAzOTIuNCAxNy4yIDM1NSA4LjMgMzE1Yy00LjUtMjEuNy02LjUtNDkuMi02LjUtNzIuNVY0aDEyN2wuMiAyNDJjLjYgMzEuMyA2LjMgNjMuNSAyNSA4OCA1My45IDczIDE2Ny45IDY2LjMgMjEyLjEtMTMuMSAxNS45LTI2LjYgMTcuMy02OC43IDE3LTk4LjVtMTUuOC0xNzQuOGg0Ny42djQ3LjZINTEwdjYzLjVoLTYzLjVWOTUuM2gtNDcuNnoiIHN0eWxlPSJmaWxsOiMwMDVlZDkiLz48L3N2Zz4=",
+      "descriptionMarkdown": "Connects to the [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) and ingests four data types: Sites, Devices, Hosts, and ISP Metrics.\n\n**Prerequisites:**\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Navigate to **API** in the left navigation\n3. Click **Create API Key**\n4. Copy and securely store the generated key (shown only once)",
+      "graphQueriesTableName": "Unifi_Cloud_Sites_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total sites received",
+          "legend": "UniFi Sites",
+          "baseQuery": "Unifi_Cloud_Sites_CL"
+        },
+        {
+          "metricName": "Total devices received",
+          "legend": "UniFi Devices",
+          "baseQuery": "Unifi_Cloud_Devices_CL"
+        },
+        {
+          "metricName": "Total hosts received",
+          "legend": "UniFi Hosts",
+          "baseQuery": "Unifi_Cloud_Hosts_CL"
+        },
+        {
+          "metricName": "Total ISP metrics received",
+          "legend": "UniFi ISP Metrics",
+          "baseQuery": "Unifi_Cloud_ISPMetrics_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All UniFi sites",
+          "query": "Unifi_Cloud_Sites_CL\n| project TimeGenerated, siteId, hostId, permission, isOwner\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Sites with metadata details",
+          "query": "Unifi_Cloud_Sites_CL\n| extend \n    siteName = tostring(meta.name),\n    siteDescription = tostring(meta['desc']),\n    timezone = tostring(meta.timezone),\n    gatewayMac = tostring(meta.gatewayMac)\n| project TimeGenerated, siteId, siteName, siteDescription, timezone, gatewayMac\n| sort by siteName asc"
+        },
+        {
+          "description": "Sites by permission level",
+          "query": "Unifi_Cloud_Sites_CL\n| summarize SiteCount = dcount(siteId) by permission\n| sort by SiteCount desc"
+        },
+        {
+          "description": "Owned vs shared sites",
+          "query": "Unifi_Cloud_Sites_CL\n| summarize \n    OwnedSites = dcountif(siteId, isOwner == true),\n    SharedSites = dcountif(siteId, isOwner == false)"
+        },
+        {
+          "description": "Sites grouped by host",
+          "query": "Unifi_Cloud_Sites_CL\n| summarize SiteCount = dcount(siteId) by hostId\n| sort by SiteCount desc"
+        },
+        {
+          "description": "Extract device counts from statistics",
+          "query": "Unifi_Cloud_Sites_CL\n| extend \n    siteName = tostring(meta.name),\n    totalDevices = toint(siteStatistics.counts.totalDevice),\n    onlineDevices = toint(siteStatistics.counts.onlineDevice),\n    offlineDevices = toint(siteStatistics.counts.offlineDevice)\n| project TimeGenerated, siteName, totalDevices, onlineDevices, offlineDevices\n| sort by totalDevices desc"
+        },
+        {
+          "description": "Extract client counts from statistics",
+          "query": "Unifi_Cloud_Sites_CL\n| extend \n    siteName = tostring(meta.name),\n    wiredClients = toint(siteStatistics.counts.wiredClient),\n    wifiClients = toint(siteStatistics.counts.wifiClient),\n    guestClients = toint(siteStatistics.counts.guestClient)\n| project TimeGenerated, siteName, wiredClients, wifiClients, guestClients\n| sort by (wiredClients + wifiClients) desc"
+        },
+        {
+          "description": "Sites by timezone",
+          "query": "Unifi_Cloud_Sites_CL\n| extend timezone = tostring(meta.timezone)\n| summarize SiteCount = dcount(siteId) by timezone\n| sort by SiteCount desc"
+        },
+        {
+          "description": "All UniFi devices",
+          "query": "Unifi_Cloud_Devices_CL\n| project TimeGenerated, name, model, ip, mac, status, version, productLine\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Offline devices",
+          "query": "Unifi_Cloud_Devices_CL\n| where status != \"online\"\n| project TimeGenerated, name, model, ip, status, productLine\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Devices with firmware updates available",
+          "query": "Unifi_Cloud_Devices_CL\n| where isnotempty(updateAvailable)\n| project TimeGenerated, name, model, version, updateAvailable, firmwareStatus\n| sort by name asc"
+        },
+        {
+          "description": "Device count by product line",
+          "query": "Unifi_Cloud_Devices_CL\n| summarize DeviceCount = dcount(id) by productLine\n| sort by DeviceCount desc"
+        },
+        {
+          "description": "Recently adopted devices (last 7 days)",
+          "query": "Unifi_Cloud_Devices_CL\n| where isnotempty(adoptionTime)\n| extend AdoptionDate = todatetime(adoptionTime)\n| where AdoptionDate > ago(7d)\n| project TimeGenerated, name, model, ip, AdoptionDate\n| sort by AdoptionDate desc"
+        },
+        {
+          "description": "All UniFi hosts",
+          "query": "Unifi_Cloud_Hosts_CL\n| project TimeGenerated, id, hostType, ipAddress, owner, isBlocked\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Blocked hosts",
+          "query": "Unifi_Cloud_Hosts_CL\n| where isBlocked == true\n| project TimeGenerated, id, hostType, ipAddress\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Hosts by type",
+          "query": "Unifi_Cloud_Hosts_CL\n| summarize HostCount = dcount(id) by hostType\n| sort by HostCount desc"
+        },
+        {
+          "description": "Recent connection state changes",
+          "query": "Unifi_Cloud_Hosts_CL\n| where isnotempty(lastConnectionStateChange)\n| extend ConnectionChange = todatetime(lastConnectionStateChange)\n| where ConnectionChange > ago(24h)\n| project TimeGenerated, id, hostType, ipAddress, ConnectionChange\n| sort by ConnectionChange desc"
+        },
+        {
+          "description": "Hosts with recent backups",
+          "query": "Unifi_Cloud_Hosts_CL\n| where isnotempty(latestBackupTime)\n| extend BackupTime = todatetime(latestBackupTime)\n| where BackupTime > ago(7d)\n| project TimeGenerated, id, hostType, ipAddress, BackupTime\n| sort by BackupTime desc"
+        },
+        {
+          "description": "Host applications and capabilities",
+          "query": "Unifi_Cloud_Hosts_CL\n| extend Apps = userData.apps\n| mv-expand Apps\n| summarize HostCount = dcount(id) by tostring(Apps)\n| sort by HostCount desc"
+        },
+        {
+          "description": "All ISP metrics (latest)",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Expand and analyze metric periods",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend \n    periodStart = todatetime(period.start),\n    periodEnd = todatetime(period.end),\n    avgLatency = todouble(period.latency.avg),\n    packetLoss = todouble(period.packetLoss),\n    downloadKbps = todouble(period.download),\n    uploadKbps = todouble(period.upload),\n    uptime = todouble(period.uptime)\n| project TimeGenerated, hostId, siteId, periodStart, avgLatency, packetLoss, downloadKbps, uploadKbps, uptime\n| sort by periodStart desc"
+        },
+        {
+          "description": "High latency events (>100ms)",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend avgLatency = todouble(period.latency.avg)\n| where avgLatency > 100\n| project TimeGenerated, hostId, siteId, avgLatency\n| sort by avgLatency desc"
+        },
+        {
+          "description": "Packet loss events",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend packetLoss = todouble(period.packetLoss)\n| where packetLoss > 0\n| project TimeGenerated, hostId, siteId, packetLoss\n| sort by packetLoss desc"
+        },
+        {
+          "description": "Average metrics by site",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend \n    avgLatency = todouble(period.latency.avg),\n    downloadKbps = todouble(period.download),\n    uploadKbps = todouble(period.upload)\n| summarize \n    AvgLatency = avg(avgLatency),\n    AvgDownloadMbps = avg(downloadKbps) / 1000,\n    AvgUploadMbps = avg(uploadKbps) / 1000\n    by siteId\n| sort by AvgLatency desc"
+        },
+        {
+          "description": "Uptime summary by host",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend uptime = todouble(period.uptime)\n| summarize AvgUptime = avg(uptime), MinUptime = min(uptime) by hostId\n| sort by AvgUptime asc"
+        },
+        {
+          "description": "Speed test trends over time",
+          "query": "Unifi_Cloud_ISPMetrics_CL\n| mv-expand period = periods\n| extend \n    periodStart = todatetime(period.start),\n    downloadMbps = todouble(period.download) / 1000,\n    uploadMbps = todouble(period.upload) / 1000\n| summarize AvgDownload = avg(downloadMbps), AvgUpload = avg(uploadMbps) by bin(periodStart, 1h)\n| sort by periodStart asc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "Unifi_Cloud_Sites_CL",
+          "lastDataReceivedQuery": "Unifi_Cloud_Sites_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Unifi_Cloud_Devices_CL",
+          "lastDataReceivedQuery": "Unifi_Cloud_Devices_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Unifi_Cloud_Hosts_CL",
+          "lastDataReceivedQuery": "Unifi_Cloud_Hosts_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Unifi_Cloud_ISPMetrics_CL",
+          "lastDataReceivedQuery": "Unifi_Cloud_ISPMetrics_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions required",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "UniFi Site Manager API Key",
+            "description": "A read-only API key from [unifi.ui.com](https://unifi.ui.com) with access to your UniFi deployment."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Obtain a UniFi Site Manager API Key",
+          "description": "1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Click **API** in the left navigation\n3. Click **Create API Key**\n4. Copy the generated key immediately - it will only be displayed once"
+        },
+        {
+          "title": "2. Connect",
+          "description": "Enter your API key below. This single key authorizes polling for all four data types (Sites, Devices, Hosts, ISP Metrics).",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "UniFi Site Manager API Key",
+                "placeholder": "Enter your API key from unifi.ui.com",
+                "type": "password",
+                "name": "apiKey"
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "disconnectLabel": "Disconnect"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

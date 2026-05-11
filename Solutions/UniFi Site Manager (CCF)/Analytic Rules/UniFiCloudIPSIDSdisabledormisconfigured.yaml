@@ -1,0 +1,52 @@
+id: 36a64027-729e-51d7-16bf-8e926c03712a
+name: "UniFi Cloud: IPS/IDS disabled or misconfigured"
+description: |
+  Gateway threat-protection state TRANSITIONED away from the expected IPS-active mode. Fires only on the change (was protected, now degraded) — not while protection stays off. Admin may have intentionally disabled it, or an attacker with admin access has weakened defences.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT15M
+queryPeriod: PT45M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let prev = Unifi_Cloud_Sites_CL
+            | where TimeGenerated between (ago(30m) .. ago(15m))
+            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+            | project siteId_s = tostring(siteId),
+                      prevIpsMode = tostring(siteStatistics.gateway.ipsMode),
+                      prevInspection = tostring(siteStatistics.gateway.inspectionState);
+        Unifi_Cloud_Sites_CL
+        | where TimeGenerated > ago(15m)
+        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+        | extend siteId_s = tostring(siteId),
+                 siteName = tostring(meta.name),
+                 ipsMode = tostring(siteStatistics.gateway.ipsMode),
+                 inspectionState = tostring(siteStatistics.gateway.inspectionState)
+        | join kind=inner prev on siteId_s
+        | where (ipsMode != 'ips' and prevIpsMode == 'ips')
+             or (inspectionState != 'on' and prevInspection == 'on')
+        | extend Activity = strcat('Threat protection degraded — ipsMode: ', prevIpsMode, ' -> ', ipsMode, ', inspection: ', prevInspection, ' -> ', inspectionState)
+        | project TimeGenerated, siteId, siteName, Activity, prevIpsMode, ipsMode, prevInspection, inspectionState
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

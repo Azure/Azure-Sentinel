@@ -1,0 +1,67 @@
+id: f3fa4f3f-c8db-ae35-ee06-04de2dfac511
+name: "UniFi Cloud: Device Offline"
+description: |
+  Detects when a UniFi device goes offline. This could indicate network issues, power problems, or device failure requiring immediate attention.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Devices_CL
+queryFrequency: PT15M
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+query: |
+  // UniFi Device Offline Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  Unifi_Cloud_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by id
+  | where status == "offline"
+  | extend OfflineMinutes = datetime_diff('minute', now(), TimeGenerated)
+  | where OfflineMinutes >= 10
+  | extend
+      DeviceName = coalesce(name, "Unnamed"),
+      DeviceId = id,
+      Model = model,
+      IPAddress = ip,
+      MACAddress = mac,
+      ProductLine = productLine,
+      FirmwareVersion = version
+  | extend hostName = DeviceName
+  | project
+      TimeGenerated,
+      DeviceName,
+      DeviceId,
+      Model,
+      IPAddress,
+      MACAddress,
+      ProductLine,
+      Status = status,
+      OfflineMinutes,
+      FirmwareVersion,
+      hostName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: hostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

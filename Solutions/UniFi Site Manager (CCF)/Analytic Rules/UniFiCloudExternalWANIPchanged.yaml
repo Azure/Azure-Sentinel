@@ -1,0 +1,47 @@
+id: ef1a293a-9e2b-b087-7816-2610814ed2d4
+name: "UniFi Cloud: External WAN IP changed"
+description: |
+  A site reported more than one distinct WAN external IP within an hour. Could be ISP DHCP refresh, a WAN reconfiguration, or in the worst case a routing hijack. Verify against expected ISP behaviour.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1590
+query: |
+  Unifi_Cloud_Sites_CL
+        | where TimeGenerated > ago(1h)
+        | extend siteName = tostring(meta.name),
+                 currentIp = tostring(siteStatistics.wans.WAN.externalIp)
+        | where isnotempty(currentIp)
+        | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by siteId, siteName
+        | where array_length(DistinctIps) > 1
+        | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))
+        | project TimeGenerated, siteId, siteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CurrentIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

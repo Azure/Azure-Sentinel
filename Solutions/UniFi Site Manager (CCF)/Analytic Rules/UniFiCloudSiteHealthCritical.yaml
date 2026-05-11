@@ -1,0 +1,64 @@
+id: c8875ebb-cc6e-14e4-4216-d8b06fd92c90
+name: "UniFi Cloud: Site Health Critical"
+description: |
+  Detects when a site has multiple offline devices, indicating a significant site-level issue such as power outage, network failure, or infrastructure problem requiring immediate attention.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT15M
+queryPeriod: PT30M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+  - T1499
+query: |
+  // UniFi Site Health Critical Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  let OfflineThreshold = 3;
+  Unifi_Cloud_Sites_CL
+  | where TimeGenerated > ago(30m)
+  | summarize arg_max(TimeGenerated, *) by siteId
+  | extend 
+      siteName = tostring(meta.name),
+      timezone = tostring(meta.timezone),
+      totalDevices = toint(siteStatistics.counts.totalDevice),
+      offlineDevices = toint(siteStatistics.counts.offlineDevice),
+      wifiClients = toint(siteStatistics.counts.wifiClient),
+      wiredClients = toint(siteStatistics.counts.wiredClient)
+  | where offlineDevices >= OfflineThreshold
+  | extend 
+      AvailabilityPct = round(100.0 * (totalDevices - offlineDevices) / totalDevices, 1),
+      TotalClients = wifiClients + wiredClients
+  | project
+      TimeGenerated,
+      SiteId = siteId,
+      SiteName = siteName,
+      TotalDevices = totalDevices,
+      OfflineDevices = offlineDevices,
+      OnlineDevices = totalDevices - offlineDevices,
+      AvailabilityPct,
+      TotalClients,
+      WiFiClients = wifiClients,
+      WiredClients = wiredClients,
+      Timezone = timezone
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

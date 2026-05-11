@@ -1,0 +1,50 @@
+id: b16f13ae-343b-9513-e684-469cdf9471b2
+name: "UniFi Cloud: New WAN2 (secondary) issue recorded"
+description: |
+  A NEW issue appeared on the secondary WAN (`wans.WAN2.wanIssues[].index`). On multi-WAN sites this is the failover link — its downtime/latency matters even when WAN is healthy. Fires only on new issue indexes, not while existing issues persist.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT15M
+queryPeriod: PT45M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+query: |
+  let prev = Unifi_Cloud_Sites_CL
+            | where TimeGenerated between (ago(30m) .. ago(15m))
+            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+            | mv-expand pi = todynamic(tostring(siteStatistics.wans.WAN2.wanIssues))
+            | extend siteId_s = tostring(siteId), prevIdx = tolong(pi.index)
+            | distinct siteId_s, prevIdx;
+        Unifi_Cloud_Sites_CL
+        | where TimeGenerated > ago(15m)
+        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+        | where isnotempty(tostring(siteStatistics.wans.WAN2))
+        | extend siteId_s = tostring(siteId), siteName = tostring(meta.name)
+        | mv-expand issue = todynamic(tostring(siteStatistics.wans.WAN2.wanIssues))
+        | extend idx = tolong(issue.index)
+        | join kind=leftanti prev on $left.siteId_s == $right.siteId_s, $left.idx == $right.prevIdx
+        | extend Activity = strcat('New WAN2 issue index ', idx, ' on secondary WAN (downtime=', tostring(issue.wanDowntime), ' highLatency=', tostring(issue.highLatency), ')')
+        | project TimeGenerated, siteId, siteName, Activity, IssueIndex=idx, IssueDetail=issue
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

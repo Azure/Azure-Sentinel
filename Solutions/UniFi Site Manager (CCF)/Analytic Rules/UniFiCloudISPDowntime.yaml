@@ -1,0 +1,68 @@
+id: b54123ef-cfa7-769e-a959-f437404a1192
+name: "UniFi Cloud: ISP Downtime"
+description: |
+  Detects when the ISP connection experiences downtime. Any downtime impacts business operations and should be investigated and documented for SLA purposes.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_ISPMetrics_CL
+queryFrequency: PT15M
+queryPeriod: PT30M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+  - T1499
+query: |
+  // UniFi ISP Downtime Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  Unifi_Cloud_ISPMetrics_CL
+  | where TimeGenerated > ago(30m)
+  | mv-expand period = periods
+  | extend 
+      metricTime = todatetime(period.metricTime),
+      downtime = toint(period.data.wan.downtime),
+      uptime = todouble(period.data.wan.uptime),
+      ispName = tostring(period.data.wan.ispName),
+      ispAsn = tostring(period.data.wan.ispAsn)
+  | where downtime > 0
+  | summarize 
+      TotalDowntimeSeconds = sum(downtime),
+      EventCount = count(),
+      AvgUptime = round(avg(uptime), 2),
+      FirstSeen = min(metricTime),
+      LastSeen = max(metricTime)
+      by siteId, ispName, ispAsn
+  | extend 
+      TimeGenerated = now(),
+      DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)
+  | project
+      TimeGenerated,
+      SiteId = siteId,
+      ISPName = ispName,
+      ISPAsn = ispAsn,
+      TotalDowntimeSeconds,
+      DowntimeMinutes,
+      AvgUptimePct = AvgUptime,
+      EventCount,
+      FirstSeen,
+      LastSeen
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ISPName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

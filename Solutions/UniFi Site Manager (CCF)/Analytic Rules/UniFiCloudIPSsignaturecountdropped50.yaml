@@ -1,0 +1,44 @@
+id: aa188a24-783a-76a1-cd11-3bcac0e97de9
+name: "UniFi Cloud: IPS signature count dropped >50%"
+description: |
+  The IPS signature ruleset count has dropped by more than half compared to its 7-day max. The IPS threat-intel feed may be broken or rolling back — investigate to ensure threat detection remains effective.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT6H
+queryPeriod: P7D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  Unifi_Cloud_Sites_CL
+        | where TimeGenerated > ago(7d)
+        | extend siteName = tostring(meta.name),
+                 rulesCount = toint(siteStatistics.gateway.ipsSignature.rulesCount)
+        | where isnotnull(rulesCount)
+        | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by siteId, siteName
+        | where MaxCount > 100 and toreal(rulesCount) / MaxCount < 0.5
+        | extend DropPct = round(100.0 * (1 - toreal(rulesCount) / MaxCount), 1)
+        | extend Activity = strcat('IPS rules dropped to ', rulesCount, ' (from ', MaxCount, ', -', DropPct, '%)')
+        | project TimeGenerated, siteId, siteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT12H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

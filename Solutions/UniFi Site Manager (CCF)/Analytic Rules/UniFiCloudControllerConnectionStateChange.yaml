@@ -1,0 +1,64 @@
+id: ac1efe0f-654e-264e-07be-c1b60e698343
+name: "UniFi Cloud: Controller Connection State Change"
+description: |
+  Detects when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change. This could indicate network issues, power problems, or controller failures that may impact netwo
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Hosts_CL
+queryFrequency: PT15M
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1489
+  - T1071
+query: |
+  // UniFi Controller Connection State Change Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  Unifi_Cloud_Hosts_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(lastConnectionStateChange)
+  | extend ConnectionChange = todatetime(lastConnectionStateChange)
+  | where ConnectionChange > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by id
+  | extend 
+      HostTypeDisplay = case(
+          hostType == "ucore", "UniFi OS Console",
+          hostType == "uck", "Cloud Key",
+          hostType == "uckp", "Cloud Key+",
+          hostType == "udm", "Dream Machine",
+          hostType == "udmpro", "Dream Machine Pro",
+          hostType == "udmse", "Dream Machine SE",
+          hostType == "self-hosted", "Self-Hosted",
+          hostType
+      )
+  | project
+      TimeGenerated,
+      ConnectionChangeTime = ConnectionChange,
+      HostId = id,
+      HostType = hostType,
+      HostTypeDisplay,
+      IPAddress = ipAddress,
+      IsBlocked = isBlocked,
+      IsOwner = owner
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: Selected
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

@@ -1,0 +1,42 @@
+id: f5130582-9e0e-cb47-af0b-dcd8b261fa04
+name: "UniFi Cloud: WiFi quality degraded (high TX retry)"
+description: |
+  Site-wide WiFi TX retry rate exceeded 5% — indicates RF interference, channel congestion, or undersized AP coverage. Could also signal active wireless attack (deauth flooding).
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Sites_CL
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+query: |
+  Unifi_Cloud_Sites_CL
+        | where TimeGenerated > ago(1h)
+        | extend siteName = tostring(meta.name),
+                 txRetry = todouble(siteStatistics.percentages.txRetry)
+        | where txRetry > 5.0
+        | summarize arg_max(TimeGenerated, *) by siteId, siteName
+        | extend Activity = strcat('TX retry rate ', round(txRetry, 1), '% (>5% threshold)')
+        | project TimeGenerated, siteId, siteName, Activity, TxRetryPct = round(txRetry, 1)
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

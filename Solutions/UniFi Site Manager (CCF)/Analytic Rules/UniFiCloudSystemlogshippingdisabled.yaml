@@ -1,0 +1,48 @@
+id: f32950bc-6553-4c03-2686-a9c29ef318e8
+name: "UniFi Cloud: System log shipping disabled"
+description: |
+  A UniFi host transitioned `reportedState.cloudSystemLogState` from `enabled` to `disabled`. Cloud log shipping going dark is a defense-evasion signal — an attacker with admin access may be silencing audit trails.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_Hosts_CL
+queryFrequency: PT15M
+queryPeriod: PT45M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let prev = Unifi_Cloud_Hosts_CL
+            | where TimeGenerated between (ago(30m) .. ago(15m))
+            | summarize arg_max(TimeGenerated, *) by id
+            | project id_s = id, prevState = tostring(reportedState.cloudSystemLogState);
+        Unifi_Cloud_Hosts_CL
+        | where TimeGenerated > ago(15m)
+        | summarize arg_max(TimeGenerated, *) by id
+        | extend id_s = id,
+                 siteName = tostring(reportedState.name),
+                 currentState = tostring(reportedState.cloudSystemLogState)
+        | join kind=inner prev on id_s
+        | where currentState == 'disabled' and prevState == 'enabled'
+        | extend Activity = strcat('Cloud system log shipping was disabled on host ', siteName, ' (', prevState, ' -> ', currentState, ')')
+        | project TimeGenerated, id, siteName, Activity, prevState, currentState
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT12H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

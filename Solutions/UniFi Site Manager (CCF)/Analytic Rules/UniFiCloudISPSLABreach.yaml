@@ -1,0 +1,68 @@
+id: fecd4ab1-b24e-8413-9164-e3621c8d7caa
+name: "UniFi Cloud: ISP SLA Breach"
+description: |
+  Detects when ISP uptime falls below the SLA threshold. This alert helps track SLA compliance and can be used for ISP accountability and contract negotiations.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_Cloud_ISPMetrics_CL
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  // UniFi ISP SLA Breach Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  let SLAThreshold = 99.9;
+  Unifi_Cloud_ISPMetrics_CL
+  | where TimeGenerated > ago(1h)
+  | mv-expand period = periods
+  | extend 
+      metricTime = todatetime(period.metricTime),
+      uptime = todouble(period.data.wan.uptime),
+      downtime = toint(period.data.wan.downtime),
+      ispName = tostring(period.data.wan.ispName),
+      ispAsn = tostring(period.data.wan.ispAsn)
+  | summarize 
+      AvgUptime = round(avg(uptime), 3),
+      MinUptime = round(min(uptime), 3),
+      TotalDowntimeSeconds = sum(downtime),
+      MeasurementCount = count()
+      by siteId, ispName, ispAsn
+  | where AvgUptime < SLAThreshold
+  | extend 
+      TimeGenerated = now(),
+      SLATarget = SLAThreshold,
+      UptimeGap = round(SLAThreshold - AvgUptime, 3)
+  | project
+      TimeGenerated,
+      SiteId = siteId,
+      ISPName = ispName,
+      ISPAsn = ispAsn,
+      AvgUptimePct = AvgUptime,
+      MinUptimePct = MinUptime,
+      SLATargetPct = SLATarget,
+      UptimeGapPct = UptimeGap,
+      TotalDowntimeSeconds,
+      MeasurementCount
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ISPName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
