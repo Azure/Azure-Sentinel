@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.0       | 01-05-2026                     | Updated **CCF Data Connector** to include new V3 table that includes additional fields and support for multiple domains. |
+| 3.1.0       | 27-04-2026                     | Updated CCP data connector with expanded DCR, table definitions, and polling configuration |
 | 3.0.10      | 23-01-2026                     | Update the Salesforce data connector with instructions for the Salesforce Shield Event Monitoring license requirement     |
 | 3.0.9       | 17-11-2025                     | Resolved bug in **CCF Data Connector** related to column names     |
 | 3.0.8       | 04-11-2025                     | Resolved bugs in **Analytic rules** related to TimestampDerived field.         |

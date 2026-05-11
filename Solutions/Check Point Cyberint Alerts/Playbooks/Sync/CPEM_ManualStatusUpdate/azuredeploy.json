@@ -1,0 +1,335 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Check Point Exposure Management - Manual Status Update (Sentinel \u2192 Argos)",
+    "description": "On-demand playbook that reads the current Sentinel incident status and pushes it to the corresponding alert(s). Triggered manually from the incident actions menu.",
+    "prerequisites": [
+      "1. A valid Check Point Exposure Management API token and base URL.",
+      "2. The Logic App Managed Identity must be granted Microsoft Sentinel Responder role on the resource group."
+    ],
+    "postDeployment": [
+      "1. Grant the Logic App Managed Identity the **Microsoft Sentinel Responder** role.",
+      "2. Analysts can run this playbook from the Sentinel incident Actions menu."
+    ],
+    "lastUpdateTime": "2026-02-25T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Sync",
+      "Remediation"
+    ],
+    "support": {
+      "tier": "Partner",
+      "name": "Check Point",
+      "link": "https://cyberint.com/customer-support/"
+    },
+    "source": {
+      "type": "solution",
+      "name": "Check Point Exposure Management Alerts"
+    },
+    "author": {
+      "name": "Check Point"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Check Point Exposure Management - Manual Status Update",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "Check_Point_EM_ManualStatusUpdate",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook"
+      }
+    },
+    "API_Base_URL": {
+      "type": "String",
+      "metadata": {
+        "description": "Base URL of the Check Point Exposure Management API (e.g. https://app.cyberint.io)"
+      }
+    },
+    "API_Access_Token": {
+      "type": "SecureString",
+      "metadata": {
+        "description": "API token for Check Point Exposure Management"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "workspace-location-inline": "[resourceGroup().location]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Check_Point_EM_ManualStatusUpdate",
+        "hidden-SentinelTemplateVersion": "1.2"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "API_Base_URL": {
+              "defaultValue": "",
+              "type": "String"
+            },
+            "API_Access_Token": {
+              "defaultValue": "",
+              "type": "SecureString"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_variable_-_SyncResults": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SyncResults",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_variable_-_AlertRefId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AlertRefId",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_variable_-_SyncResults": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Compose_classification_mapping": {
+              "type": "Compose",
+              "inputs": {
+                "TruePositive": "resolved",
+                "FalsePositive": "false_positive",
+                "BenignPositive": "no_longer_a_threat",
+                "Undetermined": "other"
+              },
+              "runAfter": {
+                "Initialize_variable_-_AlertRefId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Set_ArgosStatus": {
+              "type": "Compose",
+              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), 'closed', 'open')",
+              "runAfter": {
+                "Compose_classification_mapping": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Set_ArgosClosureReason": {
+              "type": "Compose",
+              "inputs": "@if(equals(triggerBody()?['object']?['properties']?['status'], 'Closed'), coalesce(outputs('Compose_classification_mapping')?[triggerBody()?['object']?['properties']?['classification']], 'other'), '')",
+              "runAfter": {
+                "Set_ArgosStatus": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_incident_alerts": {
+              "type": "Compose",
+              "inputs": "@triggerBody()?['object']?['properties']?['alerts']",
+              "runAfter": {
+                "Set_ArgosClosureReason": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each_alert": {
+              "type": "Foreach",
+              "foreach": "@outputs('Parse_incident_alerts')",
+              "actions": {
+                "Set_AlertRefId": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "AlertRefId",
+                    "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                  },
+                  "runAfter": {}
+                },
+                "Update_Argos_Alert_Status": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "PUT",
+                    "uri": "@{parameters('API_Base_URL')}/api/v1/alerts/@{encodeURIComponent(variables('AlertRefId'))}",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Accept": "application/json",
+                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                      "X-Integration-Type": "Azure Sentinel",
+                      "X-Integration-Version": "1.0"
+                    },
+                    "body": {
+                      "status": "@{outputs('Set_ArgosStatus')}",
+                      "closure_reason": "@{outputs('Set_ArgosClosureReason')}",
+                      "closure_reason_description": "@{if(equals(outputs('Set_ArgosClosureReason'), 'other'), 'Closed in Microsoft Sentinel', null)}"
+                    }
+                  },
+                  "runAfter": {
+                    "Set_AlertRefId": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Append_sync_result": {
+                  "type": "AppendToStringVariable",
+                  "inputs": {
+                    "name": "SyncResults",
+                    "value": "Alert @{variables('AlertRefId')}: @{outputs('Set_ArgosStatus')} (HTTP @{coalesce(outputs('Update_Argos_Alert_Status')?['statusCode'], 'Error')})\n"
+                  },
+                  "runAfter": {
+                    "Update_Argos_Alert_Status": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_incident_alerts": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Add_sync_comment": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p><strong>CPEM Manual Status Update:</strong><br>Sentinel Status: @{triggerBody()?['object']?['properties']?['status']}<br>Argos Status: @{outputs('Set_ArgosStatus')}<br>Closure Reason: @{outputs('Set_ArgosClosureReason')}<br><br>Results:<br>@{variables('SyncResults')}</p>"
+                },
+                "path": "/Incidents/Comment"
+              },
+              "runAfter": {
+                "For_each_alert": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              }
+            },
+            "Update_incident_tags": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "tagsToAdd": {
+                    "TagsToAdd": [
+                      "argos-manual-synced"
+                    ]
+                  }
+                },
+                "path": "/Incidents"
+              },
+              "runAfter": {
+                "Add_sync_comment": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "API_Base_URL": {
+            "value": "[parameters('API_Base_URL')]"
+          },
+          "API_Access_Token": {
+            "value": "[parameters('API_Access_Token')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}
