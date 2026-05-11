@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.0       | 11-05-2026                     | Added CCF **Data Connector** support with 3 new **Parsers** and updated existing **Parsers** to support BitSight CCF data |
 | 3.1.1       | 22-04-2026                     | Updated **Solution Package** with the fix of solutionId |
 | 3.1.0       | 31-03-2026                     | Updated the python runtime version to 3.12. Added support for Log Ingestion API and updated parsers accordingly. <br> Reverted the solution id to fix the BitSight Solution publishing issue.                   |
 | 3.0.2       | 26-07-2024                     | Update **Analytic rules** for missing TTP                          |
