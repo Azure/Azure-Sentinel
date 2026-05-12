@@ -2,7 +2,7 @@
 
 **Topic:** Monitor Sentinel costs using Usage tables and the ingestion dashboard  
 **Difficulty:** Intermediate  
-**Prerequisites:** None
+**Prerequisites:** **Billing Administrator** and **Security Administrator** roles are required to access the Cost management blade in the Defender portal
 
 ---
 

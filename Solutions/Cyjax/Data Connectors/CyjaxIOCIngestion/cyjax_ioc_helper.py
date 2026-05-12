@@ -65,14 +65,10 @@ class CyjaxIOCHelper:
                     consts.LOGS_STARTS_WITH,
                     "_check_timeout",
                     consts.FUNCTION_NAME,
-                    "Function approaching timeout at {} seconds. Saving checkpoint and exiting.".format(
-                        int(elapsed)
-                    ),
+                    "Function approaching timeout at {} seconds. Saving checkpoint and exiting.".format(int(elapsed)),
                 )
             )
-            raise CyjaxTimeoutException(
-                "Function timeout reached at {} seconds".format(int(elapsed))
-            )
+            raise CyjaxTimeoutException("Function timeout reached at {} seconds".format(int(elapsed)))
 
     def _get_checkpoint(self):
         """Retrieve the checkpoint data from Azure File Share.
@@ -127,16 +123,16 @@ class CyjaxIOCHelper:
 
     def _format_timestamp(self, timestamp):
         """Format timestamp to ISO8601 compliance.
-        
+
         Args:
             timestamp (str): Input timestamp string that may need formatting.
-            
+
         Returns:
             str: Formatted timestamp in ISO8601 format.
         """
         if not timestamp:
             return None
-            
+
         # Convert timezone format +0000 to Z for ISO8601 compliance
         if timestamp.endswith("+0000"):
             return timestamp.replace("+0000", "Z")
@@ -147,7 +143,7 @@ class CyjaxIOCHelper:
             if len(parts) == 2:
                 tz = parts[1].replace(":", "")
                 return f"{parts[0]}+{tz}"
-        
+
         return timestamp
 
     def _save_checkpoint(self, since, until, page):
@@ -207,14 +203,10 @@ class CyjaxIOCHelper:
                     consts.LOGS_STARTS_WITH,
                     __method_name,
                     consts.FUNCTION_NAME,
-                    "Missing required environment variables: {}".format(
-                        ", ".join(missing)
-                    ),
+                    "Required environment variables are not configured. Check application settings.",
                 )
             )
-            raise CyjaxException(
-                "Missing required environment variables: {}".format(", ".join(missing))
-            )
+            raise CyjaxException("Missing required environment variables: {}".format(", ".join(missing)))
         applogger.info(
             self.log_format.format(
                 consts.LOGS_STARTS_WITH,
@@ -292,9 +284,7 @@ class CyjaxIOCHelper:
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "Fetched {} IOCs on page {} (total fetched so far: {})".format(
-                    len(ioc_list), page, self.total_fetched
-                ),
+                "Fetched {} IOCs on page {} (total fetched so far: {})".format(len(ioc_list), page, self.total_fetched),
             )
         )
 
@@ -337,9 +327,7 @@ class CyjaxIOCHelper:
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Enrichment authentication failed: {}. Stopping enrichment for all IOCs.".format(
-                            auth_err
-                        ),
+                        "Enrichment authentication failed: {}. Stopping enrichment for all IOCs.".format(auth_err),
                     )
                 )
                 raise
@@ -349,9 +337,7 @@ class CyjaxIOCHelper:
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Enrichment failed for IOC value={}: {}. Continuing.".format(
-                            ioc_value, enrich_err
-                        ),
+                        "Enrichment failed for IOC value={}: {}. Continuing.".format(ioc_value, enrich_err),
                     )
                 )
 
@@ -485,9 +471,7 @@ class CyjaxIOCHelper:
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.FUNCTION_NAME,
-                "Processing window: since={}, until={}, starting page={}".format(
-                    since, until, page
-                ),
+                "Processing window: since={}, until={}, starting page={}".format(since, until, page),
             )
         )
 
@@ -501,9 +485,10 @@ class CyjaxIOCHelper:
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "Reached maximum page limit ({}). Resetting to page 1 with new timestamp. Previous window: since={}, until={}".format(
-                            consts.CYJAX_MAX_PAGE, since, until
-                        ),
+                        "Reached maximum page limit ({}). Resetting to page 1 with new timestamp.".format(
+                            consts.CYJAX_MAX_PAGE
+                        )
+                        + " Previous window: since={}, until={}".format(since, until),
                     )
                 )
                 # Store current until as new since, update until to current time
@@ -514,9 +499,7 @@ class CyjaxIOCHelper:
                         consts.LOGS_STARTS_WITH,
                         __method_name,
                         consts.FUNCTION_NAME,
-                        "New window after page reset: since={}, until={}".format(
-                            new_since, new_until
-                        ),
+                        "New window after page reset: since={}, until={}".format(new_since, new_until),
                     )
                 )
                 since = new_since
@@ -526,7 +509,7 @@ class CyjaxIOCHelper:
                 self._save_checkpoint(since, until, page)
 
             merged_records, raw_iocs = self.collect_and_enrich_iocs(since, until, page)
-            
+
             # Store the last record's time for potential page reset
             if raw_iocs and len(raw_iocs) > 0:
                 # Get the timestamp from the last record in the page
@@ -554,7 +537,7 @@ class CyjaxIOCHelper:
                         ),
                     )
                 )
-                
+
                 # If all indicators failed, this indicates a critical error (auth, config, etc.)
                 # Stop execution to prevent wasting resources and allow investigation
                 if attempted > 0 and result["success_count"] == 0:
@@ -564,9 +547,7 @@ class CyjaxIOCHelper:
                             __method_name,
                             consts.FUNCTION_NAME,
                             "All {} indicators failed on page {}. Stopping execution to prevent further failures. "
-                            "Check authentication, permissions, and configuration.".format(
-                                attempted, page
-                            ),
+                            "Check authentication, permissions, and configuration.".format(attempted, page),
                         )
                     )
                     raise CyjaxException(

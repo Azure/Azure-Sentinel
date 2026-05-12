@@ -1,3 +1,6 @@
+# 2.1.1
+- Improved efficiency.
+
 ## 2.1.0
 - Fixed event normalization.
 
