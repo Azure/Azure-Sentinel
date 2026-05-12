@@ -2,19 +2,9 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
-
+import requests, urllib3
 from typing import Optional
 
-import requests
-
-from .pyepm import (
-    get_admin_audit_events,
-    get_aggregated_events,
-    get_aggregated_policy_audits,
-    get_detailed_raw_events,
-    get_policy_audit_raw_event_details,
-    get_sets_list,
-)
 from .storage import AzureBlobStorage, LocalStorage
 
 
@@ -31,6 +21,42 @@ storage = LocalStorage() if os.environ.get('STORAGE', 'Storage') == 'LocalStorag
 TOKEN_FILE_NAME = 'token.json'
 EPM_TENANT_URL_FILE_NAME = 'epm_tenant_url.json'
 TIME_FRAME_FILE_NAME = 'time_frame.json'
+RETRY_STATUSES = {403, 429}
+MAX_RETRIES = 3
+RETRY_BACKOFF = [60, 90, 120]
+
+urllib3.disable_warnings()
+
+
+def _build_bearer_headers(bearer_token):
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + bearer_token,
+        'x-cybr-telemetry': 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
+    }
+
+
+def _request(method, url, headers=None, data=None, params=None) -> requests.Response:
+    for attempt in range(MAX_RETRIES):
+        if method == 'GET':
+            response = requests.get(url, headers=headers, params=params)
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, data=data, params=params)
+        else:
+            raise ValueError('Unsupported method')
+
+        if response.status_code not in RETRY_STATUSES or attempt == MAX_RETRIES - 1:
+            return response
+
+        wait = int(response.headers.get('Retry-After', RETRY_BACKOFF[attempt]))
+        logging.warning(f'Request to {url} returned {response.status_code}, retrying in {wait}s (attempt {attempt + 1}/{MAX_RETRIES})')
+        time.sleep(wait)
+
+    return response
+
+
+def _build_auth_headers(epm_token, auth_type=None):
+    return _build_bearer_headers(epm_token)
 
 
 def _is_token_expired(token: dict) -> bool:
@@ -151,6 +177,116 @@ def _get_dispatcher_url(auth_token: str):
     return None
 
 
+def _get_aggregated_events(epm_server, epm_token, set_id, data, next_cursor="start", limit=1000, **kwargs):
+    """
+        Get aggregated events
+        This method enables the user to retrieve aggregated events from EPM according
+    """
+
+    # build the URL
+
+    if next_cursor:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/events/aggregations/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/events/aggregations/search?limit=" + str(limit)
+
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+    if len(kwargs) > 0:
+        return _request('POST', target_url, headers=hdr, data=data, params=kwargs)
+    else:
+        return _request('POST', target_url, headers=hdr, data=data)
+
+
+def _get_detailed_raw_events(epm_server, epm_token, set_id, data, next_cursor="start", limit=1000, **kwargs):
+    """
+        Get detailed raw events
+        This method enables the user to retrieve raw events from EPM according
+        to a predefined filter
+    """
+
+    # build the URL
+    if next_cursor:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/Events/Search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/Events/Search?limit=" + str(limit)
+
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    if len(kwargs) > 0:
+        return _request('POST', target_url, headers=hdr, data=data, params=kwargs)
+    else:
+        return _request('POST', target_url, headers=hdr, data=data)
+
+
+def _get_aggregated_policy_audits(epm_server, epm_token, set_id, data, next_cursor="start", limit=1000, **kwargs):
+    """
+            Get aggregated policy audits
+            This method enables the user to retrieve aggregated policy audits from EPM according
+    """
+
+    # build the URL
+    if next_cursor:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/policyaudits/aggregations/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/policyaudits/aggregations/search?limit=" + str(limit)
+
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    if len(kwargs) > 0:
+        return _request('POST', target_url, headers=hdr, data=data, params=kwargs)
+    else:
+        return _request('POST', target_url, headers=hdr, data=data)
+
+
+def _get_policy_audit_raw_event_details(epm_server, epm_token, set_id, data, next_cursor="start", limit=1000,
+                                  **kwargs):
+    """
+            Get policy audit raw event details
+            This method enables the user to retrieve policy audit raw event details from EPM according
+    """
+
+    # build the URL
+    if next_cursor:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/policyaudits/search?nextCursor=" + next_cursor + "&limit=" + str(
+            limit)
+    else:
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/policyaudits/search?limit=" + str(limit)
+
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    if len(kwargs) > 0:
+        return _request('POST', target_url, headers=hdr, data=data, params=kwargs)
+    else:
+        return _request('POST', target_url, headers=hdr, data=data)
+
+
 def collect_events() -> list:
     token = _get_oauth_token()
     dispatcher_url = _get_dispatcher_url(token)
@@ -172,19 +308,19 @@ def collect_events() -> list:
 
     all_events: list = []
     for set_id in sets:
-        aggregated_events = _fetch_set_events(get_aggregated_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        aggregated_events = _fetch_set_events(_get_aggregated_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
         logging.info(f"Fetched {len(aggregated_events)} aggregated events from {set_id.get('Name')}")
         all_events.extend([e | {"eventType": 'aggregated_events'} for e in aggregated_events if isinstance(e, dict)])
 
-        detailed_raw_events =  _fetch_set_events(get_detailed_raw_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        detailed_raw_events =  _fetch_set_events(_get_detailed_raw_events, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
         logging.info(f"Fetched {len(detailed_raw_events)} detailed raw events from {set_id.get('Name')}")
         all_events.extend([e | {"eventType": 'raw_event'} for e in detailed_raw_events if isinstance(e, dict)])
 
-        aggregated_policy_audits = _fetch_set_events(get_aggregated_policy_audits, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        aggregated_policy_audits = _fetch_set_events(_get_aggregated_policy_audits, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
         logging.info(f"Fetched {len(aggregated_policy_audits)} aggregated policy audits from {set_id.get('Name')}")
         all_events.extend([e | {"eventType": 'aggregated_policy_audits'} for e in aggregated_policy_audits if isinstance(e, dict)])
 
-        audit_raw_event_details = _fetch_set_events(get_policy_audit_raw_event_details, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
+        audit_raw_event_details = _fetch_set_events(_get_policy_audit_raw_event_details, dispatcher_url=dispatcher_url, token=token, filter_date=filter_date, set_id=set_id)
         logging.info(f"Fetched {len(audit_raw_event_details)} policy audit raw events from {set_id.get('Name')}")
         all_events.extend([e | {"eventType": 'policy_audit_raw_event_details'} for e in audit_raw_event_details if isinstance(e, dict)])
 
@@ -203,3 +339,74 @@ def collect_events() -> list:
             logging.warning(f'Failed fetching Admin Audit Data: {err}')
 
     return [e for e in all_events if isinstance(e, dict)]
+
+
+def get_version(dispatcher, version=None):
+    """
+        Get EPM version
+        This method enables the user to retrieve the EPM version
+    """
+    # create the URL to the dispacthcer with the information passed in to the function
+    if not version:
+        target_url = dispatcher + "/EPM/API/Server/Version"
+    else:
+        target_url = dispatcher + "/EPM/API/" + version + "/Server/Version"
+
+    # make the Rest API call
+    return requests.get(target_url)
+
+
+def get_sets_list(epm_server, epm_token, version=None):
+    """
+        Get Sets list
+        This method enables the user to retrieve the list of Sets.
+    """
+    # build the URL
+    if not version:
+        target_url = epm_server + "/EPM/API/Sets"
+    else:
+        target_url = epm_server + "/EPM/API/" + version + "/Sets"
+
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    return _request('GET', target_url, headers=hdr)
+
+
+def get_admin_audit_events(epm_server, epm_token, set_id, start_time, end_time, limit=100) -> list:
+    """
+        Get Admin Audit Data
+        This method enables the user to retrieve Admin Audit Data from EPM according
+        to a range of time (between start_time and end_time)
+    """
+    # build the header
+    hdr = _build_bearer_headers(epm_token)
+
+    # make the Rest API call
+    # this url can take a query, the parameters for the query should be in kwargs
+    # check to see if there are any keyword arguments passed in to this function
+    # if so, use them
+
+    rows_count = 0
+    offset = 0
+    events_json = []
+
+    while True:
+        #build the URL
+        target_url = epm_server + "/EPM/API/Sets/" + set_id + "/AdminAudit?DateFrom=" + start_time + "&DateTo=" + end_time + "&limit=" + str(limit) + "&offset=" + str(offset)
+        r = _request('GET', target_url, headers=hdr).json()
+        events_json += r["AdminAudits"]
+        #Get TotalCount from JSON
+        total_count = r["TotalCount"]
+        rows_count += len(r["AdminAudits"])
+
+        if total_count > rows_count:
+            offset += limit
+        else:
+            break
+    if len(events_json) > 0:
+        for admin_audit_event in events_json:
+            admin_audit_event["eventType"] = "admin_audit"
+
+    return events_json
