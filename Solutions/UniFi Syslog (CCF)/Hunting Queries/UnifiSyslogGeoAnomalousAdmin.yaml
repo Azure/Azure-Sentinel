@@ -1,0 +1,36 @@
+id: 55e5a8b1-5050-4f65-bf51-5e6f7a8b9c05
+name: "UniFi: Geo-anomalous admin / SSH activity"
+description: |
+  Lists admin or SSH activity originating from countries outside your normal operating geography. Edit the expected_countries list at the top of the query to match your environment.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let expected_countries = dynamic([ "GB", "US", "" ]);
+  CommonSecurityLog
+  | where TimeGenerated > ago(7d)
+  | where DeviceEventClassID == "sshd_auth_success"
+          or (DeviceEventCategory has_any ("admin", "auth") and DeviceVendor =~ "Ubiquiti")
+  | extend Country = coalesce(MaliciousIPCountry, DeviceCustomString3)
+  | where Country !in (expected_countries)
+  | project TimeGenerated, SourceIP, SourceUserName, Country,
+            ASN_Org = DeviceCustomString4, Activity, DeviceAction,
+            DeviceEventClassID, TIMatch = ThreatDescription
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceUserName
+version: 1.0.0
+kind: HuntingQuery

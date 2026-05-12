@@ -1,0 +1,51 @@
+id: c9d4a07e-3215-49b1-8a32-7c0e8b6f12d4
+name: "UniFi: SSH brute force"
+description: |
+  Identifies 5+ SSH authentication failures from a single source IP within 15 minutes against UniFi consoles. Severity elevated to Critical when the source IP also matches a TI feed.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+query: |
+  CommonSecurityLog
+  | where DeviceEventClassID == "sshd_auth_fail"
+  | summarize Attempts = count(),
+              TargetUsers = make_set(SourceUserName, 25),
+              FirstSeen = min(TimeGenerated),
+              LastSeen = max(TimeGenerated),
+              Country = take_any(coalesce(MaliciousIPCountry, DeviceCustomString3)),
+              ASN_Org = take_any(DeviceCustomString4),
+              TIMatch = take_any(ThreatDescription)
+    by SourceIP
+  | where Attempts >= 5
+  | extend RuleSeverity = iff(isnotempty(TIMatch), "Critical", "High")
+  | order by Attempts desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

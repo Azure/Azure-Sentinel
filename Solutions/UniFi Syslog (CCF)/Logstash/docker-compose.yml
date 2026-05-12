@@ -1,0 +1,44 @@
+services:
+  logstash:
+    build:
+      context: .
+      # MaxMind credentials passed as BuildKit secrets (mounted into the build,
+      # never written to image layers or build logs). Required for ingest-time
+      # geo / ASN enrichment; leave the env vars blank in .env to skip.
+      secrets:
+        - maxmind_account_id
+        - maxmind_license_key
+    image: unifi-syslog-logstash:local
+    container_name: unifi-syslog-logstash
+    restart: unless-stopped
+    networks:
+      # Replace this network name + ipv4_address with whatever macvlan network
+      # you've created on the host (see README). The container needs its own
+      # IP so it can bind port 514 without clashing with the host's syslog.
+      syslog-net:
+        ipv4_address: 10.0.0.21
+    environment:
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+      SENTINEL_TENANT_ID: "${SENTINEL_TENANT_ID}"
+      SENTINEL_CLIENT_APP_ID: "${SENTINEL_CLIENT_APP_ID}"
+      SENTINEL_CLIENT_APP_SECRET: "${SENTINEL_CLIENT_APP_SECRET}"
+      SENTINEL_DCE_URL: "${SENTINEL_DCE_URL}"
+      SENTINEL_DCR_IMMUTABLE_ID: "${SENTINEL_DCR_IMMUTABLE_ID}"
+      SENTINEL_DCR_STREAM_NAME: "${SENTINEL_DCR_STREAM_NAME}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  syslog-net:
+    external: true
+
+# BuildKit secrets sourced from the .env-loaded environment variables -
+# their values are never echoed to build logs or baked into image layers.
+secrets:
+  maxmind_account_id:
+    environment: MAXMIND_ACCOUNT_ID
+  maxmind_license_key:
+    environment: MAXMIND_LICENSE_KEY

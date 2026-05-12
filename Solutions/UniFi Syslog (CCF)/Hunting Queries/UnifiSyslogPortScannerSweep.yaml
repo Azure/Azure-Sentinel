@@ -1,0 +1,35 @@
+id: 22b2d5e8-2020-4c32-8d2e-2b3c4d5e6f02
+name: "UniFi: Port scanner sweep detection"
+description: |
+  Lists external sources hitting 10 or more distinct destination ports within a 5-minute window - the classic port-scan signature. Filters to non-RFC1918 sources only to suppress noise from internal LAN scanners.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Discovery
+  - Reconnaissance
+relevantTechniques:
+  - T1046
+  - T1595
+query: |
+  CommonSecurityLog
+  | where TimeGenerated > ago(1h)
+  | where DeviceEventCategory =~ "Firewall"
+  | where isnotempty(SourceIP) and not(ipv4_is_private(SourceIP))
+  | summarize DistinctPorts = dcount(DestinationPort),
+              Ports = make_set(DestinationPort, 50),
+              Attempts = count(),
+              TIFlagged = take_any(ThreatDescription),
+              Country = take_any(coalesce(MaliciousIPCountry, DeviceCustomString3)),
+              ASN_Org = take_any(DeviceCustomString4)
+    by SourceIP, bin(TimeGenerated, 5m)
+  | where DistinctPorts >= 10
+  | order by DistinctPorts desc, Attempts desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: HuntingQuery

@@ -1,0 +1,51 @@
+id: 2c8d4f12-1a5e-4b3a-9e87-a01f3c1c2d11
+name: "UniFi: Threat-intel match on inbound traffic"
+description: |
+  Identifies inbound traffic whose source IP matched a known-bad TI feed (FireHOL Level 1, Spamhaus DROP/EDROP, or Tor exit). Severity reflects the highest-confidence feed that matched. Tune by changing the ThreatSeverity threshold.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+tactics:
+  - InitialAccess
+  - Reconnaissance
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1595
+query: |
+  CommonSecurityLog
+  | where isnotempty(MaliciousIP) and ThreatSeverity >= 7
+  | summarize Hits = count(),
+              FeedsMatched = make_set(ThreatDescription),
+              TopActivity = take_any(Activity),
+              TopAction   = take_any(DeviceAction),
+              TargetPorts = make_set(DestinationPort, 25),
+              TargetUsers = make_set(SourceUserName, 25)
+    by SourceIP, MaliciousIPCountry, IndicatorThreatType,
+       ASN_Org = DeviceCustomString4, ThreatSeverity
+  | order by ThreatSeverity desc, Hits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

@@ -1,0 +1,52 @@
+id: 9e2c6d4b-5871-4a72-bf65-37e91b8e7f23
+name: "UniFi: Admin activity from non-LAN source"
+description: |
+  Identifies successful SSH logins or admin CEF events originating from a source IP outside RFC1918 private ranges. These should be rare in a healthy network (VPN traffic should appear as private); investigate every match to confirm it was an authorised remote login.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+tactics:
+  - InitialAccess
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1078
+  - T1021
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where DeviceEventClassID == "sshd_auth_success"
+          or DeviceEventCategory has_any ("admin", "auth", "login", "logon")
+  | where isnotempty(SourceIP)
+  | where not(ipv4_is_private(SourceIP))
+  | project TimeGenerated, Computer, SourceIP, SourceUserName, DeviceAction,
+            Activity, Message, DeviceEventClassID,
+            Country = MaliciousIPCountry, ASN_Org = DeviceCustomString4,
+            TIMatch = ThreatDescription, AdditionalExtensions
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceUserName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

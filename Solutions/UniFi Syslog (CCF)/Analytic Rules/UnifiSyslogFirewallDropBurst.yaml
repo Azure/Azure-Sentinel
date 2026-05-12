@@ -1,0 +1,52 @@
+id: 4b1f7e5c-2d09-4e2a-9c83-1a72fa3b6c14
+name: "UniFi: Repeated firewall drops from single source"
+description: |
+  Identifies 50+ firewall drop or reject events from the same source IP within an hour - likely a port scan, brute force probe, or misconfigured client. Uses UniFi zone-based firewall events parsed into CEF (DeviceEventClassID like LAN_LAN / WAN_LOCAL).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 2h
+suppressionEnabled: false
+tactics:
+  - Discovery
+  - InitialAccess
+relevantTechniques:
+  - T1046
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where DeviceEventCategory =~ "Firewall"
+  | where DeviceAction in~ ("DROP", "REJECT")
+  | where isnotempty(SourceIP)
+  | summarize Drops = count(),
+              DistinctDstPorts = dcount(DestinationPort),
+              Ports = make_set(DestinationPort, 50),
+              ZoneDirs = make_set(DeviceEventClassID),
+              Country = take_any(coalesce(MaliciousIPCountry, DeviceCustomString3)),
+              ASN_Org = take_any(DeviceCustomString4),
+              TIMatch = take_any(ThreatDescription)
+    by SourceIP, bin(TimeGenerated, 1h)
+  | where Drops >= 50
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

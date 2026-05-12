@@ -1,0 +1,36 @@
+id: 11a1c4d9-1010-4b21-9c1f-1a2b3c4d5e01
+name: "UniFi: Top external attackers (TI-flagged)"
+description: |
+  Ranks TI-flagged source IPs by activity volume in the last 24h. Use this to prioritise blocklist additions or investigate persistent actors that hit your perimeter.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - InitialAccess
+  - Reconnaissance
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1595
+query: |
+  CommonSecurityLog
+  | where TimeGenerated > ago(24h)
+  | where isnotempty(MaliciousIP) and ThreatSeverity >= 5
+  | summarize Attempts = count(),
+              Countries = make_set(MaliciousIPCountry, 5),
+              Feeds = make_set(ThreatDescription, 5),
+              ASN_Orgs = make_set(DeviceCustomString4, 5),
+              TargetPorts = make_set(DestinationPort, 25),
+              TargetUsers = make_set(SourceUserName, 25),
+              FirstSeen = min(TimeGenerated),
+              LastSeen = max(TimeGenerated)
+    by SourceIP, ThreatSeverity, IndicatorThreatType
+  | order by Attempts desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: HuntingQuery

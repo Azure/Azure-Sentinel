@@ -1,0 +1,35 @@
+id: 66f6b9c2-6060-4a76-af62-6f7a8b9c0d06
+name: "UniFi: Sudo activity audit"
+description: |
+  Lists sudo events not from known service accounts (unifi-protect, unifi, ubios-udapi). Real admin sudo activity to root warrants attention. Tune the system_users list at the top of the query for your environment.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - PrivilegeEscalation
+  - Execution
+relevantTechniques:
+  - T1548
+query: |
+  let system_users = dynamic([ "unifi-protect", "unifi", "unifi-network",
+                               "ubios-udapi", "ubios" ]);
+  CommonSecurityLog
+  | where TimeGenerated > ago(24h)
+  | where DeviceEventClassID == "sudo_command"
+  | where SourceUserName !in (system_users)
+  | project TimeGenerated, Computer, SourceUserName, DestinationUserName,
+            Command = Message, PWD = DeviceCustomString1,
+            Product = DeviceProduct
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceUserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+version: 1.0.0
+kind: HuntingQuery

@@ -1,0 +1,30 @@
+id: 88b8d1e4-8080-4c98-af84-8b9c0d1e2f08
+name: "UniFi: WiFi deauth flooding (possible Karma / Evil Twin)"
+description: |
+  Lists APs that observed 20 or more WiFi deauth or disassoc events within a 5-minute window. Could be normal roaming chaos, or active deauth attack (Karma, Evil Twin, WPA handshake capture).
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CredentialAccess
+  - Discovery
+relevantTechniques:
+  - T1040
+query: |
+  CommonSecurityLog
+  | where TimeGenerated > ago(1h)
+  | where DeviceEventClassID in ("wifi_deauth", "wifi_disassoc")
+  | summarize Events = count(),
+              DistinctClients = dcount(SourceMACAddress),
+              Clients = make_set(SourceMACAddress, 25)
+    by Computer, DeviceEventClassID, bin(TimeGenerated, 5m)
+  | where Events >= 20
+  | order by Events desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+version: 1.0.0
+kind: HuntingQuery
