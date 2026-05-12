@@ -1,0 +1,29 @@
+id: f6a7b8c9-0123-4567-8901-234567890047
+name: "Tailscale: Subnet router CIDR exposure inventory"
+description: |
+  Lists every device currently advertising or enabling subnet routes (i.e., bridging non-tailnet networks into the tailnet). Excludes pure exit-node advertisements (0.0.0.0/0 and ::/0) so only true subnet exposure is surfaced. Use this for change-control - confirm every CIDR listed is intended to be reachable from the tailnet, and that the device's ACL restricts who can route through it.
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021
+  - T1018
+query: |
+  let exitRoutes = dynamic(["0.0.0.0/0", "::/0"]);
+  Tailscale_Devices_CL
+  | summarize arg_max(TimeGenerated, *) by DeviceId
+  | where array_length(AdvertisedRoutes) > 0 or array_length(EnabledRoutes) > 0
+  | extend SubnetAdvertised = set_difference(AdvertisedRoutes, exitRoutes)
+  | extend SubnetEnabled = set_difference(EnabledRoutes, exitRoutes)
+  | where array_length(SubnetAdvertised) > 0 or array_length(SubnetEnabled) > 0
+  | project DeviceName, Hostname, User, Os, SubnetAdvertised, SubnetEnabled, Tags, LastSeen
+  | order by DeviceName asc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+version: 1.0.0

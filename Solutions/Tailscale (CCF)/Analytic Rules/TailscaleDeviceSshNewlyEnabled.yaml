@@ -1,0 +1,55 @@
+id: f0a1b2c3-4567-8901-23de-f12345670041
+name: "Tailscale: Device Tailscale SSH newly enabled"
+description: |
+  Tailscale SSH was enabled on a device that previously did not have it. Tailscale SSH provides authenticated shell access to the device over the tailnet, using the existing Tailscale identity rather than SSH keys. Legitimate during initial admin setup; an unexpected enable broadens the attack surface for any device that can reach this node. Verify the change was intentional and that the SSH ACL covers it appropriately.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - LateralMovement
+relevantTechniques:
+  - T1021
+  - T1098
+query: |
+  let recent =
+      Tailscale_Devices_CL
+      | where TimeGenerated > ago(1h)
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where SshEnabled == true
+      | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, LastSeen;
+  let prior =
+      Tailscale_Devices_CL
+      | where TimeGenerated between (ago(2d) .. ago(1h))
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where SshEnabled == true
+      | distinct DeviceId;
+  recent
+  | join kind=leftanti prior on DeviceId
+  | project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, LastSeen
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
