@@ -1,0 +1,46 @@
+id: b1a2c3d4-1234-5678-90ab-cdef12345001
+name: "Tailscale: Device key expiring within 7 days"
+description: |
+  A tailnet device's machine key expires within the next 7 days and key expiry is not disabled. Expired keys force device re-authentication; surface this proactively so it can be renewed in a planned window rather than during an outage.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  Tailscale_Devices_CL
+  | where TimeGenerated > ago(6h)
+  | summarize arg_max(TimeGenerated, *) by DeviceId
+  | where KeyExpiryDisabled == false
+  | where isnotnull(Expires)
+  | where Expires between (now() .. now() + 7d)
+  | extend DaysToExpiry = datetime_diff('day', Expires, now())
+  | project TimeGenerated, DeviceName, Hostname, User, Os, DaysToExpiry, Expires, LastSeen
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
