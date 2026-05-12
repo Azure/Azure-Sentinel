@@ -5,7 +5,7 @@ The UniFi Site Manager solution for Microsoft Sentinel ingests cloud-side teleme
 ## Contents
 
 - **Data Connector** — single Sentinel UI card ("UniFi Site Manager (CCF)") that deploys four polling rules from one API key. Polls Sites, Devices, Hosts and ISP Metrics every 5 minutes.
-- **Custom tables** — `Unifi_Cloud_Sites_CL`, `Unifi_Cloud_Devices_CL`, `Unifi_Cloud_Hosts_CL`, `Unifi_Cloud_ISPMetrics_CL`
+- **Custom tables** — `Unifi_SiteManager_Sites_CL`, `Unifi_SiteManager_Devices_CL`, `Unifi_SiteManager_Hosts_CL`, `Unifi_SiteManager_ISPMetrics_CL`
 - **21 analytics rules** — covering ISP downtime, latency, packet loss, SLA breach, WAN issues (incl. WAN2/secondary failover), IPS/IDS posture changes, firmware drift, device offline events, controller connection state, critical notifications (delta-based), external WAN IP rotation, system-log shipping disabled (defense-evasion), and data connector health.
 - **8 hunting queries** — firmware-drift hotspots, long-tail latency, device flapping, WAN IP geographic deviation, firmware version diversity, persistent WAN issues, off-hours device adoption, console group membership churn.
 - **Workbook** — Operations dashboard with 6 tabs: Overview, Sites, ISP Performance, Devices, Security, Operations. Includes open-incident view, multi-WAN status panels, severity-classified incident feed, and color-coded latency thresholds.
@@ -30,7 +30,7 @@ Site Manager API endpoints used by this connector are available on all UniFi clo
 
 State-based rules (IPS/IDS disabled, WAN issues, critical notifications, system-log shipping disabled) fire only on **state transitions** — they detect the change from `enabled → disabled`, not the persistent state. This keeps incident volume proportional to actual events and avoids alert storms during sustained outages.
 
-ISP performance rules (downtime, latency, packet loss, SLA) operate on rolling windows of the `Unifi_Cloud_ISPMetrics_CL` table.
+ISP performance rules (downtime, latency, packet loss, SLA) operate on rolling windows of the `Unifi_SiteManager_ISPMetrics_CL` table.
 
 ## Support
 
