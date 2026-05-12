@@ -1,0 +1,33 @@
+id: e55f8aaf-5fbc-8b6e-d05b-4c7faabcadbe
+name: "Tailscale: New src->dst node pairs (lateral movement candidates)"
+description: |
+  Lists tailnet src->dst pairs observed in the last 24h that were NOT observed in the prior 7-day baseline. Useful for spotting lateral movement to nodes that don't usually talk to each other. Requires Tailscale Premium or Enterprise (network flow logs).
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - LateralMovement
+  - Discovery
+relevantTechniques:
+  - T1021
+  - T1018
+query: |
+  let recent = 1d;
+  let baseline = 7d;
+  let recentPairs =
+      Tailscale_Network_CL
+      | where TimeGenerated > ago(recent)
+      | mv-expand t = VirtualTraffic
+      | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)
+      | summarize FirstSeen = min(TimeGenerated), TxBytes = sum(tolong(t.txBytes)), RxBytes = sum(tolong(t.rxBytes)), FlowCount = count() by Src, Dst, Proto;
+  let baselinePairs =
+      Tailscale_Network_CL
+      | where TimeGenerated between (ago(baseline + recent) .. ago(recent))
+      | mv-expand t = VirtualTraffic
+      | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)
+      | distinct Src, Dst, Proto;
+  recentPairs
+  | join kind=leftanti baselinePairs on Src, Dst, Proto
+  | order by FirstSeen asc
+version: 1.0.0

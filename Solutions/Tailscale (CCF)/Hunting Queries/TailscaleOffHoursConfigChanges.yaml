@@ -1,0 +1,31 @@
+id: c73f6e5e-3d9a-6f4c-be3f-2a5d7f9eafbc
+name: "Tailscale: Off-hours configuration changes"
+description: |
+  Lists configuration audit events that occurred outside typical business hours (defined as Monday-Friday 08:00-18:00 UTC). Adjust the time window to match your operating region. Useful for spotting impromptu maintenance, account compromise, or insider activity.
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Configuration_CL
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let businessStartUtc = 8;
+  let businessEndUtc = 18;
+  Tailscale_Configuration_CL
+  | extend HourOfDay = datetime_part("hour", TimeGenerated), DayOfWeek = dayofweek(TimeGenerated)
+  | where DayOfWeek in (0d, 6d)  // Sunday and Saturday
+      or HourOfDay < businessStartUtc
+      or HourOfDay >= businessEndUtc
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend TargetType = tostring(Target.type)
+  | project TimeGenerated, ActorLogin, Action, TargetType, Target, Origin
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+version: 1.0.0

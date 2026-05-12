@@ -1,0 +1,23 @@
+id: f46a9bb0-6acd-9c7f-e16c-5d8abbcdbeca
+name: "Tailscale: Top talkers by bytes (virtual traffic)"
+description: |
+  Ranks tailnet src->dst pairs by total bytes transferred over the last 24h. Useful for capacity planning, identifying data-heavy flows, and spotting unexpected volume that could indicate data staging. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1041
+  - T1567
+query: |
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(1d)
+  | mv-expand t = VirtualTraffic
+  | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto), TxBytes = tolong(t.txBytes), RxBytes = tolong(t.rxBytes)
+  | summarize TotalBytes = sum(TxBytes + RxBytes), TotalPackets = sum(tolong(t.txPkts) + tolong(t.rxPkts)), FlowCount = count() by Src, Dst, Proto
+  | extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)
+  | top 50 by TotalBytes
+version: 1.0.0

@@ -1,0 +1,26 @@
+id: a37bacc1-7bde-ad8a-f27d-6e9bcdcecadb
+name: "Tailscale: Exit-node usage patterns"
+description: |
+  Summarises traffic leaving the tailnet via exit nodes. Exit node use is typically intentional (regional egress, privacy routing) but unexpected exit-node traffic from a node should be investigated as a potential pivot point or unsanctioned egress. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1090
+  - T1041
+query: |
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(1d)
+  | where array_length(ExitTraffic) > 0
+  | mv-expand t = ExitTraffic
+  | extend Src = tostring(t.src), ExitDst = tostring(t.dst), Proto = toint(t.proto), TxBytes = tolong(t.txBytes), RxBytes = tolong(t.rxBytes)
+  | summarize TotalBytes = sum(TxBytes + RxBytes), FlowCount = count(), ExitDestinations = make_set(ExitDst, 25)
+      by NodeId, SrcNodeName = tostring(SrcNode.name), Src
+  | extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)
+  | order by TotalBytes desc
+  | take 100
+version: 1.0.0

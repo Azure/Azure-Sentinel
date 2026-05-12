@@ -1,0 +1,314 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Tailscale Operations (Standard)\n\nSecurity and operational view across the **Tailscale Standard (CCF)** data connector. Surfaces configuration audit data (`Tailscale_Configuration_CL`).\n\nFor network flow visibility, upgrade your tailnet to Premium / Enterprise and install **Tailscale Premium (CCF)** + use the **Tailscale Operations (Premium)** workbook."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "overview",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Overview",
+            "subTarget": "overview",
+            "style": "link"
+          },
+          {
+            "id": "config",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Identity & Configuration",
+            "subTarget": "config",
+            "style": "link"
+          },
+          {
+            "id": "signals",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Security Signals",
+            "subTarget": "signals",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "tabs"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Overview"
+            },
+            "name": "overview-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| summarize TotalEvents = count(), UniqueActors = dcount(tostring(Actor.loginName)), ACLChanges = countif(Action == \"WRITE\" and tostring(Target.type) == \"ACL\"), AuthKeysCreated = countif(Action == \"CREATE\" and tostring(Target.type) == \"AUTH_KEY\")",
+              "size": 4,
+              "title": "Configuration audit summary",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "TotalEvents",
+                  "formatter": 12
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "100",
+            "name": "overview-tiles"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| summarize EventCount = count() by bin(TimeGenerated, 1h), Action\n| render timechart",
+              "size": 0,
+              "title": "Configuration activity over time, by action",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "overview-timeseries"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| extend ActorLogin = tostring(Actor.loginName)\n| where isnotempty(ActorLogin)\n| summarize EventCount = count() by ActorLogin\n| top 10 by EventCount\n| render barchart",
+              "size": 0,
+              "title": "Top 10 actors",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "50",
+            "name": "overview-top-actors"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| summarize EventCount = count() by tostring(Target.type)\n| top 10 by EventCount\n| render piechart",
+              "size": 0,
+              "title": "Target type distribution",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "50",
+            "name": "overview-target-types"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "overview"
+      },
+      "name": "overview-group"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Identity & Configuration"
+            },
+            "name": "config-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| extend ActorLogin = tostring(Actor.loginName), TargetType = tostring(Target.type)\n| summarize EventCount = count() by ActorLogin, Action, TargetType\n| order by EventCount desc",
+              "size": 0,
+              "title": "Actor / Action / Target heatmap",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "customWidth": "100",
+            "name": "config-heatmap"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| where tostring(Target.type) == \"ACL\"\n| extend ActorLogin = tostring(Actor.loginName)\n| project TimeGenerated, ActorLogin, Action, OldPolicy = Old, NewPolicy = New\n| order by TimeGenerated desc",
+              "size": 0,
+              "title": "ACL policy change history",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "config-acl-history"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| where tostring(Target.type) == \"AUTH_KEY\"\n| extend ActorLogin = tostring(Actor.loginName), Reusable = tostring(New.reusable), Ephemeral = tostring(New.ephemeral)\n| project TimeGenerated, Action, ActorLogin, KeyId = tostring(Target.id), Reusable, Ephemeral, Description = tostring(New.description)\n| order by TimeGenerated desc",
+              "size": 0,
+              "title": "Auth key lifecycle",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "config-authkey-lifecycle"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "Tailscale_Configuration_CL\n| where TimeGenerated {TimeRange}\n| where tostring(Target.type) in (\"API_KEY\", \"OAUTH_CLIENT\")\n| extend ActorLogin = tostring(Actor.loginName)\n| project TimeGenerated, Action, ActorLogin, Type = tostring(Target.type), TargetId = tostring(Target.id), Description = tostring(New.description)\n| order by TimeGenerated desc",
+              "size": 0,
+              "title": "API token and OAuth client activity",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "config-oauth-api"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "config"
+      },
+      "name": "config-group"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Security Signals\n\nIncidents and alerts raised by Tailscale-related analytic rules."
+            },
+            "name": "signals-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertName startswith \"Tailscale\"\n| summarize Count = count() by AlertName, AlertSeverity\n| order by Count desc",
+              "size": 0,
+              "title": "Tailscale alerts by rule",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "50",
+            "name": "signals-by-rule"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertName startswith \"Tailscale\"\n| summarize Count = count() by AlertSeverity\n| render piechart",
+              "size": 0,
+              "title": "Severity distribution",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "50",
+            "name": "signals-severity"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SecurityAlert\n| where TimeGenerated {TimeRange}\n| where AlertName startswith \"Tailscale\"\n| project TimeGenerated, AlertName, AlertSeverity, Description, Entities\n| order by TimeGenerated desc",
+              "size": 0,
+              "title": "Recent Tailscale alerts",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "100",
+            "name": "signals-recent"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "signals"
+      },
+      "name": "signals-group"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-TailscaleStandardOperations",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
