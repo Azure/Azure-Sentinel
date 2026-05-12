@@ -1,0 +1,60 @@
+id: a5b6c7d8-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+name: "Tailscale Premium: Subnet router throughput anomaly"
+description: |
+  A subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handled 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate increased legitimate workload, but also data exfiltration to a non-Tailscale destination via the gateway, or scanning of an attached subnet. Requires Tailscale Premium or Enterprise (network flow logs).
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 1h
+queryPeriod: 8d
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1572
+  - T1041
+query: |
+  let baselineDays = 7d;
+  let recent = 1h;
+  let multiplier = 3.0;
+  let recentTraffic =
+      Tailscale_Network_CL
+      | where TimeGenerated > ago(recent)
+      | where array_length(SubnetTraffic) > 0
+      | mv-expand t = SubnetTraffic
+      | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes), SrcNodeName = tostring(SrcNode.name)
+      | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName;
+  let baseline =
+      Tailscale_Network_CL
+      | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))
+      | where array_length(SubnetTraffic) > 0
+      | mv-expand t = SubnetTraffic
+      | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)
+      | summarize TotalBaselineBytes = sum(Bytes) by NodeId
+      | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;
+  recentTraffic
+  | join kind=inner baseline on NodeId
+  | where RecentBytes > BaselineHourlyBytes * multiplier
+  | extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)
+  | project NodeId, SrcNodeName, RecentMB, BaselineHourlyMB, Multiplier
+  | order by Multiplier desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

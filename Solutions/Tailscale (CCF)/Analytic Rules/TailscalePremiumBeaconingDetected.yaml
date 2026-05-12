@@ -1,0 +1,56 @@
+id: e3f4a5b6-3c4d-5e6f-7a8b-9c0d1e2f3a4b
+name: "Tailscale Premium: Network flow beaconing detected"
+description: |
+  Flows between a src->dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). This is the signature of C2 beaconing or scheduled exfiltration. Investigate the source node, the destination, and timing. Requires Tailscale Premium or Enterprise (network flow logs).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1095
+  - T1029
+query: |
+  let lookback = 2d;
+  let minFlows = 10;
+  let beaconPercentThreshold = 80.0;
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(lookback)
+  | mv-expand t = VirtualTraffic
+  | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)
+  | project TimeGenerated, Src, Dst, Proto
+  | sort by Src asc, Dst asc, Proto asc, TimeGenerated asc
+  | serialize
+  | extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)
+  | where Src == NextSrc and Dst == NextDst and Proto == NextProto
+  | extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)
+  | where DeltaSec > 5
+  | summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec
+  | summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto
+  | where TotalFlows >= minFlows
+  | extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)
+  | where BeaconPercent >= beaconPercentThreshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
