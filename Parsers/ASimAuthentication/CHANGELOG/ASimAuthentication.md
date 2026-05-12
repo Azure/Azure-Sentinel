@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.15
+
+- (2026-05-06) Add pack parameter to updated Salesforce Service Cloud parser - [PR #14215](https://github.com/Azure/Azure-Sentinel/pull/14215)
+
 ## Version 0.2.14
 
 - (2026-04-29) Add parser Cisco DNAC events from Syslog - [PR #14135](https://github.com/Azure/Azure-Sentinel/pull/14135)
