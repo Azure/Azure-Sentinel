@@ -1,0 +1,43 @@
+id: a1b2c3d4-5678-9012-34ab-cdef12345030
+name: "Tailscale Premium: Posture integration disabled or removed"
+description: |
+  A device-posture integration (Jamf, Kandji, Intune, Kolide, Microsoft Defender for Endpoint, CrowdStrike Falcon, SentinelOne, etc.) was disabled or removed from the tailnet. Posture integrations enforce device compliance (OS up-to-date, EDR running, etc.) before allowing tailnet access; removing one disables that enforcement and increases blast radius for compromised endpoints. Requires Tailscale Premium or Enterprise (posture integrations feature).
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1562
+  - T1556
+query: |
+  Tailscale_Audit_CL
+  | where Action in ("DELETE", "UPDATE")
+  | where tostring(Target.type) == "POSTURE_INTEGRATION"
+    or tostring(Target.type) startswith "POSTURE"
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend Provider = tostring(Target.name)
+  | project TimeGenerated, ActorLogin, Action, Provider, Target, Old, New, Origin
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
