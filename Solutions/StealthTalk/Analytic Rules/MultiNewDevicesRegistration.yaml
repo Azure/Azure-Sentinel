@@ -1,0 +1,82 @@
+id: f9d4c2a8-1b6e-4a3f-9c7d-8e2b1a3c5d7e
+name: StealthTalk - Multi New Devices Registration
+description: |
+  Detects a single StealthTalk user registering two or more previously-unseen devices within
+  a 24-hour window. Sudden registration of multiple new devices is a strong indicator of
+  account takeover (an attacker enrolling their own device after credential theft) or
+  device-farm abuse.
+
+  The rule fires when a user produces two or more distinct NewDeviceId values within the
+  lookback window, regardless of operating system. Look at the OSList custom detail to spot
+  cross-platform patterns (e.g. an iOS-only user suddenly enrolling an Android device).
+severity: Medium
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+queryFrequency: PT30M
+queryPeriod: P1D
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let LookbackPeriod = 24h;
+  let MinNewDevices  = 2;
+  StealthTalkAnomalousAuth_CL
+  | where TimeGenerated >= ago(LookbackPeriod)
+  | where EventType == "NewDeviceLogin"
+  | summarize
+      NewDeviceCount  = dcount(NewDeviceId),
+      NewDevices      = make_set(NewDeviceId),
+      NewDeviceOSList = make_set(NewDeviceOS),
+      FirstSeen       = min(TimeGenerated),
+      LastSeen        = max(TimeGenerated),
+      AppVersions     = make_set(AppVersion)
+    by UserId
+  | where NewDeviceCount >= MinNewDevices
+  | extend
+      AlertName    = "MultiNewDevicesRegistration",
+      AlertDetails = strcat(
+          "User ", UserId,
+          " registered ", NewDeviceCount, " new devices within 24 hours.",
+          " Device IDs: ", tostring(NewDevices), ".",
+          " Operating systems: ", tostring(NewDeviceOSList), "."
+      )
+  | project
+      TimeGenerated = LastSeen,
+      UserId, NewDeviceCount, NewDevices, NewDeviceOSList,
+      FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserId
+customDetails:
+  NewDeviceCount: NewDeviceCount
+  NewDevices: NewDevices
+  NewDeviceOSList: NewDeviceOSList
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+alertDetailsOverride:
+  alertDisplayNameFormat: 'StealthTalk: Multi New Devices — {{UserId}} ({{NewDeviceCount}} new devices)'
+  alertDescriptionFormat: '{{AlertDetails}}'
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled

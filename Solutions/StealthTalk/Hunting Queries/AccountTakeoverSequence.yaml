@@ -1,0 +1,44 @@
+id: d2e5f8a3-9c4b-4d7e-8f6a-3b2c4d5e6f7a
+name: StealthTalk - Account Takeover Sequence
+description: |
+  Detects the classic three-stage account-takeover pattern within a single 24-hour window
+  for the same StealthTalk user: an off-hours login (initial credential test), a new device
+  registration (attacker enrolling their own client), and a geo-anomaly login (attacker
+  authenticating from a different region). Any single one of these events is suspicious;
+  all three for the same account inside a day is high-confidence evidence of compromise.
+description-detailed: |
+  Joins three event-type subsets (OffHoursLogin, NewDeviceLogin, GeoAnomalyLogin) on UserId
+  and constrains the temporal window to ±24 hours. Returns one row per matching triple with
+  the new device ID, login country and source IP for triage.
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+tactics:
+  - InitialAccess
+  - Persistence
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let TimeWindow = 24h;
+  let offHours = StealthTalkAnomalousAuth_CL
+      | where EventType == "OffHoursLogin"
+      | project UserId, T_offhours = TimeGenerated;
+  let newDevice = StealthTalkAnomalousAuth_CL
+      | where EventType == "NewDeviceLogin"
+      | project UserId, T_device = TimeGenerated, NewDeviceId;
+  let geoAnomaly = StealthTalkAnomalousAuth_CL
+      | where EventType == "GeoAnomalyLogin"
+      | project UserId, T_geo = TimeGenerated, LoginCountry, IpAddress;
+  offHours
+  | join kind=inner newDevice  on UserId
+  | join kind=inner geoAnomaly on UserId
+  | where abs(datetime_diff('hour', T_offhours, T_device)) <= 24
+  | where abs(datetime_diff('hour', T_offhours, T_geo))   <= 24
+  | project UserId, T_offhours, T_device, T_geo, NewDeviceId, LoginCountry, IpAddress
+  | extend AlertName = "AccountTakeoverSequence", Severity = "Critical"
+  | distinct UserId, AlertName, Severity, LoginCountry, IpAddress
+version: 1.0.0

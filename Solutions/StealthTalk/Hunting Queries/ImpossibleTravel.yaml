@@ -1,0 +1,47 @@
+id: c1d4e7f2-8b3a-4c6d-9e5f-2a1b3c4d5e6f
+name: StealthTalk - Impossible Travel
+description: |
+  Detects a single StealthTalk user authenticating from two different countries within a
+  30-minute window — a strong indicator of a stolen credential, given that legitimate physical
+  travel between countries cannot occur on that timescale. Returns paired GeoAnomalyLogin
+  events ordered by elapsed time (smallest gap first), which makes it easy to spot the most
+  egregious cases at the top of the result set.
+description-detailed: |
+  Hunting query that joins the StealthTalk anomalous-auth table to itself on UserId, then
+  retains only pairs where LoginCountry differs and the events are within 30 minutes. Useful
+  for proactive threat-hunting when a SOC analyst wants to find compromised accounts that may
+  not have triggered a single-event detection.
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+query: |
+  StealthTalkAnomalousAuth_CL
+  | where EventType == "GeoAnomalyLogin"
+  | project TimeGenerated, UserId, LoginCountry, LoginCity, IpAddress
+  | join kind=inner (
+      StealthTalkAnomalousAuth_CL
+      | where EventType == "GeoAnomalyLogin"
+      | project TimeGenerated2 = TimeGenerated, UserId,
+                LoginCountry2 = LoginCountry, IpAddress2 = IpAddress
+    ) on UserId
+  | where LoginCountry != LoginCountry2
+  | where abs(datetime_diff('minute', TimeGenerated, TimeGenerated2)) <= 30
+  | where TimeGenerated < TimeGenerated2
+  | project
+      UserId,
+      FirstCountry   = LoginCountry,
+      SecondCountry  = LoginCountry2,
+      FirstTime      = TimeGenerated,
+      SecondTime     = TimeGenerated2,
+      MinutesBetween = datetime_diff('minute', TimeGenerated2, TimeGenerated),
+      FirstIP        = IpAddress,
+      SecondIP       = IpAddress2
+  | extend AlertName = "ImpossibleTravel"
+  | order by MinutesBetween asc
+version: 1.0.0

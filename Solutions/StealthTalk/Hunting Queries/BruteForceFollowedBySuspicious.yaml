@@ -1,0 +1,45 @@
+id: e3f6a9b4-ad5c-4e8f-9a7b-4c3d5e6f7a8b
+name: StealthTalk - Brute Force Followed By Suspicious Access
+description: |
+  Detects credential-stuffing or brute-force success: a `MultiFailLogin` event with 9 or more
+  failed attempts that is followed (within 2 hours) by either a `GeoAnomalyLogin` (login from
+  unusual location) or a `NewDeviceLogin` (login from new device) for the same user. Because
+  StealthTalk does not emit a "successful login" event in its anomalous-auth feed, the
+  presence of a subsequent anomaly event is the closest proxy for "the brute-force eventually
+  succeeded".
+description-detailed: |
+  Joins MultiFailLogin events to subsequent GeoAnomalyLogin or NewDeviceLogin events for the
+  same user, where the second event occurs strictly after the brute force and within 2 hours.
+  Each matching pair represents a high-confidence suspected post-compromise access.
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+  - T1078
+query: |
+  let bfWindow = 2h;
+  StealthTalkAnomalousAuth_CL
+  | where EventType == "MultiFailLogin"
+  | where PassedAttempts >= 9
+  | project UserId, BF_Time = TimeGenerated, DeviceId, PassedAttempts
+  | join kind=inner (
+      StealthTalkAnomalousAuth_CL
+      | where EventType in ("GeoAnomalyLogin", "NewDeviceLogin")
+      | project UserId, PostEvent_Time = TimeGenerated, PostEventType = EventType
+    ) on UserId
+  | where PostEvent_Time > BF_Time
+  | where datetime_diff('hour', PostEvent_Time, BF_Time) <= 2
+  | project
+      UserId,
+      BruteForceAt    = BF_Time,
+      Attempts        = PassedAttempts,
+      SuspectEventAt  = PostEvent_Time,
+      SuspectType     = PostEventType
+  | extend AlertName = "BruteForceFollowedBySuspiciousAccess"
+  | order by BruteForceAt desc
+version: 1.0.0
