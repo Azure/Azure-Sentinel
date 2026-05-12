@@ -1,0 +1,98 @@
+id: 3d36b19f-cd62-4522-8869-23cdd9cc0c9f
+name: MFA method registered from an IP address not seen in user sign-in history
+description: |
+  Hunting query that identifies MFA method registration events where the source IP
+  address has not been observed in the registering user's successful sign-in history
+  during the previous 30 days. An attacker who has obtained a user's credentials may
+  register a new MFA method (authenticator app, phone number, FIDO key) from an
+  attacker-controlled IP to establish persistent authentication access that survives
+  a password reset. The IP-baseline approach surfaces registrations from network
+  origins that are genuinely new for that specific user, rather than flagging all
+  MFA registrations indiscriminately.
+  This query requires both AuditLogs and SigninLogs. The baseline uses successful
+  interactive sign-ins over 30 days to build a per-user set of known IP addresses.
+  Any MFA registration from an IP outside that set, or from a user with no sign-in
+  history in the baseline window, is surfaced for analyst review.
+  Analysts must validate every result. Benign matches include users registering MFA
+  from a new home network, hotel or travel Wi-Fi, a new corporate office, or a VPN
+  exit node not previously used for sign-in.
+  This query is complementary to HighRiskSignInAroundAuthMethodOrDeviceRegistration,
+  which correlates MFA registration with high-risk sign-in events and requires
+  Entra ID P2 licensing. This query does not require P2 and uses IP novelty as the
+  anomaly signal instead of identity protection risk scores.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/authentication/concept-mfa-howitworks
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1556/006/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1556.006
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let ipLookback = starttime - 30d;
+  // Build per-user baseline of IPs from successful sign-ins over the past 30 days
+  let BaselineIPs =
+      SigninLogs
+      | where TimeGenerated between (ipLookback .. starttime)
+      | where ResultType == 0
+      | where isnotempty(IPAddress)
+      | extend UserUpn = tolower(UserPrincipalName)
+      | summarize KnownIPs = make_set(IPAddress) by UserUpn;
+  // MFA registration events in the query window
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "User registered security info"
+  | where Result =~ "success"
+  | extend UserUpn    = tolower(tostring(TargetResources[0].userPrincipalName))
+  | extend UserId     = tostring(TargetResources[0].id)
+  | extend MethodType = tostring(TargetResources[0].displayName)
+  | extend RegIp      = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | where isnotempty(RegIp) and isnotempty(UserUpn)
+  // Join with IP baseline
+  | join kind=leftouter BaselineIPs on $left.UserUpn == $right.UserUpn
+  // Flag registrations from IPs not present in the baseline, or users with no baseline at all
+  | where isnull(KnownIPs) or not(set_has_element(KnownIPs, RegIp))
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      TimeGenerated,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      UserId,
+      MethodType,
+      RegIp,
+      KnownIPCount = array_length(KnownIPs),
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RegIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
