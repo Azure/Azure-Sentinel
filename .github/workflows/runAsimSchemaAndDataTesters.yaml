@@ -3,7 +3,7 @@
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize, labeled]
+    types: [labeled, synchronize]
     branches:
       - master
     paths:
@@ -78,31 +78,38 @@ jobs:
             labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
             log_info "Available labels: $labels"
             
-            if echo "$labels" | grep -q "SafeToRun"; then
-              log_success "'SafeToRun' label found - checking if re-approval needed"
+            # For fork PRs, only approve on 'labeled' events where SafeToRun is being added
+            trigger_event="${{ github.event.action }}"
+            log_info "Workflow triggered by event: $trigger_event"
+            
+            if [ "$trigger_event" = "labeled" ]; then
+              # Check if the label being added is 'SafeToRun'
+              label_added="${{ github.event.label.name }}"
+              log_info "Label event: $label_added"
               
-              # Check if this workflow was triggered by new commits (synchronize event)
-              trigger_event="${{ github.event.action }}"
-              log_info "Workflow triggered by: $trigger_event"
-              
-              if [ "$trigger_event" = "synchronize" ]; then
-                log_info "New commits detected on fork PR with existing 'SafeToRun' label"
-                log_info "Maintainer must remove and re-add the 'SafeToRun' label for security"
-                echo "approved=false" >> $GITHUB_OUTPUT
-                echo "needs_approval=false" >> $GITHUB_OUTPUT
-                echo "comment_needed=true" >> $GITHUB_OUTPUT
-                exit 1
-              else
-                log_success "Label approval granted (no new commits)"
+              if [ "$label_added" = "SafeToRun" ]; then
+                log_success "SafeToRun label being added on fork PR - approving"
                 echo "approved=true" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=false" >> $GITHUB_OUTPUT
+              else
+                log_info "Different label applied, not SafeToRun"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
               fi
-            else
-              log_info "'SafeToRun' label not found - approval required"
+            elif [ "$trigger_event" = "synchronize" ]; then
+              log_info "New commits detected (synchronize event) - SafeToRun label will be auto-removed"
               echo "approved=false" >> $GITHUB_OUTPUT
-              echo "needs_approval=true" >> $GITHUB_OUTPUT
-              echo "comment_needed=true" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
+              echo "should_remove_label=true" >> $GITHUB_OUTPUT
+              exit 1
+            else
+              log_info "Unexpected event for fork PR: $trigger_event"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
               exit 1
             fi
           else
@@ -111,6 +118,51 @@ jobs:
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Auto-remove SafeToRun label on synchronize for fork PRs
+        if: |
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'synchronize' &&
+          steps.check-approval.outputs.should_remove_label == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            try {
+              log('info', 'Attempting to remove stale SafeToRun label on synchronize event');
+              
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+              });
+
+              const hasLabel = pr.labels.some(label => label.name === 'SafeToRun');
+              
+              if (hasLabel) {
+                log('info', 'SafeToRun label found, removing it...');
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'SafeToRun'
+                });
+                log('success', 'SafeToRun label removed due to new commits');
+              } else {
+                log('info', 'SafeToRun label not present, nothing to remove');
+              }
+            } catch (error) {
+              log('error', `Failed to remove label: ${error.message}`);
+              if (error.status === 404) {
+                log('info', 'Label or PR not found, continuing...');
+              } else {
+                throw error;
+              }
+            }
 
       - name: Prevent fork modifications to test infrastructure
         if: github.event.pull_request.head.repo.fork == true
@@ -196,16 +248,16 @@ jobs:
               *🤖 Automated security check • Created: ${timestamp}*  
               *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
               } else {
-                // Re-approval scenario (new commits with existing label)
+                // Re-approval scenario (new commits OR pr edits with existing label)
                 commentBody = `🔒 **Security Re-approval Required**
               
-              ⚠️ **New commits detected**: This fork PR has been updated with new commits while the \`SafeToRun\` label was present.
+              ⚠️ **Fork PR verification needed**: This fork PR has been updated.
               
               **For security, a maintainer must:**
               1. 📝 Review the latest commits carefully for any security concerns
-              2. ✅ **Verify file types** - Ensure new commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
+              2. ✅ **Verify file types** - Ensure commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
               3. 🏷️ Remove the \`SafeToRun\` label
-              4. 🏷️ Re-add the \`SafeToRun\` label if the new commits are safe
+              4. 🏷️ Re-add the \`SafeToRun\` label if the latest commits are safe
               
               This simple process ensures that all commits have been properly reviewed before testing with repository secrets.
               
@@ -239,7 +291,10 @@ jobs:
   Run-ASim-TemplateValidation:
     name: Run ASim Template Validation tests
     needs: security-gate
-    if: needs.security-gate.outputs.approved == 'true'
+    if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout pull request branch
@@ -288,6 +343,9 @@ jobs:
   Run-ASim-Sample-Data-Ingest:
     needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
+    if: |
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -349,6 +407,9 @@ jobs:
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
+    if: |
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     permissions:
       id-token: write

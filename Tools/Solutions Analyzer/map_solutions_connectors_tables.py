@@ -7561,6 +7561,22 @@ def main() -> None:
         found_connector_ids: Set[str] = set()
         found_connector_titles: Set[str] = set()
 
+        # Track connector titles seen from non-azuredeploy definition files per directory.
+        # This is used to deduplicate CCP v2 azuredeploy wrapper files that produce
+        # phantom connector IDs. In CCP v2 folders, two files typically coexist:
+        #   1. *_DataConnectorDefinition.json — the actual definition with a literal "id"
+        #   2. azuredeploy_*_poller_connector.json — an ARM deployment wrapper whose "id"
+        #      is an ARM variable reference (e.g. "[variables('...')]").
+        # Both describe the SAME connector. But because the ARM template's "id" cannot be
+        # resolved, find_connector_objects() generates a synthetic ID from the title, which
+        # differs from the definition file's literal ID. This causes one logical connector
+        # to appear as two in the output.
+        # Fix: when an azuredeploy file produces a connector with id_generated=True and the
+        # same (directory, title) was already seen from a non-azuredeploy file with a literal
+        # ID, skip the azuredeploy entry.
+        # Key: (parent_directory, connector_title) -> literal connector_id
+        definition_title_by_dir: Dict[Tuple[str, str], str] = {}
+
         for data_connectors_dir in data_connectors_dirs:
             if not data_connectors_dir.exists():
                 continue
@@ -7591,6 +7607,47 @@ def main() -> None:
                 connector_entries = find_connector_objects(data)
                 if not connector_entries:
                     continue
+
+                # --- Deduplicate CCP v2 azuredeploy wrapper connectors ---
+                # Phase 1: Register titles from non-azuredeploy files (literal IDs)
+                is_azuredeploy_file = json_path.name.lower().startswith("azuredeploy")
+                parent_dir_key = str(json_path.parent)
+                if not is_azuredeploy_file:
+                    for entry in connector_entries:
+                        if not entry.get("id_generated", False):
+                            title = entry.get("title", "")
+                            if title:
+                                definition_title_by_dir[(parent_dir_key, title)] = entry.get("id", "")
+
+                # Phase 2: Filter out azuredeploy entries that duplicate a definition file
+                if is_azuredeploy_file:
+                    filtered_entries = []
+                    for entry in connector_entries:
+                        if entry.get("id_generated", False):
+                            title = entry.get("title", "")
+                            key = (parent_dir_key, title)
+                            if key in definition_title_by_dir:
+                                real_id = definition_title_by_dir[key]
+                                synthetic_id = entry.get("id", "")
+                                add_issue(
+                                    issues,
+                                    solution_name=solution_info["solution_name"],
+                                    solution_folder=solution_info["solution_folder"],
+                                    connector_id=synthetic_id,
+                                    connector_title=title,
+                                    connector_publisher=entry.get("publisher", ""),
+                                    relevant_file=safe_relative(json_path, data_connectors_dir),
+                                    reason="azuredeploy_duplicate_skipped",
+                                    details=f"Skipped azuredeploy wrapper connector '{synthetic_id}' "
+                                            f"(synthetic ID from title); same title already registered "
+                                            f"from definition file with literal ID '{real_id}'.",
+                                )
+                                continue  # Skip this duplicate entry
+                        filtered_entries.append(entry)
+                    connector_entries = filtered_entries
+                    if not connector_entries:
+                        continue
+
                 has_valid_connector = True
                 
                 # === Table extraction with priority ordering ===
