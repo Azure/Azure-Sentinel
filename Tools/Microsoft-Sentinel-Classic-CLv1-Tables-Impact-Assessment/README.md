@@ -11,7 +11,7 @@ Microsoft Sentinel before the
 [HTTP Data Collector API retirement on **September 14, 2026**](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate).
 
 ## Authors
-**Toby Goulden**, **Sreedhar Ande**
+**Toby G**, **Sreedhar Ande**
 
 ## Download and run the PowerShell script
 

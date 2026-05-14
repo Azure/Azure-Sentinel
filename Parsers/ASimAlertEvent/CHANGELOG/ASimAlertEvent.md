@@ -1,8 +1,12 @@
 # Changelog for ASimAlertEvent.yaml
 
-## Version 0.1.1
+## Version 0.1.2
 
 - (2026-04-22) Included Bitdefender Gravity Zone alerts in results - [PR #13330](https://github.com/Azure/Azure-Sentinel/pull/13330)
+
+## Version 0.1.1
+
+- (2026-03-04) Cisco Secure Endpoint - AlertEvent ASIM Parser - [PR #13741](https://github.com/Azure/Azure-Sentinel/pull/13741)
 
 ## Version 0.1.0
 

@@ -1,3 +1,12 @@
+## 2.2.0
+- Adds ability to use either new or old configuration values.
+
+## 2.1.2
+- Documentation updates
+
+## 2.1.1
+- Improved efficiency.
+
 ## 2.1.0
 - Fixed event normalization.
 
