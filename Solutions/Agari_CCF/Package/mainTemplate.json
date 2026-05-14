@@ -1,0 +1,1768 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Agari",
+    "comments": "Solution template for Agari_CCF"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Agari_CCF",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "agari.Agari_MSS",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "AgariConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "AgariConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Fortra Agari Data Connector (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AgariConnector",
+                  "title": "Fortra Agari Data Connector (via Codeless Connector Framework)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [Fortra Agari Data Connector](https://www.agari.com/) allows ingesting logs from Fortra Agari APIs into Microsoft Sentinel. This connector integrates with Agari Brand Protection (BP), Phishing Defense (APD), and Phishing Response (APR) products. It supports DCR-based ingestion time transformations for efficient query execution. Refer to [Agari API documentation](https://developers.agari.com/agari-platform/reference/overview) for more information.",
+                  "graphQueriesTableName": "AgariBPAlertsLog_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total Brand Protection alert logs received",
+                      "legend": "Agari Brand Protection Alert Logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    },
+                    {
+                      "metricName": "Total Phishing Defense policy logs received",
+                      "legend": "Agari Phishing Defense Policy Logs",
+                      "baseQuery": "AgariAPDPolicyLog_CL"
+                    },
+                    {
+                      "metricName": "Total Phishing Defense threat category logs received",
+                      "legend": "Agari Phishing Defense Threat Category Logs",
+                      "baseQuery": "AgariAPDTCLog_CL"
+                    },
+                    {
+                      "metricName": "Total Brand Protection threat feed URL submissions received",
+                      "legend": "Agari Brand Protection Threat Feed Submissions",
+                      "baseQuery": "AgariBPThreatFeedSubs_CL"
+                    },
+                    {
+                      "metricName": "Total Phishing Response investigation attachments received",
+                      "legend": "Agari Phishing Response Investigation Attachments",
+                      "baseQuery": "AgariAPRInvestigationsLog_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of Agari Brand Protection alert logs",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    },
+                    {
+                      "description": "Get sample of Agari Phishing Defense policy logs",
+                      "query": "AgariAPDPolicyLog_CL\n | take 10"
+                    },
+                    {
+                      "description": "Get sample of Agari Phishing Defense threat category logs",
+                      "query": "AgariAPDTCLog_CL\n | take 10"
+                    },
+                    {
+                      "description": "Get sample of Agari Brand Protection threat feed URL submissions",
+                      "query": "AgariBPThreatFeedSubs_CL\n | take 10"
+                    },
+                    {
+                      "description": "Get sample of Agari Phishing Response investigation attachments",
+                      "query": "AgariAPRInvestigationsLog_CL\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "AgariAPDPolicyLog_CL",
+                      "lastDataReceivedQuery": "AgariAPDPolicyLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "AgariAPDTCLog_CL",
+                      "lastDataReceivedQuery": "AgariAPDTCLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "AgariBPThreatFeedSubs_CL",
+                      "lastDataReceivedQuery": "AgariBPThreatFeedSubs_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "AgariAPRInvestigationsLog_CL",
+                      "lastDataReceivedQuery": "AgariAPRInvestigationsLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Configuration steps for the Agari API",
+                      "description": "Follow the instructions below to obtain your Agari API credentials.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 1. Retrieve API URL\nLog in to your Agari Console and navigate to the API section. The default API URL is https://api.agari.com"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 2. Retrieve Client Credentials\nObtain your Client ID and Client Secret from the API credentials section in your Agari account. Note that different Agari products (Brand Protection, Phishing Defense, Phishing Response) may require separate API credentials."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### 3. Select Data Streams\nChoose which Agari data streams you want to collect. You can select one or more streams based on your subscription and requirements."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Base API URL",
+                            "placeholder": "https://api.agari.com",
+                            "type": "text",
+                            "name": "apiUrl",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client ID",
+                            "placeholder": "Your Client ID",
+                            "type": "text",
+                            "name": "clientId",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Client Secret",
+                            "placeholder": "Your Client Secret",
+                            "type": "password",
+                            "name": "clientSecret",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Data Streams to Collect",
+                            "name": "enabledPollers",
+                            "options": [
+                              {
+                                "key": "BPAlerts",
+                                "text": "Brand Protection Alerts (with nested details)"
+                              },
+                              {
+                                "key": "APDPolicy",
+                                "text": "Phishing Defense Policy Events"
+                              },
+                              {
+                                "key": "APDThreatCategories",
+                                "text": "Phishing Defense Threat Categories"
+                              },
+                              {
+                                "key": "BPThreatFeedSubmissions",
+                                "text": "Brand Protection Threat Feed URL Submissions (IoC)"
+                              },
+                              {
+                                "key": "APRInvestigations",
+                                "text": "Phishing Response Investigation Attachments"
+                              }
+                            ],
+                            "isMultiSelect": true,
+                            "defaultAllSelected": true,
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Agari"
+                },
+                "support": {
+                  "name": "Agari",
+                  "tier": "Partner",
+                  "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AgariDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-AgariBPAlertsLog_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "long"
+                      },
+                      {
+                        "name": "alert_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "last_notified_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "resolved_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "updated_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "summary",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "spf_fail_hosts",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "dkim_fail_hosts",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "links",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-AgariAPDPolicyLog_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "long"
+                      },
+                      {
+                        "name": "alert_definition_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "updated_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "summary",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "policy_action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "policy_enabled",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "notified_original_recipients",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "admin_recipients",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-AgariAPDTCLog_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "to",
+                        "type": "string"
+                      },
+                      {
+                        "name": "from",
+                        "type": "string"
+                      },
+                      {
+                        "name": "from_domain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attack_types",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "timestamp_ms",
+                        "type": "long"
+                      },
+                      {
+                        "name": "date",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "subject",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sbrs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "domain_reputation",
+                        "type": "int"
+                      },
+                      {
+                        "name": "policy_ids",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "domain_tags",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "has_attachment",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "message_details_link",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attachment_sha256",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "attachment_extensions",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "attachment_filenames",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-AgariBPThreatFeedSubs_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "long"
+                      },
+                      {
+                        "name": "uri",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "threat_feed_id",
+                        "type": "long"
+                      }
+                    ]
+                  },
+                  "Custom-AgariAPRInvestigationsLog_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "filename",
+                        "type": "string"
+                      },
+                      {
+                        "name": "content_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "size",
+                        "type": "long"
+                      },
+                      {
+                        "name": "sha256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "url",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-AgariBPAlertsLog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AgariBPAlertsLog_CL",
+                    "transformKql": "source | extend TimeGenerated = now() , Id = ['id'] , AlertType = ['alert_type'] , LastNotifiedAt = ['last_notified_at'] , ResolvedAt = ['resolved_at'] , CreatedAt = ['created_at'] , UpdatedAt = ['updated_at'] , Summary = ['summary'] , Domain = ['domain'] , SpfFailHosts = ['spf_fail_hosts'] , DkimFailHosts = ['dkim_fail_hosts'] , Links = ['links'] | project TimeGenerated , Id , AlertType , LastNotifiedAt , ResolvedAt , CreatedAt , UpdatedAt , Summary , Domain , SpfFailHosts , DkimFailHosts , Links"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AgariAPDPolicyLog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AgariAPDPolicyLog_CL",
+                    "transformKql": "source | extend TimeGenerated = now() , Id = ['id'] , AlertDefinitionName = ['alert_definition_name'] , CreatedAt = ['created_at'] , UpdatedAt = ['updated_at'] , Summary = ['summary'] , PolicyAction = ['policy_action'] , PolicyEnabled = ['policy_enabled'] , NotifiedOriginalRecipients = ['notified_original_recipients'] , AdminRecipients = ['admin_recipients'] | project TimeGenerated , Id , AlertDefinitionName , CreatedAt , UpdatedAt , Summary , PolicyAction , PolicyEnabled , NotifiedOriginalRecipients , AdminRecipients"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AgariAPDTCLog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AgariAPDTCLog_CL",
+                    "transformKql": "source | extend TimeGenerated = now() , Id = ['id'] , To = ['to'] , From = ['from'] , FromDomain = ['from_domain'] , AttackTypes = ['attack_types'] , TimestampMs = ['timestamp_ms'] , MessageDate = ['date'] , Subject = ['subject'] , Ip = ['ip'] , Sbrs = ['sbrs'] , DomainReputation = ['domain_reputation'] , PolicyIds = ['policy_ids'] , DomainTags = ['domain_tags'] , HasAttachment = ['has_attachment'] , MessageDetailsLink = ['message_details_link'] , AttachmentSha256 = ['attachment_sha256'] , AttachmentExtensions = ['attachment_extensions'] , AttachmentFilenames = ['attachment_filenames'] | project TimeGenerated , Id , To , From , FromDomain , AttackTypes , TimestampMs , MessageDate , Subject , Ip , Sbrs , DomainReputation , PolicyIds , DomainTags , HasAttachment , MessageDetailsLink , AttachmentSha256 , AttachmentExtensions , AttachmentFilenames"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AgariBPThreatFeedSubs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AgariBPThreatFeedSubs_CL",
+                    "transformKql": "source | extend TimeGenerated = now() , Id = ['id'] , Uri = ['uri'] , CreatedAt = ['created_at'] , ThreatFeedId = ['threat_feed_id'] | project TimeGenerated , Id , Uri , CreatedAt , ThreatFeedId"
+                  },
+                  {
+                    "streams": [
+                      "Custom-AgariAPRInvestigationsLog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AgariAPRInvestigationsLog_CL",
+                    "transformKql": "source | extend TimeGenerated = now() , Id = ['id'] , Filename = ['filename'] , ContentType = ['content_type'] , Size = ['size'] , Sha256 = ['sha256'] , CreatedAt = ['created_at'] , AttachmentType = ['type'] , Url = ['url'] | project TimeGenerated , Id , Filename , ContentType , Size , Sha256 , CreatedAt , AttachmentType , Url"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "AgariAPRInvestigationsLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AgariAPRInvestigationsLog_CL",
+                  "description": "Agari Phishing Response investigation attachments",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Id",
+                      "type": "string",
+                      "description": "Unique identifier for the investigation attachment"
+                    },
+                    {
+                      "name": "Filename",
+                      "type": "string",
+                      "description": "Original filename of the attachment"
+                    },
+                    {
+                      "name": "ContentType",
+                      "type": "string",
+                      "description": "MIME content type of the attachment (e.g. application/pdf, message/rfc822)"
+                    },
+                    {
+                      "name": "Size",
+                      "type": "long",
+                      "description": "File size of the attachment in bytes"
+                    },
+                    {
+                      "name": "Sha256",
+                      "type": "string",
+                      "description": "SHA-256 hash of the attachment for threat intelligence correlation"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the attachment was added to the investigation"
+                    },
+                    {
+                      "name": "AttachmentType",
+                      "type": "string",
+                      "description": "Category of attachment (e.g. screenshot, email_source, pcap)"
+                    },
+                    {
+                      "name": "Url",
+                      "type": "string",
+                      "description": "URL to download the attachment from the Agari console"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AgariAPDPolicyLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AgariAPDPolicyLog_CL",
+                  "description": "Agari Phishing Defense policy events",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Id",
+                      "type": "long",
+                      "description": "Unique identifier for the policy event"
+                    },
+                    {
+                      "name": "AlertDefinitionName",
+                      "type": "string",
+                      "description": "Name of the alert definition associated with the policy event"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the policy event was created"
+                    },
+                    {
+                      "name": "UpdatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the policy event was last updated"
+                    },
+                    {
+                      "name": "Summary",
+                      "type": "boolean",
+                      "description": "Policy Event Summary flag"
+                    },
+                    {
+                      "name": "PolicyAction",
+                      "type": "string",
+                      "description": "Action taken by the policy (deliver, mark-spam, move, inbox, delete, none)"
+                    },
+                    {
+                      "name": "PolicyEnabled",
+                      "type": "boolean",
+                      "description": "Whether the policy that triggered this event is enabled"
+                    },
+                    {
+                      "name": "NotifiedOriginalRecipients",
+                      "type": "boolean",
+                      "description": "Whether the original email recipients were notified about this policy event"
+                    },
+                    {
+                      "name": "AdminRecipients",
+                      "type": "dynamic",
+                      "description": "Array of admin email addresses notified about this policy event"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AgariAPDTCLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AgariAPDTCLog_CL",
+                  "description": "Agari Phishing Defense threat category messages",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Id",
+                      "type": "string",
+                      "description": "Unique identifier for the message (UUID)"
+                    },
+                    {
+                      "name": "To",
+                      "type": "string",
+                      "description": "Recipient email address"
+                    },
+                    {
+                      "name": "From",
+                      "type": "string",
+                      "description": "Sender email address"
+                    },
+                    {
+                      "name": "FromDomain",
+                      "type": "string",
+                      "description": "Domain of the sender email address"
+                    },
+                    {
+                      "name": "AttackTypes",
+                      "type": "dynamic",
+                      "description": "Array of detected attack types (e.g. phishing, credential_theft)"
+                    },
+                    {
+                      "name": "TimestampMs",
+                      "type": "long",
+                      "description": "Timestamp in milliseconds when the message was processed"
+                    },
+                    {
+                      "name": "MessageDate",
+                      "type": "datetime",
+                      "description": "Date and time the message was received"
+                    },
+                    {
+                      "name": "Subject",
+                      "type": "string",
+                      "description": "Email subject line"
+                    },
+                    {
+                      "name": "Ip",
+                      "type": "string",
+                      "description": "IP address of the sending mail server"
+                    },
+                    {
+                      "name": "Sbrs",
+                      "type": "string",
+                      "description": "SenderBase Reputation Score of the sending IP"
+                    },
+                    {
+                      "name": "DomainReputation",
+                      "type": "int",
+                      "description": "Reputation score of the sending domain"
+                    },
+                    {
+                      "name": "PolicyIds",
+                      "type": "dynamic",
+                      "description": "Array of policy IDs that matched this message"
+                    },
+                    {
+                      "name": "DomainTags",
+                      "type": "dynamic",
+                      "description": "Array of tags applied to the sending domain"
+                    },
+                    {
+                      "name": "HasAttachment",
+                      "type": "boolean",
+                      "description": "Whether the message has attachments"
+                    },
+                    {
+                      "name": "MessageDetailsLink",
+                      "type": "string",
+                      "description": "URL to view the message details in the Agari console"
+                    },
+                    {
+                      "name": "AttachmentSha256",
+                      "type": "dynamic",
+                      "description": "Array of SHA-256 hashes of message attachments"
+                    },
+                    {
+                      "name": "AttachmentExtensions",
+                      "type": "dynamic",
+                      "description": "Array of file extensions of message attachments"
+                    },
+                    {
+                      "name": "AttachmentFilenames",
+                      "type": "dynamic",
+                      "description": "Array of filenames of message attachments"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AgariBPAlertsLog_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AgariBPAlertsLog_CL",
+                  "description": "Agari Brand Protection alert events",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Id",
+                      "type": "long",
+                      "description": "Unique identifier for the alert"
+                    },
+                    {
+                      "name": "AlertType",
+                      "type": "string",
+                      "description": "Type of alert (e.g., authentication_spike, phishing)"
+                    },
+                    {
+                      "name": "LastNotifiedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the alert was last notified"
+                    },
+                    {
+                      "name": "ResolvedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the alert was resolved"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the alert was created"
+                    },
+                    {
+                      "name": "UpdatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the alert was last updated"
+                    },
+                    {
+                      "name": "Summary",
+                      "type": "string",
+                      "description": "Human-readable summary of the alert"
+                    },
+                    {
+                      "name": "Domain",
+                      "type": "string",
+                      "description": "Domain associated with the alert"
+                    },
+                    {
+                      "name": "SpfFailHosts",
+                      "type": "dynamic",
+                      "description": "Array of hosts with SPF authentication failures"
+                    },
+                    {
+                      "name": "DkimFailHosts",
+                      "type": "dynamic",
+                      "description": "Array of hosts with DKIM authentication failures"
+                    },
+                    {
+                      "name": "Links",
+                      "type": "dynamic",
+                      "description": "Related API links for failure stats and samples"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AgariBPThreatFeedSubs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AgariBPThreatFeedSubs_CL",
+                  "description": "Agari Brand Protection threat feed URL submissions (IoC)",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Id",
+                      "type": "long",
+                      "description": "Unique identifier for the threat feed submission"
+                    },
+                    {
+                      "name": "Uri",
+                      "type": "string",
+                      "description": "URL IoC extracted from the threat feed submission"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "datetime",
+                      "description": "Timestamp when the submission was created"
+                    },
+                    {
+                      "name": "ThreatFeedId",
+                      "type": "long",
+                      "description": "Identifier of the parent threat feed"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AgariConnector",
+          "title": "Fortra Agari Data Connector (via Codeless Connector Framework)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [Fortra Agari Data Connector](https://www.agari.com/) allows ingesting logs from Fortra Agari APIs into Microsoft Sentinel. This connector integrates with Agari Brand Protection (BP), Phishing Defense (APD), and Phishing Response (APR) products. It supports DCR-based ingestion time transformations for efficient query execution. Refer to [Agari API documentation](https://developers.agari.com/agari-platform/reference/overview) for more information.",
+          "graphQueriesTableName": "AgariBPAlertsLog_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total Brand Protection alert logs received",
+              "legend": "Agari Brand Protection Alert Logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            },
+            {
+              "metricName": "Total Phishing Defense policy logs received",
+              "legend": "Agari Phishing Defense Policy Logs",
+              "baseQuery": "AgariAPDPolicyLog_CL"
+            },
+            {
+              "metricName": "Total Phishing Defense threat category logs received",
+              "legend": "Agari Phishing Defense Threat Category Logs",
+              "baseQuery": "AgariAPDTCLog_CL"
+            },
+            {
+              "metricName": "Total Brand Protection threat feed URL submissions received",
+              "legend": "Agari Brand Protection Threat Feed Submissions",
+              "baseQuery": "AgariBPThreatFeedSubs_CL"
+            },
+            {
+              "metricName": "Total Phishing Response investigation attachments received",
+              "legend": "Agari Phishing Response Investigation Attachments",
+              "baseQuery": "AgariAPRInvestigationsLog_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of Agari Brand Protection alert logs",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            },
+            {
+              "description": "Get sample of Agari Phishing Defense policy logs",
+              "query": "AgariAPDPolicyLog_CL\n | take 10"
+            },
+            {
+              "description": "Get sample of Agari Phishing Defense threat category logs",
+              "query": "AgariAPDTCLog_CL\n | take 10"
+            },
+            {
+              "description": "Get sample of Agari Brand Protection threat feed URL submissions",
+              "query": "AgariBPThreatFeedSubs_CL\n | take 10"
+            },
+            {
+              "description": "Get sample of Agari Phishing Response investigation attachments",
+              "query": "AgariAPRInvestigationsLog_CL\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "AgariAPDPolicyLog_CL",
+              "lastDataReceivedQuery": "AgariAPDPolicyLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "AgariAPDTCLog_CL",
+              "lastDataReceivedQuery": "AgariAPDTCLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "AgariBPThreatFeedSubs_CL",
+              "lastDataReceivedQuery": "AgariBPThreatFeedSubs_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "AgariAPRInvestigationsLog_CL",
+              "lastDataReceivedQuery": "AgariAPRInvestigationsLog_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Configuration steps for the Agari API",
+              "description": "Follow the instructions below to obtain your Agari API credentials.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 1. Retrieve API URL\nLog in to your Agari Console and navigate to the API section. The default API URL is https://api.agari.com"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 2. Retrieve Client Credentials\nObtain your Client ID and Client Secret from the API credentials section in your Agari account. Note that different Agari products (Brand Protection, Phishing Defense, Phishing Response) may require separate API credentials."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### 3. Select Data Streams\nChoose which Agari data streams you want to collect. You can select one or more streams based on your subscription and requirements."
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Base API URL",
+                    "placeholder": "https://api.agari.com",
+                    "type": "text",
+                    "name": "apiUrl",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client ID",
+                    "placeholder": "Your Client ID",
+                    "type": "text",
+                    "name": "clientId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client Secret",
+                    "placeholder": "Your Client Secret",
+                    "type": "password",
+                    "name": "clientSecret",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Data Streams to Collect",
+                    "name": "enabledPollers",
+                    "options": [
+                      {
+                        "key": "BPAlerts",
+                        "text": "Brand Protection Alerts (with nested details)"
+                      },
+                      {
+                        "key": "APDPolicy",
+                        "text": "Phishing Defense Policy Events"
+                      },
+                      {
+                        "key": "APDThreatCategories",
+                        "text": "Phishing Defense Threat Categories"
+                      },
+                      {
+                        "key": "BPThreatFeedSubmissions",
+                        "text": "Brand Protection Threat Feed URL Submissions (IoC)"
+                      },
+                      {
+                        "key": "APRInvestigations",
+                        "text": "Phishing Response Investigation Attachments"
+                      }
+                    ],
+                    "isMultiSelect": true,
+                    "defaultAllSelected": true,
+                    "required": true
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Agari"
+        },
+        "support": {
+          "name": "Agari",
+          "tier": "Partner",
+          "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Fortra Agari Data Connector (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Fortra Agari Data Connector (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiUrl": {
+              "defaultValue": "apiUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "enabledPollers": {
+              "defaultValue": "enabledPollers",
+              "type": "array"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Agari"
+                },
+                "support": {
+                  "name": "Agari",
+                  "tier": "Partner",
+                  "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'BPAlertsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/oauth/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/alert_events')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 5,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "AgariSentinel BP_Integration/v1.0"
+                  },
+                  "queryParameters": {
+                    "start_date": "{_QueryWindowStartTime}",
+                    "end_date": "{_QueryWindowEndTime}",
+                    "fields": "id",
+                    "sort": "created_at ASC"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.alert_events[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 200,
+                  "pageSizeParameterName": "limit"
+                },
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "bp_alert_details",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project id_placeholder = tostring(res.id)"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "bp_alert_details": {
+                    "shouldJoinNestedData": false,
+                    "request": {
+                      "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/alert_events/$id_placeholder$')]",
+                      "httpMethod": "GET",
+                      "rateLimitQPS": 1,
+                      "queryWindowInMin": 5,
+                      "retryCount": 5,
+                      "timeoutInSeconds": 40,
+                      "logResponseContent": true,
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "AgariSentinel BP_Integration/v1.0"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.alert_event"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                },
+                "connectorDefinitionName": "AgariConnector",
+                "dataType": "AgariBPAlertsLog_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AgariBPAlertsLog_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enabledPollers'), 'BPAlerts')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'APDPolicyPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/v1/ep/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/ep/policy_events')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 5,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "AgariSentinel APD_Integration/v1.0"
+                  },
+                  "queryParameters": {
+                    "start_date": "{_QueryWindowStartTime}",
+                    "end_date": "{_QueryWindowEndTime}",
+                    "sort": "created_at DESC",
+                    "policy_enabled": "true"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.alert_events[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 200,
+                  "pageSizeParameterName": "limit"
+                },
+                "connectorDefinitionName": "AgariConnector",
+                "dataType": "AgariAPDPolicyLog_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AgariAPDPolicyLog_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enabledPollers'), 'APDPolicy')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'APDThreatCategoriesPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/v1/ep/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/ep/messages')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 5,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "AgariSentinel APD_Integration/v1.0"
+                  },
+                  "queryParameters": {
+                    "start_date": "{_QueryWindowStartTime}",
+                    "end_date": "{_QueryWindowEndTime}",
+                    "sort": "timestamp_ms DESC"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.messages"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 200,
+                  "pageSizeParameterName": "limit"
+                },
+                "connectorDefinitionName": "AgariConnector",
+                "dataType": "AgariAPDTCLog_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AgariAPDTCLog_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enabledPollers'), 'APDThreatCategories')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'BPThreatFeedSubmissionsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/oauth/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/threat_feeds')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 5,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "AgariSentinel BP_Integration/v1.0"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.threat_feeds[*]"
+                  ],
+                  "format": "json"
+                },
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "bp_threat_feed_submissions",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project id_placeholder = tostring(res.id)"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "bp_threat_feed_submissions": {
+                    "shouldJoinNestedData": false,
+                    "request": {
+                      "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/cp/threat_feeds/$id_placeholder$/submissions?start_date={_QueryWindowStartTime}&end_date={_QueryWindowEndTime}')]",
+                      "httpMethod": "GET",
+                      "rateLimitQPS": 1,
+                      "queryWindowInMin": 5,
+                      "retryCount": 5,
+                      "timeoutInSeconds": 40,
+                      "logResponseContent": true,
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "AgariSentinel BP_Integration/v1.0"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.threat_feed_submissions[*]"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                },
+                "connectorDefinitionName": "AgariConnector",
+                "dataType": "AgariBPThreatFeedSubs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AgariBPThreatFeedSubs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enabledPollers'), 'BPThreatFeedSubmissions')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'APRInvestigationsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[concat(parameters('apiUrl'),'/v1/apr/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/apr/investigations')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 5,
+                  "timeoutInSeconds": 40,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "AgariSentinel APR_Integration/v1.0"
+                  },
+                  "queryParameters": {
+                    "start_date": "{_QueryWindowStartTime}",
+                    "end_date": "{_QueryWindowEndTime}",
+                    "classification": "malicious",
+                    "sort": "created_at ASC"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.investigations[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 200,
+                  "pageSizeParameterName": "limit"
+                },
+                "stepInfo": {
+                  "stepType": "Nested",
+                  "nextSteps": [
+                    {
+                      "stepId": "apr_investigation_attachments",
+                      "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project id_placeholder = tostring(res.id)"
+                    }
+                  ]
+                },
+                "stepCollectorConfigs": {
+                  "apr_investigation_attachments": {
+                    "shouldJoinNestedData": false,
+                    "request": {
+                      "apiEndpoint": "[[concat(parameters('apiUrl'),'/v1/apr/investigations/$id_placeholder$/attachments')]",
+                      "httpMethod": "GET",
+                      "rateLimitQPS": 1,
+                      "queryWindowInMin": 5,
+                      "retryCount": 5,
+                      "timeoutInSeconds": 40,
+                      "logResponseContent": true,
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "AgariSentinel APR_Integration/v1.0"
+                      }
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$.attachments[*]"
+                      ],
+                      "format": "json"
+                    }
+                  }
+                },
+                "connectorDefinitionName": "AgariConnector",
+                "dataType": "AgariAPRInvestigationsLog_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AgariAPRInvestigationsLog_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              },
+              "condition": "[[contains(parameters('enabledPollers'), 'APRInvestigations')]"
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Agari_CCF",
+        "publisherDisplayName": "Agari",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Agari_CCF/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Agari Phishing Defense and Brand Protection Solution for Microsoft Azure Sentinel makes it easy to connect Agari email threat data to the Microsoft Sentinel SOAR, improving visibility into email threats, accelerating incident response, and driving SOC efficiency. The Agari Data Connector included in the solution supports every Agari product: <a href=\"https://www.agari.com/insights/solution-briefs/agari-brand-protection/\">Agari Brand Protection</a>, <a href=\"https://www.agari.com/products/phishing-defense/\">Agari Phishing Defense</a>, and <a href=\"https://www.agari.com/products/phishing-response/\">Agari Phishing Response</a>. Leveraging Agari data to enrich and share threat intelligence across multiple applications helps safeguard your entire infrastructure against email threats. For more details about this solution refer to <a href=\"https://www.agari.com/insights/solution-briefs/microsoft-azure-sentinel-integration/\">https://www.agari.com/insights/solution-briefs/microsoft-azure-sentinel-integration/</a></p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></li>\n<li><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a></li>\n<li><a href=\"https://docs.microsoft.com/graph/api/resources/security-api-overview?view=graph-rest-1.0\">Microsoft Security Graph API</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/agari_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Agari_CCF",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Agari"
+        },
+        "support": {
+          "name": "Agari",
+          "tier": "Partner",
+          "link": "https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Agari"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
