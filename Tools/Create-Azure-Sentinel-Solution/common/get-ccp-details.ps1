@@ -251,6 +251,15 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     }
 
                     try {
+                        # For dynamic stream names (parameter references), assign DCR path without stream matching
+                        if ($ccpPollerFile.isDynamicStreamName -and [string]::IsNullOrEmpty($ccpPollerFile.DCRFilePath)) {
+                            $isDCRType = if ($fileContent -is [System.Object[]]) { $fileContent[0].type -eq "Microsoft.Insights/dataCollectionRules" } else { $fileContent.type -eq "Microsoft.Insights/dataCollectionRules" }
+                            if ($isDCRType) {
+                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                continue
+                            }
+                        }
+
                         if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules" -and $fileContent.properties.dataFlows.streams -is [System.String]) {
                             $dataFlowStreams = $fileContent.properties.dataFlows;
                             foreach ($dcrDataFlowStream in $dataFlowStreams) {

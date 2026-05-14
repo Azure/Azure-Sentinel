@@ -33,7 +33,7 @@
     "email": "support@data443.com",
     "_email": "[variables('email')]",
     "_solutionName": "TacitRed-SentinelOne",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.3",
     "solutionId": "data443riskmitigationinc1761580347231.azure-sentinel-solution-tacitred-s1-ioc-auto",
     "_solutionId": "[variables('solutionId')]",
     "blanks": "[replace('b', 'b', '')]",
@@ -56,7 +56,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "pb-tacitred-to-sentinelone Playbook with template version 3.0.0",
+        "description": "pb-tacitred-to-sentinelone Playbook with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -65,22 +65,11 @@
               "type": "string",
               "defaultValue": "pb-tacitred-to-sentinelone"
             },
-            "location": {
-              "type": "string",
-              "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
-            },
             "TacitRed_ApiKey": {
               "type": "securestring",
               "defaultValue": "",
               "metadata": {
                 "description": "TacitRed API Key for authentication"
-              }
-            },
-            "TacitRed_Domain": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional domain filter for TacitRed findings"
               }
             },
             "SentinelOne_ApiToken": {
@@ -92,9 +81,16 @@
             },
             "SentinelOne_BaseUrl": {
               "type": "string",
-              "defaultValue": "https://usea1-001.sentinelone.net",
+              "defaultValue": "",
               "metadata": {
-                "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
+                "description": "SentinelOne Console URL (e.g. https://usea1-021.sentinelone.net) \u2014 find this in your browser address bar when logged into SentinelOne. Must include https:// with no trailing slash."
+              }
+            },
+            "SentinelOne_AccountId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SentinelOne Account ID for IOC scoping"
               }
             }
           },
@@ -108,15 +104,12 @@
               "type": "Microsoft.Logic/workflows",
               "apiVersion": "2019-05-01",
               "name": "[[parameters('PlaybookName')]",
-              "location": "[[parameters('location')]",
+              "location": "[[variables('workspace-location-inline')]",
               "properties": {
                 "state": "Enabled",
                 "parameters": {
                   "TacitRed_ApiKey": {
                     "value": "[[parameters('TacitRed_ApiKey')]"
-                  },
-                  "TacitRed_Domain": {
-                    "value": "[[parameters('TacitRed_Domain')]"
                   },
                   "SentinelOne_ApiToken": {
                     "value": "[[parameters('SentinelOne_ApiToken')]"
@@ -137,13 +130,9 @@
                       "type": "string",
                       "defaultValue": "[variables('blanks')]"
                     },
-                    "TacitRed_Domain": {
-                      "type": "string",
-                      "defaultValue": "[variables('blanks')]"
-                    },
                     "SentinelOne_BaseUrl": {
                       "type": "string",
-                      "defaultValue": "https://usea1-001.sentinelone.net"
+                      "defaultValue": ""
                     },
                     "SentinelOne_ApiToken": {
                       "type": "string",
@@ -165,7 +154,7 @@
                       "type": "Http",
                       "inputs": {
                         "method": "GET",
-                        "uri": "@{parameters('TacitRed_ApiUrl')}?types[]=compromised_credentials&domains[]=@{encodeUriComponent(parameters('TacitRed_Domain'))}&date_from=@{formatDateTime(addDays(utcNow(), -7), 'yyyy-MM-dd')}&page=1&page_size=100",
+                        "uri": "@{parameters('TacitRed_ApiUrl')}?types[]=compromised_credentials&date_from=@{formatDateTime(addDays(utcNow(), -7), 'yyyy-MM-dd')}&page=1&page_size=100",
                         "headers": {
                           "accept": "application/json",
                           "User-Agent": "Microsoft-Sentinel-TacitRed/1.0",
@@ -192,6 +181,11 @@
                               "Authorization": "ApiToken @{parameters('SentinelOne_ApiToken')}"
                             },
                             "body": {
+                              "filter": {
+                                "accountIds": [
+                                  "@{parameters('SentinelOne_AccountId')}"
+                                ]
+                              },
                               "data": [
                                 {
                                   "value": "@{coalesce(item()?['finding']?['supporting_data']?['site_domain'], item()?['finding']?['supporting_data']?['domain'])}",
@@ -212,13 +206,15 @@
                 }
               },
               "tags": {
+                "hidden-SentinelTemplateName": "TacitRedToSentinelOne",
+                "hidden-SentinelTemplateVersion": "1.0",
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
               }
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
-              "name": "[[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
               "properties": {
                 "parentId": "[[variables('playbookId1')]]",
                 "contentId": "[variables('_playbookContentId1')]",
@@ -251,8 +247,7 @@
             "postDeployment": [
               "1. Configure the TacitRed API Key parameter",
               "2. Configure the SentinelOne API Token and Base URL parameters",
-              "3. Optionally set a domain filter to limit findings to specific domains",
-              "4. Enable the Logic App and configure the recurrence trigger as needed"
+              "3. Enable the Logic App and configure the recurrence trigger as needed"
             ],
             "lastUpdateTime": "2026-01-22T00:00:00Z",
             "tags": [
@@ -288,12 +283,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.3",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "TacitRed-SentinelOne",
         "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-SentinelOne/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed SentinelOne IOC Automation solution provides example playbooks that demonstrate how to consume TacitRed threat intelligence from Microsoft Sentinel and prepare indicators for ingestion into SentinelOne.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>\u2022 Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-SentinelOne/ReleaseNotes.md\">Release Notes</a></p>\n<p>\u2022 There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed SentinelOne IOC Automation solution provides example playbooks that demonstrate how to consume TacitRed threat intelligence from Microsoft Sentinel and prepare indicators for ingestion into SentinelOne.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",

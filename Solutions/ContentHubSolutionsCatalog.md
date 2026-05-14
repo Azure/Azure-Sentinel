@@ -2334,7 +2334,7 @@ This file is a catalog of all solutions and standalone content templates that ex
 | | |GitHubAuditData|Parser| |Solution|
 | | |GitHubCodeScanningData|Parser| |Solution|
 | | |GitHubDependabotData|Parser| |Solution|
-| | |GithubSecretScanningData|Parser| |Solution|
+| | |GitHubSecretScanningData|Parser| |Solution|
 | | |GithubWorkbook|Workbook|Gain insights to GitHub activities that may be interesting for security.|Solution|
 | | |GitHub Security|Workbook|Gain insights to GitHub activities that may be interesting for security.|Solution|
 |Microsoft Exchange Security for Exchange Online|The Microsoft Exchange Security Audit and Configuration Insights solution analyzes Exchange online configuration and logs from a security lens to provide insights and alerts.Underlying Microsoft Technologies used:This solution takes a dependency on the following technologies, and some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:a. Custom logs ingestion via Data Collector REST APIData Connectors: 1, Parsers: 2, Workbooks: 2|Exchange Security Insights Online Collector (using Azure Functions)|DataConnector|Connector used to push Exchange Online Security configuration for Microsoft Sentinel Analysis|Solution|

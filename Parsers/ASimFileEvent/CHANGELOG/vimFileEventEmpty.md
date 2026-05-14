@@ -1,5 +1,9 @@
 # Changelog for vimFileEventEmpty.yaml
 
+## Version 0.2.0
+
+- (2026-03-17) Update empty parser alphabetically and align with columns from ASimTester.csv - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)
+
 ## Version 0.1.1
 
 - (2023-11-23) ASIM Registry Event schema parser with its sample and test data for Trend Micro Vision One - [PR #8680](https://github.com/Azure/Azure-Sentinel/pull/8680)

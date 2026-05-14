@@ -21,6 +21,7 @@ from .utils import (
     CONFIDENCE_MAPPING,
     STIX_PATTERN_MAPPING,
     APIError,
+    get_valid_until,
 )
 from .config import Config
 
@@ -170,18 +171,21 @@ def generate_uuid(identifier: str):
     return uuid.UUID(hash_value.hexdigest())
 
 
-def convert_to_stix(indicators: list):
+def convert_to_stix(indicators, config):
     """
     Converts CrowdStrike indicators of compromise to STIX 2.1 format.
 
     Args:
         indicators: List of CrowdStrike indicator dictionaries
+        config: Configuration object containing valid_until_seconds
 
     Returns:
         list: List of STIX 2.1 formatted indicator objects
     """
-
     stix_batch = []
+
+    if config.valid_until_seconds is not None:
+        logging.info("Applying valid_until with duration of %d seconds", config.valid_until_seconds)
 
     for indicator in indicators:
         stix_object = {
@@ -219,6 +223,10 @@ def convert_to_stix(indicators: list):
                 }
             },
         }
+
+        # Add valid_until field if VALIDUNTIL is configured
+        if config.valid_until_seconds is not None:
+            stix_object["valid_until"] = get_valid_until(config.valid_until_seconds)
 
         stix_batch.append(stix_object)
 
@@ -303,7 +311,7 @@ def main(mytimer: func.TimerRequest) -> None:
         if (
             seconds_to_next_execution.total_seconds() > 60
         ):  # if next execution is 60 seconds away
-            stix_batch = convert_to_stix(ioc_batch)
+            stix_batch = convert_to_stix(ioc_batch, config)
             send_to_threat_intel(stix_batch, config.workspace_id, aad_token)
             state_manager.post(marker)
             indicator_count += len(stix_batch)
