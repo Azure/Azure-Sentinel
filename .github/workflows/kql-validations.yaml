@@ -10,13 +10,15 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
-  KqlValidations:
-    runs-on: ubuntu-22.04
-    env:
-      buildConfiguration: Release
-      dotnetSdkVersion: 6.0.x
-      PRNUM: ${{ github.event.pull_request.number }}
-    steps:
+    KqlValidations:
+      runs-on: ubuntu-22.04
+      outputs:
+        error_output: ${{ steps.capture-error.outputs.error_output }}
+      env:
+        buildConfiguration: Release
+        dotnetSdkVersion: 6.0.x
+        PRNUM: ${{ github.event.pull_request.number }}
+      steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # Need HEAD and parent for git diff
@@ -25,9 +27,35 @@ jobs:
         with:
           dotnet-version: ${{ env.dotnetSdkVersion }}
       - name: Run KQL Validation tests
+        id: kql-test
         run: dotnet test .script/tests/KqlvalidationsTests/Kqlvalidations.Tests.csproj --configuration ${{ env.buildConfiguration }}
         env:
           GITHUBAPPID: ${{ secrets.APPLICATION_ID }}
           GITHUBAPPINSTALLATIONID: ${{ secrets.APPLICATION_INSTALLATION_ID }}
           GITHUBAPPPRIVATEKEY: ${{ secrets.APPLICATION_PRIVATE_KEY }}
           SYSTEM_PULLREQUEST_ISFORK: ${{ github.event.pull_request.head.repo.fork }}
+        continue-on-error: true
+
+      - name: Capture error output
+        if: failure() || steps.kql-test.outcome == 'failure'
+        id: capture-error
+        run: |
+          {
+            echo "error_output<<EOF"
+            echo "KQL Validation Test Failed"
+            echo "Job: ${{ github.job }}"
+            echo "Run ID: ${{ github.run_id }}"
+            echo "Branch: ${{ github.ref_name }}"
+            echo "For detailed logs, see: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+    SummarizeFailure:
+      name: Summarize KQL Validation Failure
+      if: failure()
+      needs: KqlValidations
+      uses: ./.github/workflows/validation-run-summary.yaml
+      with:
+        workflowName: "KQL Validations"
+        errorMessage: ${{ needs.KqlValidations.outputs.error_output || 'KQL validation tests failed. See job logs for details.' }}
+        prNumber: ${{ github.event.pull_request.number }}
