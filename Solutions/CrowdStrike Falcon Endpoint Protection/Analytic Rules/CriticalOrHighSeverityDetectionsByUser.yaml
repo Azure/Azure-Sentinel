@@ -1,7 +1,10 @@
 id: 4465ebde-b381-45f7-ad08-7d818070a11c
 name: Critical or High Severity Detections by User
 description: |
-  'Creates an incident when a large number of Critical/High severity CrowdStrike Falcon sensor detections is triggered by a single user'
+  'Creates an incident when a large number of Critical or High severity CrowdStrike Falcon sensor detections is
+  triggered by a single user within 1 hour. The rule uses the CrowdStrikeFalconEventStream table, filters for DetectionSummaryEvent
+  records with Severity set to Critical or High, and alerts when detections for a single DstUserName exceed the configured
+  threshold of 15. Review DstHostName, SrcIpAddr, FileName, FileHash, and Message for investigation context.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -12,42 +15,46 @@ queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-tactics: []
-relevantTechniques: []
+tactics: 
+- Impact
+- DefenseEvasion
+relevantTechniques:
+- T1562
+- T1489
 query: |
   let timeframe = 1h;
   let threshold = 15; // update threshold value based on organization's preference
-  let NoteableEvents = CrowdStrikeFalconEventStream
+  let NotableEvents = CrowdStrikeFalconEventStream
   | where TimeGenerated > ago(timeframe)
   | where EventType == "DetectionSummaryEvent"
   | where Severity in ("Critical", "High")
-  | summarize Total = count() by DstUserName
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstUserName, DstHostName, SrcIpAddr, FileName, FileHash, Message
   | where Total > threshold;
-  CrowdStrikeFalconEventStream
-  | where TimeGenerated > ago(timeframe)
-  | where EventType == "DetectionSummaryEvent"
-  | where Severity in ("Critical", "High")
-  | join kind=inner (NoteableEvents) on DstUserName
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstHostName, SrcIpAddr, DstUserName, FileName, FileHash, Message
+  NotableEvents
   | extend timestamp = StartTimeUtc, AccountCustomEntity = DstUserName, HostCustomEntity = DstHostName, IPCustomEntity = SrcIpAddr, FileHashCustomEntity = FileHash, FileHashAlgo = "MD5"
+  | project timestamp, StartTimeUtc, EndTimeUtc, DstUserName, DstHostName, SrcIpAddr, FileName, FileHash, FileHashAlgo, Message, Total, AccountCustomEntity, HostCustomEntity, IPCustomEntity, FileHashCustomEntity
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-  - entityType: Host
-    fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: IPCustomEntity
-  - entityType: FileHash
-    fieldMappings:
-      - identifier: Algorithm
-        columnName: FileHashAlgo
-      - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.4
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountCustomEntity
+- entityType: Host
+  fieldMappings:
+  - identifier: FullName
+    columnName: HostCustomEntity
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPCustomEntity
+- entityType: FileHash
+  fieldMappings:
+  - identifier: Algorithm
+    columnName: FileHashAlgo
+  - identifier: Value
+    columnName: FileHashCustomEntity
+alertDetailsOverride:
+  alertDisplayNameFormat: 'CrowdStrike critical/high detections by user: {{DstUserName}}'
+  alertDescriptionFormat: User {{DstUserName}} generated {{Total}} critical/high detections from host {{DstHostName}} over
+    {{timeframe}}.
+version: 1.0.5
 kind: Scheduled
