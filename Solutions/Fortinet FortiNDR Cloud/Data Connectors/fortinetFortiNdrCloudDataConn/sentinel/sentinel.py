@@ -22,8 +22,11 @@ def post_data(events: list[dict], log_type_suffix: str):
     method = "POST"
     content_type = "application/json"
     resource = "/api/logs"
-    rfc1123date = datetime.now(tz=timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    rfc1123date = datetime.now(tz=timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT")
     content_length = len(body)
+    logging.info(
+        f"SentinelClient: [new] - Sending {len(events)} events with a size of: {content_length}.")
     signature = _build_signature(
         rfc1123date, content_length, method, content_type, resource
     )
@@ -37,7 +40,8 @@ def post_data(events: list[dict], log_type_suffix: str):
     }
     response = requests.post(LOG_ANALYTICS_URI, data=body, headers=headers)
     if response.status_code >= 200 and response.status_code <= 299:
-        logging.info(f"SentinelClient: posted {len(events)} events to {log_type}")
+        logging.info(
+            f"SentinelClient: posted {len(events)} events to {log_type}")
     else:
         logging.error(
             f"SentinelClient: failed to post events to Sentinel. Response code: {response.status_code}"
