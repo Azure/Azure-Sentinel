@@ -20,28 +20,29 @@ tactics:
 relevantTechniques:
   - T1098.003
 query: |
-  let starttime = todatetime('{{StartTimeISO}}');
-  let endtime = todatetime('{{EndTimeISO}}');
+  let timeframe = 1d;
   let window = 10m;
   let threshold = 3;
   // Role assignment events expanded to extract the target user per event
   let RoleAssignments =
       AuditLogs
-      | where TimeGenerated between (starttime .. endtime)
+      | where TimeGenerated >= ago(timeframe)
       | where OperationName =~ "Add member to role."
       | where Result =~ "success"
-      | extend ActorUpn = tolower(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
-      | extend ActorApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+      | extend ActorUpn = tolower(tostring(InitiatedBy.user.userPrincipalName))
+      | extend ActorApp = tostring(InitiatedBy.app.displayName)
       | extend ActorIp  = iff(
-            isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
-            tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
-            tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+            isnotempty(tostring(InitiatedBy.user.ipAddress)),
+            tostring(InitiatedBy.user.ipAddress),
+            tostring(InitiatedBy.app.ipAddress))
       | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
       | mv-expand TargetResource = TargetResources
       | where tostring(TargetResource.type) =~ "User"
       | extend TargetUpn = tostring(TargetResource.userPrincipalName)
       | where isnotempty(TargetUpn);
   // Aggregate by actor and fixed ten-minute bucket, flag where count reaches threshold
+  // Note: bin() uses fixed time buckets; assignments at bucket boundaries may be undercounted.
+  // For sliding-window accuracy, consider using a range join approach.
   let BulkActors =
       RoleAssignments
       | summarize
@@ -56,7 +57,7 @@ query: |
   // Enrich with actor most recent sign-in country for geographic context
   let ActorSignIns =
       SigninLogs
-      | where TimeGenerated between (starttime .. endtime)
+      | where TimeGenerated >= ago(timeframe)
       | where ResultType == 0
       | extend ActorUpn = tolower(UserPrincipalName)
       | summarize LastSignInTime = max(TimeGenerated) by ActorUpn, Location

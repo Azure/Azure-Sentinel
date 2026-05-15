@@ -23,9 +23,8 @@ relevantTechniques:
   - T1078.004
   - T1098
 query: |
-  let starttime = todatetime('{{StartTimeISO}}');
-  let endtime = todatetime('{{EndTimeISO}}');
-  let lookback = starttime - 30d;
+  let timeframe = 14d;
+  let lookback = 30d;
   let correlationWindow = 1h;
   let sensitiveOps = dynamic([
       "Add member to role.",
@@ -41,7 +40,7 @@ query: |
   // Build per-user baseline of countries from successful sign-ins over 30 days
   let BaselineCountries =
       SigninLogs
-      | where TimeGenerated between (lookback .. starttime)
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
       | where ResultType == 0
       | where isnotempty(Location)
       | extend UserUpn = tolower(UserPrincipalName)
@@ -49,7 +48,7 @@ query: |
   // Sign-ins from countries not in the user baseline
   let NewCountrySignIns =
       SigninLogs
-      | where TimeGenerated between (starttime .. endtime)
+      | where TimeGenerated >= ago(timeframe)
       | where ResultType == 0
       | where isnotempty(Location)
       | extend UserUpn = tolower(UserPrincipalName)
@@ -63,11 +62,11 @@ query: |
           AppDisplayName;
   // Sensitive AuditLogs operations correlated within the window
   AuditLogs
-  | where TimeGenerated between (starttime .. endtime)
-  | where OperationName has_any (sensitiveOps)
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName in~ (sensitiveOps)
   | where Result =~ "success"
-  | extend UserUpn    = tolower(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
-  | extend AuditIp    = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend UserUpn    = tolower(tostring(InitiatedBy.user.userPrincipalName))
+  | extend AuditIp    = tostring(InitiatedBy.user.ipAddress)
   | extend TargetName = tostring(TargetResources[0].displayName)
   | where isnotempty(UserUpn)
   | join kind=inner NewCountrySignIns on UserUpn
