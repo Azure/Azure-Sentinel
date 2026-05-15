@@ -1,0 +1,102 @@
+id: c449826b-d6d0-4ac8-8dad-19acc3fc75a7
+name: OAuth consent to high-risk permission by a new or rarely seen application
+description: |
+  Hunting query that identifies OAuth consent events where the granted permission scope
+  includes high-risk delegated or application permissions, and where the target application
+  has not been observed in the tenant during the previous 30 days. The combination of a
+  newly observed application and a high-privilege scope can indicate a consent phishing
+  attempt, an illicit OAuth grant, or an insider threat granting excessive permissions
+  to an external application.
+  High-risk scopes covered include Mail.ReadWrite, Mail.Send, Files.ReadWrite.All,
+  full_access_as_app, Directory.ReadWrite.All, EWS.AccessAsUser.All, and
+  Exchange.ManageAsApp. Analysts must validate every result. Benign matches include
+  newly deployed enterprise applications with legitimate mail or directory integration,
+  freshly registered automation accounts, and authorized ISV integrations.
+  This query is complementary to ConsentToApplicationDiscovery.yaml, which covers all
+  consent events regardless of scope or application age.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/manage-apps/protect-against-consent-phishing
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1528/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let appLookback = starttime - 30d;
+  let highRiskScopes = dynamic([
+      "Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All",
+      "full_access_as_app", "Directory.ReadWrite.All",
+      "EWS.AccessAsUser.All", "Exchange.ManageAsApp"
+  ]);
+  // Applications seen in the tenant during the 30-day baseline period
+  let KnownApps =
+      AuditLogs
+      | where TimeGenerated between (appLookback .. starttime)
+      | where OperationName =~ "Consent to application"
+      | extend AppName = tolower(tostring(TargetResources[0].displayName))
+      | where isnotempty(AppName)
+      | summarize by AppName;
+  // Consent events in the current window
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Consent to application"
+  | extend ModProps   = TargetResources[0].modifiedProperties
+  | extend AppName    = tolower(tostring(TargetResources[0].displayName))
+  | extend ActorUpn   = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp   = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp    = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | mv-expand ModProps
+  | extend PropertyName = tostring(ModProps.displayName)
+  | extend NewValue     = replace_string(tostring(ModProps.newValue), '"', "")
+  | where PropertyName =~ "ConsentAction.Permissions"
+  // Extract individual scope tokens from the permission string
+  | extend ScopeRaw = extract(@'Scope:\s*([^,\]]*)', 1, NewValue)
+  | extend Scopes = split(trim(" ", ScopeRaw), " ")
+  | mv-expand Scope = Scopes to typeof(string)
+  | extend Scope = trim(" ", Scope)
+  | where Scope in~ (highRiskScopes)
+  // Keep only applications not seen in the 30-day baseline
+  | join kind=leftanti KnownApps on AppName
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | summarize
+      FirstSeen     = min(TimeGenerated),
+      LastSeen      = max(TimeGenerated),
+      GrantedScopes = make_set(Scope),
+      EventCount    = count()
+      by AppName, Actor, AccountName, AccountUPNSuffix, ActorIp, CorrelationId, Result
+  | sort by FirstSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
