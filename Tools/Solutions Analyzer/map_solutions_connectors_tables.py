@@ -29,9 +29,6 @@ GITHUB_REPO_URL = "https://github.com/Azure/Azure-Sentinel/blob/master"
 AZURE_MARKETPLACE_API_URL = "https://catalogapi.azure.com/offers"
 AZURE_MARKETPLACE_API_VERSION = "2018-08-01-beta"
 
-# Icons for documentation output
-NOT_PUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions
-
 # Multi-valued collection_method and ingestion_api precedence orders
 # (most preferred → least preferred; used for sorting when a connector has multiple methods/APIs)
 COLLECTION_METHOD_PRECEDENCE = (
@@ -44,7 +41,7 @@ COLLECTION_METHOD_PRECEDENCE = (
     "CCF",
     "Azure Function",
     "Logic App",
-    "REST Pull API",
+    "REST Push API",
     "AMA",
     "Azure Diagnostics",
     "Syslog",
@@ -121,9 +118,6 @@ FILTER_FIELDS = {
     'OfficeWorkload': 'OfficeActivity',
     'RecordType': 'OfficeActivity',
 }
-
-# Fields that only use equality operators (==, =~, in)
-EQUALITY_ONLY_FIELDS = {'EventID', 'RecordType'}  # Numeric fields restricted to equality operators
 
 # Fields that can use string operators (has, contains, startswith, etc.)
 # All string-based filter fields support these operators
@@ -351,11 +345,6 @@ FILTER_STRING_MULTI_OP_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# Tables that use vendor/product fields for source identification
-VENDOR_PRODUCT_TABLES = {
-    'commonsecuritylog': ('DeviceVendor', 'DeviceProduct'),
-}
-
 # Folders in the Solutions directory that should be excluded (not actual solutions)
 EXCLUDED_SOLUTION_FOLDERS = {
     'images',       # Contains logo images only
@@ -363,30 +352,12 @@ EXCLUDED_SOLUTION_FOLDERS = {
     'training',     # Training materials
 }
 
-# Content-only connectors that don't actually ingest data
-# These provide analytics content/hunting capabilities using data from other connectors
-# They should be excluded from ASIM parser/content item association
-CONTENT_ONLY_CONNECTORS = {
-    'cyborgsecurity_hunter',  # Cyborg Security HUNTER - provides hunting content, uses SecurityEvent from Windows Security Events
-}
-
-# Connectors whose sample queries reference other tables for JOIN examples
-# These should only match parsers for their primary table, not the joined tables
-# Format: connector_id (lowercase) -> set of table names to EXCLUDE from matching
-CONNECTOR_EXCLUDE_TABLES = {
-    'threatintelligence': {'commonsecuritylog', 'signinlogs'},  # Sample queries show JOIN examples with these tables
-}
-
-# Tables referenced in a connector's graphQueries/sampleQueries/dataTypes that are
-# NOT actually ingested by the connector. Common cause: Function App connectors that
-# reference AzureDiagnostics / AzureMetrics for health-monitoring queries while their
-# real ingestion target is a custom or built-in workspace table.
-# These tables are removed from the connector's reported table list (and thus from the
-# connector page "Tables Ingested" section).
-# Format: connector_id (lowercase) -> set of table names (lowercase) to drop
-CONNECTOR_REPORTED_TABLE_EXCLUSIONS: Dict[str, Set[str]] = {
-    'slashnextfunctionapp': {'azurediagnostics', 'azuremetrics'},  # Sample/lastDataReceived queries inspect Function App diagnostic/metrics logs, not an ingestion target
-}
+# Per-connector special-case classifications previously hardcoded here now live
+# in `solution_analyzer_overrides.csv` as Connector entries:
+#   - `content_only`              (bool)  - connector provides content using other connectors' data
+#   - `exclude_tables`            (set)   - tables present in sample/JOIN queries that are not ingested
+#   - `reported_table_exclusions` (set)   - tables referenced for health/lastDataReceived only
+# Consumed via `get_connector_override_bool` / `get_connector_override_set`.
 
 # Precedence rules used to collapse a table's ambiguous set of feeding-connector
 # collection methods into a single inferred method that can be back-propagated
@@ -399,10 +370,180 @@ METHOD_PRECEDENCE_RULES: List[Tuple[Set[str], str]] = [
     ({'azure function', 'ccf'}, 'CCF'),      # CCF is the preferred replacement for Azure Function ingestion
 ]
 
+# Per COLLECTION_METHOD_GUIDANCE.md §4.4: normalize legacy / lowercase labels
+# so the dashboard can drop its normalization layer. Keys are lowercased.
+COLLECTION_METHOD_NORMALIZE: Dict[str, str] = {
+    'native': 'Native',
+    'mma': 'AMA',                # MMA is retired and replaced by AMA
+    'ccf (legacy)': 'CCF',
+}
+
+# Per COLLECTION_METHOD_GUIDANCE.md §4.2: tables whose collection_method should
+# be hard-set regardless of connector evidence now live in
+# `solution_analyzer_overrides.csv` (rows
+# `Table,<TableName>,collection_method,<Value>`), which `collect_table_info.py`
+# applies when rebuilding `tables_reference.csv`.
+
+
+def _table_categories(ref: Dict[str, str]) -> Set[str]:
+    """Return the set of category tokens for a tables_reference row.
+
+    `category` in tables_reference.csv is a comma-joined multi-value (e.g.
+    `"Audit, Azure Resources, Containers"`). Strict equality checks against
+    `'Azure Resources'` miss those rows. See COLLECTION_METHOD_GUIDANCE.md §3.
+    """
+    return {c.strip() for c in (ref.get('category') or '').split(',') if c.strip()}
+
+
+def _normalize_collection_method(method: str) -> str:
+    """Apply COLLECTION_METHOD_NORMALIZE at write time, preserving pipe-multivalues."""
+    if not method:
+        return method
+    parts = [p.strip() for p in method.split('|') if p.strip()]
+    normalized = [COLLECTION_METHOD_NORMALIZE.get(p.lower(), p) for p in parts]
+    # Deduplicate while preserving order
+    seen: Set[str] = set()
+    out: List[str] = []
+    for p in normalized:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return '|'.join(out)
+
+
+def _collapse_parenthesized_refinement(method: str) -> str:
+    """Collapse pipe-multivalues like ``X (foo)|X`` to the canonical ``X``.
+
+    See COLLECTION_METHOD_GUIDANCE.md §4.5. When one pipe-separated value is a
+    parenthesized refinement of another (e.g.
+    ``Azure Function (TI Upload API)|Azure Function``), drop the refinement
+    and keep the canonical name.
+    """
+    if not method or '|' not in method:
+        return method
+    parts = [p.strip() for p in method.split('|') if p.strip()]
+    bases: Set[str] = set()
+    for p in parts:
+        idx = p.find('(')
+        if idx > 0:
+            base = p[:idx].strip()
+            if base:
+                bases.add(base)
+    if not bases:
+        return '|'.join(parts)
+    kept: List[str] = []
+    seen: Set[str] = set()
+    for p in parts:
+        idx = p.find('(')
+        if idx > 0:
+            base = p[:idx].strip()
+            if base in bases and base in parts:
+                # A refinement of a base that's also present — drop the refinement.
+                continue
+        if p not in seen:
+            seen.add(p)
+            kept.append(p)
+    return '|'.join(kept) if kept else method
+
+
 # ASim tables use EventVendor/EventProduct
 ASIM_TABLE_PREFIXES = ('asim', '_asim', '_im_')
 
-# Global log file handle (set in main())
+
+# Filter-field resolution config (loaded lazily from filter_field_resolution.yaml).
+# Maps lowercased field name -> rule dict with normalized keys. Prefix tags are
+# materialized to lowercase tuples for quick startswith() checks.
+_FILTER_FIELD_RULES: Optional[Dict[str, Dict[str, Any]]] = None
+
+
+def _load_filter_field_rules() -> Dict[str, Dict[str, Any]]:
+    """Load and cache field resolution rules from filter_field_resolution.yaml."""
+    global _FILTER_FIELD_RULES
+    if _FILTER_FIELD_RULES is not None:
+        return _FILTER_FIELD_RULES
+    import yaml
+    config_path = Path(__file__).parent / "filter_field_resolution.yaml"
+    with config_path.open("r", encoding="utf-8") as f:
+        config = yaml.safe_load(f) or {}
+    prefix_groups_raw = config.get("prefix_groups", {}) or {}
+    prefix_groups: Dict[str, Tuple[str, ...]] = {
+        tag: tuple(p.lower() for p in prefixes)
+        for tag, prefixes in prefix_groups_raw.items()
+    }
+    rules: Dict[str, Dict[str, Any]] = {}
+    for field_name, rule in (config.get("fields", {}) or {}).items():
+        normalized = dict(rule)
+        if normalized.get("type") == "prefix":
+            tag = normalized.get("prefix_tag")
+            normalized["prefixes"] = prefix_groups.get(tag, ()) if isinstance(tag, str) else ()
+        if "candidates" in normalized:
+            # Pre-compute lowercase set + original-case list for ordered lookup
+            normalized["_candidates_lower"] = {c.lower() for c in normalized["candidates"]}
+        rules[field_name.lower()] = normalized
+    _FILTER_FIELD_RULES = rules
+    return rules
+
+
+def _resolve_filter_field_table(
+    field_lower: str,
+    tables_lower: Set[str],
+    tables_in_query: Optional[Set[str]],
+    local_tables: Set[str],
+    skip_asim_vendor_product: bool,
+) -> Optional[str]:
+    """Resolve which Sentinel table a filter field attribution belongs to.
+
+    Returns the target table name (original case where available) or None to skip
+    the filter entirely.
+    """
+    rules = _load_filter_field_rules()
+    rule = rules.get(field_lower)
+    if not rule:
+        return None
+    rtype = rule.get("type")
+
+    # Skip-flag short-circuit
+    skip_flag = rule.get("skip_flag")
+    if skip_flag == "skip_asim_vendor_product" and skip_asim_vendor_product:
+        return None
+
+    if rtype == "direct":
+        return rule.get("table")
+
+    if rtype == "gated":
+        table = rule.get("table")
+        if table and table.lower() in tables_lower:
+            return table
+        return None
+
+    if rtype == "priority":
+        for candidate in rule.get("candidates", []):
+            if candidate.lower() in tables_lower:
+                return candidate
+        return None
+
+    if rtype == "any_of":
+        candidates_lower = rule.get("_candidates_lower", set())
+        # Prefer local-tables match when requested
+        if rule.get("prefer_local"):
+            for t in local_tables:
+                if t.lower() in candidates_lower:
+                    return t
+        for t in (tables_in_query or set()):
+            if t.lower() in candidates_lower:
+                return t
+        return None
+
+    if rtype == "prefix":
+        prefixes: Tuple[str, ...] = rule.get("prefixes", ())
+        if not prefixes:
+            return None
+        for t in (tables_in_query or set()):
+            if t.lower().startswith(prefixes):
+                return t
+        return None
+
+    return None
 _log_file = None
 _log_start_time = None
 
@@ -635,29 +776,6 @@ def _run_collect_table_info(cache_dir: Path) -> None:
         ["--refresh-cache", "--cache-dir", str(cache_dir)],
         "collect_table_info.py"
     )
-
-
-def _clear_table_info_cache(cache_dir: Path) -> None:
-    """Clear the collect_table_info.py cache files (.cache and .meta files)."""
-    if not cache_dir.exists():
-        return
-    
-    count = 0
-    for cache_file in cache_dir.glob('*.cache'):
-        try:
-            cache_file.unlink()
-            count += 1
-        except IOError:
-            pass
-    
-    for meta_file in cache_dir.glob('*.meta'):
-        try:
-            meta_file.unlink()
-        except IOError:
-            pass
-    
-    if count > 0:
-        log_print(f"  Cleared {count} table info cache files")
 
 
 def save_cache() -> None:
@@ -915,156 +1033,18 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
             return  # This is a workbook parameter, not a literal value
         
         field_lower = field_name.lower()
-        
-        # Determine the table this filter applies to
-        table_name = None
-        
-        # DeviceVendor/DeviceProduct/DeviceEventClassID -> CommonSecurityLog
-        if field_lower in ('devicevendor', 'deviceproduct', 'deviceeventclassid'):
-            table_name = 'CommonSecurityLog'
-        # EventVendor/EventProduct -> look for ASIM tables
-        # Skip if skip_asim_vendor_product is True (ASIM parsers SET these, not filter on them)
-        elif field_lower in ('eventvendor', 'eventproduct'):
-            if skip_asim_vendor_product:
-                return  # Skip - ASIM parsers SET these values, not filter on them
-            # Check if query references known ASIM tables - REQUIRE an actual ASIM table
-            for t in (tables_in_query or set()):  # Use original case
-                if t.lower().startswith(ASIM_TABLE_PREFIXES):
-                    table_name = t  # Use the original case from the query
-                    break
-            if not table_name:
-                return  # Skip - no ASIM table found, likely a SET not a filter
-        # ResourceType/Category -> AzureDiagnostics (only if AzureDiagnostics is in the query)
-        elif field_lower == 'resourcetype':
-            # ResourceType is fairly specific to AzureDiagnostics
-            if 'azurediagnostics' in tables_lower:
-                table_name = 'AzureDiagnostics'
-            else:
-                return  # Skip - ResourceType without AzureDiagnostics context is likely unrelated
-        elif field_lower == 'category':
-            # Category is a common field name - only attribute to AzureDiagnostics if that table is present
-            if 'azurediagnostics' in tables_lower:
-                table_name = 'AzureDiagnostics'
-            else:
-                return  # Skip - generic "category" field is not what we're looking for
-        # EventID -> WindowsEvent or SecurityEvent (check which is in query)
-        elif field_lower == 'eventid':
-            if 'windowsevent' in tables_lower:
-                table_name = 'WindowsEvent'
-            elif 'securityevent' in tables_lower:
-                table_name = 'SecurityEvent'
-            elif 'event' in tables_lower:
-                table_name = 'Event'
-            else:
-                # Skip - EventID without a known Windows event table context
-                return
-        # Source -> Event table (e.g., Source == "Service Control Manager")
-        elif field_lower == 'source':
-            if 'event' in tables_lower:
-                table_name = 'Event'
-            else:
-                return  # Skip - Source without Event table context
-        # EventLog -> Event table (e.g., EventLog == "MSExchange Management")
-        elif field_lower == 'eventlog':
-            if 'event' in tables_lower:
-                table_name = 'Event'
-            else:
-                return  # Skip - EventLog without Event table context
-        # Provider -> WindowsEvent table
-        elif field_lower == 'provider':
-            if 'windowsevent' in tables_lower:
-                table_name = 'WindowsEvent'
-            else:
-                return  # Skip - Provider without WindowsEvent table context
-        # Syslog fields
-        elif field_lower in ('facility', 'processname', 'processid', 'syslogmessage'):
-            if 'syslog' in tables_lower:
-                table_name = 'Syslog'
-            else:
-                return  # Skip - Syslog field without Syslog table context
-        # AWSCloudTrail fields
-        elif field_lower == 'eventname':
-            if 'awscloudtrail' in tables_lower:
-                table_name = 'AWSCloudTrail'
-            else:
-                return  # Skip - EventName without AWSCloudTrail table context
-        # ASIM EventType field
-        elif field_lower == 'eventtype':
-            # EventType is used in ASIM tables - check for ASIM tables in query
-            for t in (tables_in_query or set()):
-                if t.lower().startswith(ASIM_TABLE_PREFIXES):
-                    table_name = t
-                    break
-            if not table_name:
-                return  # Skip - EventType without ASIM table context
-        # AzureActivity / AzureDiagnostics fields (ResourceProvider is used in both)
-        elif field_lower == 'resourceprovider':
-            # ResourceProvider is used in both AzureDiagnostics (e.g., "MICROSOFT.BATCH") 
-            # and AzureActivity (e.g., "Microsoft.Compute")
-            if 'azurediagnostics' in tables_lower:
-                table_name = 'AzureDiagnostics'
-            elif 'azureactivity' in tables_lower:
-                table_name = 'AzureActivity'
-            else:
-                return  # Skip - ResourceProvider without AzureDiagnostics or AzureActivity table context
-        # Resource field (Azure resource instance name)
-        elif field_lower == 'resource':
-            # Resource identifies a specific Azure resource instance across diagnostic tables
-            if 'azurediagnostics' in tables_lower:
-                table_name = 'AzureDiagnostics'
-            elif 'azuremetrics' in tables_lower:
-                table_name = 'AzureMetrics'
-            elif 'azureactivity' in tables_lower:
-                table_name = 'AzureActivity'
-            else:
-                return  # Skip - Resource without a known Azure diagnostic table context
-        # Microsoft Defender XDR / MDE ActionType field
-        elif field_lower == 'actiontype':
-            # ActionType is used in Defender XDR tables (DeviceEvents, DeviceFileEvents, etc.)
-            mde_tables = {'deviceevents', 'devicefileevents', 'deviceprocessevents', 'devicenetworkevents',
-                          'deviceregistryevents', 'devicelogoninfo', 'deviceinfo', 'deviceimageloadevents',
-                          'cloudappevents', 'alertevidence', 'alertinfo', 'emailevents', 'emailattachmentinfo',
-                          'emailurlinfo', 'identitylogonevents', 'identityqueryevents', 'identitydirectoryevents'}
-            # IMPORTANT: First check tables in THIS query, not all tables from all queries
-            # This prevents misattributing filters when multiple queries reference different MDE tables
-            for t in local_tables:
-                if t.lower() in mde_tables:
-                    table_name = t
-                    break
-            # Fall back to global tables only if no local match
-            if not table_name:
-                for t in (tables_in_query or set()):
-                    if t.lower() in mde_tables:
-                        table_name = t
-                        break
-            if not table_name:
-                return  # Skip - ActionType without MDE/XDR table context
-        # Office 365 / Microsoft 365 OperationName field
-        elif field_lower == 'operationname':
-            # OperationName appears in AuditLogs, AzureActivity, OfficeActivity, SigninLogs
-            operation_tables = {'auditlogs', 'azureactivity', 'officeactivity', 'signinlogs', 
-                                'aaborerrorlogs', 'aadnoninteractiveusersigninlogs', 'aadserviceprincipalsigninlogs',
-                                'aadmanagedidentitysigninlogs', 'aadriskyusers', 'aadprovisioninglogs'}
-            for t in (tables_in_query or set()):
-                if t.lower() in operation_tables:
-                    table_name = t
-                    break
-            if not table_name:
-                return  # Skip - OperationName without matching table context
-        # OfficeActivity fields
-        elif field_lower == 'officeworkload':
-            if 'officeactivity' in tables_lower:
-                table_name = 'OfficeActivity'
-            else:
-                return  # Skip - OfficeWorkload without OfficeActivity table context
-        elif field_lower == 'recordtype':
-            if 'officeactivity' in tables_lower:
-                table_name = 'OfficeActivity'
-            else:
-                return  # Skip - RecordType without OfficeActivity table context
-        else:
-            return  # Unknown field, skip
-        
+
+        # Resolve the target table for this filter field via the YAML-driven rules.
+        table_name = _resolve_filter_field_table(
+            field_lower=field_lower,
+            tables_lower=tables_lower,
+            tables_in_query=tables_in_query,
+            local_tables=local_tables,
+            skip_asim_vendor_product=skip_asim_vendor_product,
+        )
+        if not table_name:
+            return  # Unknown field or no matching table context
+
         # Normalize field name to proper casing
         field_proper = next((f for f in FILTER_FIELDS if f.lower() == field_lower), field_name)
         
@@ -1988,8 +1968,9 @@ def find_matching_connectors(target_tables: Set[str],
         connector_title = connector.get('connector_title', '')
         solution_name = connector.get('solution_name', '')
 
-        # Skip content-only connectors (they use data from other connectors, not ingest it)
-        if connector_id.lower() in CONTENT_ONLY_CONNECTORS:
+        # Skip content-only connectors (they use data from other connectors, not ingest it).
+        # Driven by Connector,<id>,content_only,true in solution_analyzer_overrides.csv.
+        if get_connector_override_bool(connector_id, 'content_only'):
             continue
         
         # Parse connector filter fields to find tables
@@ -2020,8 +2001,9 @@ def find_matching_connectors(target_tables: Set[str],
         if not conn_tables:
             continue
         
-        # Exclude tables that are only referenced in JOIN examples (not actual ingested tables)
-        excluded_tables = CONNECTOR_EXCLUDE_TABLES.get(connector_id.lower(), set())
+        # Exclude tables that are only referenced in JOIN examples (not actual ingested tables).
+        # Driven by Connector,<id>,exclude_tables,table1;table2 in solution_analyzer_overrides.csv.
+        excluded_tables = get_connector_override_set(connector_id, 'exclude_tables')
         conn_tables = conn_tables - excluded_tables
         
         if not conn_tables:
@@ -2400,9 +2382,14 @@ def load_overrides(overrides_path: Path) -> List[Override]:
     - Pattern: regex pattern to match against key (full match, case insensitive)
     - Field: the field to override (for connector_association: match type like 'tables_only')
     - Value: the new value (for connector_association: 'connector_id|solution_name')
+
+    The returned list is also stashed in `_LOADED_OVERRIDES` so module-level
+    helpers (e.g. `get_connector_override_value`) can consult overrides without
+    being threaded the list through every call site.
     """
     overrides: List[Override] = []
     if not overrides_path.exists():
+        _set_loaded_overrides(overrides)
         return overrides
     
     try:
@@ -2425,7 +2412,80 @@ def load_overrides(overrides_path: Path) -> List[Override]:
     except Exception as e:
         print(f"Warning: Could not load overrides from {overrides_path}: {e}")
     
+    _set_loaded_overrides(overrides)
     return overrides
+
+
+# Module-level cache of overrides + derived per-entity-field lookup indexes.
+# Populated by `load_overrides`. The lookup indexes are computed lazily from
+# `_LOADED_OVERRIDES` on first access via `_get_override_lookup`.
+_LOADED_OVERRIDES: List[Override] = []
+_OVERRIDE_LOOKUP_CACHE: Dict[Tuple[str, str], Dict[str, str]] = {}
+
+
+def _set_loaded_overrides(overrides: List[Override]) -> None:
+    """Update the module-level overrides cache and invalidate derived indexes."""
+    global _LOADED_OVERRIDES
+    _LOADED_OVERRIDES = overrides
+    _OVERRIDE_LOOKUP_CACHE.clear()
+
+
+def _get_override_lookup(entity: str, field: str) -> Dict[str, str]:
+    """Return a lowercased pattern -> value map for overrides on (entity, field).
+
+    Only literal (non-regex-metachar) patterns are indexed; the helper is
+    designed for the simple connector-id -> value mappings that previously lived
+    in hardcoded dicts. Patterns that include regex metacharacters are skipped
+    here (callers expecting regex behavior should use `apply_overrides_to_row`).
+    """
+    cache_key = (entity.lower(), field.lower())
+    cached = _OVERRIDE_LOOKUP_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    result: Dict[str, str] = {}
+    metachars = set(".^$*+?{}[]|()\\")
+    for ov in _LOADED_OVERRIDES:
+        if ov.entity != cache_key[0]:
+            continue
+        if ov.field.lower() != cache_key[1]:
+            continue
+        if any(ch in metachars for ch in ov.pattern):
+            continue
+        result[ov.pattern.lower()] = ov.value
+    _OVERRIDE_LOOKUP_CACHE[cache_key] = result
+    return result
+
+
+def get_connector_override_value(connector_id: str, field: str) -> Optional[str]:
+    """Look up a single Connector-scoped override value by literal connector_id.
+
+    Returns `None` if no matching override exists. Field name is
+    case-insensitive; connector_id matching is case-insensitive against the
+    Pattern column.
+    """
+    if not connector_id:
+        return None
+    return _get_override_lookup("connector", field).get(connector_id.lower())
+
+
+def get_connector_override_set(connector_id: str, field: str) -> Set[str]:
+    """Look up a Connector-scoped override that encodes a semicolon-separated set.
+
+    Returns a lowercased set, or an empty set if no override matches. Used for
+    fields like `exclude_tables` and `reported_table_exclusions`.
+    """
+    raw = get_connector_override_value(connector_id, field)
+    if not raw:
+        return set()
+    return {item.strip().lower() for item in raw.split(";") if item.strip()}
+
+
+def get_connector_override_bool(connector_id: str, field: str) -> bool:
+    """Look up a Connector-scoped boolean override (case-insensitive `true`/`yes`/`1`)."""
+    raw = get_connector_override_value(connector_id, field)
+    if not raw:
+        return False
+    return raw.strip().lower() in {"true", "yes", "1"}
 
 
 def load_connector_association_overrides(overrides_path: Path) -> List[ConnectorAssociationOverride]:
@@ -5341,80 +5401,6 @@ def _capture_block_scalar(lines: List[str], start_index: int) -> Tuple[str, int]
     return joined, idx - 1 if idx <= total else total - 1
 
 
-def load_asim_parsers(repo_root: Path) -> Tuple[Set[str], Dict[str, Set[str]], Dict[str, str]]:
-    """
-    Load ASIM parsers from /Parsers/ASim*/Parsers directories.
-    
-    Returns:
-        - parser_names: Set of all ASIM parser names (both ParserName and EquivalentBuiltInParser)
-        - parser_table_map: Dict mapping parser name (lowercased) to tables/sub-parsers it references
-        - parser_alias_map: Dict mapping EquivalentBuiltInParser to ParserName (both lowercased)
-    """
-    try:
-        import yaml
-    except ImportError:
-        log_print("  Warning: PyYAML not installed, skipping ASIM parser loading")
-        return set(), {}, {}
-    
-    parsers_dir = repo_root / "Parsers"
-    parser_names: Set[str] = set()
-    parser_table_map: Dict[str, Set[str]] = defaultdict(set)
-    parser_alias_map: Dict[str, str] = {}  # Maps EquivalentBuiltInParser -> ParserName
-    
-    if not parsers_dir.exists():
-        return parser_names, parser_table_map, parser_alias_map
-    
-    # Find all ASim* directories
-    asim_dirs = [d for d in parsers_dir.iterdir() if d.is_dir() and d.name.startswith("ASim")]
-    
-    for asim_dir in asim_dirs:
-        parsers_subdir = asim_dir / "Parsers"
-        if not parsers_subdir.exists():
-            continue
-        
-        for yaml_path in list(parsers_subdir.glob("*.yaml")) + list(parsers_subdir.glob("*.yml")):
-            try:
-                content = yaml_path.read_text(encoding="utf-8")
-                data = yaml.safe_load(content)
-                if not isinstance(data, dict):
-                    continue
-                
-                parser_name = data.get("ParserName", "")
-                equivalent_builtin = data.get("EquivalentBuiltInParser", "")
-                parser_query = data.get("ParserQuery", "")
-                sub_parsers = data.get("Parsers", [])  # List of sub-parser references
-                
-                if parser_name:
-                    parser_names.add(parser_name)
-                    parser_name_lower = parser_name.lower()
-                    
-                    # Extract tables from the parser query
-                    if parser_query:
-                        tables = extract_query_table_tokens(parser_query, {}, {})
-                        parser_table_map[parser_name_lower].update(tables)
-                    
-                    # Add sub-parser references (these will be expanded recursively later)
-                    if isinstance(sub_parsers, list):
-                        for sub_parser in sub_parsers:
-                            if isinstance(sub_parser, str) and sub_parser.strip():
-                                parser_table_map[parser_name_lower].add(sub_parser.strip())
-                
-                # Map the EquivalentBuiltInParser to the ParserName
-                if equivalent_builtin and parser_name:
-                    parser_names.add(equivalent_builtin)
-                    equivalent_lower = equivalent_builtin.lower()
-                    parser_name_lower = parser_name.lower()
-                    parser_alias_map[equivalent_lower] = parser_name_lower
-                    # Also make the equivalent name point to the same tables
-                    if parser_name_lower in parser_table_map:
-                        parser_table_map[equivalent_lower] = parser_table_map[parser_name_lower]
-                    
-            except Exception:
-                continue
-    
-    return parser_names, dict(parser_table_map), parser_alias_map
-
-
 def _process_asim_parser_file(
     yaml_path: Path,
     schema_name: str,
@@ -5704,12 +5690,6 @@ def normalize_parser_name(name: str) -> str:
     if lowered.startswith('_'):
         return lowered[1:]
     return lowered
-
-
-def is_parser_name(name: str, parser_names_normalized: Set[str]) -> bool:
-    """Check if a name matches a known parser name (handling underscore variations)."""
-    normalized = normalize_parser_name(name)
-    return normalized in parser_names_normalized
 
 
 def expand_parser_tables(parser_name: str, parser_table_map: Dict[str, Set[str]], max_depth: int = 5) -> Set[str]:
@@ -6227,7 +6207,7 @@ def determine_ingestion_api(
     """Determine whether a connector uses the Log Ingestion API or HTTP Data Collector API.
     
     This is only applicable to connectors that push data via an API:
-    CCF Push, Azure Function, REST Pull API, and Unknown (Custom Log).
+    CCF Push, Azure Function, REST Push API, and Unknown (Custom Log).
     
     CCF and CCF (Legacy) are excluded because their ingestion mechanism is
     platform-managed (Sentinel PaaS) — the connector definition doesn't configure
@@ -6236,7 +6216,7 @@ def determine_ingestion_api(
     Detection priority:
     1. CCF Push → always Log Ingestion API (DCR-based, solution code pushes data)
     2. Azure Function → scan Python code for API patterns
-    3. REST Pull API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
+    3. REST Push API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
     4. Fallback: table column suffix heuristic from table_schemas
     
     Args:
@@ -6255,7 +6235,7 @@ def determine_ingestion_api(
     """
     # Only applicable to collection methods where the solution code pushes data via an API
     # CCF and CCF (Legacy) are excluded — their ingestion is platform-managed
-    api_methods = {"CCF Push", "Azure Function", "REST Pull API", "Unknown (Custom Log)"}
+    api_methods = {"CCF Push", "Azure Function", "REST Push API", "Unknown (Custom Log)"}
     if collection_method not in api_methods:
         return "", ""
     
@@ -6423,7 +6403,7 @@ def determine_collection_method(
     - AMA (Azure Monitor Agent): Uses Azure Monitor Agent for CEF/Syslog collection
     - MMA (Log Analytics Agent): Legacy agent using workspace ID/key
     - Azure Diagnostics: Uses Azure diagnostic settings
-    - REST Pull API: Direct REST Pull API integration
+    - REST Push API: Connector pushes data to Sentinel via Azure Monitor HTTP Data Collector API / Logs Ingestion API
     - Native: Built-in Microsoft integrations
     
     Detection Priority:
@@ -6432,7 +6412,7 @@ def determine_collection_method(
     3. Native Microsoft integrations
     4. CCF patterns (content-based)
     5. Azure Function patterns
-    6. REST Pull API patterns
+    6. REST Push API patterns
     7. Table metadata fallback
     
     Args:
@@ -6462,11 +6442,13 @@ def determine_collection_method(
     title_indicates_ama = ('AMA' in connector_title or 'via AMA' in connector_title or
                            'ama' in conn_id_lower.split('-') or conn_id_lower.endswith('ama'))
     title_indicates_mma = ('Legacy Agent' in connector_title or 'via Legacy Agent' in connector_title)
-    
-    # Special case: WindowsFirewall (without Ama suffix) is MMA
-    if connector_id == 'WindowsFirewall':
+
+    # Per-connector override from solution_analyzer_overrides.csv:
+    # `Connector,<connector_id>,collection_method,MMA` forces MMA classification
+    # for connectors whose title/ID does not advertise the legacy agent.
+    if (get_connector_override_value(connector_id, 'collection_method') or '').strip().upper() == 'MMA':
         title_indicates_mma = True
-    
+
     if title_indicates_ama:
         all_matches.append(("AMA", "Title/ID indicates AMA"))
     if title_indicates_mma:
@@ -6551,17 +6533,17 @@ def determine_collection_method(
     is_azure_function = is_azure_function_filename or is_azure_function_content
     
     # === PRIORITY 7: Native Microsoft Integration (skip if CCF content detected) ===
-    # Native patterns are broad, so only use if no CCF content patterns found
+    # Only generic schema-level signals are detected here. Specific connector
+    # IDs that should be classified as Native (e.g. Office 365 management
+    # activity) are handled via Connector overrides in
+    # solution_analyzer_overrides.csv, not hardcoded here.
     is_native = False
     if not is_ccf_content:
         if 'SentinelKinds' in content:
             all_matches.append(("Native", "Uses SentinelKinds (Native integration)"))
             is_native = True
-        if any(x in connector_title for x in ['Microsoft Defender', 'Microsoft 365', 'Office 365', 'Microsoft Entra ID']):
+        if any(x in connector_title for x in ['Microsoft 365', 'Office 365']):
             all_matches.append(("Native", "Microsoft native integration"))
-            is_native = True
-        if any(x in connector_id for x in ['AzureActivity', 'AzureActiveDirectory', 'Office365', 'MicrosoftDefender']):
-            all_matches.append(("Native", "Known native connector ID"))
             is_native = True
     
     # === PRIORITY 8: Additional AMA/MMA patterns (lower priority) ===
@@ -6590,15 +6572,17 @@ def determine_collection_method(
                                       'InstallAgentOnLinuxNonAzure' in content):
         all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
     
-    # === PRIORITY 9: REST Pull API patterns ===
+    # === PRIORITY 9: REST Push API patterns ===
+    # External system pushes data to Sentinel via Azure Monitor HTTP Data Collector API
+    # or Logs Ingestion API (workspace sharedKeys / DCR + DCE).
     if 'REST API' in connector_title or 'REST API' in connector_description:
-        all_matches.append(("REST Pull API", "Title/description mentions REST API"))
+        all_matches.append(("REST Push API", "Title/description mentions REST API"))
     if 'push' in conn_title_lower or 'push' in conn_id_lower:
-        all_matches.append(("REST Pull API", "Push connector (REST API based)"))
+        all_matches.append(("REST Push API", "Push connector (REST API based)"))
     if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
-        all_matches.append(("REST Pull API", "Webhook pattern (REST API based)"))
+        all_matches.append(("REST Push API", "Webhook pattern (REST API based)"))
     if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
-        all_matches.append(("REST Pull API", "HTTP endpoint/trigger (REST API)"))
+        all_matches.append(("REST Push API", "HTTP endpoint/trigger (REST API)"))
     
     # === PRIORITY 10: Table metadata-based detection (lowest content-based priority) ===
     # Only use if no stronger patterns detected - this is a fallback
@@ -6634,9 +6618,9 @@ def determine_collection_method(
     
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
-    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Pull API
+    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Push API
     # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
-    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Defender", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
+    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Defender", "Native", "MMA", "AMA", "REST Push API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -8846,9 +8830,11 @@ def main() -> None:
 
                     # Drop tables that this connector references in queries but does not
                     # actually ingest (e.g., Function App health-monitoring queries against
-                    # AzureDiagnostics / AzureMetrics).
-                    reported_exclusions = CONNECTOR_REPORTED_TABLE_EXCLUSIONS.get(
-                        connector_id.lower(), set()
+                    # AzureDiagnostics / AzureMetrics). Driven by
+                    # Connector,<id>,reported_table_exclusions,table1;table2 in
+                    # solution_analyzer_overrides.csv.
+                    reported_exclusions = get_connector_override_set(
+                        connector_id, 'reported_table_exclusions'
                     )
                     if reported_exclusions and effective_table_entries:
                         filtered_entries: List[Tuple[str, Dict[str, Any]]] = []
@@ -8865,7 +8851,7 @@ def main() -> None:
                                     reason="reported_table_excluded",
                                     details=(
                                         f"Table '{entry_name}' dropped from connector tables "
-                                        f"per CONNECTOR_REPORTED_TABLE_EXCLUSIONS "
+                                        f"per Connector reported_table_exclusions override "
                                         f"(referenced in queries but not ingested)."
                                     ),
                                 )
@@ -9702,6 +9688,12 @@ def main() -> None:
         # Join multi-valued fields with precedence sorting
         final_method, final_method_reason = _join_multi(methods, method_reasons, COLLECTION_METHOD_PRECEDENCE)
         final_api, final_api_reason = _join_multi(apis, api_reasons, INGESTION_API_PRECEDENCE)
+
+        # Normalize legacy/lowercased labels and collapse parenthesized
+        # refinements at write time (COLLECTION_METHOD_GUIDANCE.md §4.4, §4.5).
+        final_method = _collapse_parenthesized_refinement(
+            _normalize_collection_method(final_method)
+        )
         
         connectors_data.append({
             'connector_id': info['connector_id'],
@@ -9791,7 +9783,7 @@ def main() -> None:
     # connector publishes to the Sentinel STIX Upload Indicators API, which
     # populates the new `ThreatIntelIndicators` / `ThreatIntelObjects` tables.
     # Applied regardless of the original collection_method (covers Unknown,
-    # REST Pull API, etc.) but does NOT override an already-detected
+    # REST Push API, etc.) but does NOT override an already-detected
     # TI_UPLOAD_METHOD classification.
     for connector in connectors_data:
         cid = connector.get('connector_id', '')
@@ -10316,6 +10308,17 @@ def main() -> None:
         table = mapping.get('table_name', '')
         if table:
             all_tables.add(normalize_table_case(table))
+    # COLLECTION_METHOD_GUIDANCE.md §9.1+§9.2: also emit a tables.csv row for
+    # every table documented in tables_reference.csv, even when no solution /
+    # connector / content item references it. The dashboard wants tables.csv to
+    # be the authoritative source of `collection_method`, so tables like
+    # AKSAudit, AppTraces, FunctionAppLogs, ContainerLogV2,
+    # MicrosoftGraphActivityLogs (which carry valid intrinsic metadata but no
+    # public solution) must appear so the category / resource_types /
+    # source_azure_monitor fallbacks can fire.
+    for table in tables_reference:
+        if table:
+            all_tables.add(table)
     
     # Apply solution overrides to rows early, before building table_support_tiers
     # This ensures solution-level overrides (like support_tier fixes) affect derived table data
@@ -10382,16 +10385,25 @@ def main() -> None:
             support_tier = 'Various'
         
         # === Table collection_method resolution ===
-        # Priority order:
+        # Priority order (see COLLECTION_METHOD_GUIDANCE.md):
         #   0. ASim* normalized tables are by definition fed by many parsers/
         #      sources, so always 'Various' regardless of any other signal.
-        #   1. Intrinsic value from tables_reference.csv (e.g. AMA from VM resource type).
-        #   2. Intrinsic XDR override: source_defender_xdr=Yes -> Defender.
-        #   3. Intrinsic Azure Resources override: category 'Azure Resources' -> Azure Diagnostics.
+        #   1. Hard table-name overrides (CommonSecurityLog, Syslog,
+        #      AzureDiagnostics) — publicly verifiable, trump everything else.
+        #   2. Intrinsic value from tables_reference.csv (e.g. AMA from VM resource type).
+        #   3. Intrinsic XDR override: source_defender_xdr=Yes -> Defender.
         #   4. Inherited from feeding connector when there is exactly one distinct
         #      informative collection method across all connectors that ingest
         #      this table (1:1 method relationship, even if multiple connectors).
-        # If (1)/(2)/(3) is set AND the connector-derived method (4 candidate)
+        #      Connector evidence wins over the category/resource_types Azure
+        #      fallback, so SigninLogs/AuditLogs (fed by the Entra connector)
+        #      correctly resolve to 'Native' rather than 'Azure Diagnostics'.
+        #   5. Category fallback: 'Azure Resources' in the category set
+        #      (treated as a multi-value, not a strict-equality string).
+        #   6. resource_types shortcut: any non-empty resource_types implies the
+        #      table is delivered through a resource (or Entra) Diagnostic Setting.
+        #   7. Last resort: *_CL custom-log tables with no other signal -> Custom.
+        # If (2)-(3) is set AND the connector-derived method (4 candidate)
         # disagrees (case-insensitively), a conflict is logged but the intrinsic
         # value wins. Comparisons are case-insensitive to tolerate stray casing
         # in tables_reference.csv (e.g. 'native' vs 'Native').
@@ -10404,9 +10416,6 @@ def main() -> None:
             if not collection_method and ref.get('source_defender_xdr', '').strip().lower() == 'yes':
                 collection_method = 'Defender'
                 method_source = 'source_defender_xdr'
-            if not collection_method and ref.get('category', '') == 'Azure Resources':
-                collection_method = 'Azure Diagnostics'
-                method_source = 'category=Azure Resources'
 
         connector_methods = table_connector_methods.get(table_name, set())
         # "Published connectors trump" rule: when a table is fed by multiple
@@ -10536,6 +10545,56 @@ def main() -> None:
                             f"{','.join(sorted(connector_methods))}. Per-method connectors: {breakdown}"
                         ),
                     )
+
+        # Category fallback (after connector inference, so connector evidence
+        # like SigninLogs/AuditLogs -> Native wins). 'Azure Resources' is
+        # treated as a set member because tables_reference.csv stores it as a
+        # comma-joined multi-value (e.g. 'Audit, Azure Resources, Containers').
+        # See COLLECTION_METHOD_GUIDANCE.md §3.
+        if not collection_method and 'Azure Resources' in _table_categories(ref):
+            collection_method = 'Azure Diagnostics'
+            method_source = 'category=Azure Resources'
+
+        # resource_types shortcut: any documented resource_types implies the
+        # table is delivered through an Azure (or Entra) Diagnostic Setting.
+        # See COLLECTION_METHOD_GUIDANCE.md §4.1. Note that
+        # tables_reference.csv uses '-' as a placeholder for "no resource
+        # types", so we treat that as empty.
+        if not collection_method:
+            rt = (ref.get('resource_types') or '').strip()
+            if rt and rt != '-':
+                collection_method = 'Azure Diagnostics'
+                method_source = 'resource_types'
+
+        # source_azure_monitor=Yes last-resort fallback per
+        # COLLECTION_METHOD_GUIDANCE.md §9.3: any table documented as an Azure
+        # Monitor table without a more specific signal is delivered via
+        # Diagnostic Settings. Catches Application Insights tables (AppTraces,
+        # AppRequests, AppMetrics, ...), Microsoft Graph activity logs, AAD
+        # B2C/Domain Services / Intune tables that are categorized as
+        # 'Low value' / 'Microsoft Graph' / 'Entra' / 'Intune' but lack a
+        # resource_types entry.
+        if not collection_method and ref.get('source_azure_monitor', '').strip().lower() == 'yes':
+            collection_method = 'Azure Diagnostics'
+            method_source = 'source_azure_monitor'
+
+        # Last-resort fallback per COLLECTION_METHOD_GUIDANCE.md §4.6: any *_CL
+        # table the analyzer sees but cannot attribute to a connector or
+        # tables_reference row gets the umbrella label 'Custom' (intentionally
+        # distinct from CCF). Customer custom-log tables ingested via either
+        # Customer CCF or the Log Ingestion API both fall here; the public data
+        # does not let us distinguish them.
+        if not collection_method and table_name.endswith('_CL'):
+            collection_method = 'Custom'
+            method_source = 'cl_table_fallback'
+
+        # Apply normalization (e.g. lowercase 'native' -> 'Native', legacy
+        # 'MMA' -> 'AMA') and collapse parenthesized refinements
+        # (e.g. 'Azure Function (TI Upload API)|Azure Function' -> 'Azure Function')
+        # at write time. See COLLECTION_METHOD_GUIDANCE.md §4.4 and §4.5.
+        collection_method = _collapse_parenthesized_refinement(
+            _normalize_collection_method(collection_method)
+        )
 
         tables_data.append({
             'table_name': table_name,
@@ -10930,13 +10989,14 @@ def main() -> None:
                     existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
                 )
         
-        # Promote Unknown (Custom Log) to REST Pull API if ingestion API was detected from JSON patterns
+        # Promote Unknown (Custom Log) to REST Push API if ingestion API was detected from JSON patterns
         # The presence of sharedKeys/WorkspaceId/PrimaryKey in the connector definition proves
-        # the connector uses an API-based approach, so it should be classified as REST Pull API
+        # the connector pushes data to Sentinel via the HTTP Data Collector API,
+        # so it should be classified as REST Push API
         if primary_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
             # Update all methods in the list
             updated_methods = [
-                "REST Pull API" if m == "Unknown (Custom Log)" else m
+                "REST Push API" if m == "Unknown (Custom Log)" else m
                 for m in collection_methods
             ]
             updated_reasons = connector.get('collection_method_reason', '').split('|')
@@ -10960,7 +11020,7 @@ def main() -> None:
         connectors_data = apply_overrides_to_data(connectors_data, overrides, 'connector', 'connector_id')
     
     if promoted_count:
-        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Pull API based on ingestion API detection")
+        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Push API based on ingestion API detection")
     
     # Recount after overrides (split multi-values)
     ingestion_api_counts = defaultdict(int)

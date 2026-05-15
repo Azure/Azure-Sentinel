@@ -257,9 +257,9 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Connect Microsoft Defender for Cloud", "https://learn.microsoft.com/azure/sentinel/connect-defender-for-cloud"),
         ],
     },
-    "REST Pull API": {
-        "name": "REST Pull API / Custom Integration",
-        "description": "REST Pull API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
+    "REST Push API": {
+        "name": "REST Push API / Custom Integration",
+        "description": "REST Push API-based connectors push data into Microsoft Sentinel via the Azure Monitor HTTP Data Collector API or the Logs Ingestion API (DCR/DCE). The external source initiates the HTTP requests; Sentinel does not poll. These connectors may use custom scripts, Logic Apps, or other integration methods to collect data and send it to the workspace.",
         "links": [
             ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
             ("📖 Send data using the Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-walkthrough"),
@@ -4120,7 +4120,7 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         if api_totals:
             f.write("---\n\n")
             f.write("## Ingestion API by Collection Method\n\n")
-            f.write("API-based connectors (CCF Push, Azure Function, REST Pull API, and Custom Log) ")
+            f.write("API-based connectors (CCF Push, Azure Function, REST Push API, and Custom Log) ")
             f.write("use one of two APIs to send data to the Log Analytics workspace. ")
             f.write("CCF and CCF (Legacy) are excluded as their ingestion is platform-managed.\n\n")
             
