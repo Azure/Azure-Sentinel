@@ -24,31 +24,36 @@ def main(mytimer: func.TimerRequest) -> None:
     start = datetime.datetime.now(datetime.timezone.utc)
 
     applogger.info(
-        "%s: %s started at %s",
-        consts.LOG_PREFIX,
-        consts.FUNCTION_NAME_FETCHER,
-        start.isoformat(),
+        consts.LOG_FORMAT.format(
+            consts.LOG_PREFIX, "main", consts.FUNCTION_NAME_FETCHER,
+            f"started at {start.isoformat()}",
+        )
     )
 
     if mytimer.past_due:
-        applogger.warning("%s: timer is past due", consts.LOG_PREFIX)
+        applogger.warning(
+            consts.LOG_FORMAT.format(
+                consts.LOG_PREFIX, "main", consts.FUNCTION_NAME_FETCHER,
+                "timer is past due",
+            )
+        )
 
     try:
         runner = GoogleSecOpsToStorage()
         runner.run()
     except Exception:
         applogger.exception(
-            "%s: unhandled error in %s",
-            consts.LOG_PREFIX,
-            consts.FUNCTION_NAME_FETCHER,
+            consts.LOG_FORMAT.format(
+                consts.LOG_PREFIX, "main", consts.FUNCTION_NAME_FETCHER,
+                "unhandled error",
+            )
         )
         raise
     finally:
         end = datetime.datetime.now(datetime.timezone.utc)
         applogger.info(
-            "%s: %s ended at %s (duration=%.2fs)",
-            consts.LOG_PREFIX,
-            consts.FUNCTION_NAME_FETCHER,
-            end.isoformat(),
-            (end - start).total_seconds(),
+            consts.LOG_FORMAT.format(
+                consts.LOG_PREFIX, "main", consts.FUNCTION_NAME_FETCHER,
+                f"ended at {end.isoformat()} (duration={( end - start).total_seconds():.2f}s)",
+            )
         )
