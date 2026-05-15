@@ -355,7 +355,10 @@ def get_collection_method_link(method: str, relative_path: str = "") -> str:
     if not method or method == '?':
         return '?'
     filename = get_collection_method_filename(method)
-    return f"[{method}]({relative_path}methods/{filename}.md)"
+    # Escape pipe characters in the display label so combined methods like
+    # "A|B" don't break markdown table cells when this link is placed in a table.
+    display = method.replace('|', '\\|')
+    return f"[{display}]({relative_path}methods/{filename}.md)"
 
 
 def get_asim_icon(relative_path: str = "../tables/") -> str:
