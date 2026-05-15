@@ -47,7 +47,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "OpenAI",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.1.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-openai",
     "_solutionId": "[variables('solutionId')]",
     "parserObject1": {
@@ -65,7 +65,7 @@
       "parserContentId2": "OpenAIChatCompletions-Parser"
     },
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.0",
+    "dataConnectorCCPVersion": "3.1.0",
     "_dataConnectorContentIdConnectorDefinition1": "OpenAIConnector",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "OpenAIConnectorConnections",
@@ -84,7 +84,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_OpenAIAuditLogsAliasFunction Data Parser with template version 3.0.0",
+        "description": "parser_OpenAIAuditLogsAliasFunction Data Parser with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -216,7 +216,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "parser_OpenAIChatCompletionsAliasFunction Data Parser with template version 3.0.0",
+        "description": "parser_OpenAIChatCompletionsAliasFunction Data Parser with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -233,7 +233,7 @@
                 "displayName": "OpenAIChatCompletions",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "OpenAIChatCompletions",
-                "query": "union isfuzzy=true OpenAIChatCompletions_CL, SentinelOpenAIChatCompletions",
+                "query": "ASimAgentEventLogs\n| where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion'",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -298,7 +298,7 @@
         "displayName": "OpenAIChatCompletions",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "OpenAIChatCompletions",
-        "query": "union isfuzzy=true OpenAIChatCompletions_CL, SentinelOpenAIChatCompletions",
+        "query": "ASimAgentEventLogs\n| where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion'",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -368,13 +368,13 @@
                   "id": "OpenAIConnector",
                   "title": "OpenAI (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Data is collected into separate tables (OpenAIAuditLogs and OpenAIChatCompletions) for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
+                  "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Audit logs are collected into the custom OpenAIAuditLogs table; chat completions are normalized into the ASimAgentEventLogs standard ASIM table for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
                   "graphQueriesTableName": "OpenAIAuditLogs",
                   "graphQueries": [
                     {
                       "metricName": "Total OpenAI Data",
                       "legend": "All OpenAI Data",
-                      "baseQuery": "{{graphQueriesTableName}}"
+                      "baseQuery": "union OpenAIAuditLogs, OpenAIChatCompletions"
                     },
                     {
                       "metricName": "Recent Audit Logs",
@@ -382,19 +382,19 @@
                       "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h)"
                     },
                     {
-                      "metricName": "Recent Chat Completions",
-                      "legend": "Recent Chat Completions",
-                      "baseQuery": "OpenAIChatCompletions"
-                    },
-                    {
                       "metricName": "API Key Events",
                       "legend": "API Key Related Events",
                       "baseQuery": "{{graphQueriesTableName}} | where EventType has_any ('api_key.created', 'api_key.updated', 'api_key.deleted')"
                     },
                     {
+                      "metricName": "Recent Chat Completions",
+                      "legend": "Recent Chat Completions",
+                      "baseQuery": "OpenAIChatCompletions"
+                    },
+                    {
                       "metricName": "High Token Usage",
                       "legend": "High Token Usage Completions",
-                      "baseQuery": "OpenAIChatCompletions | where Usage.total_tokens > 1000"
+                      "baseQuery": "ASimAgentEventLogs | where EventProduct == 'OpenAI API Platform' and EventVendor == 'OpenAI' and EventType == 'ChatCompletion' | where OutputTokensUsed > 1000"
                     }
                   ],
                   "sampleQueries": [
@@ -409,8 +409,8 @@
                       "lastDataReceivedQuery": "OpenAIAuditLogs\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     },
                     {
-                      "name": "OpenAIChatCompletions",
-                      "lastDataReceivedQuery": "OpenAIChatCompletions\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      "name": "ASimAgentEventLogs",
+                      "lastDataReceivedQuery": "ASimAgentEventLogs\n| where TimeGenerated > ago(6h)\n| where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -420,7 +420,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "union OpenAIAuditLogs, OpenAIChatCompletions | where TimeGenerated > ago(1h) | take 1"
+                        "union OpenAIAuditLogs, (ASimAgentEventLogs | where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion') | where TimeGenerated > ago(1h) | take 1"
                       ]
                     }
                   ],
@@ -458,7 +458,7 @@
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`OpenAIChatCompletions`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
+                            "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`ASimAgentEventLogs`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Chat completions are normalized into the **ASimAgentEventLogs** ASIM standard table.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
                           }
                         }
                       ]
@@ -528,7 +528,7 @@
                                   {
                                     "type": "Markdown",
                                     "parameters": {
-                                      "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics).\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
+                                      "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics) into the **ASimAgentEventLogs** ASIM standard table.\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
                                     }
                                   },
                                   {
@@ -672,19 +672,75 @@
                         "type": "string"
                       },
                       {
-                        "name": "object",
+                        "name": "request_id",
                         "type": "string"
-                      },
-                      {
-                        "name": "created",
-                        "type": "long"
                       },
                       {
                         "name": "model",
                         "type": "string"
                       },
                       {
-                        "name": "request_id",
+                        "name": "temperature",
+                        "type": "real"
+                      },
+                      {
+                        "name": "top_p",
+                        "type": "real"
+                      },
+                      {
+                        "name": "presence_penalty",
+                        "type": "real"
+                      },
+                      {
+                        "name": "frequency_penalty",
+                        "type": "real"
+                      },
+                      {
+                        "name": "seed",
+                        "type": "long"
+                      },
+                      {
+                        "name": "tool_choice",
+                        "type": "string"
+                      },
+                      {
+                        "name": "choices",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "created",
+                        "type": "long"
+                      },
+                      {
+                        "name": "eventVendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventProduct",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventSchema",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventSchemaVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventCount",
+                        "type": "string"
+                      },
+                      {
+                        "name": "eventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "modelProviderName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "object",
                         "type": "string"
                       },
                       {
@@ -696,11 +752,11 @@
                         "type": "string"
                       },
                       {
-                        "name": "choices",
+                        "name": "response_format",
                         "type": "dynamic"
                       },
                       {
-                        "name": "usage",
+                        "name": "tools",
                         "type": "dynamic"
                       },
                       {
@@ -708,44 +764,12 @@
                         "type": "dynamic"
                       },
                       {
-                        "name": "tool_choice",
-                        "type": "string"
-                      },
-                      {
-                        "name": "tools",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "temperature",
-                        "type": "real"
-                      },
-                      {
-                        "name": "top_p",
-                        "type": "real"
-                      },
-                      {
-                        "name": "frequency_penalty",
-                        "type": "real"
-                      },
-                      {
-                        "name": "presence_penalty",
-                        "type": "real"
-                      },
-                      {
-                        "name": "seed",
-                        "type": "long"
-                      },
-                      {
                         "name": "input_user",
                         "type": "string"
                       },
                       {
-                        "name": "response_format",
+                        "name": "usage",
                         "type": "dynamic"
-                      },
-                      {
-                        "name": "friendlyName",
-                        "type": "string"
                       }
                     ]
                   }
@@ -776,130 +800,10 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "outputStream": "Custom-OpenAIChatCompletions_CL",
-                    "transformKql": "source | extend TimeGenerated = iff(isnull(['created']), now(), datetime(1970-01-01) + (['created'] * 1s)) , Id = ['id'] , ObjectType = ['object'] , CreatedAt = datetime(1970-01-01) + (['created'] * 1s) , Model = ['model'] , RequestId = ['request_id'] , ServiceTier = ['service_tier'] , SystemFingerprint = ['system_fingerprint'] , Choices = ['choices'] , Usage = ['usage'] , Metadata = ['metadata'] , ToolChoice = ['tool_choice'] , Tools = ['tools'] , Temperature = ['temperature'] , TopProbability = ['top_p'] , FrequencyPenalty = ['frequency_penalty'] , PresencePenalty = ['presence_penalty'] , Seed = ['seed'] , InputUser = ['input_user'] , ResponseFormat = ['response_format'] , ConnectorName = ['friendlyName'] | project TimeGenerated , Id , ObjectType , CreatedAt , Model , RequestId , ServiceTier , SystemFingerprint , Choices , Usage , Metadata , ToolChoice , Tools , Temperature , TopProbability , FrequencyPenalty , PresencePenalty , Seed , InputUser , ResponseFormat , ConnectorName"
+                    "outputStream": "Microsoft-ASimAgentEventLogs",
+                    "transformKql": "source | extend   TimeGenerated = iff(isnull(['created']), now(), datetime(1970-01-01) + (['created'] * 1s)) , EventStartTime = iff(isnull(['created']), now(), datetime(1970-01-01) + (['created'] * 1s)) , EventEndTime = iff(isnull(['created']), now(), datetime(1970-01-01) + (['created'] * 1s)) , EventUid = tostring(['id']) , EventRequestId = tostring(['request_id']) , ModelName = tostring(['model']) , EventRequestTemperature = todouble(['temperature']) , EventRequestTopP = todouble(['top_p']) , EventRequestPresencePenalty = todouble(['presence_penalty']) , EventRequestFrequencyPenalty = todouble(['frequency_penalty']) , EventRequestSeed = tolong(['seed']) , ToolName = tostring(['tool_choice']) , EventOriginalType = tostring(['object']) , EventOriginalResultDetails = tostring(todynamic(['choices'])) , InputTokensUsed = tolong(usage.prompt_tokens) , OutputTokensUsed = tolong(usage.completion_tokens) , EventVendor = tostring(['eventVendor']) , EventProduct = tostring(['eventProduct']) , EventSchema = tostring(['eventSchema']) , EventSchemaVersion = tostring(['eventSchemaVersion']) , EventCount = toint(['eventCount']) , EventType = tostring(['eventType']) , ModelProviderName = tostring(['modelProviderName']) , AdditionalFields = bag_pack('service_tier', ['service_tier'], 'system_fingerprint', ['system_fingerprint'], 'response_format', ['response_format'], 'tools', ['tools'], 'metadata', ['metadata'], 'input_user', ['input_user']) , EventFinishReasons = pack_array(tostring(todynamic(['choices'])[0].finish_reason)) | project   TimeGenerated , EventStartTime , EventEndTime , EventUid , EventRequestId , ModelName , ModelProviderName , EventRequestTemperature , EventRequestTopP , EventRequestPresencePenalty , EventRequestFrequencyPenalty , EventRequestSeed , ToolName , EventOriginalType , EventFinishReasons , EventOriginalResultDetails , InputTokensUsed , OutputTokensUsed , EventVendor , EventProduct , EventSchema , EventSchemaVersion , EventCount , EventType , AdditionalFields"
                   }
                 ]
-              }
-            },
-            {
-              "name": "OpenAIChatCompletions_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "retentionInDays": 90,
-                "schema": {
-                  "name": "OpenAIChatCompletions_CL",
-                  "description": "OpenAI Chat Completions data collected from OpenAI Chat Completions API",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "datetime"
-                    },
-                    {
-                      "name": "Id",
-                      "type": "string",
-                      "description": "The unique identifier for the chat completion"
-                    },
-                    {
-                      "name": "ObjectType",
-                      "type": "string",
-                      "description": "The object type"
-                    },
-                    {
-                      "name": "CreatedAt",
-                      "type": "datetime",
-                      "description": "The Unix timestamp (in seconds) of when the chat completion was created"
-                    },
-                    {
-                      "name": "Model",
-                      "type": "string",
-                      "description": "The model used for the chat completion"
-                    },
-                    {
-                      "name": "RequestId",
-                      "type": "string",
-                      "description": "The unique request identifier"
-                    },
-                    {
-                      "name": "ServiceTier",
-                      "type": "string",
-                      "description": "The processing type used for serving the request"
-                    },
-                    {
-                      "name": "SystemFingerprint",
-                      "type": "string",
-                      "description": "Backend configuration fingerprint"
-                    },
-                    {
-                      "name": "Choices",
-                      "type": "dynamic",
-                      "description": "The list of chat completion choices"
-                    },
-                    {
-                      "name": "Usage",
-                      "type": "dynamic",
-                      "description": "Usage statistics for the completion request"
-                    },
-                    {
-                      "name": "Metadata",
-                      "type": "dynamic",
-                      "description": "Set of key-value pairs attached to the object"
-                    },
-                    {
-                      "name": "ToolChoice",
-                      "type": "string",
-                      "description": "Which tool (if any) was called by the model"
-                    },
-                    {
-                      "name": "Tools",
-                      "type": "dynamic",
-                      "description": "List of tools the model may call"
-                    },
-                    {
-                      "name": "Temperature",
-                      "type": "real",
-                      "description": "The sampling temperature used"
-                    },
-                    {
-                      "name": "TopProbability",
-                      "type": "real",
-                      "description": "The nucleus sampling parameter"
-                    },
-                    {
-                      "name": "FrequencyPenalty",
-                      "type": "real",
-                      "description": "Frequency penalty parameter"
-                    },
-                    {
-                      "name": "PresencePenalty",
-                      "type": "real",
-                      "description": "Presence penalty parameter"
-                    },
-                    {
-                      "name": "Seed",
-                      "type": "long",
-                      "description": "The seed used for deterministic sampling"
-                    },
-                    {
-                      "name": "InputUser",
-                      "type": "string",
-                      "description": "User identifier for the request"
-                    },
-                    {
-                      "name": "ResponseFormat",
-                      "type": "dynamic",
-                      "description": "The format specification for the response"
-                    },
-                    {
-                      "name": "ConnectorName",
-                      "type": "string",
-                      "description": "The friendly name of the connector instance that collected this log"
-                    }
-                  ]
-                }
               }
             },
             {
@@ -989,13 +893,13 @@
           "id": "OpenAIConnector",
           "title": "OpenAI (via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Data is collected into separate tables (OpenAIAuditLogs and OpenAIChatCompletions) for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
+          "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Audit logs are collected into the custom OpenAIAuditLogs table; chat completions are normalized into the ASimAgentEventLogs standard ASIM table for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
           "graphQueriesTableName": "OpenAIAuditLogs",
           "graphQueries": [
             {
               "metricName": "Total OpenAI Data",
               "legend": "All OpenAI Data",
-              "baseQuery": "{{graphQueriesTableName}}"
+              "baseQuery": "union OpenAIAuditLogs, OpenAIChatCompletions"
             },
             {
               "metricName": "Recent Audit Logs",
@@ -1003,19 +907,19 @@
               "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h)"
             },
             {
-              "metricName": "Recent Chat Completions",
-              "legend": "Recent Chat Completions",
-              "baseQuery": "OpenAIChatCompletions"
-            },
-            {
               "metricName": "API Key Events",
               "legend": "API Key Related Events",
               "baseQuery": "{{graphQueriesTableName}} | where EventType has_any ('api_key.created', 'api_key.updated', 'api_key.deleted')"
             },
             {
+              "metricName": "Recent Chat Completions",
+              "legend": "Recent Chat Completions",
+              "baseQuery": "OpenAIChatCompletions"
+            },
+            {
               "metricName": "High Token Usage",
               "legend": "High Token Usage Completions",
-              "baseQuery": "OpenAIChatCompletions | where Usage.total_tokens > 1000"
+              "baseQuery": "ASimAgentEventLogs | where EventProduct == 'OpenAI API Platform' and EventVendor == 'OpenAI' and EventType == 'ChatCompletion' | where OutputTokensUsed > 1000"
             }
           ],
           "sampleQueries": [
@@ -1030,8 +934,8 @@
               "lastDataReceivedQuery": "OpenAIAuditLogs\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             },
             {
-              "name": "OpenAIChatCompletions",
-              "lastDataReceivedQuery": "OpenAIChatCompletions\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+              "name": "ASimAgentEventLogs",
+              "lastDataReceivedQuery": "ASimAgentEventLogs\n| where TimeGenerated > ago(6h)\n| where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1041,7 +945,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
-                "union OpenAIAuditLogs, OpenAIChatCompletions | where TimeGenerated > ago(1h) | take 1"
+                "union OpenAIAuditLogs, (ASimAgentEventLogs | where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion') | where TimeGenerated > ago(1h) | take 1"
               ]
             }
           ],
@@ -1079,7 +983,7 @@
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`OpenAIChatCompletions`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
+                    "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`ASimAgentEventLogs`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Chat completions are normalized into the **ASimAgentEventLogs** ASIM standard table.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
                   }
                 }
               ]
@@ -1149,7 +1053,7 @@
                           {
                             "type": "Markdown",
                             "parameters": {
-                              "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics).\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
+                              "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics) into the **ASimAgentEventLogs** ASIM standard table.\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
                             }
                           },
                           {
@@ -1439,13 +1343,20 @@
                   "pageSizeParameterName": "limit"
                 },
                 "connectorDefinitionName": "OpenAIConnector",
-                "dataType": "OpenAIChatCompletions",
+                "dataType": "ASimAgentEventLogs",
                 "dcrConfig": {
                   "streamName": "Custom-OpenAIChatCompletions_CL",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                 },
                 "addOnAttributes": {
+                  "eventVendor": "OpenAI",
+                  "eventProduct": "OpenAI API Platform",
+                  "eventSchema": "AgentEvent",
+                  "eventSchemaVersion": "0.1.0",
+                  "eventCount": "1",
+                  "eventType": "ChatCompletion",
+                  "modelProviderName": "OpenAI",
                   "friendlyName": "[[parameters('chatCompletionsFriendlyName')]"
                 }
               },
@@ -1467,7 +1378,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.1.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "OpenAI",

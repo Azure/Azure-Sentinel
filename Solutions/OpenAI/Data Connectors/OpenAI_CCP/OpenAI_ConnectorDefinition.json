@@ -9,13 +9,13 @@
       "id": "OpenAIConnector",
       "title": "OpenAI (via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Data is collected into separate tables (OpenAIAuditLogs and OpenAIChatCompletions) for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
+      "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Audit logs are collected into the custom OpenAIAuditLogs table; chat completions are normalized into the ASimAgentEventLogs standard ASIM table for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
       "graphQueriesTableName": "OpenAIAuditLogs",
       "graphQueries": [
         {
           "metricName": "Total OpenAI Data",
           "legend": "All OpenAI Data",
-          "baseQuery": "{{graphQueriesTableName}}"
+          "baseQuery": "union OpenAIAuditLogs, OpenAIChatCompletions"
         },
         {
           "metricName": "Recent Audit Logs",
@@ -23,19 +23,19 @@
           "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h)"
         },
         {
-          "metricName": "Recent Chat Completions",
-          "legend": "Recent Chat Completions",
-          "baseQuery": "OpenAIChatCompletions"
-        },
-        {
           "metricName": "API Key Events",
           "legend": "API Key Related Events",
           "baseQuery": "{{graphQueriesTableName}} | where EventType has_any ('api_key.created', 'api_key.updated', 'api_key.deleted')"
         },
         {
+          "metricName": "Recent Chat Completions",
+          "legend": "Recent Chat Completions",
+          "baseQuery": "OpenAIChatCompletions"
+        },
+        {
           "metricName": "High Token Usage",
           "legend": "High Token Usage Completions",
-          "baseQuery": "OpenAIChatCompletions | where Usage.total_tokens > 1000"
+          "baseQuery": "ASimAgentEventLogs | where EventProduct == 'OpenAI API Platform' and EventVendor == 'OpenAI' and EventType == 'ChatCompletion' | where OutputTokensUsed > 1000"
         }
       ],
       "sampleQueries": [
@@ -50,8 +50,8 @@
           "lastDataReceivedQuery": "OpenAIAuditLogs\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         },
         {
-          "name": "OpenAIChatCompletions",
-          "lastDataReceivedQuery": "OpenAIChatCompletions\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+          "name": "ASimAgentEventLogs",
+          "lastDataReceivedQuery": "ASimAgentEventLogs\n| where TimeGenerated > ago(6h)\n| where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -61,7 +61,7 @@
         {
           "type": "IsConnectedQuery",
           "value": [
-            "union OpenAIAuditLogs, OpenAIChatCompletions | where TimeGenerated > ago(1h) | take 1"
+            "union OpenAIAuditLogs, (ASimAgentEventLogs | where EventVendor == 'OpenAI' and EventProduct == 'OpenAI API Platform' and EventType == 'ChatCompletion') | where TimeGenerated > ago(1h) | take 1"
           ]
         }
       ],
@@ -99,7 +99,7 @@
             {
               "type": "Markdown",
               "parameters": {
-                "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`OpenAIChatCompletions`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
+                "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`ASimAgentEventLogs`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Chat completions are normalized into the **ASimAgentEventLogs** ASIM standard table.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
               }
             }
           ]
@@ -169,7 +169,7 @@
                       {
                         "type": "Markdown",
                         "parameters": {
-                          "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics).\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
+                          "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics) into the **ASimAgentEventLogs** ASIM standard table.\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
                         }
                       },
                       {
