@@ -1,0 +1,84 @@
+id: 2a166359-a104-4d72-93ae-643ae69bf801
+name: OAuth Application Consent to High-Risk Permission Scope
+description: |
+  Identifies OAuth application consent events where high-risk permissions were granted,
+  including application-level permissions such as Directory.ReadWrite.All or
+  RoleManagement.ReadWrite.Directory. Flags apps with no consent history in the tenant
+  over the past 90 days. Complements SuspiciousOAuthApp_OfflineAccess by covering
+  application permissions and admin consent grants not included in that detection.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let timeframe = 1d;
+  let lookback = 90d;
+  let HighRiskScopes = dynamic([
+      "RoleManagement.ReadWrite.Directory",
+      "Application.ReadWrite.All",
+      "AppRoleAssignment.ReadWrite.All",
+      "Directory.ReadWrite.All",
+      "User.ReadWrite.All",
+      "Mail.ReadWrite",
+      "Mail.Send",
+      "Files.ReadWrite.All",
+      "full_access_as_app"
+  ]);
+  let KnownAppSet = toscalar(
+      AuditLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where OperationName =~ "Consent to application"
+      | extend AppId = tostring(TargetResources[0].id)
+      | summarize make_set(AppId)
+  );
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName =~ "Consent to application"
+  | where Result =~ "success"
+  | extend AppId    = tostring(TargetResources[0].id)
+  | extend AppName  = tostring(TargetResources[0].displayName)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | where tostring(ModProp.displayName) =~ "ConsentContext.Permissions"
+  | extend GrantedPermissions = tostring(ModProp.newValue)
+  | where GrantedPermissions has_any (HighRiskScopes)
+  | extend IsNewApp = not(set_has_element(KnownAppSet, AppId))
+  | extend AccountName      = iff(Actor has "@", tostring(split(Actor, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(Actor has "@", tostring(split(Actor, "@")[1]), "")
+  | project TimeGenerated, AppName, AppId, GrantedPermissions, Actor,
+            AccountName, AccountUPNSuffix, ActorIp, IsNewApp, CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
