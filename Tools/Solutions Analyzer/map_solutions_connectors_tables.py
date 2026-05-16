@@ -5958,6 +5958,30 @@ TI_UPLOAD_API_NAME_BY_PATTERN: Dict[str, str] = {
 TI_UPLOAD_DEFAULT_API_NAME = "STIX 2.1 Upload Indicators API"
 
 
+def _strip_redundant_af_for_ti_upload(
+    methods: List[str], reasons: List[str]
+) -> Tuple[List[str], List[str]]:
+    """When a connector is classified as ``Azure Function (TI Upload API)``,
+    the parallel ``Azure Function`` tag is redundant (TI Upload IS hosted
+    in an Azure Function). Strip the ``Azure Function`` entry and its
+    paired reason in-place-safe order. Returns the cleaned lists.
+    """
+    if TI_UPLOAD_METHOD not in methods or "Azure Function" not in methods:
+        return methods, reasons
+    cleaned_methods: List[str] = []
+    cleaned_reasons: List[str] = []
+    # Keep parallel arrays aligned: drop the first occurrence of 'Azure Function'.
+    dropped = False
+    for i, m in enumerate(methods):
+        r = reasons[i] if i < len(reasons) else ""
+        if not dropped and m == "Azure Function":
+            dropped = True
+            continue
+        cleaned_methods.append(m)
+        cleaned_reasons.append(r)
+    return cleaned_methods, cleaned_reasons
+
+
 def solution_uses_ti_upload_api(solution_dir: Optional[Path]) -> Optional[str]:
     """Return the matching pattern if any Python file under the solution's
     Data Connectors folder references a Sentinel TI ingestion management-plane
@@ -9762,7 +9786,14 @@ def main() -> None:
                     existing_method_reasons.append(f"Connector code uses Sentinel TI Upload Indicators API ({match})")
                 else:
                     existing_method_reasons.append(f"Connector code uses legacy Sentinel TI ingestion API ({match})")
-            
+
+            # TI Upload is itself an Azure Function variant: drop the generic
+            # "Azure Function" classification so the combined method does not
+            # show up as `Azure Function (TI Upload API)|Azure Function`.
+            existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
+                existing_methods, existing_method_reasons
+            )
+
             # Add TI Upload API if not already present
             if api_name not in existing_apis:
                 existing_apis.append(api_name)
@@ -9807,7 +9838,11 @@ def main() -> None:
                 "Connector definition filename suffix '_UploadIndicatorsAPI' "
                 "indicates Sentinel STIX Upload Indicators API ingestion"
             )
-        
+
+        existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
+            existing_methods, existing_method_reasons
+        )
+
         if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis:
             existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
             existing_api_reasons.append(
@@ -9863,7 +9898,11 @@ def main() -> None:
             existing_methods.append(TI_UPLOAD_METHOD)
             if not connector.get('collection_method_reason'):
                 existing_method_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
-        
+
+        existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
+            existing_methods, existing_method_reasons
+        )
+
         if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis and not connector.get('ingestion_api'):
             existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
             existing_api_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
