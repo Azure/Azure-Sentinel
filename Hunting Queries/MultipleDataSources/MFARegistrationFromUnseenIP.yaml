@@ -40,8 +40,10 @@ query: |
   | extend MethodType = tostring(TargetResources[0].displayName)
   | extend RegIp      = tostring(InitiatedBy.user.ipAddress)
   | where isnotempty(RegIp) and isnotempty(UserUpn)
-  // Join with IP baseline
-  | join kind=leftouter BaselineIPs on $left.UserUpn == $right.UserUpn
+  // Join with IP baseline; hint.strategy=broadcast pushes the smaller AuditLogs
+  // stream to all nodes holding BaselineIPs, avoiding an expensive shuffle join
+  // when the 30-day baseline is large relative to the 1-day event stream.
+  | join kind=leftouter hint.strategy=broadcast BaselineIPs on $left.UserUpn == $right.UserUpn
   // Flag registrations from IPs not present in the baseline, or users with no baseline at all
   | where isnull(KnownIPs) or not(set_has_element(KnownIPs, RegIp))
   | extend AccountName      = tostring(split(UserUpn, "@")[0])
