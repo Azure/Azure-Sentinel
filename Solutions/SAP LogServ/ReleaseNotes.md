@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.5       | 01-04-2026                     |preview tag remove, UI update|
+| 3.0.5       | 23-04-2026                     | Implemented DCR KQL transforms for standard table routing: Linux syslog and HANA DB audit→Syslog, Windows→WindowsEvent, BIND DNS→ASimDnsActivityLogs, SAP Web Dispatcher access→ASimWebSessionLogs. Removed dead NetworkSession flow. Updated connector description and sample queries. |
 | 3.0.4       |  11-08-2025                    | Connector UI updates |
 | 3.0.3       |  17-07-2025                    | Observability Workbook added |
 | 3.0.2       |  25-06-2025                    | Analytic Rules for HANA DB added |
