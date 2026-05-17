@@ -1,0 +1,1 @@
+../../Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1
