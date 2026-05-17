@@ -35,11 +35,25 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "_solutionName": "VaronisSaaS",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.1.0",
     "solutionId": "varonis.microsoft-sentinel-solution-varonissaas",
     "_solutionId": "[variables('solutionId')]",
     "workbookVersion1": "1.0.0",
@@ -58,6 +72,12 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "dataConnectorCCPVersion": "3.1.0",
+    "_dataConnectorContentIdConnectorDefinition2": "VaronisSaaSAlertsPush",
+    "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
+    "_dataConnectorContentIdConnections2": "VaronisSaaSAlertsPushConnections",
+    "dataConnectorTemplateNameConnections2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections2')))]",
+    "blanks": "[replace('b', 'b', '')]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -70,7 +90,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "VaronisSaaS Workbook with template version 3.0.3",
+        "description": "VaronisSaaS Workbook with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -157,7 +177,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "VaronisSaaS data connector with template version 3.0.3",
+        "description": "VaronisSaaS data connector with template version 3.1.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -490,16 +510,903 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "displayName": "Varonis SaaS (Push)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "VaronisSaaSAlertsPush",
+                  "title": "Varonis SaaS (Push)",
+                  "publisher": "Varonis",
+                  "descriptionMarkdown": "The [Varonis SaaS](https://www.varonis.com/) connector provides the capability to push real-time DatAlert security alerts from your Varonis application directly into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. Varonis prioritizes deep data visibility, classification capabilities, and automated remediation for data access. This connector ingests alert severity, event types, user information, and related details into a custom Log Analytics table for analysis, alerting, and visualization.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total alerts received",
+                      "legend": "VaronisAlerts_CL",
+                      "baseQuery": "VaronisAlerts_CL"
+                    },
+                    {
+                      "metricName": "High severity alerts",
+                      "legend": "High severity alerts",
+                      "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"High\""
+                    },
+                    {
+                      "metricName": "Medium severity alerts",
+                      "legend": "Medium severity alerts",
+                      "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"Medium\""
+                    },
+                    {
+                      "metricName": "Low severity alerts",
+                      "legend": "Low severity alerts",
+                      "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"Low\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Varonis alerts",
+                      "query": "VaronisAlerts_CL\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "High severity Varonis alerts",
+                      "query": "VaronisAlerts_CL\n | where AlertSeverity_s == \"High\"\n | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Alerts by category",
+                      "query": "VaronisAlerts_CL\n | summarize Count = count() by AlertCategory_s\n | sort by Count desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "VaronisAlerts_CL",
+                      "lastDataReceivedQuery": "VaronisAlerts_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "VaronisAlerts_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Create ARM Resources and Provide the Required Permissions",
+                      "description": "This connector enables your Varonis SaaS application to push DatAlert security alerts directly to Microsoft Sentinel via the Azure Monitor Ingestion API.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application\nClicking on \"Deploy\" will trigger the creation of a Log Analytics table and a Data Collection Rule (DCR).\nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                          }
+                        },
+                        {
+                          "type": "DeployPushConnectorButton",
+                          "parameters": {
+                            "label": "Deploy Varonis SaaS Push connector resources",
+                            "applicationDisplayName": "Varonis SaaS Push Connector Application"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Configure Your Varonis Application",
+                      "description": "Use the following parameters to configure your Varonis SaaS application to push DatAlert alerts to the workspace.",
+                      "instructions": [
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Tenant ID (Directory ID)",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Entra App Registration Application ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Application ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Entra App Registration Secret",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Secret"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Endpoint Uri",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Rule Immutable ID",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Stream Name",
+                            "value": "Custom-VaronisSaaSAlerts"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Configure Varonis SaaS Application\nUpdate your Varonis SaaS application configuration with the above credentials to enable DatAlert alert push to Microsoft Sentinel."
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Varonis"
+                },
+                "support": {
+                  "name": "Varonis",
+                  "email": "support@varonis.com",
+                  "tier": "Partner",
+                  "link": "https://www.varonis.com/resources/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "VaronisSaaSAlertsPushDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-VaronisSaaSAlerts": {
+                    "columns": [
+                      {
+                        "name": "AlertId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatDetectionPolicyName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AlertTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AlertSeverity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AlertCategory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Countries",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "States",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CloseReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BlacklistedLocation",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "AbnormalLocations",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "EventsCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "PrivilegedAccountType",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "UserNames",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "UserSamAccountNames",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "ContainsMaliciousExternalIPs",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "AggregatedExternalIPThreatTypes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "Assets",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "FlaggedDataExposed",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "SensitiveDataExposed",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "DataSourceTypes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "DataSources",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "DeviceNames",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "InitialEventTimeUTC",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AccountsHaveFollowUpIndicators",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "AlertTimeUTC",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "InitialEventTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AssignedtoVaronis",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "EscalationType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MitreTacticName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClosedBy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IngestTime",
+                        "type": "datetime"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-VaronisSaaSAlerts"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = iif(isnotnull(AlertTimeUTC), AlertTimeUTC, now()) | extend AlertId_g = tostring(AlertId), ThreatDetectionPolicyName_s = ThreatDetectionPolicyName, AlertTime_t = AlertTime, AlertSeverity_s = AlertSeverity, AlertCategory_s = AlertCategory, Countries_s = tostring(Countries), States_s = tostring(States), Status_s = Status, CloseReason_s = CloseReason, BlacklistedLocation_b = BlacklistedLocation, AbnormalLocations_s = tostring(AbnormalLocations), EventsCount_d = toreal(EventsCount), PrivilegedAccountType_s = tostring(PrivilegedAccountType), UserNames_s = tostring(UserNames), UserSamAccountNames_s = tostring(UserSamAccountNames), ContainsMaliciousExternalIPs_b = ContainsMaliciousExternalIPs, AggregatedExternalIPThreatTypes_s = tostring(AggregatedExternalIPThreatTypes), Assets_s = tostring(Assets), FlaggedDataExposed_s = tostring(FlaggedDataExposed), SensitiveDataExposed_s = tostring(SensitiveDataExposed), DataSourceTypes_s = tostring(DataSourceTypes), DataSources_s = tostring(DataSources), DeviceNames_s = tostring(DeviceNames), InitialEventTimeUTC_t = InitialEventTimeUTC, AccountsHaveFollowUpIndicators_s = tostring(AccountsHaveFollowUpIndicators), AlertTimeUTC_t = AlertTimeUTC, InitialEventTime_t = InitialEventTime, AssignedtoVaronis_b = AssignedtoVaronis, EscalationType_s = EscalationType, MitreTacticName_s = MitreTacticName, ClosedBy_s = ClosedBy, IngestTime_t = IngestTime | project TimeGenerated, AlertId_g, ThreatDetectionPolicyName_s, AlertTime_t, AlertSeverity_s, AlertCategory_s, Countries_s, States_s, Status_s, CloseReason_s, BlacklistedLocation_b, AbnormalLocations_s, EventsCount_d, PrivilegedAccountType_s, UserNames_s, UserSamAccountNames_s, ContainsMaliciousExternalIPs_b, AggregatedExternalIPThreatTypes_s, Assets_s, FlaggedDataExposed_s, SensitiveDataExposed_s, DataSourceTypes_s, DataSources_s, DeviceNames_s, InitialEventTimeUTC_t, AccountsHaveFollowUpIndicators_s, AlertTimeUTC_t, InitialEventTime_t, AssignedtoVaronis_b, EscalationType_s, MitreTacticName_s, ClosedBy_s, IngestTime_t",
+                    "outputStream": "Custom-VaronisAlerts_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+              }
+            },
+            {
+              "name": "VaronisAlerts_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "VaronisAlerts_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AlertId_g",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ThreatDetectionPolicyName_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertTime_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AlertSeverity_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertCategory_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Countries_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "States_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Status_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CloseReason_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BlacklistedLocation_b",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "AbnormalLocations_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventsCount_d",
+                      "type": "real"
+                    },
+                    {
+                      "name": "PrivilegedAccountType_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserNames_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserSamAccountNames_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ContainsMaliciousExternalIPs_b",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "AggregatedExternalIPThreatTypes_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Assets_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FlaggedDataExposed_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SensitiveDataExposed_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DataSourceTypes_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DataSources_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceNames_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InitialEventTimeUTC_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AccountsHaveFollowUpIndicators_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertTimeUTC_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "InitialEventTime_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AssignedtoVaronis_b",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "EscalationType_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitreTacticName_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClosedBy_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IngestTime_t",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition2'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "VaronisSaaSAlertsPush",
+          "title": "Varonis SaaS (Push)",
+          "publisher": "Varonis",
+          "descriptionMarkdown": "The [Varonis SaaS](https://www.varonis.com/) connector provides the capability to push real-time DatAlert security alerts from your Varonis application directly into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. Varonis prioritizes deep data visibility, classification capabilities, and automated remediation for data access. This connector ingests alert severity, event types, user information, and related details into a custom Log Analytics table for analysis, alerting, and visualization.",
+          "graphQueries": [
+            {
+              "metricName": "Total alerts received",
+              "legend": "VaronisAlerts_CL",
+              "baseQuery": "VaronisAlerts_CL"
+            },
+            {
+              "metricName": "High severity alerts",
+              "legend": "High severity alerts",
+              "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"High\""
+            },
+            {
+              "metricName": "Medium severity alerts",
+              "legend": "Medium severity alerts",
+              "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"Medium\""
+            },
+            {
+              "metricName": "Low severity alerts",
+              "legend": "Low severity alerts",
+              "baseQuery": "VaronisAlerts_CL\n| where AlertSeverity_s == \"Low\""
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Varonis alerts",
+              "query": "VaronisAlerts_CL\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "High severity Varonis alerts",
+              "query": "VaronisAlerts_CL\n | where AlertSeverity_s == \"High\"\n | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Alerts by category",
+              "query": "VaronisAlerts_CL\n | summarize Count = count() by AlertCategory_s\n | sort by Count desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "VaronisAlerts_CL",
+              "lastDataReceivedQuery": "VaronisAlerts_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "VaronisAlerts_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra",
+                "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+              },
+              {
+                "name": "Microsoft Azure",
+                "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Create ARM Resources and Provide the Required Permissions",
+              "description": "This connector enables your Varonis SaaS application to push DatAlert security alerts directly to Microsoft Sentinel via the Azure Monitor Ingestion API.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application\nClicking on \"Deploy\" will trigger the creation of a Log Analytics table and a Data Collection Rule (DCR).\nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                  }
+                },
+                {
+                  "type": "DeployPushConnectorButton",
+                  "parameters": {
+                    "label": "Deploy Varonis SaaS Push connector resources",
+                    "applicationDisplayName": "Varonis SaaS Push Connector Application"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Configure Your Varonis Application",
+              "description": "Use the following parameters to configure your Varonis SaaS application to push DatAlert alerts to the workspace.",
+              "instructions": [
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Tenant ID (Directory ID)",
+                    "fillWith": [
+                      "TenantId"
+                    ]
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Entra App Registration Application ID",
+                    "fillWith": [
+                      "ApplicationId"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Application ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Entra App Registration Secret",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Secret"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Endpoint Uri",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Rule Immutable ID",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Stream Name",
+                    "value": "Custom-VaronisSaaSAlerts"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Configure Varonis SaaS Application\nUpdate your Varonis SaaS application configuration with the above credentials to enable DatAlert alert push to Microsoft Sentinel."
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition2')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition2'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Varonis"
+        },
+        "support": {
+          "name": "Varonis",
+          "email": "support@varonis.com",
+          "tier": "Partner",
+          "link": "https://www.varonis.com/resources/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections2'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+        "displayName": "Varonis SaaS (Push)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Varonis SaaS (Push)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections2": "[variables('_dataConnectorContentIdConnections2')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections2')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections2'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Varonis"
+                },
+                "support": {
+                  "name": "Varonis",
+                  "email": "support@varonis.com",
+                  "tier": "Partner",
+                  "link": "https://www.varonis.com/resources/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'VaronisSaaSAlertsPushConnector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "VaronisSaaSAlertsPush",
+                "dcrConfig": {
+                  "streamName": "Custom-VaronisSaaSAlerts",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "Push",
+                  "AppId": "[[parameters('auth').appId]",
+                  "ServicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections2'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.1.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "VaronisSaaS",
         "publisherDisplayName": "Varonis",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VaronisSaaS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Varonis SaaS integration allows you to retrieve Varonis DatAlert alerts, create incident and pull activities related to the alerts for conducting investigations.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VaronisSaaS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Varonis SaaS integration allows you to retrieve Varonis DatAlert alerts, create incident and pull activities related to the alerts for conducting investigations.</p>\n<p><strong>Data Connectors:</strong> 2, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -532,6 +1439,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections2')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             }
           ]
         },
