@@ -22,6 +22,7 @@ import-module AzTable
 # Retrieve Environment Variables and prep other Variables for the JumpCloud API request
 $JCService = $QueueItem                         #Which eventlog set to rerieve from JumpCloud
 $JCapiToken = $env:JumpCloudApiToken            #JumpCloud API
+$JCOrgId = $env:JumpCloudOrgId                  # Add this line: JumpCloud Org ID
 $JCuri = $env:JumpCloudUri                      #Standard JumpCloud URI
 #$JCStartTime = $env:JumpCloudStartTime          #Initial Start time to collect logs
 $AzureWebJobsStorage =$env:AzureWebJobsStorage  #Storage Account to use for table to maintain state for log queries between executions
@@ -63,6 +64,7 @@ do {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Content-Type", "application/json")
     $headers.Add("x-api-key", "$JCapiToken")
+    $headers.Add("x-org-id", "$JCOrgId")  # Add this line here
     #create $body for request
     $body = '{"service": ["'+ $JCService + '"], ' 
     if ('' -ne $JCSearchAfter){ 
