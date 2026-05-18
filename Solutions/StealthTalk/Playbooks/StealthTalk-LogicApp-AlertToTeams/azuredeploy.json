@@ -1,187 +1,196 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-  "contentVersion": "1.0.0.0",
-  "metadata": {
-    "title": "StealthTalk - Alert to Microsoft Teams",
-    "description": "When a Microsoft Sentinel incident is created, post a formatted Adaptive Card with the incident summary into a Microsoft Teams channel via a Power Automate Workflow webhook.",
-    "prerequisites": "1. A Microsoft Teams channel with a Workflows incoming webhook ('When a Teams Webhook request is received' → 'Post card in a chat or channel') already configured. The webhook URL is provided as a deployment parameter. 2. After deployment, grant the Logic App's system-assigned managed identity the **Microsoft Sentinel Responder** role on the Sentinel workspace, and the **Microsoft Sentinel Automation Contributor** role to the Azure Security Insights service principal on the Logic App resource group. 3. Create an Automation Rule in Microsoft Sentinel to run this playbook on incidents from the four StealthTalk analytic rules.",
-    "lastUpdateTime": "2026-05-01",
-    "entities": ["Account", "IP", "Host"],
-    "tags": ["Notification", "Teams", "Incident"],
-    "support": {
-      "tier": "Partner"
-    },
-    "author": {
-      "name": "StealthTalk"
-    }
-  },
-  "parameters": {
-    "PlaybookName": {
-      "type": "string",
-      "defaultValue": "StealthTalk-LogicApp-AlertToTeams",
-      "metadata": {
-        "description": "Name of the Logic App / Playbook resource."
-      }
-    },
-    "TeamsWebhookUrl": {
-      "type": "securestring",
-      "metadata": {
-        "description": "Power Automate / Teams Workflow incoming-webhook URL. Created in the target Teams channel under Workflows → 'When a Teams Webhook request is received' → 'Post card in a chat or channel'. Treated as a secret because the URL contains an embedded HMAC signature."
-      }
-    }
-  },
-  "variables": {
-    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
-  },
-  "resources": [
-    {
-      "type": "Microsoft.Web/connections",
-      "apiVersion": "2016-06-01",
-      "name": "[variables('AzureSentinelConnectionName')]",
-      "location": "[resourceGroup().location]",
-      "kind": "V1",
-      "properties": {
-        "displayName": "[variables('AzureSentinelConnectionName')]",
-        "customParameterValues": {},
-        "parameterValueType": "Alternative",
-        "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Logic/workflows",
-      "apiVersion": "2017-07-01",
-      "name": "[parameters('PlaybookName')]",
-      "location": "[resourceGroup().location]",
-      "tags": {
-        "hidden-SentinelTemplateName": "StealthTalk-AlertToTeams",
-        "hidden-SentinelTemplateVersion": "1.0.0"
-      },
-      "identity": {
-        "type": "SystemAssigned"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
-      ],
-      "properties": {
-        "state": "Enabled",
-        "definition": {
-          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-          "contentVersion": "1.0.0.0",
-          "parameters": {
-            "$connections": {
-              "defaultValue": {},
-              "type": "Object"
-            },
-            "TeamsWebhookUrl": {
-              "type": "SecureString"
-            }
-          },
-          "triggers": {
-            "Microsoft_Sentinel_incident": {
-              "type": "ApiConnectionWebhook",
-              "inputs": {
-                "body": {
-                  "callback_url": "@listCallbackUrl()"
-                },
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
-                },
-                "path": "/incident-creation"
-              }
-            }
-          },
-          "actions": {
-            "HTTP": {
-              "type": "Http",
-              "runAfter": {},
-              "runtimeConfiguration": {
-                "contentTransfer": {
-                  "transferMode": "Chunked"
-                }
-              },
-              "inputs": {
-                "method": "POST",
-                "uri": "@parameters('TeamsWebhookUrl')",
-                "headers": {
-                  "Content-Type": "application/json"
-                },
-                "body": {
-                  "type": "message",
-                  "attachments": [
-                    {
-                      "contentType": "application/vnd.microsoft.card.adaptive",
-                      "content": {
-                        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                        "type": "AdaptiveCard",
-                        "version": "1.4",
-                        "body": [
-                          {
-                            "type": "TextBlock",
-                            "size": "Large",
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "text": "🔴 StealthTalk — New Sentinel Incident"
-                          },
-                          {
-                            "type": "FactSet",
-                            "facts": [
-                              { "title": "Title",    "value": "@{triggerBody()?['object']?['properties']?['title']}" },
-                              { "title": "Severity", "value": "@{triggerBody()?['object']?['properties']?['severity']}" },
-                              { "title": "Status",   "value": "@{triggerBody()?['object']?['properties']?['status']}" },
-                              { "title": "Time",     "value": "@{triggerBody()?['object']?['properties']?['createdTimeUtc']}" }
-                            ]
-                          }
-                        ],
-                        "actions": [
-                          {
-                            "type": "Action.OpenUrl",
-                            "title": "Open in Sentinel",
-                            "url": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "outputs": {}
-        },
-        "parameters": {
-          "$connections": {
-            "value": {
-              "azuresentinel": {
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
-                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-                "connectionName": "[variables('AzureSentinelConnectionName')]",
-                "connectionProperties": {
-                  "authentication": {
-                    "type": "ManagedServiceIdentity"
-                  }
-                }
-              }
-            }
-          },
-          "TeamsWebhookUrl": {
-            "value": "[parameters('TeamsWebhookUrl')]"
-          }
-        }
-      }
-    }
-  ],
-  "outputs": {
-    "playbookResourceId": {
-      "type": "string",
-      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
-    },
-    "playbookManagedIdentityPrincipalId": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
-    }
-  }
+ "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+ "contentVersion": "1.0.0.0",
+ "metadata": {
+ "title": "StealthTalk - Alert to Microsoft Teams",
+ "description": "When a Microsoft Microsoft Sentinel incident is created, post a formatted Adaptive Card with the incident summary into a Microsoft Teams channel via a Power Automate Workflow webhook.",
+ "prerequisites": [
+ "A Microsoft Teams channel with a Workflows incoming webhook ('When a Teams Webhook request is received' followed by 'Post card in a chat or channel') already configured. The webhook URL is provided as a deployment parameter.",
+ "After deployment, grant the Logic App's system-assigned managed identity the **Microsoft Sentinel Responder** role on the Microsoft Sentinel workspace.",
+ "Grant the **Microsoft Sentinel Automation Contributor** role to the Azure Security Insights service principal on the Logic App resource group.",
+ "Create an Automation Rule in Microsoft Sentinel to run this playbook on incidents from the four StealthTalk analytic rules."
+ ],
+ "lastUpdateTime": "2026-05-13T00:00:00.000Z",
+ "entities": ["Account", "IP", "Host"],
+ "tags": ["Notification", "Teams", "Incident"],
+ "support": {
+ "tier": "partner",
+ "name": "StealthTalk Support",
+ "email": "support@stealthtalk.com",
+ "link": "https://stealthtalk.com/support"
+ },
+ "author": {
+ "name": "StealthTalk",
+ "email": "support@stealthtalk.com"
+ }
+ },
+ "parameters": {
+ "PlaybookName": {
+ "type": "string",
+ "defaultValue": "StealthTalk-LogicApp-AlertToTeams",
+ "metadata": {
+ "description": "Name of the Logic App / Playbook resource."
+ }
+ },
+ "TeamsWebhookUrl": {
+ "type": "securestring",
+ "metadata": {
+ "description": "Power Automate / Teams Workflow incoming-webhook URL. Created in the target Teams channel under Workflows -> 'When a Teams Webhook request is received' -> 'Post card in a chat or channel'. Treated as a secret because the URL contains an embedded HMAC signature."
+ }
+ }
+ },
+ "variables": {
+ "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+ },
+ "resources": [
+ {
+ "type": "Microsoft.Web/connections",
+ "apiVersion": "2016-06-01",
+ "name": "[variables('AzureSentinelConnectionName')]",
+ "location": "[resourceGroup().location]",
+ "kind": "V1",
+ "properties": {
+ "displayName": "[variables('AzureSentinelConnectionName')]",
+ "customParameterValues": {},
+ "parameterValueType": "Alternative",
+ "api": {
+ "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+ }
+ }
+ },
+ {
+ "type": "Microsoft.Logic/workflows",
+ "apiVersion": "2017-07-01",
+ "name": "[parameters('PlaybookName')]",
+ "location": "[resourceGroup().location]",
+ "tags": {
+ "hidden-SentinelTemplateName": "StealthTalk-AlertToTeams",
+ "hidden-SentinelTemplateVersion": "1.0.0"
+ },
+ "identity": {
+ "type": "SystemAssigned"
+ },
+ "dependsOn": [
+ "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+ ],
+ "properties": {
+ "state": "Enabled",
+ "definition": {
+ "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+ "contentVersion": "1.0.0.0",
+ "parameters": {
+ "$connections": {
+ "defaultValue": {},
+ "type": "Object"
+ },
+ "TeamsWebhookUrl": {
+ "type": "SecureString"
+ }
+ },
+ "triggers": {
+ "Microsoft_Sentinel_incident": {
+ "type": "ApiConnectionWebhook",
+ "inputs": {
+ "body": {
+ "callback_url": "@listCallbackUrl()"
+ },
+ "host": {
+ "connection": {
+ "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+ }
+ },
+ "path": "/incident-creation"
+ }
+ }
+ },
+ "actions": {
+ "HTTP": {
+ "type": "Http",
+ "runAfter": {},
+ "runtimeConfiguration": {
+ "contentTransfer": {
+ "transferMode": "Chunked"
+ }
+ },
+ "inputs": {
+ "method": "POST",
+ "uri": "@parameters('TeamsWebhookUrl')",
+ "headers": {
+ "Content-Type": "application/json"
+ },
+ "body": {
+ "type": "message",
+ "attachments": [
+ {
+ "contentType": "application/vnd.microsoft.card.adaptive",
+ "content": {
+ "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+ "type": "AdaptiveCard",
+ "version": "1.4",
+ "body": [
+ {
+ "type": "TextBlock",
+ "size": "Large",
+ "weight": "Bolder",
+ "color": "Attention",
+ "text": " StealthTalk - New Microsoft Sentinel Incident"
+ },
+ {
+ "type": "FactSet",
+ "facts": [
+ { "title": "Title", "value": "@{triggerBody()?['object']?['properties']?['title']}" },
+ { "title": "Severity", "value": "@{triggerBody()?['object']?['properties']?['severity']}" },
+ { "title": "Status", "value": "@{triggerBody()?['object']?['properties']?['status']}" },
+ { "title": "Time", "value": "@{triggerBody()?['object']?['properties']?['createdTimeUtc']}" }
+ ]
+ }
+ ],
+ "actions": [
+ {
+ "type": "Action.OpenUrl",
+ "title": "Open in Microsoft Sentinel",
+ "url": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
+ }
+ ]
+ }
+ }
+ ]
+ }
+ }
+ }
+ },
+ "outputs": {}
+ },
+ "parameters": {
+ "$connections": {
+ "value": {
+ "azuresentinel": {
+ "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+ "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+ "connectionName": "[variables('AzureSentinelConnectionName')]",
+ "connectionProperties": {
+ "authentication": {
+ "type": "ManagedServiceIdentity"
+ }
+ }
+ }
+ }
+ },
+ "TeamsWebhookUrl": {
+ "value": "[parameters('TeamsWebhookUrl')]"
+ }
+ }
+ }
+ }
+ ],
+ "outputs": {
+ "playbookResourceId": {
+ "type": "string",
+ "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+ },
+ "playbookManagedIdentityPrincipalId": {
+ "type": "string",
+ "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
+ }
+ }
 }
