@@ -346,4 +346,4 @@ No SLA - the maintainer responds when convenient. PRs that include tests + a rep
 
 ## 13. Acknowledgements
 
-Thanks to [Tailscale](https://tailscale.com/) for enabling Network Flow Logs on the maintainer's tailnet - and crucially, without the usual 30-60 day trial restriction - so the Premium-tier features of this solution could be built, validated against live API responses, and shipped without development being interrupted by a feature timeout. That open-ended access is what made it possible to develop and verify the network flow log ingestion (`Tailscale_Network_CL`), posture integration inventory, the seven Premium analytic rules, the five Premium hunting queries, and the Premium Operations workbook end-to-end against real data. Without that support the Premium connector would have shipped speculatively rather than verified.
+Thanks to [Tailscale](https://tailscale.com/) for the support that made the Premium-tier features of this solution (network flow log ingestion, posture integration inventory, the seven Premium analytic rules, the five Premium hunting queries, and the Premium Operations workbook) buildable and verifiable against live data.
