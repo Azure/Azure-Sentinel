@@ -1,0 +1,97 @@
+id: 1bb5e930-18be-454d-b0d9-351eef15871a
+name: Privileged role assigned to newly created account
+description: |
+  Identifies directory role assignments to accounts created less than 24 hours earlier
+  in the same tenant. An account receiving a privileged role shortly after creation
+  may indicate a backdoor account staged by an attacker with existing admin access.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.003
+  - T1136.003
+query: |
+  let timeframe = 7d;
+  let creationWindow = 24h;
+  let PrivilegedRoles = dynamic([
+      "Global Administrator",
+      "Privileged Role Administrator",
+      "Application Administrator",
+      "Cloud Application Administrator",
+      "Exchange Administrator",
+      "SharePoint Administrator",
+      "User Account Administrator",
+      "Authentication Administrator",
+      "Privileged Authentication Administrator",
+      "Security Administrator",
+      "Hybrid Identity Administrator"
+  ]);
+  let NewAccounts =
+      AuditLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where OperationName =~ "Add user"
+      | where Result =~ "success"
+      | project
+          AccountCreatedTime = TimeGenerated,
+          UserId             = tostring(TargetResources[0].id),
+          NewUserUpn         = tostring(TargetResources[0].userPrincipalName);
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "RoleManagement"
+  | where OperationName =~ "Add member to role."
+  | where Result =~ "success"
+  | extend TargetUserId = tostring(TargetResources[0].id)
+  | extend TargetUpn    = tostring(TargetResources[0].userPrincipalName)
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | where tostring(ModProp.displayName) =~ "Role.DisplayName"
+  | extend RoleName = trim('"', tostring(ModProp.newValue))
+  | where RoleName in~ (PrivilegedRoles)
+  | join kind=inner NewAccounts on $left.TargetUserId == $right.UserId
+  | where TimeGenerated between (AccountCreatedTime .. (AccountCreatedTime + creationWindow))
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[0]), TargetUpn)
+  | extend AccountUPNSuffix = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      RoleName,
+      TargetUpn,
+      AccountName,
+      AccountUPNSuffix,
+      AccountCreatedTime,
+      Actor,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
