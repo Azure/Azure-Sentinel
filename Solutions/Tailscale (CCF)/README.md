@@ -6,6 +6,7 @@ Microsoft Sentinel solution that ingests Tailscale identity, device, configurati
 - **24 analytic rules** (16 Standard + 8 Premium-only)
 - **22 hunting queries** (12 Standard + 10 Premium-only)
 - **2 workbooks** (Standard Operations, Premium Operations)
+- **2 ASIM NetworkSession parsers** (`vimNetworkSessionTailscale` + `ASimNetworkSessionTailscale` wrapper) - Premium only
 - **9 custom tables** ingested via 9-11 polling rules behind a single Connect button
 
 ---
@@ -309,7 +310,7 @@ Net effect for the operator is identical: one table, filter by `ConfigType`.
 ## 10. Limitations
 
 - **Network flow logs are Premium-only.** The eight Premium rules and ten Premium hunts depend on `Tailscale_Network_CL` and won't run on a Standard install.
-- **No ASIM NetworkSession parser yet.** Microsoft's pre-built "Network Session Essentials" detections won't auto-cover Tailscale data in 3.0.0 - a `vimNetworkSessionTailscale` parser mapping `Tailscale_Network_CL` to the ASIM NetworkSession schema is planned for a follow-up release. Until then use the analytic rules and hunting queries shipped in this solution.
+- **Microsoft pre-built "Network Session Essentials" detections require a clone-and-rewire.** This solution ships a `vimNetworkSessionTailscale` ASIM NetworkSession parser (and the param-less `ASimNetworkSessionTailscale` wrapper) that maps `Tailscale_Network_CL` to the ASIM NetworkSession schema. Microsoft's pre-built detections call the sealed workspace function `_Im_NetworkSession`, which can't be extended from a Solution - so to apply those detections to Tailscale data, clone the rule and replace `_Im_NetworkSession(...)` with `vimNetworkSessionTailscale(...)` (or `union vimNetworkSessionTailscale(...), _Im_NetworkSession(...)` if you want both sources in one query).
 - **Snapshot tables overwrite, they don't diff.** Each 60-min snapshot is a complete current-state poll, not a delta. Rules that need transition detection (e.g. "SSH newly enabled") compare the latest snapshot against a 24-hour baseline.
 
 ---

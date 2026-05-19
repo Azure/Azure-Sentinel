@@ -1,0 +1,96 @@
+id: 0d8fe6c1-3a4f-4f5b-9c8d-1a2b3c4d5e6f
+Function:
+  Title: ASIM Network Session parser for Tailscale
+  Version: '1.0.0'
+  LastUpdated: '2026-05-19'
+Category: Microsoft Sentinel Parser
+FunctionName: vimNetworkSessionTailscale
+FunctionAlias: vimNetworkSessionTailscale
+FunctionQuery: |
+    let NetworkProtocolLookup = datatable(proto_lookup: int, NetworkProtocol_lookup: string)
+    [
+        1,  "ICMP",
+        6,  "TCP",
+        17, "UDP",
+        58, "ICMPv6"
+    ];
+    let baseEvents = Tailscale_Network_CL;
+    let virtualFlows = baseEvents
+        | where HasVirtualTraffic
+        | mv-expand t = VirtualTraffic
+        | extend NetworkSessionType = "Virtual", NetworkDirection = "Local";
+    let subnetFlows = baseEvents
+        | where HasSubnetTraffic
+        | mv-expand t = SubnetTraffic
+        | extend NetworkSessionType = "Subnet", NetworkDirection = "Outbound";
+    let exitFlows = baseEvents
+        | where HasExitTraffic
+        | mv-expand t = ExitTraffic
+        | extend NetworkSessionType = "Exit", NetworkDirection = "Outbound";
+    union virtualFlows, subnetFlows, exitFlows
+    | extend
+        SrcIpAddrAndPort = tostring(t.src),
+        DstIpAddrAndPort = tostring(t.dst),
+        proto_lookup = toint(t.proto),
+        SrcBytes = tolong(t.txBytes),
+        DstBytes = tolong(t.rxBytes),
+        SrcPackets = tolong(t.txPkts),
+        DstPackets = tolong(t.rxPkts)
+    | extend
+        SrcRawHost = extract(@"^(.+):([0-9]+)$", 1, SrcIpAddrAndPort),
+        SrcPortNumber = toint(extract(@"^(.+):([0-9]+)$", 2, SrcIpAddrAndPort)),
+        DstRawHost = extract(@"^(.+):([0-9]+)$", 1, DstIpAddrAndPort),
+        DstPortNumber = toint(extract(@"^(.+):([0-9]+)$", 2, DstIpAddrAndPort))
+    | extend
+        SrcIpAddr = case(
+            isempty(SrcRawHost), SrcIpAddrAndPort,
+            startswith(SrcRawHost, "["), substring(SrcRawHost, 1, strlen(SrcRawHost) - 2),
+            SrcRawHost
+        ),
+        DstIpAddr = case(
+            isempty(DstRawHost), DstIpAddrAndPort,
+            startswith(DstRawHost, "["), substring(DstRawHost, 1, strlen(DstRawHost) - 2),
+            DstRawHost
+        )
+    | lookup NetworkProtocolLookup on proto_lookup
+    | extend
+        NetworkProtocol = coalesce(NetworkProtocol_lookup, tostring(proto_lookup)),
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets
+    | extend
+        EventStartTime = todatetime(FlowStart),
+        EventEndTime = todatetime(FlowEnd),
+        EventProduct = "Tailscale",
+        EventVendor = "Tailscale",
+        EventSchema = "NetworkSession",
+        EventSchemaVersion = "0.2.6",
+        EventType = "NetworkSession",
+        EventResult = "Success",
+        EventCount = int(1),
+        EventSeverity = "Informational",
+        DvcAction = "Allow"
+    | extend
+        SrcHostname = SrcNodeName,
+        SrcUsername = SrcUser,
+        SrcUsernameType = iff(isnotempty(SrcUser), "Simple", ""),
+        SrcDvcOs = SrcOs,
+        DstHostname = DstNodeName,
+        DstUsername = DstUser,
+        DstUsernameType = iff(isnotempty(DstUser), "Simple", ""),
+        DstDvcOs = DstOs,
+        Dvc = SrcNodeName,
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        IpAddr = SrcIpAddr,
+        User = SrcUser,
+        Hostname = SrcNodeName
+    | project-away
+        t, NetworkProtocol_lookup, proto_lookup,
+        VirtualTraffic, SubnetTraffic, ExitTraffic, PhysicalTraffic,
+        HasVirtualTraffic, HasSubnetTraffic, HasExitTraffic, HasPhysicalTraffic,
+        SrcAddresses, DstAddresses, SrcTags, DstTags,
+        SrcOs, DstOs, SrcUser, DstUser, SrcNodeName, DstNodeName,
+        DstCount, DstNodeId, NodeId, IsRelayed,
+        SrcIpAddrAndPort, DstIpAddrAndPort, SrcRawHost, DstRawHost,
+        FlowStart, FlowEnd,
+        TenantId, _ResourceId, Type
