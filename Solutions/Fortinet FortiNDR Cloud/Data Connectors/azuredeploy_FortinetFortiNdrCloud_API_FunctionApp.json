@@ -9,6 +9,24 @@
                 "description": "The name of the Azure Function app."
             }
         },
+        "workspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of your Log Analytics / Microsoft Sentinel Workspace."
+            }
+        },
+        "DceResourceId": {
+            "type": "String",
+            "metadata": {
+                "description": "The full Azure Resource ID of your Data Collection Endpoint (DCE). (e.g., /subscriptions/.../resourceGroups/.../providers/Microsoft.Insights/dataCollectionEndpoints/dce-name)"
+            }
+        },
+        "DceUri": {
+            "type": "String",
+            "metadata": {
+                "description": "The Logs Ingestion URL from your Data Collection Endpoint. (e.g., https://dce-name.region.ingest.monitor.azure.com)"
+            }
+        },
         "storageAccountType": {
             "defaultValue": "Standard_LRS",
             "allowedValues": [
@@ -67,20 +85,6 @@
             "minLength": 1,
             "metadata": {
                 "description": "Enter Azure Tenant ID"
-            }
-        },
-        "DceUri": {
-            "type": "string",
-            "minLength": 1,
-            "metadata": {
-                "description": "The URL of your Data Collection Endpoint (DCE)"
-            }
-        },
-        "DcrImmutableId": {
-            "type": "string",
-            "minLength": 1,
-            "metadata": {
-                "description": "The Immutable ID of your Data Collection Rule (DCR)"
             }
         },
         "AwsAccessKeyId": {
@@ -165,6 +169,64 @@
     },
     "resources": [
         {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[format('{0}/{1}', parameters('workspaceName'), 'FortinetFortiNdrCloudRaw_CL')]",
+            "properties": {
+                "retentionInDays": 30,
+                "totalRetentionInDays": 30,
+                "schema": {
+                    "name": "FortinetFortiNdrCloudRaw_CL",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime" },
+                        { "name": "LogTypeSuffix", "type": "string" },
+                        { "name": "RawData", "type": "string" }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "dcr-FortinetFortiNdrCloud",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'FortinetFortiNdrCloudRaw_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[parameters('DceResourceId')]",
+                "streamDeclarations": {
+                    "Custom-FortinetFortiNdrCloudRaw_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "LogTypeSuffix", "type": "string" },
+                            { "name": "RawData", "type": "string" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+                            "name": "la-destination"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-FortinetFortiNdrCloudRaw_CL"
+                        ],
+                        "destinations": [
+                            "la-destination"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-FortinetFortiNdrCloudRaw_CL"
+                    }
+                ]
+            }
+        },
+        {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-01-01",
             "name": "[variables('storageAccountName')]",
@@ -232,7 +294,8 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', 'dcr-FortinetFortiNdrCloud')]"
             ],
             "kind": "functionapp,linux",
             "identity": {
@@ -315,7 +378,7 @@
                         },
                         {
                             "name": "DcrImmutableId",
-                            "value": "[parameters('DcrImmutableId')]"
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'dcr-FortinetFortiNdrCloud'), '2022-06-01').immutableId]"
                         },
                         {
                             "name": "AwsAccessKeyId",
@@ -443,7 +506,7 @@
                 "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
             }
         },
-        { 
+        {
             "type": "Microsoft.Resources/deploymentScripts",
             "apiVersion": "2020-10-01",
             "name": "WaitSection",

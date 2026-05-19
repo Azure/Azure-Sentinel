@@ -42,21 +42,30 @@ def post_data(events: list[dict], log_type_suffix: str):
         )
         raise
 
-    try:
-        # The stream name must match your DCR definition exactly: "Custom-<TableName>_CL"
-        stream_name = f"Custom-FncEvents{log_type_suffix.title()}_CL"
+    # Must exactly match the stream declaration name in your ARM template
+    stream_name = "Custom-FortinetFortiNdrCloudRaw_CL"
 
+    wrapped_events = []
+    for event in events:
+        wrapped_events.append({
+            "LogTypeSuffix": log_type_suffix.lower(),
+            "RawData": json.dumps(event)
+        })
+
+    try:
         logging.info(
-            f"Uploading {len(events)} events to stream {stream_name} via Log Ingestion Client.")
+            f"Uploading {len(wrapped_events)} packaged events to stream {stream_name} via Log Ingestion Client."
+        )
 
         client.upload(
             rule_id=DCR_ID,
             stream_name=stream_name,
-            logs=events
+            logs=wrapped_events
         )
 
         logging.info(
-            f"SentinelClient: Successfully uploaded {len(events)} events.")
+            f"SentinelClient: Successfully uploaded {len(events)} events."
+        )
 
     except ClientAuthenticationError as exc:
         logging.error(
@@ -70,5 +79,6 @@ def post_data(events: list[dict], log_type_suffix: str):
         raise
     except Exception as e:
         logging.error(
-            f"SentinelClient: Unexpected error during data upload: {e}")
+            f"SentinelClient: Unexpected error during data upload: {e}"
+        )
         raise
