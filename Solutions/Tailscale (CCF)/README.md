@@ -308,8 +308,7 @@ Net effect for the operator is identical: one table, filter by `ConfigType`.
 
 ## 10. Limitations
 
-- **No VPN tunnel events.** Tailscale doesn't expose per-tunnel connect/disconnect events via API. This is a Tailscale platform limitation, not a solution one - if it matters, file a feature request with Tailscale.
-- **Network flow logs are Premium-only.** The seven Premium rules and five Premium hunts depend on `Tailscale_Network_CL` and won't run on a Standard install.
+- **Network flow logs are Premium-only.** The eight Premium rules and ten Premium hunts depend on `Tailscale_Network_CL` and won't run on a Standard install.
 - **Microsoft pre-built "Network Session Essentials" rules don't auto-cover this data.** Workspace-level ASIM functions (`_Im_NetworkSession` and similar) are sealed and can't be extended from Solutions. To use Microsoft's pre-built network-session detections on Tailscale data, clone the relevant rules and point them at `imNetworkSession` (a non-underscore workspace function that unions Microsoft built-ins with our `vimNetworkSessionTailscale` parser) - included in this solution.
 - **Snapshot tables overwrite, they don't diff.** Each 60-min snapshot is a complete current-state poll, not a delta. Rules that need transition detection (e.g. "SSH newly enabled") compare the latest snapshot against a 24-hour baseline.
 
