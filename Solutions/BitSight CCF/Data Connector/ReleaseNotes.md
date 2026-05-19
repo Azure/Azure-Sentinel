@@ -1,10 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 1.0.7       | 19-05-2026                     | Replaced the BitSight findings paging model from `NextPageUrl` to `Offset` using `offset` and `limit`, which matches the documented BitSight findings API parameters and avoids the CCF `NextPageUrl` runtime requirements. |
-| 1.0.6       | 19-05-2026                     | Added `nextPageParaName` (`offset`) and `pagingInfoPlacement` (`QueryString`) to the BitSight findings CCF paging configuration to satisfy the RestApiPoller NextPageUrl runtime requirements. |
-| 1.0.5       | 19-05-2026                     | Added `nextPageTokenJsonPath` to the CCF NextPageUrl paging configuration so BitSight paging uses the `$.links.next` URL returned by the API. |
-| 1.0.4       | 19-05-2026                     | Added the missing `kind: RestApiPoller` property to each workspace-level data connector resource, resolving the `connector kind cannot be null` deployment error. |
-| 1.0.3       | 19-05-2026                     | Reworked the DCR transform to remove unsupported transformation functions such as coalesce, todynamic, and sha256/pack_all patterns, replacing them with supported Azure Monitor transformation functions. |
-| 1.0.2       | 19-05-2026                     | Replaced the invalid ARM function `decodeUriComponent` with `uriComponentToString` in the DCR transform string generation, resolving template validation failure before deployment. |
-| 1.0.1       | 19-05-2026                     | Fixed the DCR transform query generation to emit real KQL newlines, resolving the InvalidTransformQuery compilation error during deployment. |
 | 1.0.0       | 19-05-2026                     | Initial CCF package for reduced-scope BitSight Risk Findings monitoring. Added one custom table, one DCE, one DCR, and ten RestApiPoller connections covering the agreed BitSight risk vectors. Ingests only normalized WARN and BAD findings for one explicitly provided company per Connect action. |
