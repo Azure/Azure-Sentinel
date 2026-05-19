@@ -24,6 +24,7 @@ Microsoft Sentinel solution that ingests Tailscale identity, device, configurati
 10. [Limitations](#10-limitations)
 11. [Troubleshooting](#11-troubleshooting)
 12. [Support](#12-support)
+13. [Acknowledgements](#13-acknowledgements)
 
 ---
 
@@ -340,3 +341,9 @@ This is a Community-tier solution. Bugs, feature requests, and PRs:
 - **Maintainer**: noodlemctwoodle
 
 No SLA - the maintainer responds when convenient. PRs that include tests + a reproducer trip the response time considerably.
+
+---
+
+## 13. Acknowledgements
+
+Thanks to [Tailscale](https://tailscale.com/) for upgrading the maintainer's tailnet to Premium so the Premium-tier features of this solution (network flow log ingestion, posture integration inventory, the seven Premium analytic rules, the five Premium hunting queries, and the Premium Operations workbook) could be built, validated against live API responses, and shipped. Without that access, the Premium connector would have been speculative - the published version is end-to-end verified.
