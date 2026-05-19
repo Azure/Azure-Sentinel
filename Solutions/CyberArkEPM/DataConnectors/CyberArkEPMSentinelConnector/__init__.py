@@ -154,7 +154,11 @@ def main(mytimer: func.TimerRequest) -> None:
     raw_events = []
     aggregated_policy_audits = []
     policy_audit_raw_event_details = []
-    for set_id in sets_list.json()["Sets"]:
+    admin_audit_data = []
+    sets = sets_list.json().get("Sets") or []
+    if not sets:
+        logging.info("No sets with events were found; skipping set-based collection")
+    for set_id in sets:
         logging.info("Collecting aggregated events from {}".format(set_id["Name"]))
         aggregated_events += get_events(func_name=getAggregatedEvents, auth=auth, filter_date=filter_date,
                                         set_id=set_id)["events"]
@@ -168,7 +172,7 @@ def main(mytimer: func.TimerRequest) -> None:
         policy_audit_raw_event_details += get_events(func_name=getPolicyAuditRawEventDetails,
                                                      auth=auth, filter_date=filter_date, set_id=set_id)["events"]
         logging.info("Collecting Admin Audit Data from {}".format(set_id["Name"]))
-        admin_audit_data = getAdminAuditEvents(epmserver=dispatcher, epmToken=auth.json()['EPMAuthenticationResult'], authType='EPM', setid=set_id['Id'], start_time=start_time, end_time=end_time, limit=100)
+        admin_audit_data += getAdminAuditEvents(epmserver=dispatcher, epmToken=auth.json()['EPMAuthenticationResult'], authType='EPM', setid=set_id['Id'], start_time=start_time, end_time=end_time, limit=100)
 
     # Send data via data collector API
     for aggregated_event in aggregated_events:

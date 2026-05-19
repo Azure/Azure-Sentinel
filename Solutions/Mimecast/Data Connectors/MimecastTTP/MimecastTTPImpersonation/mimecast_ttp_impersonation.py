@@ -5,7 +5,7 @@ from SharedCode.logger import applogger
 from SharedCode import consts
 from SharedCode.mimecast_exception import MimecastException, MimecastTimeoutException
 from SharedCode.state_manager import StateManager
-from SharedCode.sentinel import post_data
+from SharedCode.sentinel import send_data_to_sentinel
 import inspect
 import json
 import datetime
@@ -30,8 +30,6 @@ class MimecastTTPImpersonation(Utils):
             [
                 {"File_Share_Name": consts.FILE_SHARE_NAME},
                 {"Base_Url": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"Mimecast_Client_ID": consts.MIMECAST_CLIENT_ID},
                 {"Mimecast_Client_Secret": consts.MIMECAST_CLIENT_SECRET},
             ]
@@ -165,8 +163,8 @@ class MimecastTTPImpersonation(Utils):
                     )
                 )
                 if len(data_to_ingest) > 0:
-                    post_data(
-                        json.dumps(data_to_ingest),
+                    send_data_to_sentinel(
+                        data_to_ingest,
                         consts.TABLE_NAME["TTP_IMPERSONATION"],
                     )
 

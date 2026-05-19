@@ -1,0 +1,59 @@
+id: e960f5b0-cd80-474a-996a-013ff3989772
+name: Valimail Enforce - High-Value User Management Event
+description: |
+  This query searches for high-severity user management events such as user deletion or deactivation
+  in Valimail Enforce, which may indicate unauthorized access or insider threat.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1531
+  - T1078
+query: |
+  ValimailEnforceEvents_CL
+  | where EventCategory == "UserManagement"
+  | where EventSeverity == "High"
+  | where IsHighValueEvent == true
+  | summarize
+      EventCount = count(),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt),
+      AffectedUsers = make_set(Subject),
+      Actions = make_set(EventType)
+    by User, EventCategory
+  | extend
+      AccountName = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+alertDetailsOverride:
+  alertDisplayNameFormat: "High-value user management action by {{User}}"
+  alertDescriptionFormat: |
+    User '{{User}}' performed {{EventCount}} high-value user management
+    action(s) in Valimail Enforce. Actions: {{Actions}}
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+version: 1.0.0
+kind: Scheduled

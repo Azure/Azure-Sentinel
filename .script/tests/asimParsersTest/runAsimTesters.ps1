@@ -166,6 +166,12 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
             }
         }
     } catch {
+        $IgnoreParserIsSet = IgnoreValidationForASIMParsers | Where-Object { $name -like "$_*" }
+        if ($IgnoreParserIsSet) {
+            Write-Host "::warning::The parser '$name' is listed in the parser exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: '$ParserExclusionsFilePath'"
+            return
+        }
+        
         Write-Host "::error::  -- $_"
         Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
         throw $_ # Commented out to allow the script to continue running

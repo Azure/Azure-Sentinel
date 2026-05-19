@@ -8,15 +8,17 @@ LOG_FORMAT = "{}(method = {}) : {} : {}"
 
 
 # *Sentinel related constants
-AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id", "")
-AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret", "")
-AZURE_TENANT_ID = os.environ.get("Azure_Tenant_Id", "")
-WORKSPACE_KEY = os.environ.get("Workspace_Key", "")
-WORKSPACE_ID = os.environ.get("Workspace_Id", "")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 
 # *Mimecast related constants
 MIMECAST_CLIENT_ID = os.environ.get("Mimecast_client_id")
 MIMECAST_CLIENT_SECRET = os.environ.get("Mimecast_client_secret")
+MIMECAST_CI_TABLE_NAME = os.environ.get("Mimecast_CI_Table_Name", "Cloud_Integrated")
 
 BASE_URL = os.environ.get("BaseUrl", "https://api.services.mimecast.com")
 ENDPOINTS = {
@@ -31,7 +33,7 @@ TABLE_NAME = {
     "TTP_URL": "Ttp_Url",
     "SEG_DLP": "Seg_Dlp",
     "SEG_CG": "Seg_Cg_3",
-    "CI": "Cloud_Integrated",
+    "CI": MIMECAST_CI_TABLE_NAME if MIMECAST_CI_TABLE_NAME else "Cloud_Integrated",
 }
 TTP_URL_FUNCTION_NAME = "TTP_URL"
 SEG_DLP_FUNCTION_NAME = "SEG_DLP"

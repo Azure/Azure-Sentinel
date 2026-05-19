@@ -8,18 +8,46 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of Log Analytics workspace"
+                "description": "Enter Microsoft Sentinel Workspace Name of Log Analytics workspace"
             }
         },
-        "WorkspaceKey": {
+        "AzureClientID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client ID that you have created during app registration"
+            }
+        },
+        "AzureClientSecret": {
             "type": "securestring",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Primary Key of Log Analytics workspace"
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "AzureTenantID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant ID of your Azure Active Directory"
+            }
+        },
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
             }
         },
         "MimecastBaseURL": {
@@ -41,6 +69,34 @@
             "minLength": 1,
             "metadata": {
                 "description": "Enter Mimecast Client Secret for Authentication"
+            }
+        },
+        "MimecastAwarenessPerformanceDetailsTableName": {
+            "type": "string",
+            "defaultValue": "Awareness_Performance_Details",
+            "metadata": {
+                "description": "Enter name of the table used to store Awareness Performance Details data. Default is 'Awareness_Performance_Details'"
+            }
+        },
+        "MimecastAwarenessUserDataTableName": {
+            "type": "string",
+            "defaultValue": "Awareness_User_Data",
+            "metadata": {
+                "description": "Enter name of the table used to store Awareness User Data data. Default is 'Awareness_User_Data'"
+            }
+        },
+        "MimecastAwarenessWatchlistDetailsTableName": {
+            "type": "string",
+            "defaultValue": "Awareness_Watchlist_Details",
+            "metadata": {
+                "description": "Enter name of the table used to store Awareness Watchlist Details data. Default is 'Awareness_Watchlist_Details'"
+            }
+        },
+        "MimecastAwarenessSafeScoreDetailsTableName": {
+            "type": "string",
+            "defaultValue": "Awareness_SafeScore_Details",
+            "metadata": {
+                "description": "Enter name of the table used to store Awareness SafeScore Details data. Default is 'Awareness_SafeScore_Details'"
             }
         },
         "Schedule": {
@@ -74,9 +130,563 @@
     "variables": {
         "FunctionName": "[concat(toLower(trim(parameters('FunctionName'))), uniqueString(resourceGroup().id))]",
         "StorageSuffix": "[environment().suffixes.storage]",
-        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(trim(parameters('WorkspaceID'))), '.ods.opinsights'))]"
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')),'MainCollectionRule', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastAwarenessPerformanceDetailsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastAwarenessPerformanceDetailsTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "email",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "name",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "department",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "numIncorrect",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numCorrect",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numNotWatched",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "userDetails",
+                            "Type": "dynamic"
+                        },
+                        {
+                            "Name": "userState",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userId",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastAwarenessSafeScoreDetailsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastAwarenessSafeScoreDetailsTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "emailAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "name",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "department",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "risk",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "humanError",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "sentiment",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "engagement",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "knowledge",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userState",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastAwarenessUserDataTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastAwarenessUserDataTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "timeReported",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "name",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "email",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "templateName",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "department",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "status",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "numCampaignsSent",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numCampaignsClicked",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numTrainingModulesAssigned",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numCampaignsScanned",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numCampaignsClickedScanned",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numCorrectAnswers",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "numIncorrectAnswers",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "userState",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "timeScheduled",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "timeScanned",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "timeSubmitted",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "clickedIp",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "reactionTime",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "timeOpened",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "timeClicked",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "items",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastAwarenessWatchlistDetailsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastAwarenessWatchlistDetailsTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "email",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "name",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "department",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "watchlistCount",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "userState",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userId",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastAwarenessPerformanceDetailsTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastAwarenessSafeScoreDetailsTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastAwarenessUserDataTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastAwarenessWatchlistDetailsTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('MimecastAwarenessPerformanceDetailsTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "email",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "name",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "department",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "numIncorrect",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numCorrect",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numNotWatched",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "userDetails",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "userState",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userId",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastAwarenessSafeScoreDetailsTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "emailAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "name",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "department",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "risk",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "humanError",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "sentiment",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "engagement",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "knowledge",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userState",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastAwarenessUserDataTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "timeReported",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "name",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "email",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "templateName",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "department",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "status",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "numCampaignsSent",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numCampaignsClicked",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numTrainingModulesAssigned",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numCampaignsScanned",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numCampaignsClickedScanned",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numCorrectAnswers",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "numIncorrectAnswers",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "userState",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "timeScheduled",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "timeScanned",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "timeSubmitted",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "clickedIp",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "reactionTime",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "timeOpened",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "timeClicked",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "items",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastAwarenessWatchlistDetailsTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "email",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "name",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "department",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "watchlistCount",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "userState",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userId",
+                                "Type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastAwarenessPerformanceDetailsTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastAwarenessPerformanceDetailsTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastAwarenessSafeScoreDetailsTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastAwarenessSafeScoreDetailsTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastAwarenessUserDataTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastAwarenessUserDataTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastAwarenessWatchlistDetailsTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastAwarenessWatchlistDetailsTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -180,7 +790,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -197,16 +807,24 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "WorkspaceID": "[trim(parameters('WorkspaceID'))]",
-                        "WorkspaceKey": "[trim(parameters('WorkspaceKey'))]",
+                        "AZURE_CLIENT_ID": "[parameters('AzureClientID')]",
+                        "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
+                        "AZURE_TENANT_ID": "[parameters('AzureTenantID')]",
+                        "Azure_Workspace_Name": "[parameters('WorkspaceName')]",
                         "BaseURL": "[trim(parameters('MimecastBaseURL'))]",
                         "MimecastClientID": "[trim(parameters('MimecastClientID'))]",
                         "MimecastClientSecret": "[trim(parameters('MimecastClientSecret'))]",
                         "File_Share_Name": "mimecast-checkpoints",
+                        "Mimecast_Awareness_Performance_Details_Table_Name": "[parameters('MimecastAwarenessPerformanceDetailsTableName')]",
+                        "Mimecast_Awareness_User_Data_Table_Name": "[parameters('MimecastAwarenessUserDataTableName')]",
+                        "Mimecast_Awareness_Watchlist_Details_Table_Name": "[parameters('MimecastAwarenessWatchlistDetailsTableName')]",
+                        "Mimecast_Awareness_SafeScore_Details_Table_Name": "[parameters('MimecastAwarenessSafeScoreDetailsTableName')]",
                         "Schedule": "[trim(parameters('Schedule'))]",
                         "LogLevel": "[trim(parameters('LogLevel'))]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-MimecastAT-functionapp"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-MimecastATUpdated-functionapp",
+                        "SCOPE": "[variables('scope')]",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]"
                     }
                 }
             ]
@@ -245,6 +863,47 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Main DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('mainRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
             }
         }
     ]

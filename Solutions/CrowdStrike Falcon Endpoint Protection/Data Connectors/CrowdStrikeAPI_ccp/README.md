@@ -13,8 +13,9 @@ This solution helps security teams monitor endpoints for threats, track security
 - Connects to the **CrowdStrike Falcon REST API** using OAuth2 authentication.
 - Ingests five types of security data into custom Log Analytics tables:
   - `CrowdStrikeAlerts` - Security alerts and threat notifications
+  - `CrowdStrikeCases` - Case management that include security incident and investigations
   - `CrowdStrikeDetections` - Threat detections and behavioral analysis
-  - `CrowdStrikeIncidents` - Security incidents and investigations
+  - `CrowdStrikeIncidents`(**Deprecated**) - Security incidents and investigations
   - `CrowdStrikeHosts` - Endpoint device information and status
   - `CrowdStrikeVulnerabilities` - Vulnerability data from Falcon Spotlight
 - Uses secure **OAuth 2.0 Client Credentials** for authentication with automatic token refresh.
@@ -52,6 +53,7 @@ This solution helps security teams monitor endpoints for threats, track security
 | **Data Type** | **CrowdStrike Scope** | **Description** |
 |---------------|----------------------|-----------------|
 | Alerts | `alerts:read` | Read access to security alerts |
+| Cases | `cases:read` | Read access to case management |
 | Detections | `detects:read` | Read access to threat detections |
 | Hosts | `hosts:read` | Read access to endpoint device information |
 | Incidents | `incidents:read` | Read access to security incidents |
@@ -126,6 +128,10 @@ After deployment, verify that data is flowing into Microsoft Sentinel:
 ```kql
 // Check CrowdStrike Alerts
 CrowdStrikeAlerts
+| take 10
+
+// Check Crowdstrike Cases
+CrowdStrikeCases
 | take 10
 
 // Check CrowdStrike Detections  

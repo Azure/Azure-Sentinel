@@ -1,7 +1,7 @@
 
 import boto3
 import json
-import csv
+import gzip
 import time
 import pandas as pd
 from datetime import datetime
@@ -66,9 +66,13 @@ def lambda_handler(event, context):
             
             sanitized_stream_name = log_stream_name.replace('/', '_')
             
+            file_path = f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz'
+
             # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-            fileToS3.to_csv( f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
-            
+            text_content = '\n'.join(fileToS3['message'].astype(str).values)
+            with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+                f.write(text_content)
+    
             # Upload data to desired folder in bucket
             s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz', f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz')
             

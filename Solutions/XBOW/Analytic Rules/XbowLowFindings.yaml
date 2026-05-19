@@ -1,0 +1,81 @@
+id: d2e4f1a8-7c9b-4356-8e0d-5a2b7c8e9f01
+name: XbowLowFindings
+description: |
+  Creates an incident for each Low severity finding reported by XBOW that is currently
+  in an open state. These findings represent minor security issues or best-practice
+  violations that should be addressed as part of regular security maintenance. Each
+  alert is deduplicated per finding so re-ingestion of the same finding does not
+  produce duplicate incidents.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: XbowSecurityConnector
+    dataTypes:
+      - XbowFindings_CL
+      - XbowAssets_CL
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques: []
+query: |
+  XbowFindings_CL
+  | where TimeGenerated > ago(2h)
+  | where tolower(Severity) == 'low'
+  | where isempty(State) or tolower(State) == 'open'
+  | summarize arg_max(TimeGenerated, *) by FindingId
+  | join kind=leftouter (
+      XbowAssets_CL
+      | summarize arg_max(TimeGenerated, *) by AssetId
+      | project AssetId, StartUrl
+  ) on AssetId
+  | project
+      TimeGenerated,
+      FindingId,
+      FindingName,
+      Severity,
+      State,
+      Summary,
+      Impact,
+      Mitigations,
+      Recipe,
+      AssetId,
+      AssetName,
+      OrganizationId,
+      CreatedAt,
+      StartUrl
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'XBOW Low: {{FindingName}}'
+  alertDescriptionFormat: 'Low severity finding on asset {{AssetName}} ({{AssetId}}). {{Summary}}'
+customDetails:
+  FindingId: FindingId
+  FindingName: FindingName
+  Severity: Severity
+  State: State
+  AssetId: AssetId
+  AssetName: AssetName
+  OrganizationId: OrganizationId
+  CreatedAt: CreatedAt
+  Mitigations: Mitigations
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 24h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - FindingId
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: StartUrl
+version: 1.0.0
+kind: Scheduled

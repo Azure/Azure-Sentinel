@@ -1,5 +1,11 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.12       | 28-04-2026                    | Renamed analytic rule from **BruteForceCloudPC** to **BruteForceAgainstEntraAuthenticatedWindowsDevice** and updated name and description in **Analytic Rule** to reflect detection scope across all Entra-authenticated Windows devices (including Entra-joined, hybrid-joined, and Windows 365 Cloud PCs), resolving ambiguity around Cloud PC specificity |
+| 3.3.11       | 13-04-2026                    | Added **Watchlist** ConditionalAccessBenignStatusCodes and updated **BypassCondAccessRule** analytic rule |
+| 3.3.10       | 12-04-2026                    | Updated **AccountCreatedandDeletedinShortTimeframe** analytic rule to extend query period to 7 days, normalize UPN parsing, and use immutable UserId for improved detection accuracy and evasion resistance |
+| 3.3.9       | 23-02-2026                     | Updated **Block-AADUser Incident** trigger to fix the permissions for disable user block |
+| 3.3.8       | 06-02-2026                     | Fixed Broken Links in **Analytical Rule**. |
+| 3.3.7       | 20-01-2026                     | Updated Revoke-AADSignInSessions **Playbooks** Instructions. <br/> Add Conditional Access Insights **Workbook** for Microsoft Entra ID. |
 | 3.3.6       | 23-09-2025                     | Updated  **Analytical Rule** to fix the rule saving issue. <br/> Removed Preview Designation from **Microsoft Entra ID Connector** Data Types.  | 
 | 3.3.5       | 25-07-2025                     | Updated Entra id Conditional Access (prefix) **Analytical Rule** |
 | 3.3.4       | 10-07-2025                     | Updated **Analytical Rule** NRT_UseraddedtoPrivilgedGroups.yaml and UseraddedtoPrivilgedGroups.yaml

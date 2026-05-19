@@ -8,18 +8,46 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of Log Analytics workspace"
+                "description": "Enter Microsoft Sentinel Workspace Name of Log Analytics workspace"
             }
         },
-        "WorkspaceKey": {
+        "AzureClientID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client ID that you have created during app registration"
+            }
+        },
+        "AzureClientSecret": {
             "type": "securestring",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Primary Key of Log Analytics workspace"
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "AzureTenantID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant ID of your Azure Active Directory"
+            }
+        },
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
             }
         },
         "MimecastBaseURL": {
@@ -48,6 +76,27 @@
             "type": "string",
             "metadata": {
                 "description": "Enter the start date in the 'yyyy-mm-dd' format. If you do not provide a date, data from the last 60 days will be fetched automatically. Ensure that the date is in the past and properly formatted"
+            }
+        },
+        "MimecastTTPAttachmentTableName": {
+            "type": "string",
+            "defaultValue": "Ttp_Attachment",
+            "metadata": {
+                "description": "Enter name of the table used to store TTP Attachment data. Default is 'Ttp_Attachment'"
+            }
+        },
+        "MimecastTTPImpersonationTableName": {
+            "type": "string",
+            "defaultValue": "Ttp_Impersonation",
+            "metadata": {
+                "description": "Enter name of the table used to store TTP Impersonation data. Default is 'Ttp_Impersonation'"
+            }
+        },
+        "MimecastTTPUrlTableName": {
+            "type": "string",
+            "defaultValue": "Ttp_Url",
+            "metadata": {
+                "description": "Enter name of the table used to store TTP Attachment data. Default is 'Ttp_Url'"
             }
         },
         "Schedule": {
@@ -80,9 +129,719 @@
     "variables": {
         "FunctionName": "[concat(toLower(trim(parameters('FunctionName'))), uniqueString(resourceGroup().id))]",
         "StorageSuffix": "[environment().suffixes.storage]",
-        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(trim(parameters('WorkspaceID'))), '.ods.opinsights'))]"
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')),'MainCollectionRule', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastTTPUrlTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastTTPUrlTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "Date",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_DangerousFileExt_Status",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_UrlReputationScan_Status",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_ContentCheck_DangerousMimetypesUrlFileDownload",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_ContentCheck_DangerousExtsUrlFileDownload",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AdvancedPhishing_CredentialTheftEvidence",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AdvancedPhishing_CredentialTheftTags",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "mimecastEventId",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "mimecastEventCategory",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "advancedPhishingResult_CredentialTheftBrands",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "advancedPhishingResult_CredentialTheftEvidence",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "advancedPhishingResult_CredentialTheftTags",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_CustomerManagedUrls_ManagedUrlEntry",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_CustomerManagedUrls_Blocklisted",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_UrlReputationScan_Type",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_UrlReputationScan_UrlBlock",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_UrlReputationScan_Url",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userEmailAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "fromUserEmailAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "url",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "ttpDefinition",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "subject",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "action",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "adminOverride",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userOverride",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "scanResult",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "sendingIp",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "userAwarenessAction",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "actions",
+                            "Type": "dynamic"
+                        },
+                        {
+                            "Name": "route",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "creationMethod",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "emailPartsDescription",
+                            "Type": "dynamic"
+                        },
+                        {
+                            "Name": "messageId",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_DangerousFileExt_Inspect_FileExts",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_DangerousFileExt_Inspect_MimeTypes",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_DangerousFileExt_ContentCheck_ContentScannersBlocked",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "category",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AvScanning_ContentCheck_AvSignatureName",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AvScanning_ScannerInfo_CategoryTrigger",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AvScanning_ContentCheck_AvSignatureFileExts",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_AvScanning_ContentCheck_UrlFileDownloadFilename",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "tagMap_CustomerManagedUrls_Status",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastTTPImpersonationTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastTTPImpersonationTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "id",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "senderAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "recipientAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "subject",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "definition",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "hits",
+                            "Type": "real"
+                        },
+                        {
+                            "Name": "identifiers",
+                            "Type": "dynamic"
+                        },
+                        {
+                            "Name": "action",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "taggedExternal",
+                            "Type": "boolean"
+                        },
+                        {
+                            "Name": "taggedMalicious",
+                            "Type": "boolean"
+                        },
+                        {
+                            "Name": "senderIpAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "eventTime",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "impersonationResults",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "messageId",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastTTPAttachmentTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastTTPAttachmentTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "Date",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "senderAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "recipientAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "fileName",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "fileType",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "result",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "actionTriggered",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "details",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "route",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "messageId",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "subject",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "fileHash",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "definition",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastTTPUrlTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastTTPImpersonationTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastTTPAttachmentTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('MimecastTTPUrlTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "date",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_DangerousFileExt_Status",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_UrlReputationScan_Status",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_ContentCheck_DangerousMimetypesUrlFileDownload",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_ContentCheck_DangerousExtsUrlFileDownload",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AdvancedPhishing_CredentialTheftEvidence",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AdvancedPhishing_CredentialTheftTags",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "mimecastEventId",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "mimecastEventCategory",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "advancedPhishingResult",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "tagMap",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "advancedPhishingResult_CredentialTheftBrands",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "advancedPhishingResult_CredentialTheftEvidence",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "advancedPhishingResult_CredentialTheftTags",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_CustomerManagedUrls_ManagedUrlEntry",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_CustomerManagedUrls_Blocklisted",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_UrlReputationScan_Type",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_UrlReputationScan_UrlBlock",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_UrlReputationScan_Url",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userEmailAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "fromUserEmailAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "url",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "ttpDefinition",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "subject",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "action",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "adminOverride",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userOverride",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "scanResult",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "sendingIp",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "userAwarenessAction",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "actions",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "route",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "creationMethod",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "emailPartsDescription",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "messageId",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_DangerousFileExt_Inspect_FileExts",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_DangerousFileExt_Inspect_MimeTypes",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_DangerousFileExt_ContentCheck_ContentScannersBlocked",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "category",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AvScanning_ContentCheck_AvSignatureName",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AvScanning_ScannerInfo_CategoryTrigger",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AvScanning_ContentCheck_AvSignatureFileExts",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_AvScanning_ContentCheck_UrlFileDownloadFilename",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "tagMap_CustomerManagedUrls_Status",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastTTPImpersonationTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "id",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "senderAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "recipientAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "subject",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "definition",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "hits",
+                                "Type": "real"
+                            },
+                            {
+                                "Name": "identifiers",
+                                "Type": "dynamic"
+                            },
+                            {
+                                "Name": "action",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "taggedExternal",
+                                "Type": "boolean"
+                            },
+                            {
+                                "Name": "taggedMalicious",
+                                "Type": "boolean"
+                            },
+                            {
+                                "Name": "senderIpAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "eventTime",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "impersonationResults",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "messageId",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastTTPAttachmentTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "date",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "senderAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "recipientAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "fileName",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "fileType",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "result",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "actionTriggered",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "details",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "route",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "messageId",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "subject",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "fileHash",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "definition",
+                                "Type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastTTPUrlTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_advancedPhishingResult = parse_json(advancedPhishingResult), json_tagMap = parse_json(tagMap), Date = ['date']\n| extend json_tagMap_DangerousFileExt = parse_json(json_tagMap.DangerousFileExt), json_tagMap_UrlReputationScan = parse_json(json_tagMap.UrlReputationScan), json_tagMap_AdvancedPhishing = parse_json(json_tagMap.AdvancedPhishing), json_tagMap_CustomerManagedUrls = parse_json(json_tagMap.CustomerManagedUrls), json_tagMap_AvScanning = parse_json(json_tagMap.AvScanning)\n| extend json_tagMap_DangerousFileExt_ContentCheck = parse_json(json_tagMap_DangerousFileExt.ContentCheck), json_tagMap_DangerousFileExt_Inspect = parse_json(json_tagMap_DangerousFileExt.Inspect), json_tagMap_AvScanning_ContentCheck = parse_json(json_tagMap_AvScanning.ContentCheck), json_tagMap_AvScanning_ScannerInfo = parse_json(json_tagMap_AvScanning.ScannerInfo)\n| extend tagMap_DangerousFileExt_Status = tostring(json_tagMap_DangerousFileExt.Status), tagMap_UrlReputationScan_Status = tostring(json_tagMap_UrlReputationScan.Status), tagMap_ContentCheck_DangerousMimetypesUrlFileDownload = tostring(json_tagMap_DangerousFileExt_ContentCheck.DangerousMimetypesUrlFileDownload), tagMap_ContentCheck_DangerousExtsUrlFileDownload = tostring(json_tagMap_DangerousFileExt_ContentCheck.DangerousExtsUrlFileDownload), tagMap_AdvancedPhishing_CredentialTheftEvidence = tostring(json_tagMap_AdvancedPhishing.CredentialTheftEvidence), tagMap_AdvancedPhishing_CredentialTheftTags = tostring(json_tagMap_AdvancedPhishing.CredentialTheftTags), tagMap_CustomerManagedUrls_ManagedUrlEntry = tostring(json_tagMap_CustomerManagedUrls.ManagedUrlEntry), tagMap_CustomerManagedUrls_Blocklisted = tostring(json_tagMap_CustomerManagedUrls.Blocklisted), tagMap_UrlReputationScan_Type = tostring(json_tagMap_UrlReputationScan.Type), tagMap_UrlReputationScan_UrlBlock = tostring(json_tagMap_UrlReputationScan.UrlBlock), tagMap_UrlReputationScan_Url = tostring(json_tagMap_UrlReputationScan.Url), tagMap_DangerousFileExt_Inspect_FileExts = tostring(json_tagMap_DangerousFileExt_Inspect.FileExts), tagMap_DangerousFileExt_Inspect_MimeTypes = tostring(json_tagMap_DangerousFileExt_Inspect.MimeTypes), tagMap_DangerousFileExt_ContentCheck_ContentScannersBlocked = tostring(json_tagMap_DangerousFileExt_ContentCheck.ContentScannersBlocked), tagMap_AvScanning_ContentCheck_AvSignatureName = tostring(json_tagMap_AvScanning_ContentCheck.AvSignatureName), tagMap_AvScanning_ContentCheck_AvSignatureFileExts = tostring(json_tagMap_AvScanning_ContentCheck.AvSignatureFileExts), tagMap_AvScanning_ContentCheck_UrlFileDownloadFilename = tostring(json_tagMap_AvScanning_ContentCheck.UrlFileDownloadFilename), tagMap_AvScanning_ScannerInfo_CategoryTrigger = tostring(json_tagMap_AvScanning_ScannerInfo.CategoryTrigger), tagMap_CustomerManagedUrls_Status = tostring(json_tagMap_CustomerManagedUrls.Status), advancedPhishingResult_CredentialTheftBrands = tostring(json_advancedPhishingResult.CredentialTheftBrands), advancedPhishingResult_CredentialTheftEvidence = tostring(json_advancedPhishingResult.CredentialTheftEvidence), advancedPhishingResult_CredentialTheftTags = tostring(json_advancedPhishingResult.CredentialTheftTags)\n| project-away json_advancedPhishingResult, json_tagMap, json_tagMap_DangerousFileExt, json_tagMap_UrlReputationScan, json_tagMap_AvScanning_ScannerInfo, json_tagMap_AvScanning_ContentCheck, json_tagMap_DangerousFileExt_Inspect, json_tagMap_DangerousFileExt_ContentCheck, json_tagMap_AvScanning, json_tagMap_CustomerManagedUrls, json_tagMap_AdvancedPhishing",
+                        "outputStream": "[concat('Custom-', parameters('MimecastTTPUrlTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastTTPImpersonationTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastTTPImpersonationTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastTTPAttachmentTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), Date = ['date']",
+                        "outputStream": "[concat('Custom-', parameters('MimecastTTPAttachmentTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -186,7 +945,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -203,19 +962,26 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
                         "Function_App_Name": "[variables('FunctionName')]",
-                        "WorkspaceID": "[trim(parameters('WorkspaceID'))]",
-                        "WorkspaceKey": "[trim(parameters('WorkspaceKey'))]",
+                        "AZURE_CLIENT_ID": "[parameters('AzureClientID')]",
+                        "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
+                        "AZURE_TENANT_ID": "[parameters('AzureTenantID')]",
+                        "Azure_Workspace_Name": "[parameters('WorkspaceName')]",
                         "BaseURL": "[trim(parameters('MimecastBaseURL'))]",
                         "StartDate": "[trim(parameters('StartDate'))]",
                         "MimecastClientID": "[trim(parameters('MimecastClientID'))]",
                         "MimecastClientSecret": "[trim(parameters('MimecastClientSecret'))]",
                         "File_Share_Name": "mimecast-checkpoints",
+                        "Mimecast_TTP_Attachment_Table_Name": "[parameters('MimecastTTPAttachmentTableName')]",
+                        "Mimecast_TTP_Impersonation_Table_Name": "[parameters('MimecastTTPImpersonationTableName')]",
+                        "Mimecast_TTP_Url_Table_Name": "[parameters('MimecastTTPUrlTableName')]",
                         "Schedule": "[trim(parameters('Schedule'))]",
                         "LogLevel": "[trim(parameters('LogLevel'))]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-Mimecast_TTP-functionapp",
-                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+                        "SCOPE": "[variables('scope')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-MimecastTTPUpdated-functionapp",
+                        "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]"
                     }
                 }
             ]
@@ -254,6 +1020,47 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Main DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('mainRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
             }
         }
     ]

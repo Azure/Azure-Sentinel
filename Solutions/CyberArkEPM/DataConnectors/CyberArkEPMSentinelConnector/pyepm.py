@@ -4,7 +4,28 @@ Version: 0.0.1
 Date Created: 6/10/2019 16:19
 """
 import json, requests, urllib3, urllib
-from lxml import html
+from html.parser import HTMLParser
+
+
+class _SamlResponseParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.values = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != 'input':
+            return
+        d = {k.lower(): v for k, v in attrs}
+        if d.get('name') == 'SAMLResponse' and 'value' in d:
+            self.values.append(d['value'])
+
+
+def _extract_saml_response(html_text):
+    parser = _SamlResponseParser()
+    parser.feed(html_text)
+    if not parser.values:
+        raise ValueError('SAMLResponse input not found in IdP HTML response')
+    return parser.values[-1]
 
 def epmAuth(dispatcher, username, password):
     """
@@ -82,9 +103,7 @@ def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL
     }
     response = session.get(url, headers=headers, data = payload)
 
-
-    tree = html.fromstring(response.content)
-    samlresponse = tree.xpath('//input[@name="SAMLResponse"]/@value[last()]')[0]
+    samlresponse = _extract_saml_response(response.text)
 
     #SAML Logon
     url = dispatcher + "/SAML/Logon"

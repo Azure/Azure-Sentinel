@@ -28,7 +28,7 @@ if(not match):
 def hmac_sha1(message, secret):
     message = bytes(message, 'utf-8')
     secret = bytes(secret, 'utf-8')
-    hash = hmac.new(secret, message, hashlib.sha1)
+    hash = hmac.new(secret, message, hashlib.sha1)       # CodeQL [SM02167] SHA1 is used here for HMAC verification.
     return hash.hexdigest()
 
 
