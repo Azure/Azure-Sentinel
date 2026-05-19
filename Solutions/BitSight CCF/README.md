@@ -1,57 +1,134 @@
-# BitSight Full CCF ARM package
+# BitSight Risk Findings CCF Data Connector
+* [Introduction](#Introduction)
+* [Description](#Description)
+* [Folders](#Folders)
+* [Prerequisites](#Prerequisites)
+* [Configuration](#Configuration)
+* [Installing for the users](#Installing-for-the-users)
+* [Installing for testing](#Installing-for-testing)
 
-This package provides the BitSight CCF data connector with the full integration scope of the deprecated Function-based connector.
+## Introduction<a name="Introduction"></a>
 
-## Files
+This folder contains the CCF-based ARM artifacts for the reduced BitSight Risk Findings data connector. The connector focuses on a limited set of BitSight risk vectors and ingests only normalized **WARN** and **BAD** findings into Microsoft Sentinel.
 
-- `bitsight-full-connection-template.json` — Template 1. Creates custom tables, a DCR, an optional DCE, and multiple `RestApiPoller` connections.
-- `bitsight-full-connector-definition.json` — Template 2. Creates the BitSight `Customizable` connector definition in Microsoft Sentinel.
-- `*.parameters.json` — starter parameter files.
-- `README.md` — deployment notes and assumptions.
+## Description<a name="Description"></a>
 
-## Important assumptions
+The BitSight Risk Findings CCF Data Connector supports targeted evidence-based cyber risk monitoring by bringing selected BitSight finding data into Microsoft Sentinel through the **Microsoft Sentinel Codeless Connector Framework (CCF)**.
 
-1. The uploaded deprecated ARM template exposed the **tables, DCR streams, transforms, schedules, and settings**, but **not** the exact BitSight REST URLs used by the Function runtime because the runtime logic lived in the external package referenced by `WEBSITE_RUN_FROM_PACKAGE`.
-2. Because of that, this package keeps the **data model and transforms** close to the deprecated connector, but leaves the **connection rules parameterized**.
-3. The starter parameter file intentionally contains **placeholder BitSight endpoints** such as `https://api.bitsighttech.com/<replace>/alerts`. Replace those with the exact tenant-tested URLs before production use.
-4. The default paging configuration is a conservative scaffold:
-   - most connection defaults use `Offset`
-   - observation statistics defaults use `None`
-   Review and adjust these to the exact BitSight endpoint behavior.
+This package covers the following monitoring factors:
 
-## Scope covered
+1. Botnet Infections
+2. Spam Propagation
+3. Malware Servers
+4. Unsolicited Communications
+5. Potentially Exploited
+6. TLS/SSL Certificates
+7. Patching Cadence
+8. Mobile Software
+9. Open Ports
+10. File Sharing
 
-The package creates resources for these BitSight datasets:
+The initial implementation ingests only **WARN** and **BAD** findings. **FAIR** findings can be added later by updating the DCR transform and, if needed, the sample queries.
 
-- BitsightPortfolio_Companies_CL
-- BitsightCompany_details_CL
-- BitsightCompany_rating_details_CL
-- BitsightAlerts_data_CL
-- BitsightGraph_data_CL
-- BitsightDiligence_historical_statistics_CL
-- BitsightDiligence_statistics_CL
-- BitsightIndustrial_statistics_CL
-- BitsightObservation_statistics_CL
-- BitsightFindings_data_CL
-- BitsightFindings_summary_CL
-- BitsightBreaches_data_CL
+## Folders<a name="Folders"></a>
 
-## Deployment flow
+1. `bitsight-risk-findings-connection-template.json` - Connection template that creates the custom table, DCE, DCR, and ten `RestApiPoller` connections for one BitSight company.
+2. `bitsight-risk-findings-connector-definition.json` - Microsoft Sentinel connector definition template used to expose the BitSight Risk Findings connector in the Data Connectors gallery.
+3. `bitsight-risk-findings-connection-template.parameters.json` - Sample parameters for the connection template.
+4. `bitsight-risk-findings-connector-definition.parameters.json` - Sample parameters for the connector definition template.
+5. `BitsightRiskFindings.kql` - Sample KQL queries for validation and operational monitoring.
+6. `README.md` - Deployment and configuration guidance.
+7. `ReleaseNotes.md` - Package change history.
 
-1. Publish **Template 1** as a Template Spec.
-2. Update the Template 1 parameter file with:
-   - workspace name
-   - region
-   - exact BitSight endpoint URLs
-   - exact response paths and paging settings as needed
-3. Deploy **Template 2** with:
-   - workspace name
-   - template spec name
-   - template spec version
-4. Open the BitSight connector in Microsoft Sentinel and provide the BitSight API token.
+## Prerequisites<a name="Prerequisites"></a>
+
+1. A valid BitSight API Token is required.
+2. A Microsoft Sentinel workspace is required.
+3. The monitored BitSight company GUID must be known in advance.
+4. The Template Spec for the connection template must be published before deploying the connector definition template.
+
+## Configuration<a name="Configuration"></a>
+
+### STEP 1 - BitSight API Token
+
+Obtain a valid BitSight API token from the BitSight portal. The connector uses the BitSight token in an Authorization header equivalent to BitSight Basic authentication.
+
+### STEP 2 - Publish the connection template as a Template Spec
+
+Publish `bitsight-risk-findings-connection-template.json` as an Azure Template Spec. Example values:
+
+- Template Spec Name: `bitsight-risk-findings-connection-template`
+- Template Spec Version: `1.0.0`
+
+### STEP 3 - Deploy the connector definition template
+
+Deploy `bitsight-risk-findings-connector-definition.json` into the same resource group as the Log Analytics workspace. Recommended values:
+
+- Workspace Name: your Log Analytics workspace name
+- Template Spec Name: `bitsight-risk-findings-connection-template`
+- Template Spec Version: `1.0.0`
+- Publisher: `Obrela`
+- Connector Definition Name: `bitsight-risk-findings-ccf`
+
+### STEP 4 - Connect one BitSight company
+
+Open the BitSight Risk Findings connector in Microsoft Sentinel and provide:
+
+- BitSight API token
+- BitSight company GUID
+- BitSight company display name
+
+Each **Connect** action deploys one monitored company and creates ten `RestApiPoller` connections, one per monitored BitSight risk vector.
+
+## Installing for the users<a name="Installing-for-the-users"></a>
+
+After the connector definition is deployed, the connector appears in the Microsoft Sentinel **Data connectors** gallery.
+
+i. Go to **Microsoft Sentinel -> Data Connectors**
+
+ii. Open **BitSight Risk Findings (via Codeless Connector Framework)**
+
+iii. Enter the BitSight API token, company GUID, and company display name.
+
+iv. Click **Connect**
+
+The connection template will deploy:
+
+- `BitsightRiskFindings_CL`
+- `bitsight-risk-findings-dce`
+- `bitsight-risk-findings-dcr`
+- ten `RestApiPoller` data connectors for the selected BitSight risk vectors
+
+To monitor an additional company, repeat the **Connect** action with a different company GUID and display name.
+
+## Installing for testing<a name="Installing-for-testing"></a>
+
+1. Publish the connection template as a Template Spec.
+2. Deploy the connector definition template with the sample parameter file and adjust values as needed.
+3. Open the BitSight connector page in Sentinel and run **Connect** for a test company.
+4. Validate ingestion with the sample KQL file.
+
+Example quick checks:
+
+```kusto
+BitsightRiskFindings_CL | take 10
+```
+
+```kusto
+BitsightRiskFindings_CL
+| summarize arg_max(TimeGenerated, *) by finding_uid
+| where normalized_risk_state in ("warn", "bad")
+| count
+```
 
 ## Notes
 
-- The template uses the current stable Microsoft Sentinel ARM API version `2025-09-01` for `Microsoft.SecurityInsights/dataConnectors` and `Microsoft.SecurityInsights/dataConnectorDefinitions`.
-- The template keeps one intentional schema cleanup from the pilot: `BitsightAlerts_data.guid` is normalized to `string`.
-- If you later confirm the exact BitSight endpoint-by-endpoint request model, you can harden the parameter file or inline the connection settings into the template.
+- This reduced package is designed for **explicit company GUID input**. It does not perform runtime portfolio discovery.
+- The package is intentionally limited to the ten agreed monitoring factors and **WARN/BAD** findings only.
+- If **FAIR** findings are needed later, update the DCR transform filter and the related documentation.
+
+This version configures CCF paging to follow the BitSight `links.next` value returned in findings responses.
+
+This version configures BitSight findings paging with `$.links.next` and the `offset` query parameter, which matches the CCF NextPageUrl runtime requirements for this API pattern.
+
+This version uses BitSight findings pagination through the documented `limit` and `offset` query parameters, implemented in CCF with `pagingType: Offset`.
