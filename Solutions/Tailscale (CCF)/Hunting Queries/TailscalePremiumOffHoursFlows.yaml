@@ -1,0 +1,40 @@
+id: 622ce88a-0838-4bbe-8a00-ab8ac8377f41
+name: "Tailscale Premium: Network flows outside business hours"
+description: |
+  Identifies network flows occurring outside 07:00-19:00 UTC on weekdays, plus all of weekend, over the past 7 days. Filters to virtual/subnet/exit traffic (drops DERP-only keepalive noise). Useful for spotting unattended automation gone wrong, scheduled exfiltration, or unsanctioned after-hours access by humans. The TaggedSource column makes it easy to separate cron-like service traffic (tag:backup, tag:cron) from human user activity. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1029
+  - T1071
+query: |
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(7d)
+  | where HasVirtualTraffic or HasSubnetTraffic or HasExitTraffic
+  | extend HourUtc = hourofday(TimeGenerated), Dow = dayofweek(TimeGenerated)
+  | where HourUtc < 7 or HourUtc >= 19 or Dow in (0d, 6d)
+  | extend TaggedSource = isnotempty(SrcTags)
+  | summarize
+      Flows = count(),
+      FirstFlow = min(TimeGenerated),
+      LastFlow = max(TimeGenerated),
+      DistinctHours = dcount(bin(TimeGenerated, 1h))
+      by SrcNodeName, SrcUser, SrcTags=tostring(SrcTags), DstNodeName, DstTags=tostring(DstTags), TaggedSource
+  | where Flows >= 5
+  | project SrcNodeName, SrcUser, SrcTags, TaggedSource, DstNodeName, DstTags, Flows, DistinctHours, FirstFlow, LastFlow
+  | order by Flows desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+version: 1.0.0

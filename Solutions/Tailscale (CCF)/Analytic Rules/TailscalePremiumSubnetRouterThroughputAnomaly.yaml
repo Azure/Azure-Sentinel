@@ -25,14 +25,14 @@ query: |
   let recentTraffic =
       Tailscale_Network_CL
       | where TimeGenerated > ago(recent)
-      | where array_length(SubnetTraffic) > 0
+      | where HasSubnetTraffic
       | mv-expand t = SubnetTraffic
-      | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes), SrcNodeName = tostring(SrcNode.name)
-      | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName;
+      | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)
+      | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);
   let baseline =
       Tailscale_Network_CL
       | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))
-      | where array_length(SubnetTraffic) > 0
+      | where HasSubnetTraffic
       | mv-expand t = SubnetTraffic
       | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)
       | summarize TotalBaselineBytes = sum(Bytes) by NodeId
@@ -41,13 +41,17 @@ query: |
   | join kind=inner baseline on NodeId
   | where RecentBytes > BaselineHourlyBytes * multiplier
   | extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)
-  | project NodeId, SrcNodeName, RecentMB, BaselineHourlyMB, Multiplier
+  | project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier
   | order by Multiplier desc
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: SrcNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:

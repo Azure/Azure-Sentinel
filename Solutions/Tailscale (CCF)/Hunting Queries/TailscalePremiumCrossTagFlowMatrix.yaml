@@ -1,0 +1,41 @@
+id: a8978f27-3c85-4c29-a45a-c4a5e43fef2d
+name: "Tailscale Premium: Cross-tag flow matrix"
+description: |
+  Identifies network flows pivoted by source-tag x destination-tag over the past 7 days, treating untagged user devices as `<user>`. Highlights which tagged services interact - useful for ACL validation, detecting unexpected tag-to-tag traffic, and spotting tag-to-same-tag loops that can indicate worm-style propagation or service-mesh anomalies. Order by Flows to find the heaviest tag pairs; sort by DistinctSrcDevices to find broadly-used services. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - LateralMovement
+  - Discovery
+relevantTechniques:
+  - T1021
+  - T1046
+query: |
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(7d)
+  | extend SrcCategory = case(
+      isnotempty(SrcTags), tostring(SrcTags),
+      isnotempty(SrcUser), "<user>",
+      "<unknown>")
+  | extend DstCategory = case(
+      isnotempty(DstTags), tostring(DstTags),
+      isnotempty(DstUser), "<user>",
+      "<unknown>")
+  | summarize
+      Flows = count(),
+      DistinctSrcDevices = dcount(SrcNodeName),
+      DistinctDstDevices = dcount(DstNodeName),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by SrcCategory, DstCategory
+  | extend SameTagLoop = SrcCategory == DstCategory and SrcCategory != "<user>" and SrcCategory != "<unknown>"
+  | project SrcCategory, DstCategory, Flows, DistinctSrcDevices, DistinctDstDevices, SameTagLoop, FirstSeen, LastSeen
+  | order by Flows desc
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SrcCategory
+version: 1.0.0

@@ -17,6 +17,14 @@
             "type": "string"
           },
           {
+            "name": "type",
+            "type": "string"
+          },
+          {
+            "name": "actionDetails",
+            "type": "string"
+          },
+          {
             "name": "actor",
             "type": "dynamic"
           },
@@ -274,10 +282,18 @@
           }
         ]
       },
-      "Custom-Tailscale_DnsNameservers_CL": {
+      "Custom-Tailscale_DnsConfig_CL": {
         "columns": [
           {
             "name": "dns",
+            "type": "dynamic"
+          },
+          {
+            "name": "magicDNS",
+            "type": "boolean"
+          },
+          {
+            "name": "searchPaths",
             "type": "dynamic"
           }
         ]
@@ -315,22 +331,6 @@
           {
             "name": "postureIdentityCollectionOn",
             "type": "boolean"
-          }
-        ]
-      },
-      "Custom-Tailscale_DnsPreferences_CL": {
-        "columns": [
-          {
-            "name": "magicDNS",
-            "type": "boolean"
-          }
-        ]
-      },
-      "Custom-Tailscale_DnsSearchPaths_CL": {
-        "columns": [
-          {
-            "name": "searchPaths",
-            "type": "dynamic"
           }
         ]
       },
@@ -427,7 +427,7 @@
         "destinations": [
           "sentinelWorkspace"
         ],
-        "transformKql": "source | extend TimeGenerated = eventTime | extend EventTime = eventTime | extend EventGroupID = eventGroupID | extend Actor = actor | extend Action = action | extend Target = target | extend Origin = origin | extend New = new | extend Old = old | project TimeGenerated, EventTime, EventGroupID, Actor, Action, Target, Origin, New, Old",
+        "transformKql": "source | extend TimeGenerated = eventTime | extend EventTime = eventTime | extend EventGroupID = eventGroupID | extend EventType = type | extend ActionDetails = actionDetails | extend Actor = actor | extend Action = action | extend Target = target | extend Origin = origin | extend New = new | extend Old = old | project TimeGenerated, EventTime, EventGroupID, EventType, ActionDetails, Actor, Action, Target, Origin, New, Old",
         "outputStream": "Custom-Tailscale_Audit_CL"
       },
       {
@@ -472,12 +472,12 @@
       },
       {
         "streams": [
-          "Custom-Tailscale_DnsNameservers_CL"
+          "Custom-Tailscale_DnsConfig_CL"
         ],
         "destinations": [
           "sentinelWorkspace"
         ],
-        "transformKql": "source | extend TimeGenerated = now() | extend ConfigType = 'nameservers' | extend Nameservers = dns | project TimeGenerated, ConfigType, Nameservers",
+        "transformKql": "source | extend TimeGenerated = now() | extend ConfigType = case(isnotnull(dns), 'nameservers', isnotnull(searchPaths), 'searchpaths', 'preferences') | extend Nameservers = dns | extend MagicDNS = magicDNS | extend SearchPaths = searchPaths | project TimeGenerated, ConfigType, Nameservers, MagicDNS, SearchPaths",
         "outputStream": "Custom-Tailscale_Dns_CL"
       },
       {
@@ -492,32 +492,12 @@
       },
       {
         "streams": [
-          "Custom-Tailscale_DnsPreferences_CL"
-        ],
-        "destinations": [
-          "sentinelWorkspace"
-        ],
-        "transformKql": "source | extend TimeGenerated = now() | extend ConfigType = 'preferences' | extend MagicDNS = magicDNS | project TimeGenerated, ConfigType, MagicDNS",
-        "outputStream": "Custom-Tailscale_Dns_CL"
-      },
-      {
-        "streams": [
-          "Custom-Tailscale_DnsSearchPaths_CL"
-        ],
-        "destinations": [
-          "sentinelWorkspace"
-        ],
-        "transformKql": "source | extend TimeGenerated = now() | extend ConfigType = 'searchpaths' | extend SearchPaths = searchPaths | project TimeGenerated, ConfigType, SearchPaths",
-        "outputStream": "Custom-Tailscale_Dns_CL"
-      },
-      {
-        "streams": [
           "Custom-Tailscale_Network_CL"
         ],
         "destinations": [
           "sentinelWorkspace"
         ],
-        "transformKql": "source | extend TimeGenerated = logged | extend NodeId = nodeId | extend FlowStart = start | extend FlowEnd = end | extend SrcNode = srcNode | extend DstNodes = dstNodes | extend VirtualTraffic = virtualTraffic | extend SubnetTraffic = subnetTraffic | extend ExitTraffic = exitTraffic | extend PhysicalTraffic = physicalTraffic | project TimeGenerated, NodeId, FlowStart, FlowEnd, SrcNode, DstNodes, VirtualTraffic, SubnetTraffic, ExitTraffic, PhysicalTraffic",
+        "transformKql": "source | extend TimeGenerated = logged | extend NodeId = nodeId | extend FlowStart = start | extend FlowEnd = end | extend SrcNode = srcNode | extend SrcUser = tostring(srcNode.user) | extend SrcNodeName = tostring(srcNode.name) | extend SrcOs = tostring(srcNode.os) | extend SrcTags = srcNode.tags | extend SrcAddresses = srcNode.addresses | extend DstNodes = dstNodes | extend DstCount = toint(array_length(dstNodes)) | extend DstNodeId = tostring(dstNodes[0].nodeId) | extend DstNodeName = tostring(dstNodes[0].name) | extend DstUser = tostring(dstNodes[0].user) | extend DstOs = tostring(dstNodes[0].os) | extend DstTags = dstNodes[0].tags | extend DstAddresses = dstNodes[0].addresses | extend VirtualTraffic = virtualTraffic | extend SubnetTraffic = subnetTraffic | extend ExitTraffic = exitTraffic | extend PhysicalTraffic = physicalTraffic | extend HasVirtualTraffic = array_length(virtualTraffic) > 0 | extend HasSubnetTraffic = array_length(subnetTraffic) > 0 | extend HasExitTraffic = array_length(exitTraffic) > 0 | extend HasPhysicalTraffic = array_length(physicalTraffic) > 0 | extend IsRelayed = tostring(physicalTraffic) contains '127.3.3.40' | project TimeGenerated, NodeId, FlowStart, FlowEnd, SrcNode, SrcUser, SrcNodeName, SrcOs, SrcTags, SrcAddresses, DstNodes, DstCount, DstNodeId, DstNodeName, DstUser, DstOs, DstTags, DstAddresses, VirtualTraffic, SubnetTraffic, ExitTraffic, PhysicalTraffic, HasVirtualTraffic, HasSubnetTraffic, HasExitTraffic, HasPhysicalTraffic, IsRelayed",
         "outputStream": "Custom-Tailscale_Network_CL"
       },
       {

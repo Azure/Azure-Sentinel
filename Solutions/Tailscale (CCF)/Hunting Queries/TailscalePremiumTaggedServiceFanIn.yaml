@@ -1,0 +1,36 @@
+id: f8d4e7bc-3450-4c55-84ac-90e6e9c6b8fe
+name: "Tailscale Premium: Tagged services with broad inbound exposure"
+description: |
+  Identifies tagged services (devices with non-empty DstTags) ranked by inbound diversity over 7 days. Baseline: a tag:plex serving the household typically sees connections from 1-3 user devices; a tag:db or tag:internal that receives connections from 10+ distinct users or 3+ OS families may indicate ACL drift, credential sharing, or unauthorised access. Sort by DistinctSrcDevices to surface services with the broadest blast-radius. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - LateralMovement
+  - InitialAccess
+relevantTechniques:
+  - T1021
+  - T1133
+query: |
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(7d)
+  | where isnotempty(DstTags)
+  | where HasVirtualTraffic or HasSubnetTraffic
+  | summarize
+      DistinctSrcUsers = dcount(SrcUser),
+      DistinctSrcDevices = dcount(SrcNodeName),
+      DistinctSrcOs = dcount(SrcOs),
+      Flows = count(),
+      FirstFlow = min(TimeGenerated),
+      LastFlow = max(TimeGenerated)
+      by DstNodeName, DstTags=tostring(DstTags)
+  | extend ShortDstName = tostring(split(DstNodeName, ".")[0])
+  | project ShortDstName, DstTags, DistinctSrcDevices, DistinctSrcUsers, DistinctSrcOs, Flows, FirstFlow, LastFlow
+  | order by DistinctSrcDevices desc, Flows desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ShortDstName
+version: 1.0.0

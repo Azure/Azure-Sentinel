@@ -25,21 +25,34 @@ query: |
   let beaconPercentThreshold = 80.0;
   Tailscale_Network_CL
   | where TimeGenerated > ago(lookback)
+  | where HasVirtualTraffic
   | mv-expand t = VirtualTraffic
   | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)
-  | project TimeGenerated, Src, Dst, Proto
+  | project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser
   | sort by Src asc, Dst asc, Proto asc, TimeGenerated asc
   | serialize
   | extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)
   | where Src == NextSrc and Dst == NextDst and Proto == NextProto
   | extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)
   | where DeltaSec > 5
-  | summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec
-  | summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto
+  | summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser
+  | summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser
   | where TotalFlows >= minFlows
   | extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)
   | where BeaconPercent >= beaconPercentThreshold
 entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DstNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
   - entityType: IP
     fieldMappings:
       - identifier: Address

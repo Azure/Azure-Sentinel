@@ -1,0 +1,52 @@
+id: 7237a848-30f2-499b-9ad5-024aea1288bd
+name: "Tailscale: OAuth client or API key created with write scopes"
+description: |
+  Detects creation of a Tailscale OAuth client or API access key whose granted scopes include WRITE permissions (anything matching ":write"). Tokens with write scopes can modify tailnet configuration, manage devices, write ACLs, and revoke keys - high-value adversary targets. Compare against the recent actor history; revoke immediately if unexpected.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1136
+query: |
+  Tailscale_Audit_CL
+  | where EventType == "CONFIG"
+  | where Action == "CREATE"
+  | where tostring(Target.type) in ("API_KEY", "OAUTH_CLIENT")
+  | extend Scopes = extract(@"scopes\s*-\s*(.+)$", 1, ActionDetails)
+  | where Scopes contains ":write"
+  | extend WriteScopes = extract_all(@"([a-zA-Z_]+:write)", Scopes)
+  | extend ActorLogin = tostring(Actor.loginName)
+  | extend ActorType = tostring(Actor.type)
+  | extend TargetName = tostring(Target.name)
+  | extend TargetId = tostring(Target.id)
+  | extend TargetType = tostring(Target.type)
+  | project TimeGenerated, ActorLogin, ActorType, Action, TargetType, TargetName, TargetId, WriteScopes, Scopes, Origin, ActionDetails
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
