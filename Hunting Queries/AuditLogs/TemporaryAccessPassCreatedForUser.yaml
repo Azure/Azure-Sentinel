@@ -1,0 +1,74 @@
+id: a9d39b89-25ed-4233-a825-9640ec77d83d
+name: Temporary Access Pass created for user account
+description: |
+  Identifies Temporary Access Pass creations in Entra ID. A TAP allows passwordless
+  authentication and bypasses existing credential requirements. Creation outside a
+  managed onboarding process may indicate an attacker registering a TAP for account
+  takeover.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1556.006
+  - T1098
+query: |
+  let timeframe = 1d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "UserManagement"
+  | where OperationName in~ (
+        "Admin registered security info",
+        "Create Temporary Access Pass method for user",
+        "Update user"
+    )
+  | where Result =~ "success"
+  | where tostring(TargetResources) has "TemporaryAccessPass"
+  | extend TargetUpn  = tostring(TargetResources[0].userPrincipalName)
+  | extend TargetId   = tostring(TargetResources[0].id)
+  | extend ActorUpn   = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp   = tostring(InitiatedBy.app.displayName)
+  | extend Actor      = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp    = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[0]), TargetUpn)
+  | extend AccountUPNSuffix = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      TargetUpn,
+      AccountName,
+      AccountUPNSuffix,
+      TargetId,
+      Actor,
+      ActorIp,
+      OperationName,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
