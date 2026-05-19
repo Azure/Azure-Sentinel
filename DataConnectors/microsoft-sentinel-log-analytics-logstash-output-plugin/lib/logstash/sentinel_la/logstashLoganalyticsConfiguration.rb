@@ -15,8 +15,6 @@ class LogstashLoganalyticsOutputConfiguration
         @managed_identity = managed_identity
         @managed_identity_object_id = managed_identity_object_id
 
-	# Delay between each resending of a message
-        @RETRANSMISSION_DELAY = 2
         @MIN_MESSAGE_AMOUNT = 100
         # Maximum of 1 MB per post to Log Analytics Data Collector API V2.
         # This is a size limit for a single post.
@@ -75,6 +73,9 @@ class LogstashLoganalyticsOutputConfiguration
 
         if @retransmission_time < 0
             raise ArgumentError, "retransmission_time must be a positive integer."
+        end
+        if @RETRANSMISSION_DELAY < 0
+            raise ArgumentError, "retransmission_delay must be a positive integer."
         end
         if @max_items < @MIN_MESSAGE_AMOUNT
             raise ArgumentError, "Setting max_items to value must be greater then #{@MIN_MESSAGE_AMOUNT}."
@@ -214,6 +215,10 @@ class LogstashLoganalyticsOutputConfiguration
 
     def retransmission_time=(new_retransmission_time)
         @retransmission_time = new_retransmission_time
+    end
+
+    def retransmission_delay=(new_retransmission_delay)
+        @RETRANSMISSION_DELAY = new_retransmission_delay
     end
 
     def compress_data

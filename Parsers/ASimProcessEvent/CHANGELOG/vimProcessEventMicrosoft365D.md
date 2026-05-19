@@ -1,5 +1,13 @@
 # Changelog for vimProcessEventMicrosoft365D.yaml
 
+## Version 0.4.1
+
+- (2026-05-01) Fix bug where TargetUserSessionId was not projected - [PR #14183](https://github.com/Azure/Azure-Sentinel/pull/14183)
+
+## Version 0.4.0
+
+- (2026-03-10) [ASIM] Update Process Event Defender Parsers With Additional Fields - [PR #13785](https://github.com/Azure/Azure-Sentinel/pull/13785)
+
 ## Version 0.3.1
 
 - (2026-01-19) [ASIM] ProcessEvent - M365Defender - Filter on TimeGenerated - [PR #13467](https://github.com/Azure/Azure-Sentinel/pull/13467)
