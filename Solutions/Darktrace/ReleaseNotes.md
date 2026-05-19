@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.0       | 06-03-2026                     | Initial Solution Release                    |
+| 3.0.0       | 06-03-2026                     | Added new Darktrace ActiveAI Security Platform CCF data connector, DCR, custom tables, workbook, and two new analytic rules; relabeled legacy REST API connector, workbook, and analytic rules as (Legacy)                    |
