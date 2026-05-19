@@ -39,12 +39,14 @@ def post_data(events: list[dict], log_type_suffix: str):
         # Use DefaultAzureCredential (supports Managed Identity in Azure)
         # credential = DefaultAzureCredential()
 
+        logging.info("Creating the Client Secret Credential object.")
         creds = ClientSecretCredential(
             client_id=AZURE_CLIENT_ID,
             client_secret=AZURE_CLIENT_SECRET,
             tenant_id=AZURE_TENANT_ID,
         )
 
+        logging.info("Creating the Log Ingestion Client object.")
         client = LogsIngestionClient(
             endpoint=AZURE_ENDPOINT,
             credential=creds
@@ -62,6 +64,9 @@ def post_data(events: list[dict], log_type_suffix: str):
         # The stream name must match your DCR definition
         # Usually "Custom-<TableName>_CL"
         stream_name = f"Custom-FncEvents{log_type_suffix.title()}_CL"
+
+        logging.info(
+            f"Uploading {len(events)} events using the new Log Ingestion Client.")
 
         client.upload(
             rule_id=DCR_ID,
