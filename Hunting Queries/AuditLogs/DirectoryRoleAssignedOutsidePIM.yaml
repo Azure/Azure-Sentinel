@@ -1,6 +1,9 @@
 id: 2df6ff4f-f90f-4158-ac4a-98c1b23d9e18
 name: Privileged directory role assigned outside PIM workflow
-description: Identifies permanent directory role assignments to privileged roles made outside the Privileged Identity Management activation workflow. Direct assignments bypass PIM approval and justification requirements. Complements PIMRoleActivationOutsideBusinessHours by covering the non-PIM assignment path used in post-compromise persistence.
+description: |
+  Identifies permanent directory role assignments to privileged roles made outside
+  the Privileged Identity Management activation workflow. Direct assignments bypass
+  PIM approval and justification requirements.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -43,10 +46,12 @@ query: |
   | where tostring(ModProp.displayName) =~ "Role.DisplayName"
   | extend RoleName = trim('"', tostring(ModProp.newValue))
   | where RoleName in~ (PrivilegedRoles)
+  | extend ActorName        = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend ActorUPNSuffix   = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
   | extend AccountName      = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[0]), TargetUpn)
   | extend AccountUPNSuffix = iff(TargetUpn has "@", tostring(split(TargetUpn, "@")[1]), "")
-  | project TimeGenerated, Actor, ActorIp, TargetUpn, AccountName, AccountUPNSuffix,
-            TargetId, RoleName, CorrelationId
+  | project TimeGenerated, Actor, ActorName, ActorUPNSuffix, ActorIp,
+            TargetUpn, AccountName, AccountUPNSuffix, TargetId, RoleName, CorrelationId
   | sort by TimeGenerated desc
 entityMappings:
   - entityType: Account
@@ -54,13 +59,17 @@ entityMappings:
       - identifier: FullName
         columnName: Actor
       - identifier: Name
-        columnName: AccountName
+        columnName: ActorName
       - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
+        columnName: ActorUPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: TargetUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
