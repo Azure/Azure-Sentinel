@@ -84,9 +84,9 @@ def post_events_inc(events, event_type):
         end = count if count - start <= limit else start + limit
         piece = events[start:end]
         logging.info(
-            f"SentinelClient: [new] - Posting slice #{i} containing {len(piece)} events")
+            f"SentinelClient: [new] - Posting slice #{i} containing {len(events[start:end])} events")
 
-        post_data(piece, event_type)
+        post_data(events[start:end], event_type)
         start = start + limit
         i += 1
 
