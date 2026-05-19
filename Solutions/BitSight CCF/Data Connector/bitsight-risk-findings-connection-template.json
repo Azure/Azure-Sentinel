@@ -1,0 +1,494 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "BitSight Risk Findings CCF connection template. Creates the custom table, DCE, DCR, and one RestApiPoller connection per monitored risk vector for a single BitSight company."
+  },
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Existing Log Analytics workspace name. Deploy this template to the workspace resource group."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Deployment location. Use the same region as the Log Analytics workspace."
+      }
+    },
+    "connectorDefinitionName": {
+      "type": "string",
+      "defaultValue": "bitsight-risk-findings-ccf",
+      "metadata": {
+        "description": "Microsoft Sentinel data connector definition resource name."
+      }
+    },
+    "bitsightApiToken": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "BitSight API token."
+      }
+    },
+    "companyGuid": {
+      "type": "string",
+      "minLength": 36,
+      "metadata": {
+        "description": "BitSight company GUID to monitor. This reduced-scope CCF package deploys one company per Connect action."
+      }
+    },
+    "companyName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Display name used in the output table for the monitored company."
+      }
+    },
+    "tableName": {
+      "type": "string",
+      "defaultValue": "BitsightRiskFindings",
+      "minLength": 1,
+      "maxLength": 42,
+      "metadata": {
+        "description": "Custom table base name without _CL."
+      }
+    },
+    "queryWindowInMin": {
+      "type": "int",
+      "defaultValue": 10080,
+      "minValue": 60,
+      "metadata": {
+        "description": "Incremental polling window in minutes. Default is 7 days."
+      }
+    },
+    "queryWindowDelayInMin": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Delay applied to the query window in minutes."
+      }
+    },
+    "pageSize": {
+      "type": "int",
+      "defaultValue": 100,
+      "minValue": 1,
+      "maxValue": 1000,
+      "metadata": {
+        "description": "BitSight page size."
+      }
+    },
+    "rateLimitQPS": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 1,
+      "maxValue": 10,
+      "metadata": {
+        "description": "Maximum query rate per second."
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "tableFullName": "[concat(parameters('tableName'), '_CL')]",
+    "streamName": "[concat('Custom-', parameters('tableName'))]",
+    "outputStream": "[concat('Custom-', parameters('tableName'), '_CL')]",
+    "destinationName": "laDest",
+    "dceName": "bitsight-risk-findings-dce",
+    "dcrName": "bitsight-risk-findings-dcr",
+    "companyKey": "[substring(replace(parameters('companyGuid'), '-', ''), 0, 8)]",
+    "riskVectors": [
+      {
+        "slug": "botnet_infections",
+        "short": "botnet",
+        "label": "Botnet Infections"
+      },
+      {
+        "slug": "spam_propagation",
+        "short": "spam",
+        "label": "Spam Propagation"
+      },
+      {
+        "slug": "malware_servers",
+        "short": "malware",
+        "label": "Malware Servers"
+      },
+      {
+        "slug": "unsolicited_comm",
+        "short": "unsolicited",
+        "label": "Unsolicited Communications"
+      },
+      {
+        "slug": "potentially_exploited",
+        "short": "exploited",
+        "label": "Potentially Exploited"
+      },
+      {
+        "slug": "ssl_certificates",
+        "short": "tlsssl",
+        "label": "TLS/SSL Certificates"
+      },
+      {
+        "slug": "patching_cadence",
+        "short": "patching",
+        "label": "Patching Cadence"
+      },
+      {
+        "slug": "mobile_software",
+        "short": "mobile",
+        "label": "Mobile Software"
+      },
+      {
+        "slug": "open_ports",
+        "short": "ports",
+        "label": "Open Ports"
+      },
+      {
+        "slug": "file_sharing",
+        "short": "fileshare",
+        "label": "File Sharing"
+      }
+    ],
+    "baseFindingsEndpoint": "[concat('https://api.bitsighttech.com/ratings/v1/companies/', parameters('companyGuid'), '/findings')]",
+    "transformKql": "[concat('source', uriComponentToString('%0A'),'| extend _details=details, _assets=assets, _tags=tags', uriComponentToString('%0A'),'| extend _risk_category=iif(isnotempty(tostring(_details.risk_category)), tostring(_details.risk_category), tostring(risk_category))', uriComponentToString('%0A'),'| extend _risk_vector=iif(isnotempty(tostring(_details.risk_vector)), tostring(_details.risk_vector), tostring(risk_vector))', uriComponentToString('%0A'),'| extend _risk_vector_label=iif(isnotempty(tostring(_details.risk_vector_label)), tostring(_details.risk_vector_label), iif(isnotempty(tostring(risk_vector_label)), tostring(risk_vector_label), _risk_vector))', uriComponentToString('%0A'),'| extend _grade=tolower(iif(isnotempty(tostring(_details.grade)), tostring(_details.grade), tostring(grade)))', uriComponentToString('%0A'),'| extend _severity=iif(isnotnull(_details.severity), todouble(_details.severity), todouble(severity))', uriComponentToString('%0A'),'| extend _severity_category=tolower(iif(isnotempty(tostring(_details.severity_category)), tostring(_details.severity_category), tostring(severity_category)))', uriComponentToString('%0A'),'| extend normalized_risk_state=case(_grade in (''good'',''fair'',''warn'',''bad'',''neutral''), _grade, _severity_category in (''severe'',''material''), ''bad'', _severity_category == ''moderate'', ''warn'', _severity_category == ''minor'', ''fair'', _severity >= 7.0, ''bad'', _severity >= 4.0, ''warn'', _severity >= 1.0, ''fair'', ''unknown'')', uriComponentToString('%0A'),'| where normalized_risk_state in (''warn'',''bad'')', uriComponentToString('%0A'),'| extend _stable_id=iif(isnotempty(tostring(_details.rolledup_observation_id)), tostring(_details.rolledup_observation_id), iif(isnotempty(tostring(_details.evidence_key)), tostring(_details.evidence_key), iif(isnotempty(tostring(temporary_id)), tostring(temporary_id), iif(isnotempty(tostring(guid)), tostring(guid), tostring(id)))))', uriComponentToString('%0A'),'| extend _first_seen=todatetime(iif(isnotempty(tostring(_details.first_seen)), tostring(_details.first_seen), tostring(first_seen)))', uriComponentToString('%0A'),'| extend _last_seen=todatetime(iif(isnotempty(tostring(_details.last_seen)), tostring(_details.last_seen), tostring(last_seen)))', uriComponentToString('%0A'),'| extend _duration=tostring(iif(isnotempty(tostring(_details.duration)), tostring(_details.duration), tostring(duration)))', uriComponentToString('%0A'),'| extend _evidence_key=tostring(iif(isnotempty(tostring(_details.evidence_key)), tostring(_details.evidence_key), tostring(evidence_key)))', uriComponentToString('%0A'),'| extend _rolledup_observation_id=tostring(iif(isnotempty(tostring(_details.rolledup_observation_id)), tostring(_details.rolledup_observation_id), tostring(rolledup_observation_id)))', uriComponentToString('%0A'),'| extend _impacts_risk_vector_details=tostring(iif(isnotempty(tostring(_details.impacts_risk_vector_details)), tostring(_details.impacts_risk_vector_details), tostring(impacts_risk_vector_details)))', uriComponentToString('%0A'),'| extend _remaining_decay=iif(isnotnull(_details.remaining_decay), todouble(_details.remaining_decay), todouble(remaining_decay))', uriComponentToString('%0A'),'| extend _remediated=iif(isnotnull(_details.remediated), tobool(_details.remediated), tobool(remediated))', uriComponentToString('%0A'),'| extend _comments=tostring(iif(isnotempty(tostring(_details.comments)), tostring(_details.comments), tostring(comments)))', uriComponentToString('%0A'),'| extend _tags_out=iif(isnotnull(_details.tags), _details.tags, _tags)', uriComponentToString('%0A'),'| extend _raw=pack(''temporary_id'', temporary_id, ''risk_category'', risk_category, ''risk_vector'', risk_vector, ''risk_vector_label'', risk_vector_label, ''grade'', grade, ''severity'', severity, ''severity_category'', severity_category, ''affects_rating'', affects_rating, ''first_seen'', first_seen, ''last_seen'', last_seen, ''duration'', duration, ''evidence_key'', evidence_key, ''rolledup_observation_id'', rolledup_observation_id, ''impacts_risk_vector_details'', impacts_risk_vector_details, ''remaining_decay'', remaining_decay, ''remediated'', remediated, ''comments'', comments, ''assets'', _assets, ''tags'', _tags, ''details'', _details, ''id'', id, ''guid'', guid)', uriComponentToString('%0A'),'| project TimeGenerated=todatetime(now()), company_guid=''', parameters('companyGuid'), ''', company_name=''', replace(parameters('companyName'), '''', ''''''), ''', finding_uid=iif(isempty(_stable_id), tostring(hash_sha256(strcat(tostring(temporary_id), ''|'', tostring(guid), ''|'', tostring(id), ''|'', _risk_vector, ''|'', tostring(_first_seen), ''|'', tostring(_last_seen)))), _stable_id), temporary_id=tostring(temporary_id), risk_category=_risk_category, risk_vector=_risk_vector, risk_vector_label=_risk_vector_label, finding_grade=_grade, severity=_severity, severity_category=_severity_category, normalized_risk_state=tostring(normalized_risk_state), affects_rating=tobool(affects_rating), first_seen=_first_seen, last_seen=_last_seen, duration=_duration, evidence_key=_evidence_key, rolledup_observation_id=_rolledup_observation_id, impacts_risk_vector_details=_impacts_risk_vector_details, remaining_decay=_remaining_decay, remediated=_remediated, comments=_comments, assets=_assets, tags=_tags_out, details=_details, raw=_raw')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "kind": "Linux",
+      "properties": {
+        "description": "DCE for BitSight risk findings CCF ingestion",
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspaceName'), '/', variables('tableFullName'))]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('tableFullName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "company_guid",
+              "type": "string"
+            },
+            {
+              "name": "company_name",
+              "type": "string"
+            },
+            {
+              "name": "finding_uid",
+              "type": "string"
+            },
+            {
+              "name": "temporary_id",
+              "type": "string"
+            },
+            {
+              "name": "risk_category",
+              "type": "string"
+            },
+            {
+              "name": "risk_vector",
+              "type": "string"
+            },
+            {
+              "name": "risk_vector_label",
+              "type": "string"
+            },
+            {
+              "name": "finding_grade",
+              "type": "string"
+            },
+            {
+              "name": "severity",
+              "type": "real"
+            },
+            {
+              "name": "severity_category",
+              "type": "string"
+            },
+            {
+              "name": "normalized_risk_state",
+              "type": "string"
+            },
+            {
+              "name": "affects_rating",
+              "type": "boolean"
+            },
+            {
+              "name": "first_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "last_seen",
+              "type": "datetime"
+            },
+            {
+              "name": "duration",
+              "type": "string"
+            },
+            {
+              "name": "evidence_key",
+              "type": "string"
+            },
+            {
+              "name": "rolledup_observation_id",
+              "type": "string"
+            },
+            {
+              "name": "impacts_risk_vector_details",
+              "type": "string"
+            },
+            {
+              "name": "remaining_decay",
+              "type": "real"
+            },
+            {
+              "name": "remediated",
+              "type": "boolean"
+            },
+            {
+              "name": "comments",
+              "type": "string"
+            },
+            {
+              "name": "assets",
+              "type": "dynamic"
+            },
+            {
+              "name": "tags",
+              "type": "dynamic"
+            },
+            {
+              "name": "details",
+              "type": "dynamic"
+            },
+            {
+              "name": "raw",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[concat(variables('workspaceResourceId'), '/tables/', variables('tableFullName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "[variables('streamName')]": {
+            "columns": [
+              {
+                "name": "temporary_id",
+                "type": "string"
+              },
+              {
+                "name": "risk_category",
+                "type": "string"
+              },
+              {
+                "name": "risk_vector",
+                "type": "string"
+              },
+              {
+                "name": "risk_vector_label",
+                "type": "string"
+              },
+              {
+                "name": "grade",
+                "type": "string"
+              },
+              {
+                "name": "severity",
+                "type": "real"
+              },
+              {
+                "name": "severity_category",
+                "type": "string"
+              },
+              {
+                "name": "affects_rating",
+                "type": "boolean"
+              },
+              {
+                "name": "first_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "last_seen",
+                "type": "datetime"
+              },
+              {
+                "name": "duration",
+                "type": "string"
+              },
+              {
+                "name": "evidence_key",
+                "type": "string"
+              },
+              {
+                "name": "rolledup_observation_id",
+                "type": "string"
+              },
+              {
+                "name": "impacts_risk_vector_details",
+                "type": "string"
+              },
+              {
+                "name": "remaining_decay",
+                "type": "real"
+              },
+              {
+                "name": "remediated",
+                "type": "boolean"
+              },
+              {
+                "name": "comments",
+                "type": "string"
+              },
+              {
+                "name": "assets",
+                "type": "dynamic"
+              },
+              {
+                "name": "tags",
+                "type": "dynamic"
+              },
+              {
+                "name": "details",
+                "type": "dynamic"
+              },
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "guid",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "[variables('destinationName')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('streamName')]"
+            ],
+            "destinations": [
+              "[variables('destinationName')]"
+            ],
+            "transformKql": "[variables('transformKql')]",
+            "outputStream": "[variables('outputStream')]"
+          }
+        ]
+      }
+    },
+    {
+      "copy": {
+        "name": "riskConnectorCopy",
+        "count": "[length(variables('riskVectors'))]"
+      },
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2025-09-01",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/bitsightrisk-', variables('companyKey'), '-', variables('riskVectors')[copyIndex('riskConnectorCopy')].short)]",
+      "dependsOn": [
+        "[variables('dcrName')]"
+      ],
+      "properties": {
+        "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
+        "dataType": "[variables('tableFullName')]",
+        "isActive": true,
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[base64(concat(parameters('bitsightApiToken'), ':'))]",
+          "ApiKeyName": "Authorization",
+          "ApiKeyIdentifier": "Basic"
+        },
+        "request": {
+          "apiEndpoint": "[variables('baseFindingsEndpoint')]",
+          "httpMethod": "Get",
+          "queryWindowInMin": "[parameters('queryWindowInMin')]",
+          "queryWindowDelayInMin": "[parameters('queryWindowDelayInMin')]",
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "rateLimitQPS": "[parameters('rateLimitQPS')]",
+          "headers": {
+            "Accept": "application/json"
+          },
+          "queryParameters": {
+            "limit": "[string(parameters('pageSize'))]",
+            "risk_vector": "[variables('riskVectors')[copyIndex('riskConnectorCopy')].slug]",
+            "expand": "remediation_history,tag_details,attributed_companies"
+          },
+          "queryTimeFormat": "yyyy-MM-dd",
+          "startTimeAttributeName": "last_seen_gte",
+          "endTimeAttributeName": "last_seen_lte"
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.results[*]"
+          ],
+          "format": "json"
+        },
+        "paging": {
+          "pagingType": "Offset",
+          "offsetParaName": "offset",
+          "pageSizeParameterName": "limit",
+          "pageSize": "[parameters('pageSize')]",
+          "pagingInfoPlacement": "QueryString",
+          "pagingQueryParamOnly": false
+        },
+        "dcrConfig": {
+          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]",
+          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]",
+          "streamName": "[variables('streamName')]"
+        }
+      },
+      "kind": "RestApiPoller"
+    }
+  ],
+  "outputs": {
+    "tableName": {
+      "type": "string",
+      "value": "[variables('tableFullName')]"
+    },
+    "dceName": {
+      "type": "string",
+      "value": "[variables('dceName')]"
+    },
+    "dcrName": {
+      "type": "string",
+      "value": "[variables('dcrName')]"
+    }
+  }
+}
