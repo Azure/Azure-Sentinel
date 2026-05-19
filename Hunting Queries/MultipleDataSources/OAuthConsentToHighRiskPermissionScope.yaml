@@ -1,11 +1,9 @@
 id: 2a166359-a104-4d72-93ae-643ae69bf801
-name: OAuth Application Consent to High-Risk Permission Scope
+name: OAuth application consent to high-risk permission scope
 description: |
-  Identifies OAuth application consent events where high-risk permissions were granted,
-  including application-level permissions such as Directory.ReadWrite.All or
-  RoleManagement.ReadWrite.Directory. Flags apps with no consent history in the tenant
-  over the past 90 days. Complements SuspiciousOAuthApp_OfflineAccess by covering
-  application permissions and admin consent grants not included in that detection.
+  Identifies OAuth application consent events where high-risk permissions such as
+  Directory.ReadWrite.All or RoleManagement.ReadWrite.Directory were granted to apps
+  with no prior tenant consent history in the preceding 90 days.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -29,13 +27,12 @@ query: |
       "Files.ReadWrite.All",
       "full_access_as_app"
   ]);
-  let KnownAppSet = toscalar(
+  let KnownApps =
       AuditLogs
       | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
       | where OperationName =~ "Consent to application"
       | extend AppId = tostring(TargetResources[0].id)
-      | summarize make_set(AppId)
-  );
+      | distinct AppId;
   AuditLogs
   | where TimeGenerated >= ago(timeframe)
   | where OperationName =~ "Consent to application"
@@ -53,11 +50,11 @@ query: |
   | where tostring(ModProp.displayName) =~ "ConsentContext.Permissions"
   | extend GrantedPermissions = tostring(ModProp.newValue)
   | where GrantedPermissions has_any (HighRiskScopes)
-  | extend IsNewApp = not(set_has_element(KnownAppSet, AppId))
+  | join kind=leftanti KnownApps on AppId
   | extend AccountName      = iff(Actor has "@", tostring(split(Actor, "@")[0]), Actor)
   | extend AccountUPNSuffix = iff(Actor has "@", tostring(split(Actor, "@")[1]), "")
   | project TimeGenerated, AppName, AppId, GrantedPermissions, Actor,
-            AccountName, AccountUPNSuffix, ActorIp, IsNewApp, CorrelationId
+            AccountName, AccountUPNSuffix, ActorIp, CorrelationId
   | sort by TimeGenerated desc
 entityMappings:
   - entityType: Account
