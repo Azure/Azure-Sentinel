@@ -12,8 +12,14 @@ if (!_owner || !_repo || !_pr_number) {
 let pullRequestDetails;
 let octokit;
 if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
-    console.log("Running in a forked repository. Creating unauthenticated Octokit client.");
-    octokit = new Octokit(); // Unauthenticated client
+    if (process.env.GITHUB_TOKEN) {
+        console.log("Running in a forked repository. Creating authenticated Octokit client using GITHUB_TOKEN.");
+        octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    }
+    else {
+        console.log("Running in a forked repository. Creating unauthenticated Octokit client.");
+        octokit = new Octokit(); // Unauthenticated client
+    }
 }
 else if (process.env.GITHUBAPPID && process.env.GITHUBAPPPRIVATEKEY && process.env.GITHUBAPPINSTALLATIONID) {
     console.log("Running in a non-forked repository. Creating authenticated Octokit client.");
