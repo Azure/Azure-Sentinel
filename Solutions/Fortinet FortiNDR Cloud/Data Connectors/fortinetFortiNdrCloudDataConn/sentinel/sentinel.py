@@ -7,8 +7,8 @@ import os
 from datetime import datetime, timezone
 
 import requests
-from azure.core.exceptions import HttpResponseError
-from azure.identity import DefaultAzureCredential
+from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
+from azure.identity import AzureAuthorityHosts, ClientSecretCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
 LOG_ANALYTICS_URI = (os.environ.get("LogAnalyticsUri") or "").strip()
@@ -21,12 +21,11 @@ if not LOG_ANALYTICS_URI:
 # SENTINEL_SHARED_KEY = (os.environ.get("WorkspaceKey") or "").strip()
 
 # New Environment Variables
-# e.g., https://my-dce.region.ingest.monitor.azure.com
-TENANT_ID       = (os.environ.get("TENANT_ID"       ) or "").strip()
-CLIENT_ID       = (os.environ.get("CLIENT_ID"       ) or "").strip()
-CLIENT_SECRET   = (os.environ.get("CLIENT_SECRET"   ) or "").strip()
-ENDPOINT        = (os.environ.get("DceUri"          ) or "").strip()
-DCR_ID          = (os.environ.get("DcrImmutableId"  ) or "").strip()
+AZURE_TENANT_ID = (os.environ.get("TENANT_ID") or "").strip()
+AZURE_CLIENT_ID = (os.environ.get("CLIENT_ID") or "").strip()
+AZURE_CLIENT_SECRET = (os.environ.get("CLIENT_SECRET") or "").strip()
+AZURE_ENDPOINT = (os.environ.get("DceUri") or "").strip()
+DCR_ID = (os.environ.get("DcrImmutableId") or "").strip()
 
 
 def post_data(events: list[dict], log_type_suffix: str):
@@ -38,16 +37,17 @@ def post_data(events: list[dict], log_type_suffix: str):
 
     try:
         # Use DefaultAzureCredential (supports Managed Identity in Azure)
-        #credential = DefaultAzureCredential()
-        
-        credential = ClientSecretCredential(
-            tenant_id=TENANT_ID,
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
+        # credential = DefaultAzureCredential()
+
+        creds = ClientSecretCredential(
+            client_id=AZURE_CLIENT_ID,
+            client_secret=AZURE_CLIENT_SECRET,
+            tenant_id=AZURE_TENANT_ID,
         )
+
         client = LogsIngestionClient(
-            endpoint=ENDPOINT,
-            credential=credential
+            endpoint=AZURE_ENDPOINT,
+            credential=creds
         )
 
     except Exception as e:
@@ -57,7 +57,7 @@ def post_data(events: list[dict], log_type_suffix: str):
         )
         logging.error(f"SentinelClient: Unexpected error: {e}")
         raise
-    
+
     try:
         # The stream name must match your DCR definition
         # Usually "Custom-<TableName>_CL"
