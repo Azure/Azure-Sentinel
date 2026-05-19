@@ -3,8 +3,8 @@
 Microsoft Sentinel solution that ingests Tailscale identity, device, configuration, audit and (Premium) network-flow telemetry via the OAuth2-secured Tailscale API. Built on the Codeless Connector Framework (CCF) - no Function App or container required.
 
 - **2 data connectors** (Standard, Premium) - install whichever matches your Tailscale plan
-- **22 analytic rules** (15 Standard + 7 Premium-only)
-- **17 hunting queries** (12 Standard + 5 Premium-only)
+- **24 analytic rules** (16 Standard + 8 Premium-only)
+- **22 hunting queries** (12 Standard + 10 Premium-only)
 - **2 workbooks** (Standard Operations, Premium Operations)
 - **9 custom tables** ingested via 9-11 polling rules behind a single Connect button
 
@@ -37,8 +37,8 @@ Install **one** of the two connectors based on your Tailscale plan. The split mi
 | **Tailscale plan** | Personal (Free), Starter, Premium\* | Premium, Enterprise |
 | **Pollers behind one Connect** | 9 | 11 |
 | **Custom tables created** | 7 | 9 |
-| **Analytic rules wired** | 15 | 22 (Standard 15 + Premium 7) |
-| **Hunting queries wired** | 12 | 17 (Standard 12 + Premium 5) |
+| **Analytic rules wired** | 16 | 24 (Standard 16 + Premium 8) |
+| **Hunting queries wired** | 12 | 22 (Standard 12 + Premium 10) |
 | **Workbook** | Standard Operations | Premium Operations |
 | **Network flow logs** | not exposed by API | `Tailscale_Network_CL` |
 | **Posture integrations** | not exposed by API | `Tailscale_PostureIntegrations_CL` |
@@ -135,19 +135,19 @@ All tables are Log Analytics custom tables (`_CL`) populated via Sentinel CCF po
 
 | Table | Cols | Cadence | Source endpoint | Tier |
 |---|---|---|---|---|
-| `Tailscale_Audit_CL` | 9 | 5 min | `/logging/configuration` | Standard + Premium |
+| `Tailscale_Audit_CL` | 11 | 5 min | `/logging/configuration` | Standard + Premium |
 | `Tailscale_Devices_CL` | 27 | 60 min | `/devices?fields=all` | Standard + Premium |
 | `Tailscale_Users_CL` | 13 | 60 min | `/users` | Standard + Premium |
 | `Tailscale_Keys_CL` | 10 | 60 min | `/keys?all=true` | Standard + Premium |
 | `Tailscale_Webhooks_CL` | 8 | 60 min | `/webhooks` | Standard + Premium |
 | `Tailscale_Settings_CL` | 9 | 60 min | `/settings` | Standard + Premium |
 | `Tailscale_Dns_CL` | 5 | 60 min | merged from `/dns/nameservers`, `/dns/preferences`, `/dns/searchpaths` | Standard + Premium |
-| `Tailscale_Network_CL` | 10 | 5 min | `/logging/network` | Premium only |
+| `Tailscale_Network_CL` | 27 | 5 min | `/logging/network` | Premium only |
 | `Tailscale_PostureIntegrations_CL` | 8 | 60 min | `/posture/integrations` | Premium only |
 
 **Snapshot semantics.** All `_CL` tables except `Audit` and `Network` are snapshot tables - each poll writes the full current state of the endpoint. Use `summarize arg_max(TimeGenerated, *) by <key>` to get the latest snapshot. The 5-min audit and network tables are append-only event streams.
 
-**`Tailscale_Devices_CL` is the richest table** at 27 columns. The 5 most interesting columns for detection are surfaced via `?fields=all`:
+**`Tailscale_Devices_CL` is the richest snapshot table** at 27 columns. The 5 most interesting columns for detection are surfaced via `?fields=all`:
 
 - `AdvertisedRoutes` / `EnabledRoutes` - dynamic arrays of CIDRs the device offers/has approved
 - `SshEnabled` - bool, is Tailscale SSH active on this device
@@ -155,17 +155,25 @@ All tables are Log Analytics custom tables (`_CL`) populated via Sentinel CCF po
 - `TailnetLockKey` / `TailnetLockError` - cryptographic node-key validation state
 - `UpdateAvailable` - bool, client behind latest release
 
+**`Tailscale_Network_CL` is the richest event table** (Premium only) at 27 columns. The DCR transform promotes the most useful inner-object fields out of the source `srcNode` / `dstNodes` dynamics so hunting queries don't have to traverse dynamic JSON:
+
+- `SrcUser` / `SrcNodeName` / `SrcOs` / `SrcTags` / `SrcAddresses` - src device identity + tagging
+- `DstCount` / `DstNodeId` / `DstNodeName` / `DstUser` / `DstOs` / `DstTags` / `DstAddresses` - dst device identity + tagging
+- `HasVirtualTraffic` / `HasSubnetTraffic` / `HasExitTraffic` / `HasPhysicalTraffic` - traffic-shape flags
+- `IsRelayed` - bool, true when the flow used a DERP relay (detected via `127.3.3.40` in `physicalTraffic`)
+
 ---
 
 ## 6. Analytic rules
 
-### Standard tier (15 rules)
+### Standard tier (16 rules)
 
-**Identity & access (4)**
+**Identity & access (5)**
 
 | Rule | Severity | Tactics | What it watches |
 |---|---|---|---|
 | New API access token or OAuth client created | Medium | Persistence, CredentialAccess | New `API_ACCESS_TOKEN_CREATE` / `OAUTH_CLIENT_CREATE` audit events |
+| OAuth client or API key created with write scopes | High | Persistence, PrivilegeEscalation | New OAuth client or API key whose granted scopes include any `:write` permission |
 | Auth key created | Low | Persistence | Any new auth key (incl. ephemeral / reusable / preauthorized) |
 | User role elevated to admin or owner | High | PrivilegeEscalation, Persistence | `USER_ROLE_UPDATE` audit events targeting `admin` or `owner` |
 | Unauthorized device connected to control plane | High | InitialAccess, Persistence | `Authorized=false AND ConnectedToControl=true` in devices snapshot |
@@ -201,13 +209,14 @@ All tables are Log Analytics custom tables (`_CL`) populated via Sentinel CCF po
 | MagicDNS disabled | Medium | DefenseEvasion | `MAGICDNS_DISABLE` audit event |
 | Split-DNS configuration modified | High | DefenseEvasion, CommandAndControl | `SPLIT_DNS_UPDATE` audit events (per-domain DNS override) |
 
-### Premium tier (additional 7 rules)
+### Premium tier (additional 8 rules)
 
 These require `Tailscale_Network_CL` (flow logs) or `Tailscale_PostureIntegrations_CL`.
 
 | Rule | Severity | Tactics | What it watches |
 |---|---|---|---|
 | Network flow beaconing detected | Medium | CommandAndControl, Exfiltration | Regular periodic flows from a single source over 24h (jitter-tolerant) |
+| DERP relay traffic surge | Low | CommandAndControl | More than 75% of a source node's recent flows fell back to DERP relay (`IsRelayed=true`); signals NAT/firewall failure, UDP-blocking middlebox, or attempted evasion |
 | Large outbound transfer over tailnet | Medium | Exfiltration, Collection | Single flow tx-bytes > 1GB in any 5-min window |
 | Mass fan-out from single node | High | Discovery, LateralMovement | Source node initiated flows to N+ distinct destinations within 5 min |
 | Subnet router throughput anomaly | Low | Exfiltration, CommandAndControl | Subnet-router src->dst throughput exceeds 3-sigma of its 7-day baseline |
@@ -236,14 +245,19 @@ These require `Tailscale_Network_CL` (flow logs) or `Tailscale_PostureIntegratio
 | External (shared-in) device inventory | InitialAccess | Devices admitted via Tailscale sharing |
 | Subnet router CIDR exposure inventory | LateralMovement | Every CIDR currently bridged into the tailnet |
 
-### Premium (5)
+### Premium (10)
 
 | Query | Tactics | Use case |
 |---|---|---|
 | Beaconing candidates (regular periodic flows) | CommandAndControl, Exfiltration | Looser threshold than the analytic rule - investigation aid |
+| Cross-tag flow matrix | LateralMovement, Discovery | Flows pivoted by src-tag x dst-tag over 7 days; surfaces tag-to-same-tag loops as worm/service-mesh signal |
+| Devices with persistent DERP relay usage | CommandAndControl | Devices that consistently fall back to DERP relay over 24h; long-window companion to the surge rule |
 | Exit-node usage patterns | CommandAndControl, Exfiltration | Who uses which exit node, how often, how much data |
 | New src->dst node pairs (lateral movement candidates) | LateralMovement, Discovery | First-time observed flow pair vs 7-day baseline |
+| Network flows outside business hours | Exfiltration, CommandAndControl | Off-hours flows with `TaggedSource` discriminator to separate service-account from human activity |
+| Tagged services with broad inbound exposure | LateralMovement, InitialAccess | Tagged services ranked by inbound `DistinctSrcDevices` / `DistinctSrcUsers` / `DistinctSrcOs` - surfaces ACL drift |
 | Top talkers by bytes (virtual traffic) | Exfiltration, Collection | Highest tx/rx nodes over time window |
+| Users generating traffic from multiple devices | InitialAccess, Persistence | Multi-device users joined against `Tailscale_Devices_CL.Created` to flag newly-added devices |
 | Current posture integration inventory | DefenseEvasion | Snapshot of every posture integration and its enabled state |
 
 ---
@@ -278,7 +292,12 @@ Tailscale's `/logging/configuration`, `/logging/network`, posture, and DNS endpo
 
 ### How three DNS endpoints become one table
 
-Tailscale exposes DNS configuration across three endpoints (`/dns/nameservers`, `/dns/preferences`, `/dns/searchpaths`). Rather than create three tables, the DCR uses a **multi-stream-in / single-stream-out** pattern: each poller writes to its own input stream (`Custom-Tailscale_DnsNameservers`, `Custom-Tailscale_DnsPreferences`, `Custom-Tailscale_DnsSearchPaths`), three `dataFlows` transform each with a `ConfigType` discriminator column into one output stream (`Custom-Tailscale_Dns_CL`). Net result: one table to query with a `ConfigType` filter.
+Tailscale exposes DNS configuration across three endpoints (`/dns/nameservers`, `/dns/preferences`, `/dns/searchpaths`) but the Sentinel UX is cleaner with one logical table. Both connectors land all three into a single `Tailscale_Dns_CL` table with a `ConfigType` discriminator column - the mechanism differs by connector because Azure DCRs are capped at 10 `dataFlows` and the Premium connector is already at the limit:
+
+- **Standard connector** (7 tables, 9 dataFlows): each DNS poller writes to its own input stream (`Custom-Tailscale_DnsNameservers_CL`, `Custom-Tailscale_DnsPreferences_CL`, `Custom-Tailscale_DnsSearchPaths_CL`) and three separate `dataFlows` apply per-source transforms before merging into the shared `Tailscale_Dns_CL` output.
+- **Premium connector** (9 tables, 9 dataFlows): all three DNS pollers write to a single unified input stream (`Custom-Tailscale_DnsConfig_CL`) so the DCR uses just one `dataFlow` for DNS. Without this consolidation the Premium DCR would be at 11 dataFlows and Azure would reject the deployment.
+
+Net effect for the operator is identical: one table, filter by `ConfigType`.
 
 ### Cadence rationale
 
@@ -321,7 +340,7 @@ Almost always a missing OAuth scope. Tailscale returns HTTP 200 with empty data 
 
 ### `Tailscale_Devices_CL` is missing `AdvertisedRoutes`, `SshEnabled`, etc.
 
-Older versions of this connector polled `/devices` without `?fields=all`. The current version (3.0.2+) polls with `?fields=all`. If you're on an older version, reinstall from Content Hub then click Connect again.
+The connector polls `/devices?fields=all`. If those columns are empty in your workspace, the most likely cause is that the DCR transform isn't projecting them - confirm the deployed `dcr-tailscale*` DCR `transformKql` matches the version in this solution and re-Connect.
 
 ### OAuth deployment fails with "Invalid Token Endpoint query parameters"
 
