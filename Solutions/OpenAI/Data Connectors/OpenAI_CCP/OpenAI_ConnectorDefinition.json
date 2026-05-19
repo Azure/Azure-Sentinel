@@ -1,0 +1,232 @@
+{
+  "name": "OpenAIConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "OpenAIConnector",
+      "title": "OpenAI (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The OpenAI data connector enables you to ingest audit logs, chat completion data, or both from your OpenAI organization into Microsoft Sentinel through the OpenAI API. Each data type uses a separate REST API poller and requires a different API key type: **audit logs** (user actions, API key management, organization changes, security events) require an **organization-level admin API key**, while **chat completions** (model usage, token consumption, performance metrics) require a **project-level API key**. You may configure one or both data types independently. Data is collected into separate tables (OpenAIAuditLogs and OpenAIChatCompletions) for security monitoring, compliance analysis, and usage monitoring. Refer to [OpenAI API documentation](https://platform.openai.com/docs/api-reference) for more information.",
+      "graphQueriesTableName": "OpenAIAuditLogs",
+      "graphQueries": [
+        {
+          "metricName": "Total OpenAI Data",
+          "legend": "All OpenAI Data",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "Recent Audit Logs",
+          "legend": "Recent Audit Logs",
+          "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h)"
+        },
+        {
+          "metricName": "Recent Chat Completions",
+          "legend": "Recent Chat Completions",
+          "baseQuery": "OpenAIChatCompletions"
+        },
+        {
+          "metricName": "API Key Events",
+          "legend": "API Key Related Events",
+          "baseQuery": "{{graphQueriesTableName}} | where EventType has_any ('api_key.created', 'api_key.updated', 'api_key.deleted')"
+        },
+        {
+          "metricName": "High Token Usage",
+          "legend": "High Token Usage Completions",
+          "baseQuery": "OpenAIChatCompletions | where Usage.total_tokens > 1000"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get sample of 20 recent records",
+          "query": "{{graphQueriesTableName}}\n| take 20"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "OpenAIAuditLogs",
+          "lastDataReceivedQuery": "OpenAIAuditLogs\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "OpenAIChatCompletions",
+          "lastDataReceivedQuery": "OpenAIChatCompletions\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "union OpenAIAuditLogs, OpenAIChatCompletions | where TimeGenerated > ago(1h) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "OpenAI API access",
+            "description": "Each data type requires a different API key type. An **organization-level admin API key** is required for audit logs - these can be created in your OpenAI organization settings. A **project-level API key** is required for chat completions - these can be created under a specific project in the OpenAI dashboard. You may configure audit logs, chat completions, or both independently."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connection Information",
+          "description": "Details on the connections used to collect data from OpenAI's API.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "- **Audit Logs** (`OpenAIAuditLogs`):\n    - Use **organization-level admin API keys**.\n    - Audit logging must be enabled in your OpenAI organization settings. Organization owners can go to OpenAI's `Organization settings` -> `Data controls` -> `Data retention` to enable audit logging.\n    - Once OpenAI audit logging is enabled, it cannot be disabled without contacting OpenAI support.\n- **Chat Completions** (`OpenAIChatCompletions`):\n    - Use **project-level API keys**.\n    - Only chat completions created with the `store` parameter set to `true` will be collected.\n    - Deleting stored chat completions while this connector is active may require you to disconnect and reconnect to reset the data collection state."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Add OpenAI Audit Logs Connection",
+          "description": "Enter your OpenAI API credentials to collect audit logs data from OpenAI API.",
+          "instructions": [
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connection",
+                "title": "Add OpenAI Audit Logs Connection",
+                "subtitle": "Connect to OpenAI Audit Logs API",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## OpenAI Audit Logs Connection\n\nConfigure your OpenAI organization-level admin API key to collect audit logs (user actions, API key management, organization changes, security events).\n\n> **Note:** Audit logs require an **organization-level admin API key**. These can be created in your OpenAI organization settings."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Audit Logs Connection Name",
+                          "placeholder": "e.g. My OpenAI Org - Audit Logs",
+                          "type": "text",
+                          "name": "auditLogsFriendlyName"
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Organization API Key",
+                          "placeholder": "Enter your OpenAI organization-level admin API key",
+                          "type": "password",
+                          "name": "orgApiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "title": "Add OpenAI Chat Completions Connection",
+          "description": "Enter your OpenAI API credentials to collect chat completions data from OpenAI API.",
+          "instructions": [
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connection",
+                "title": "Add OpenAI Chat Completions Connection",
+                "subtitle": "Connect to OpenAI Chat Completions API",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## OpenAI Chat Completions Connection\n\nConfigure your OpenAI project-level API key to collect chat completions data (model usage, token consumption, performance metrics).\n\n> **Note:** Chat completions require a **project-level API key**. These can be created under a specific project in the OpenAI dashboard. Only chat completions created with the `store` parameter set to `true` will be collected."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Chat Completions Connection Name",
+                          "placeholder": "e.g. My OpenAI Project - Chat Completions",
+                          "type": "text",
+                          "name": "chatCompletionsFriendlyName"
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Project API Key",
+                          "placeholder": "Enter your OpenAI project-level API key",
+                          "type": "password",
+                          "name": "projApiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Friendly Name",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.dataType"
+                  },
+                  {
+                    "columnName": "URL",
+                    "columnValue": "properties.request.apiEndpoint"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
