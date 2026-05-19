@@ -12,7 +12,7 @@ Azure Functions-based implementation to the Microsoft Sentinel
   authentication, and ingestion are all performed by the platform-native CCF runtime.
 - No Function App to deploy, scale, monitor, or patch.
 - Workspace shared-key (`sharedKeys`) permission is no longer required by the connector.
-- Credentials are configured directly on the connector tile in Sentinel.
+- Credentials are configured directly on the connector tile in Microsoft Sentinel.
 
 **What is preserved**
 

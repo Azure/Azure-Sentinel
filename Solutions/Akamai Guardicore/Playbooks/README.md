@@ -5,10 +5,10 @@ Author: Akamai Guardicore
 This solution ships two Logic Apps that enrich Microsoft Sentinel incidents
 with Guardicore connection data. When an incident is created, the trigger
 playbook extracts IP entities, computes three 5-minute time slots around the
-incident time, and writes slot manifest rows to Sentinel. A companion
+incident time, and writes slot manifest rows to Microsoft Sentinel. A companion
 recurrence-triggered runner Logic App polls a small Azure Storage Table for
 due slots, fetches Guardicore `/api/v3.0/connections` for each slot's window
-+ IP filter, and ingests the results to a second Sentinel custom log table.
++ IP filter, and ingests the results to a second Microsoft Sentinel custom log table.
 
 There is **no Azure Function App** - both Logic Apps run natively. Ingestion
 goes through a Data Collection Rule using the Logic Apps' system-assigned
@@ -28,7 +28,7 @@ form (workspace name + Guardicore credentials), and click **Create**.
 
 The Deploy form has three steps:
 
-1. **Sentinel workspace** - pick the workspace name (and its resource group
+1. **Microsoft Sentinel workspace** - pick the workspace name (and its resource group
    if it's not the same as the deployment RG); optionally paste a resource
    ID for an existing Data Collection Endpoint to reuse.
 2. **Guardicore credentials** - management URL (https only, regex-checked),
@@ -40,7 +40,7 @@ The Deploy form has three steps:
 
 The portal can't fully automate two final touches. Both take ~30 seconds.
 
-### 1. Authorize the Sentinel managed-API connection
+### 1. Authorize the Microsoft Sentinel managed-API connection
 
 The trigger playbook deploys a `Microsoft.Web/connections` resource for
 `azuresentinel`, configured to authenticate as the playbook's
@@ -51,12 +51,12 @@ system-assigned managed identity. Azure requires a one-time interactive
 2. Edit API connection -> confirm **Authentication Type** is **Managed
    Identity** -> click **Authorize** -> **Save**.
 
-If you skip this, every trigger run fails at the Sentinel webhook step
+If you skip this, every trigger run fails at the Microsoft Sentinel webhook step
 with `Unauthorized`.
 
-### 2. Wire the playbook to a Sentinel automation rule
+### 2. Wire the playbook to a Microsoft Sentinel automation rule
 
-The trigger playbook only fires when a Sentinel automation rule routes an
+The trigger playbook only fires when a Microsoft Sentinel automation rule routes an
 incident to it.
 
 1. Microsoft Sentinel -> workspace -> Configuration -> Automation.
@@ -68,12 +68,12 @@ incident to it.
    -> grant permissions when prompted.
 5. Save.
 
-If your Sentinel workspace lives in a different resource group than the
+If your Microsoft Sentinel workspace lives in a different resource group than the
 deployment, you may also need to grant the trigger playbook's managed
 identity the **Microsoft Sentinel Responder** role on the workspace
 (the consolidated template grants `Monitoring Metrics Publisher` on the
 DCR and `Storage Account Contributor` on the storage account
-automatically; the Sentinel role is workspace-scoped and the consolidated
+automatically; the Microsoft Sentinel role is workspace-scoped and the consolidated
 template can't grant it cross-RG safely).
 
 ## Verify
@@ -111,20 +111,20 @@ If either is empty after 15 minutes:
 | `Microsoft.Insights/dataCollectionEndpoints` (conditional) | Logs Ingestion endpoint, created if no existing DCE supplied. |
 | `Microsoft.Insights/dataCollectionRules` | Routes the two custom log streams into the workspace. |
 | `Microsoft.OperationalInsights/workspaces/tables` x 2 | `GuardicoreProcessedIncidents_CL` + `GuardicoreEnrichingConnections_CL`. |
-| `Microsoft.Web/connections` (azuresentinel) | Sentinel managed-API connection used by the trigger. |
+| `Microsoft.Web/connections` (azuresentinel) | Microsoft Sentinel managed-API connection used by the trigger. |
 | `Microsoft.Web/connections` (azuretables) | Storage tables managed-API connection shared by both Logic Apps. |
-| `Microsoft.Logic/workflows` (trigger) | `Guardicore-ProcessIncidentEnrichment`, fires on Sentinel incident creation. |
+| `Microsoft.Logic/workflows` (trigger) | `Guardicore-ProcessIncidentEnrichment`, fires on Microsoft Sentinel incident creation. |
 | `Microsoft.Logic/workflows` (runner) | `Guardicore-EnrichmentRunner`, fires on a 2-minute recurrence. |
 | `Microsoft.Authorization/roleAssignments` x 4 | DCR + Storage RBAC for both Logic App managed identities. |
 
-## What changed in v3.1.0
+## What changed in v3.0.0
 
 - The Function App at `Playbooks/CustomConnector/` was removed - there is
   no Python code anywhere on the playbook side.
 - The legacy `Playbooks/azuredeploy.json` (which deployed the legacy
   playbook only) was replaced by the new consolidated `azuredeploy.json`
   that deploys everything.
-- The two Sentinel custom log tables (`GuardicoreProcessedIncidents_CL`,
+- The two Microsoft Sentinel custom log tables (`GuardicoreProcessedIncidents_CL`,
   `GuardicoreEnrichingConnections_CL`) keep the same names but are now
   DCR-based from the start.
 - The legacy `FunctionAppName` ARM parameter is gone.
@@ -150,10 +150,10 @@ for the manual deploy order and parameter wiring.
 
 ## Citations
 
-- [Sentinel playbook recommendations](https://learn.microsoft.com/en-us/azure/sentinel/playbook-recommendations)
+- [Microsoft Sentinel playbook recommendations](https://learn.microsoft.com/en-us/azure/sentinel/playbook-recommendations)
 - [Logic Apps native HTTP action](https://learn.microsoft.com/en-us/azure/logic-apps/connectors/connectors-native-http)
 - [Logic Apps managed identity authentication](https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity)
 - [Logs Ingestion API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview)
 - [DCR transform structure](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-collection-transformations-structure)
 - [Logic Apps recurrence trigger](https://learn.microsoft.com/en-us/azure/connectors/connectors-native-recurrence)
-- [Sentinel automation rules](https://learn.microsoft.com/en-us/azure/sentinel/automate-incident-handling-with-automation-rules)
+- [Microsoft Sentinel automation rules](https://learn.microsoft.com/en-us/azure/sentinel/automate-incident-handling-with-automation-rules)
