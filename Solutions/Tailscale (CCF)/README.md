@@ -309,7 +309,7 @@ Net effect for the operator is identical: one table, filter by `ConfigType`.
 ## 10. Limitations
 
 - **Network flow logs are Premium-only.** The eight Premium rules and ten Premium hunts depend on `Tailscale_Network_CL` and won't run on a Standard install.
-- **Microsoft pre-built "Network Session Essentials" rules don't auto-cover this data.** Workspace-level ASIM functions (`_Im_NetworkSession` and similar) are sealed and can't be extended from Solutions. To use Microsoft's pre-built network-session detections on Tailscale data, clone the relevant rules and point them at `imNetworkSession` (a non-underscore workspace function that unions Microsoft built-ins with our `vimNetworkSessionTailscale` parser) - included in this solution.
+- **No ASIM NetworkSession parser yet.** Microsoft's pre-built "Network Session Essentials" detections won't auto-cover Tailscale data in 3.0.0 - a `vimNetworkSessionTailscale` parser mapping `Tailscale_Network_CL` to the ASIM NetworkSession schema is planned for a follow-up release. Until then use the analytic rules and hunting queries shipped in this solution.
 - **Snapshot tables overwrite, they don't diff.** Each 60-min snapshot is a complete current-state poll, not a delta. Rules that need transition detection (e.g. "SSH newly enabled") compare the latest snapshot against a 24-hour baseline.
 
 ---
