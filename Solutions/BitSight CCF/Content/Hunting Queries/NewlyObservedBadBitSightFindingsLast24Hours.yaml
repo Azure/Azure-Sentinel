@@ -1,0 +1,23 @@
+id: d460ec6a-49f9-4ef6-8172-b0e513ea7bf6
+name: Newly observed BAD BitSight findings in the last 24 hours
+description: |
+  Returns BAD BitSight findings first seen in Microsoft Sentinel during the last 24 hours.
+requiredDataConnectors:
+  - connectorId: bitsight-risk-findings-ccf
+    dataTypes:
+      - BitsightRiskFindings_CL
+tactics:
+  - Impact
+query: |
+  let DetectionWindow = 24h;
+  let HistoricalFindings =
+      BitsightRiskFindings_CL
+      | where TimeGenerated < ago(DetectionWindow)
+      | summarize by finding_uid;
+  BitsightRiskFindings_CL
+  | where TimeGenerated >= ago(DetectionWindow)
+  | summarize arg_max(TimeGenerated, *) by finding_uid
+  | where normalized_risk_state == "bad"
+  | join kind=leftanti HistoricalFindings on finding_uid
+  | project TimeGenerated, company_name, risk_vector_label, severity, severity_category, first_seen, last_seen, comments, finding_uid
+  | order by TimeGenerated desc
