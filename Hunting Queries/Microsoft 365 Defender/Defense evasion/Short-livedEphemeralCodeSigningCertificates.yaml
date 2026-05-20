@@ -1,0 +1,109 @@
+id: e920899f-edf0-446c-bb13-effbaf61b27b
+name: Short-lived ephemeral code signing certificates
+description: |
+  Identifies files signed by certificates with a lifespan of 14 days or less. Commercial software certificates usually last over a year, while short-lived certificates are only used in DevOps pipelines. A short-lived certificate found in a non-dev environment indicates automated Malware-Signing-as-a-Service (MSaaS) used to evade reputation-based security controls.
+  References:
+  https://www.microsoft.com/en-us/security/blog/2026/05/19/exposing-fox-tempest-a-malware-signing-service-operation/
+  https://learn.microsoft.com/en-us/azure/artifact-signing/overview
+
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileCertificateInfo
+      - DeviceInfo
+      - DeviceTvmSoftwareInventory
+tactics:
+  - DefenseEvasion
+  - Resource Development
+relevantTechniques:
+  - T1553.002
+  - T1588.003
+tags:
+- Fox Tempest
+query: |
+  // --- ADAPTATION GUIDE ---
+  // 1. EphemeralThreshold: 14 days is the 'anomalous zone'. Values over 30d may lead to higher false positives.
+  // 2. DevSoftwareKeywords: Add internal dev tools (e.g., 'Jenkins', 'TeamCity') to reduce noise.
+  // 3. devDeviceTags: Add internal dev device group name to reduce noise.
+  // 4. ExcludedIssuers: Add your organization's internal CA name here to prevent false positives.
+
+  let ephemeralThreshold = 14d;
+  let devSoftwareKeywords = dynamic(["Visual Studio", "IntelliJ", "Jenkins", "GitHub", "Git", "Kubernetes", "Docker", "Sublime"]);
+  let devDeviceTags = dynamic(["Engineering", "Dev-Workstation", "Build-Server"]);
+  let excludedIssuers = dynamic(["Internal-CA-Example", "Local-Admin-Signer"]);
+
+  // Step 1: Create a lookup table of developer assets likely to use legitimate short-lived certificates via Software and Device Tags
+  let devAssets = (
+    DeviceTvmSoftwareInventory
+    | where SoftwareName has_any (devSoftwareKeywords)
+    | summarize by DeviceId
+    | union (
+      DeviceInfo
+      | where DeviceManualTags has_any (devDeviceTags) 
+        or DeviceDynamicTags has_any (devDeviceTags) 
+        or RegistryDeviceTag has_any (devDeviceTags)
+      | summarize by DeviceId
+    )
+    | summarize by DeviceId
+  );
+
+  // Step 2: Identify certificates within the 14-day anomalous window
+  DeviceFileCertificateInfo
+  | extend TotalLifespan = datetime_diff('day', CertificateExpirationTime, CertificateCreationTime)
+  | where TotalLifespan <= ephemeralThreshold and TotalLifespan > 0
+  | where isnotempty(Issuer) and not(Issuer has_any (excludedIssuers))
+
+  // Step 3: Remove known dev machines to surface anomalies on standard user endpoints
+  | join kind=leftanti (devAssets) on DeviceId
+
+  // Step 4: Enrich with the latest machine details
+  | join kind=inner (
+      DeviceInfo 
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+    ) on DeviceId
+  | project 
+      Timestamp, 
+      DeviceName,
+      DeviceId,
+      PublicIP, 
+      LoggedOnUsers,
+      FileName,
+      SHA1,
+      Signer,
+      Issuer, 
+      IsTrusted,
+      Subject, 
+      TotalLifespan, 
+      CertificateCreationTime, 
+      CertificateExpirationTime
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: PublicIP
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: SHA1
+customDetails:
+  DefenderDeviceId: DeviceId
+  CertLifespanDays: TotalLifespan
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Younes Al Taleb
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
