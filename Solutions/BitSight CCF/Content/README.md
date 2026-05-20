@@ -67,7 +67,7 @@ Deploy `bitsight-risk-findings-connector-definition.json` into the same resource
 - Workspace Name: your Log Analytics workspace name
 - Template Spec Name: `bitsight-risk-findings-connection-template`
 - Template Spec Version: `1.0.0`
-- Publisher: `Obrela`
+- Publisher: `Microsoft`
 - Connector Definition Name: `bitsight-risk-findings-ccf`
 
 ### STEP 4 - Connect one BitSight company
