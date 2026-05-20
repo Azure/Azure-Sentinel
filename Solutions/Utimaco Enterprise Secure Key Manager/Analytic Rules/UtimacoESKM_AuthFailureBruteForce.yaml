@@ -1,0 +1,33 @@
+id: 9b1a3b3e-7e16-4a3b-8a8f-7f1f2b1c0a01
+name: Utimaco ESKM - Multiple KMIP authentication failures from same IP
+description: |
+  'Detects 5 or more KMIP "Authentication Failure" events originating from the same client IP within a 15 minute window on Utimaco ESKM. May indicate brute-force or credential-stuffing activity against the KMIP server.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UtimacoESKMConnector
+    dataTypes:
+      - UtimacoESKMKmipServerLogs_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  UtimacoESKMKmipServerLogs_CL
+  | where TimeGenerated > ago(15m)
+  | where Event == "Authentication Failure"
+  | where isnotempty(IP)
+  | summarize FailureCount = count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Users = make_set(User, 50) by IP
+  | where FailureCount >= 5
+  | extend IPCustomEntity = IP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
