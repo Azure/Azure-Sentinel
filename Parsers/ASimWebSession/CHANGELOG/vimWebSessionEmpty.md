@@ -1,5 +1,9 @@
 # Changelog for vimWebSessionEmpty.yaml
 
+## Version 0.4.0
+
+- (2026-03-17) Update empty parser alphabetically and align with columns from ASimTester.csv - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)
+
 ## Version 0.3
 
 - (2022-06-15) Asim/fixing qaws errors - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)

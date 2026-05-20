@@ -1,0 +1,895 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Censys Entity Enrichment - Host",
+        "description": "This playbook is triggered automatically when an IP entity is detected in a Microsoft Sentinel incident, based on an automation rule. Upon triggering, it extracts the IP address from the entity and queries the Censys API (v3) to retrieve detailed host information including geolocation (continent, country, city, coordinates), autonomous system details (ASN, BGP prefix), WHOIS data (network, organization, contacts), services, and DNS information. The playbook retrieves the Censys API token securely from Azure Key Vault, performs the API call with retry logic (up to 3 attempts) and comprehensive error handling for HTTP status codes (200, 401, 403, 404, 422). Upon successful data retrieval, the host data is ingested into Azure Log Analytics (CensysHost_CL table) for historical analysis and reporting. The playbook then retrieves the associated incident and invokes the CensysIncidentEnrichment sub-playbook to add the enrichment data as a comment to the incident. If no incident is associated, the playbook terminates successfully after data ingestion.",
+        "prerequisites": [
+            "1. Deploy the CensysIncidentEnrichment playbook before deploying this playbook.",
+            "2. Create an Azure Key Vault and store your Censys API token as a secret named 'Censys-Access-Token'.",
+            "3. Obtain your Censys Organization ID from the Censys platform account settings.",
+            "4. Configure an automation rule in Microsoft Sentinel to trigger this playbook when IP entities are detected."
+        ],
+        "postDeployment": [
+            "1. Grant the playbook's managed identity 'Key Vault Secrets User' role on the Azure Key Vault.",
+            "2. Authorize the Microsoft Sentinel, Key Vault, and Log Analytics Data Collector API connections.",
+            "3. Create an automation rule in Microsoft Sentinel to trigger this playbook for IP entities.",
+            "4. Ensure the CensysIncidentEnrichment playbook is deployed and accessible."
+        ],
+        "entities": [
+            "IP",
+            "DNSResolution",
+            "FileHash"
+        ],
+        "tags": [
+            "Enrichment",
+            "DNS",
+            "Censys"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Censys"
+        },
+        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CensysEntityEnrichmentHost",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App (Playbook) to be deployed. Must be unique within the resource group."
+            }
+        },
+        "OrganizationID": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Censys Organization ID from the Censys platform account settings"
+            }
+        },
+        "IncidentEnrichmentPlaybookName": {
+            "type": "string",
+            "defaultValue": "CensysAddIncidentComment",
+            "metadata": {
+                "description": "Name of the deployed CensysAddIncidentComment playbook (e.g., CensysAddIncidentComment). This playbook will be called to add enrichment data as incident comments."
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Azure Key Vault where the Censys API token is stored as a secret named 'Censys-Access-Token'"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Azure AD Tenant ID where the Key Vault is located. Found in Azure Portal → Azure AD → Overview"
+            }
+        }
+    },
+    "variables": {
+        "Azuresentinel-ConnectionName": "[concat('Azuresentinel-', trim(parameters('PlaybookName')))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]",
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_entity": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/entity/@{encodeURIComponent('IP')}"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Censys_API_Token": {
+                            "runAfter": {
+                                "Initialize_Censys_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Censys-Access-Token')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Until_Host_Data_is_Fetched": {
+                            "actions": {
+                                "HTTP_Call_to_Fetch_Host_Data": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/host/@{variables('EntityData')}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
+                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                        },
+                                        "queries": {
+                                            "organization_id": "@{variables('org_id')}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Switch_Case_for_API_Status_Codes_for_Host": {
+                                    "runAfter": {
+                                        "HTTP_Call_to_Fetch_Host_Data": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_for_200_for_Host": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Parse_JSON_for_Host_Response": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_Call_to_Fetch_Host_Data')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "result": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "resource": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "ip": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "location": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "continent": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "country": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "country_code": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "city": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "postal_code": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "timezone": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "province": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "coordinates": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "latitude": {
+                                                                                                    "type": "number"
+                                                                                                },
+                                                                                                "longitude": {
+                                                                                                    "type": "number"
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "autonomous_system": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "asn": {
+                                                                                            "type": "integer"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "bgp_prefix": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "name": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "country_code": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "whois": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "network": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "handle": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "cidrs": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "string"
+                                                                                                    }
+                                                                                                },
+                                                                                                "created": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "updated": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "allocation_type": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "organization": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "handle": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "street": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "city": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "state": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "postal_code": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "country": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "abuse_contacts": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "handle": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "email": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required": [
+                                                                                                            "handle",
+                                                                                                            "name",
+                                                                                                            "email"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "admin_contacts": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "handle": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "email": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required": [
+                                                                                                            "handle",
+                                                                                                            "name",
+                                                                                                            "email"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "tech_contacts": {
+                                                                                                    "type": "array",
+                                                                                                    "items": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "handle": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "email": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "required": [
+                                                                                                            "handle",
+                                                                                                            "name",
+                                                                                                            "email"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "services": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "service_count": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "dns": {
+                                                                                    "type": "object"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "extensions": {
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "resource"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Set_Host_Data_to_be_Send_for_Enrichment": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_for_Host_Response": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ip_data",
+                                                        "value": "@createArray(body('Parse_JSON_for_Host_Response')?['result'])"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_True_for_Successful_Data_Fetch_for_Host": {
+                                                    "runAfter": {
+                                                        "Set_Host_Data_to_be_Send_for_Enrichment": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_ip_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_403_for_Host": {
+                                            "case": 403,
+                                            "actions": {
+                                                "Set_Host_Fetch_Error_True_for_403": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Host_Fetch_Error_Message_for_403": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_True_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error_message",
+                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Host_as_True_for_403": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_Message_for_403": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_ip_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_401_for_Host": {
+                                            "case": 401,
+                                            "actions": {
+                                                "Set_Host_Fetch_Error_True_for_401": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Host_Fetch_Error_Message_for_401": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_True_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error_message",
+                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Host_as_True_for_401": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_Message_for_401": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_ip_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_422_for_Host": {
+                                            "case": 422,
+                                            "actions": {
+                                                "Set_Host_Fetch_Error_True_for_422": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Host_Fetch_Error_Message_for_422": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_True_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error_message",
+                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Host_as_True_for_422": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_Message_for_422": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_ip_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_404_for_Host": {
+                                            "case": 404,
+                                            "actions": {
+                                                "Set_Host_Fetch_Error_True_for_404": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_Host_Fetch_Error_Message_for_404": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_True_for_404": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "host_fetch_error_message",
+                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                    }
+                                                },
+                                                "Set_Break_Loop_Flag_for_Host_as_True_for_404": {
+                                                    "runAfter": {
+                                                        "Set_Host_Fetch_Error_Message_for_404": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_ip_loop",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@outputs('HTTP_Call_to_Fetch_Host_Data')?['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Break_Loop_Flag_for_Host_as_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('break_ip_loop'), true)",
+                            "limit": {
+                                "count": 3,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data_for_Host": {
+                            "actions": {
+                                "Terminate_Due_to_Error_While_Fetching_Host_Data": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "message": "@string(variables('host_fetch_error_message'))"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Host_Data_is_Fetched": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('host_fetch_error')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "CensysIncidentEnrichment": {
+                            "runAfter": {
+                                "Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "host": {
+                                    "workflow": {
+                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('IncidentEnrichmentPlaybookName')))]"
+                                    },
+                                    "triggerName": "When_an_HTTP_request_is_received"
+                                },
+                                "body": {
+                                    "incident_arm_id": "@triggerBody()?['IncidentArmID']",
+                                    "enrichment_data": {
+                                        "host": "@variables('ip_data')"
+                                    },
+                                    "parent_playbook": "@variables('parent_palybook_name')"
+                                }
+                            }
+                        },
+                        "Condition_to_Terminate_as_Success_If_Playbook_Executes_Successfully_for_Host": {
+                            "actions": {
+                                "Terminate_Due_to_Success_While_Executing_Sub_Playbook_for_Host": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "CensysIncidentEnrichment": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "TimedOut"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_Due_to_Failure_While_Executing_Sub_Playbook_for_Host": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "@outputs('CensysIncidentEnrichment')?['statusCode']",
+                                                "message": "@body('CensysIncidentEnrichment')"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('CensysIncidentEnrichment')?['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_Censys_Variables": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EntityData",
+                                        "type": "string",
+                                        "value": "@{triggerBody()?['Entity']?['properties']?['Address']}"
+                                    },
+                                    {
+                                        "name": "host_fetch_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "host_fetch_error_message",
+                                        "type": "object"
+                                    },
+                                    {
+                                        "name": "ip_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "host_data_table_name",
+                                        "type": "string",
+                                        "value": "CensysHost_CL"
+                                    },
+                                    {
+                                        "name": "parent_palybook_name",
+                                        "type": "string",
+                                        "value": "Censys Entity Enrichment Host"
+                                    },
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3"
+                                    },
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "https://api.platform.censys.io"
+                                    },
+                                    {
+                                        "name": "org_id",
+                                        "type": "string",
+                                        "value": "[trim(parameters('OrganizationID'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Break_Loop_Flag_for_Host_as_False": {
+                            "runAfter": {
+                                "Get_Censys_API_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "break_ip_loop",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Ingest_Censys_Host_Data": {
+                            "runAfter": {
+                                "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data_for_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@{variables('ip_data')}",
+                                "headers": {
+                                    "Log-Type": "@variables('host_data_table_name')"
+                                },
+                                "path": "/api/logs"
+                            }
+                        },
+                        "Get_incident": {
+                            "runAfter": {
+                                "Ingest_Censys_Host_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['IncidentArmID']"
+                                },
+                                "path": "/Incidents"
+                            }
+                        },
+                        "Terminate_Due_to_Success_While_Executing_Sub_Playbook_for_Host_without_Incident": {
+                            "runAfter": {
+                                "Get_incident": [
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Azuresentinel-ConnectionName'))]",
+                                "connectionName": "[variables('Azuresentinel-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {}
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]",
+                                "connectionProperties": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "CensysEntityEnrichmentHost",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Azuresentinel-ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Azuresentinel-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Azuresentinel-ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}
