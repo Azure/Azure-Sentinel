@@ -1,7 +1,7 @@
 # Permissions Configuration
 
 This document provides detailed steps to configure the required permissions for the Logic Apps:  
-`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-saml-provider`.
+`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-user`.
 
 ---
 
@@ -23,7 +23,7 @@ This document provides detailed steps to configure the required permissions for 
 
 ---
 
-## 2. Grant Key Vault Secrets User Permission on the Key Vault
+## 2. Grant Key Vault Secrets Officer Permission on the Key Vault
 
 ### Steps:
 1. Navigate to the **Azure Portal**.

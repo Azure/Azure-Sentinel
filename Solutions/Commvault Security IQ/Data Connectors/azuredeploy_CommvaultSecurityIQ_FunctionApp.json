@@ -32,24 +32,10 @@
                 "description": "Name of existing Key Vault containing Commvault credentials (environment-endpoint-url, access-token, refresh-token)"
             }
         },
-        "ShowAllEvents": {
-            "defaultValue": "false",
+        "WorkspaceLocation": {
             "type": "string",
-            "allowedValues": [
-                "true",
-                "false"
-            ],
             "metadata": {
-                "description": "Set to 'true' to ingest all events, or 'false' to filter specific security events only"
-            }
-        },
-        "NumberOfDaysToBackfill": {
-            "defaultValue": 7,
-            "type": "int",
-            "minValue": 1,
-            "maxValue": 365,
-            "metadata": {
-                "description": "Number of days to backfill events on first run. Default is 7 days."
+                "description": "Azure region of the Log Analytics workspace (e.g. eastus). Must match the workspace location exactly — the DCR and DCE will be deployed here."
             }
         }
     },
@@ -72,7 +58,7 @@
             "type": "Microsoft.Insights/dataCollectionEndpoints",
             "apiVersion": "2022-06-01",
             "name": "[variables('endpointName')]",
-            "location": "[parameters('Location')]",
+            "location": "[parameters('WorkspaceLocation')]",
             "kind": "Linux",
             "properties": {
                 "description": "Data collection endpoint for Commvault Security IQ ingestion",
@@ -98,7 +84,7 @@
                         {
                             "name": "EventId",
                             "type": "string",
-                            "description": "The event identifier (e.g., '69:60')"
+                            "description": "Unique event identifier in the format 'clientId-jobId-refTime-anomalyType'"
                         },
                         {
                             "name": "OccurrenceTime",
@@ -108,7 +94,7 @@
                         {
                             "name": "Severity",
                             "type": "string",
-                            "description": "Severity level (e.g., 'Critical', 'Warning', 'Info')"
+                            "description": "Severity level: 'High' (ransomware/VSA), 'Medium' (MIME/extension), 'Low' (other)"
                         },
                         {
                             "name": "ClientId",
@@ -148,7 +134,7 @@
                         {
                             "name": "UTCTimestamp",
                             "type": "string",
-                            "description": "Unix timestamp of the event"
+                            "description": "ISO 8601 UTC datetime string of the event (e.g., '2026-05-15T10:30:00Z')"
                         }
                     ]
                 }
@@ -158,7 +144,7 @@
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2022-06-01",
             "name": "[variables('dcrName')]",
-            "location": "[parameters('Location')]",
+            "location": "[parameters('WorkspaceLocation')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
                 "[concat(variables('logWsResId'), '/tables/', variables('tableName'))]"
@@ -235,7 +221,7 @@
                         "destinations": [
                             "[variables('destName')]"
                         ],
-                        "transformKql": "source | extend TimeGenerated = iif(isnotempty(UTCTimestamp), datetime(1970-01-01) + tolong(UTCTimestamp) * 1s, now())",
+                        "transformKql": "source | extend TimeGenerated = iif(isnotempty(UTCTimestamp), todatetime(UTCTimestamp), now())",
                         "outputStream": "[concat('Custom-', variables('tableName'))]"
                     }
                 ]
@@ -341,8 +327,6 @@
             "properties": {
                 "name": "[variables('FunctionName')]",
                 "httpsOnly": true,
-                "clientAffinityEnabled": true,
-                "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
                     "linuxFxVersion": "python|3.11",
@@ -368,8 +352,6 @@
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('StorageAccountName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
                         "KeyVaultName": "[parameters('KeyVaultName')]",
-                        "ShowAllEvents": "[parameters('ShowAllEvents')]",
-                        "NumberOfDaysToBackfill": "[string(parameters('NumberOfDaysToBackfill'))]",
                         "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
                         "AZURE_DATA_COLLECTION_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]",
                         "SENTINEL_TABLE_NAME": "[variables('SentinelTableName')]",
