@@ -1,0 +1,30 @@
+id: 9b1a3b3e-7e16-4a3b-8a8f-7f1f2b1c0b03
+name: Utimaco ESKM - High-volume private key retrievals by user
+description: |
+  'Surfaces users issuing an unusually high number of KMIP GET / EXPORT operations against PRIVATE_KEY objects on Utimaco ESKM over the last 24 hours. Bulk retrieval of private keys may indicate credential harvesting or pre-exfiltration staging of cryptographic material.'
+requiredDataConnectors:
+  - connectorId: UtimacoESKMConnector
+    dataTypes:
+      - UtimacoESKMKmipServerLogs_CL
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1552
+  - T1005
+query: |
+  UtimacoESKMKmipServerLogs_CL
+  | where TimeGenerated > ago(24h)
+  | where Operation in ("GET", "EXPORT")
+  | where ObjectType in ("PRIVATE_KEY", "SYMMETRIC_KEY")
+  | where Result == "SUCCESS"
+  | where isnotempty(User)
+  | summarize RetrievalCount = count(), DistinctObjects = dcount(UUID), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), SourceIPs = make_set(IP, 25), ObjectTypes = make_set(ObjectType, 10), SampleUUIDs = make_set(UUID, 50) by User
+  | where RetrievalCount >= 25 or DistinctObjects >= 10
+  | order by RetrievalCount desc
+  | extend AccountCustomEntity = User
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
