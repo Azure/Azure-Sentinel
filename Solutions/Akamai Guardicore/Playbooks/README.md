@@ -144,10 +144,7 @@ deployed individually if you have a custom orchestration:
 - `Guardicore-ProcessIncidentEnrichment/azuredeploy.json`
 - `Guardicore-EnrichmentRunner/azuredeploy.json`
 
-See the per-component runbook at
-`.a5c/runs/01KQ4NG4762ZPTJH1BRKS9X7KK/artifacts/production-deployment-runbook.md`
 for the manual deploy order and parameter wiring.
-
 ## Citations
 
 - [Microsoft Sentinel playbook recommendations](https://learn.microsoft.com/en-us/azure/sentinel/playbook-recommendations)
