@@ -1,6 +1,6 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains eight complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains seven complementary tools for analyzing Microsoft Sentinel Solutions:
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
@@ -11,7 +11,6 @@ This directory contains eight complementary tools for analyzing Microsoft Sentin
 | [`generate_interactive_docs.py`](script-docs/generate_interactive_docs.md) | Generate interactive HTML index and HTML entity pages | `index.html`, `css/`, `js/`, HTML entity pages |
 | [`generate_asim_browser.py`](script-docs/generate_asim_browser.md) | Generate interactive ASIM Schema Browser | `asim-browser.html` |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
-| [`compare_runs.py`](script-docs/compare_runs.md) | Diff two Solutions Analyzer runs (rename-aware for connectors) | Markdown summary of added/removed/renamed rows |
 
 ## Prerequisites
 
@@ -193,95 +192,58 @@ See the script documentation for details:
 - [Override System - data fields](script-docs/map_solutions_connectors_tables.md#override-system) (canonical reference)
 - [Override System - table info](script-docs/collect_table_info.md#override-system)
 - [Documentation Overrides - additional_information](script-docs/generate_connector_docs.md#documentation-overrides-and-additional-information)
+- [Filter-field attribution rules (`filter_field_resolution.yaml`)](script-docs/filter_field_resolution.md) — companion user-editable config that decides which table a shared-name KQL predicate is attributed to.
 
 ---
 
 ## Version History
 
-### v9.7 - Telemetry, Logic Apps Index, and Collection-Method Refinements
+### v9.7 - Logic Apps Index, Filter-Field Coverage, and Collection-Method Refinements
 
-**Run Comparison Tool:**
-- New `compare_runs.py` script that diffs two Solutions Analyzer CSV directories.
-- For `connectors.csv`, detects **renames** by matching strictly-removed and strictly-added rows that share the same primary `connector_files` path. This avoids treating a connector whose JSON `id` field changed as one addition + one removal.
-- Compares `solutions.csv`, `connectors.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`, `content_items.csv`. Files missing on either side are skipped silently so partial snapshots can be diffed.
+**Logic Apps connector index:**
+- New top-level Logic Apps section (`logic-apps/logic-apps-index.md` plus per-connector pages) listing every managed connector, custom connector, and built-in action type referenced by playbooks across all solutions, with playbook count, solution count, and links to the corresponding Microsoft Learn page when one exists.
+- Each per-connector page lists every playbook using the connector and the solution it belongs to.
+- Connector / action names rendered on playbook content pages and on the Statistics page link to the corresponding Logic Apps page. A "🔌 Logic Apps" entry is added to the markdown navigation strip and the interactive `index.html` navbar.
+- Microsoft Learn URLs for managed connectors are resolved dynamically and cached in `.cache/connector_learn_urls.json`.
 
-**Per-CSV Reference Documentation:**
-- New `script-docs/csv/` folder with one reference page per CSV file (21 CSVs total) — see [`script-docs/csv/README.md`](script-docs/csv/README.md) for the index.
-- Each CSV doc covers what the file contains, how it's produced, **use cases** for working with the data, full column reference, and links to related CSVs.
-- Pages cover all mapper outputs (`connectors.csv`, `solutions.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`, `content_items.csv`, the mapping/edge files, `table_schemas.csv`, the issues report, `asim_parsers_unmatched_report.csv`, the legacy denormalized mapping CSV), all `collect_table_info.py` outputs (`tables_reference.csv`, `la_table_schemas.csv`), all `collect_asim_fields.py` outputs (`asim_fields.csv`, `asim_entity_fields.csv`, `asim_logical_types.csv`, `asim_vendors_products.csv`, `asim_extraction_failures.csv`), and the hand-edited `solution_analyzer_overrides.csv` input.
-- Replaced large per-CSV column tables in `map_solutions_connectors_tables.md`, `collect_table_info.md`, and `collect_asim_fields.md` with concise summary tables and links to the corresponding `csv/` reference pages.
+**Built-in Logic App action telemetry:**
+- The mapper now records `Http`, `Function`, `Workflow`, and `ApiManagement` actions as `api_kind=builtin` rows in `playbook_connectors.csv`, alongside the existing managed/custom rows. A new `parameters` column captures each action's parameter block (method, uri, body, path, headers, queries).
 
-**Schema-Driven Filter Field Extraction:**
-- The `filter_fields` / `content_filter_fields` columns now capture selection criteria far beyond the original 25-name whitelist. After the existing whitelist pass, a generic schema-driven pass extracts any where-predicate whose field is either (a) a documented column of a table the query references — looked up in `la_table_schemas.csv` (Azure Monitor / Defender XDR docs) and `asim_fields.csv` (ASIM normalized fields), attributed only when ownership is unambiguous — or (b) defined earlier in the same query via `| extend Name = ...`, in which case the predicate is recorded under the synthetic table name `_Computed` (e.g. `_Computed.AccountName == "x"`).
-- `let X = ...;` blocks are stripped before predicate matching so their RHS literals don't masquerade as where-predicates; KQL reserved words are excluded.
-- Applies uniformly to connectors, parsers, ASIM parsers, and content items. Measured impact on a full mapper run: connectors `109 → 134` rows with predicates (`+101` total predicates), parsers `94 → 110` (`+112`), ASIM parsers `90 → 118` (`+204`), content items `842 → 2057` (`+3369`).
+**Schema-driven filter-field extraction:**
+- The `filter_fields` / `content_filter_fields` columns now capture selection-criteria predicates well beyond the original whitelist of column names. A schema-driven pass extracts any where-predicate whose field is either a documented column of a referenced table (looked up against the Azure Monitor / Defender XDR docs and ASIM field catalogs) or a column defined earlier in the same query via `| extend`. Applies uniformly to connectors, parsers, ASIM parsers, and content items.
+- When a connector's query is just a vendor parser-function call (e.g. `ClarotyEvent`, `CiscoSEGEvent`, `IllumioCoreEvent`), the connector now inherits the parser's selection-criteria predicates onto its own `filter_fields` instead of appearing as unfiltered.
+- CCF v3 (`connectorDefinition` envelopes and ARM templates) and both `connectivityCriteria` / `connectivityCriterias` spellings are now read by the query extractor, so CCF v3 connectors produce `filter_fields` like other generations.
+- Deprecated connectors are no longer dropped from `associate_connectors_to_items`; they still appear in `associated_connectors` of any parser or content item whose selection criteria they satisfy.
 
-**Connector Filter Inheritance from Parser Functions:**
-- When a connector's `baseQuery` (or other extracted query) is just a vendor parser-function call — e.g. `ClarotyEvent`, `CiscoSEGEvent`, `IllumioCoreEvent`, `OSSECEvent`, `NetwrixAuditor`, `PingFederateEvent` — `get_connector_filter_fields` now resolves the leading identifier against the parser CSVs and inherits the parser's selection-criteria predicates onto the connector's `filter_fields`. Without this, those connectors had empty `filter_fields` and the "unfiltered connector matches every target on the shared table" rule produced hundreds of spurious connector ↔ ASIM-parser / content-item associations on `CommonSecurityLog`.
-- Lookup map (`parser_filter_map`) is built from `parsers.csv` and `asim_parsers.csv` (also keyed by ASIM `equivalent_builtin` aliases) before connector JSONs are processed.
-- Measured impact on a full run: `Claroty`, `CiscoSEG`, `IllumioCore`, `OSSEC`, `Netwrix`, `Barracuda`, `FireEyeNX` (and similar vendors) now publish proper `filter_fields`. ASIM-parser `associated_connectors` deltas vs. HEAD shrank from `+520/-11` to `+74/-28`; content-item deltas shrank from `+608/-293` to `+33/-285`.
+**Per-CSV reference documentation:**
+- New `script-docs/csv/` folder with one reference page per CSV file — what each file contains, how it's produced, use cases, full column reference, and links to related CSVs. See [`script-docs/csv/README.md`](script-docs/csv/README.md).
 
-**CCF v3 Connector Query Extraction:**
-- `extract_all_queries_from_connector` now also reads queries from `properties.connectorUiConfig` (CCF v3 `connectorDefinition` envelopes) and `resources[*].properties.connectorUiConfig` (CCF ARM templates), and accepts both `connectivityCriteria` (singular, CCF v3) and `connectivityCriterias` (plural, legacy). Previously only top-level fields were scanned, so CCF v3 connectors yielded no `filter_fields`.
-
-**Deprecated Connectors No Longer Skipped During Association:**
-- `associate_connectors_to_items` no longer drops connectors with `is_deprecated=true` before computing matches. Deprecated connectors are still flagged in their own row but now correctly appear in `associated_connectors` of any parser / content item whose selection criteria they satisfy (e.g. `SentinelOne` ↔ `ASimAuthenticationSentinelOne`).
-
-**Logic Apps Connector / Built-in Action Index:**
-- New top-level Logic Apps section in the docs (`logic-apps/logic-apps-index.md` plus per-connector pages) listing every managed connector, custom connector, and built-in action type referenced by playbooks across all solutions, with playbook count, solution count, and a link to the corresponding Microsoft Learn page when one exists.
-- Each per-connector page lists every playbook using the connector and the solution it belongs to, with direct links to the playbook content page and solution page. Playbooks are sorted alphabetically by display name.
-- The Logic Apps index table is sorted by playbook count (descending), and the Managed/Custom/Built-in type descriptions are surfaced as a `Description` column on the summary metrics table rather than buried in the intro paragraph.
-- Connector / action names rendered on playbook content pages — both in the summary "Logic App Connectors" table and in each per-connector "Action parameters" sub-heading — link to the corresponding Logic Apps page.
-- New "🔌 Logic Apps" entry added to the markdown navigation strip and the interactive `index.html` navbar.
-- The "Top managed connectors by playbook usage" and "Built-in actions by playbook usage" tables on the Statistics page now link each connector / action name to its Logic Apps page.
-
-**Microsoft Learn URL Resolution (Cached):**
-- New `resolve_connector_learn_url(api_name, api_kind)` helper resolves a connector's Microsoft Learn page dynamically — managed connectors are probed at `https://learn.microsoft.com/en-us/connectors/<name>/`, built-in actions (`Http`, `Function`, `Workflow`, `ApiManagement`) use a hardcoded mapping to their `connectors-native-*` Learn pages, custom connectors return no link.
-- Results (URL or "no page") are persisted to `.cache/connector_learn_urls.json` and reused on subsequent runs, matching the file-based caching pattern used by all other internet-access checks (marketplace availability, table reference docs).
-
-**Built-in Action Extraction:**
-- The mapper now walks `properties.definition.actions` of each playbook and records `Http`, `Function`, `Workflow`, and `ApiManagement` actions as `api_kind=builtin` rows in `playbook_connectors.csv`, alongside the existing managed/custom rows derived from `Microsoft.Web/connections` resources.
-- New `parameters` column on `playbook_connectors.csv` captures the JSON-encoded parameter block of each action (method, uri, body, path, headers, queries — whichever apply) so per-connector pages and downstream tooling can inspect concrete usage.
-
-**Documentation Layout Fix:**
-- The interactive `index.html` is now generated at the configured HTML output root (e.g. the GitHub Pages site root) with `--html-docs-path` pointing to the `Solutions Docs/` subfolder. Earlier accidental layouts that wrote the HTML inside the docs folder while keeping the docs path prefix produced double-prefixed (`Solutions Docs/Solutions Docs/...`) hrefs and 404s on `index.html#content`. The canonical command is documented in `script-docs/generate_connector_docs.md`.
-
-**Table-Level `collection_method` Resolution:**
-- Tables now inherit a `collection_method` from their feeding connectors when there is exactly one distinct informative method across all connectors that ingest the table (1:1 method relationship). Intrinsic values from `tables_reference.csv`, the `source_defender_xdr=Yes` flag (→ `Defender`), and the `Azure Resources` category (→ `Azure Diagnostics`) still take precedence.
-- **ASIM tables short-circuit to `Various`.** Any table whose name starts with `ASim` (case-insensitive) is classified as `Various` regardless of feeding connectors, since ASIM is a normalization layer that aggregates events from many heterogeneous sources.
-- **Published-connector trump.** When a table is fed by both published (marketplace) and unpublished connectors with different methods, only the published connectors' methods are considered for inference. The `is_published` flag from `connectors.csv` (sourced from the marketplace catalog API) drives this filter.
-- **Atomization of `|`-joined methods.** Connector `collection_method` values are split on `|` before set comparison, so a connector that declares `CCF|Azure Function` no longer appears as a single distinct method that blocks back-propagation.
-- When feeding connectors disagree but the disagreement is a known generation overlap, ordered precedence rules collapse the set to a single winner (newer / canonical wins): `{AMA, MMA} → AMA`, `{CCF, CCF (Legacy)} → CCF`, `{Azure Function, CCF} → CCF`. Rules apply iteratively until no further collapse is possible.
-- Comparisons are case-insensitive to tolerate stray casing in `tables_reference.csv` (e.g. `native` vs `Native`).
-- **Tenant-diagnostics override.** Tables in the Entra / Intune / Graph categories, or whose `resource_types` indicate a tenant-scoped diagnostic setting, are classified as `Azure Diagnostics` and override any connector-inferred `Native`. Fixes tables fed by `AzureActiveDirectory` / Entra connectors previously misclassified `Native`. `method_source` records `tenant_diagnostics(category=...)` or `tenant_diagnostics(resource_types)`.
-- **`SecurityAlert` / `SecurityIncident` → `Internal`.** Both tables are populated by Sentinel itself (alerts authored by analytic rules, incidents synthesized from alerts). The `MicrosoftThreatProtection` connector's ARM `dataTypes` block erroneously lists them. They now have explicit `Internal` overrides.
+**Table-level `collection_method` resolution:**
+- Tables now inherit a `collection_method` from their feeding connectors when there is exactly one distinct informative method across all connectors that ingest the table. Intrinsic values from `tables_reference.csv`, the `source_defender_xdr=Yes` flag (→ `Defender`), and the `Azure Resources` category (→ `Azure Diagnostics`) still take precedence.
+- ASIM tables (any table whose name starts with `ASim`) short-circuit to `Various`, since ASIM is a normalization layer that aggregates events from many heterogeneous sources.
+- When a table is fed by both published (marketplace) and unpublished connectors with different methods, only the published connectors' methods are considered for inference.
+- Connector `collection_method` values are split on `|` before set comparison, so a connector that declares e.g. `CCF|Azure Function` no longer blocks back-propagation.
+- When feeding connectors disagree but the disagreement is a known generation overlap, ordered precedence rules collapse to a single winner: `{AMA, MMA} → AMA`, `{CCF, CCF (Legacy)} → CCF`, `{Azure Function, CCF} → CCF`.
+- Tables in the Entra / Intune / Graph categories, or whose `resource_types` indicate a tenant-scoped diagnostic setting, are now classified as `Azure Diagnostics` and override any connector-inferred `Native` — fixing tables fed by `AzureActiveDirectory` / Entra connectors that were previously misclassified `Native`.
+- `SecurityAlert` and `SecurityIncident` are now explicitly classified as `Internal` (they are populated by Sentinel itself; the `MicrosoftThreatProtection` connector's ARM `dataTypes` block erroneously claims them).
 
 **New diagnostic columns in `tables.csv`:**
-- `collection_method_source` — records how the value was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector` (1:1 inheritance), `connector_published_only` (published-trump filter applied), `connector_precedence({rule trail})`, or `tenant_diagnostics(...)`.
-- `collection_method_candidates` — the comma-separated set of distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables).
-- `feeding_connector_ids` — comma-separated IDs of every connector that ingests the table, for traceability.
+- `collection_method_source` — how the value was resolved (`asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence(...)`, `tenant_diagnostics(...)`).
+- `collection_method_candidates` — the distinct atomized methods seen across feeding connectors.
+- `feeding_connector_ids` — every connector that ingests the table, for traceability.
 
-**Diagnostic CSVs consolidated into the exceptions report:**
-- The standalone `table_method_conflicts.csv` and `table_method_ambiguities.csv` outputs and their `--table-method-conflicts-csv` / `--table-method-ambiguities-csv` CLI flags have been removed.
-- Both classes of finding now appear as rows in `solutions_connectors_tables_issues_and_exceptions_report.csv` with `reason=table_method_conflict` (intrinsic disagrees with connector-inferred method) or `reason=table_method_ambiguity` (feeding connectors still disagree after precedence collapse and no intrinsic value was set). The `details` column carries the same information that the dedicated CSVs used to (intrinsic value, source, candidate methods, per-method connector breakdown).
+**Diagnostic CSVs consolidated:**
+- The standalone `table_method_conflicts.csv` and `table_method_ambiguities.csv` outputs (and their CLI flags) have been removed. Both classes of finding now appear as rows in `solutions_connectors_tables_issues_and_exceptions_report.csv` with `reason=table_method_conflict` or `reason=table_method_ambiguity`; the `details` column carries the per-method connector breakdown.
 
-**Connector Collection-Method Classification Fixes:**
-- **`REST Pull API` → `REST Push API` rename.** The pattern previously labelled `REST Pull API` (workspace `sharedKeys`, push/webhook/HTTP-endpoint patterns, promotion from `Unknown (Custom Log)` on HTTP Data Collector detection) actually describes connectors that *push* into Sentinel via the Azure Monitor HTTP Data Collector API or the Logs Ingestion API (DCR/DCE). CCF `RestApiPoller` (genuinely pull) remains classified as `CCF`.
-- **CCF suppresses sibling-ARM `Azure Function`.** The sibling-ARM-template scan (originally added for the NordPass/Dataminr pattern) was adding `Azure Function` to CCF v2 connectors that ship `azuredeploy_*_poller_connector.json` files containing a Function App. CCF v2's Function App is the codeless-platform poller runner — internal orchestration, not a customer-facing collection mechanism — so the `Azure Function` tag is now suppressed when any CCF variant is already present. API and per-table attribution from the ARM scan are still recorded. Fixes 8 connectors (1Password, CyberArk, Illumio, Jira, OCI x2, Salesforce Service Cloud, Sophos) that previously showed `CCF|Azure Function`.
-- **`Azure Function (TI Upload API)` supersedes generic REST.** When a connector is reclassified as `Azure Function (TI Upload API)` (via connector-code patterns, the `_UploadIndicatorsAPI` filename suffix, or an override), any pre-existing `REST Pull API` / `REST Push API` methods are dropped — TI Upload API *is* a specific Sentinel management-plane REST push, so the generic REST label is redundant. Fixes MISP2Sentinel's `Azure Function (TI Upload API)|REST Push API` classification.
-- **Drop redundant `Azure Function` when `Azure Function (TI Upload API)` is present.** The combined `Azure Function (TI Upload API)|Azure Function` label is redundant (the parenthesized form is itself an Azure Function variant) and was creating an `Unknown`-method fallback page in generated docs.
-- **Escape `|` in collection-method link labels** so combined methods (e.g. `AMA|MMA`) don't break markdown table cells in generated documentation.
+**Connector collection-method classification fixes:**
+- The pattern previously labelled `REST Pull API` is renamed to `REST Push API`. The connectors it identifies push into Sentinel via the Azure Monitor HTTP Data Collector API or the Logs Ingestion API (DCR/DCE), not pull. CCF `RestApiPoller` (genuinely pull) remains classified as `CCF`.
+- The sibling-ARM-template scan no longer adds `Azure Function` to a connector that already classifies as `CCF` / `CCF Push` / `CCF (Legacy)`. CCF v2's ARM-template Function App is the codeless-platform poller runner — internal orchestration, not a customer-facing collection mechanism. API and per-table attribution from the ARM scan are still recorded.
 
-**SlashNext Function App exclusion extended:**
-- `CONNECTOR_REPORTED_TABLE_EXCLUSIONS['slashnextfunctionapp']` now drops both `AzureDiagnostics` and `AzureMetrics`. Both are referenced only by the connector's `lastDataReceivedQuery` / `sampleQueries` to monitor Function App health, not as ingestion targets.
-
-**Override System Refactor:**
-- **`filter_field_resolution.yaml`** — filter-field dispatch rules (which connector content patterns map to which filter-field categories) extracted from Python into a YAML config with five rule types: `direct`, `gated`, `priority`, `any_of`, and `prefix`. Includes a `skip_flag` mechanism so a higher-priority match can suppress lower-priority rules. The YAML is lazy-loaded on first use.
-- **Connector and table collection-method overrides migrated to `solution_analyzer_overrides.csv`.** The 23 `TABLE_NAME_COLLECTION_METHOD_OVERRIDES` entries and 4 connector-level overrides previously hard-coded in Python now live in the existing override CSV (which already carried other manual classifications), giving a single editable source of truth.
-
-**Documentation:**
-- `script-docs/map_solutions_connectors_tables.md` rewritten to match the actual resolver chain: the table-level `collection_method` resolution section is now 13 numbered steps that correctly include `resource_types`, `source_azure_monitor`, the `_CL` fallback, the tenant-diagnostics override, normalization, and the final override-CSV application. The filter-fields section documents the new YAML dispatch table. The collection-method "Key Design Decisions" list adds entries for the CCF sibling-ARM suppression and the TI Upload supersedes rule.
-- `methods-index.md` now includes a "How collection methods are assigned to tables" section that lists the resolution order and the precedence collapse table.
+**User-editable filter-field attribution (`filter_field_resolution.yaml`):**
+- The dispatch table that decides which Sentinel table a KQL where-predicate is attributed to (when a column name is shared across multiple tables — e.g. `EventID` on `Event` / `SecurityEvent` / `WindowsEvent`, `ResourceProvider` on `AzureActivity` / `AzureDiagnostics`) is now an external YAML config instead of being hard-coded in Python.
+- Supports five rule types — `direct`, `gated`, `priority`, `any_of` (with optional `prefer_local`), and `prefix` (via named `prefix_groups`) — plus an optional `skip_flag` for context-dependent suppression (e.g. skipping `EventVendor` / `EventProduct` inside ASIM parsers).
+- Editing the YAML changes filter-field attribution on the next mapper run with no code changes and no cache invalidation needed. Full reference: [`script-docs/filter_field_resolution.md`](script-docs/filter_field_resolution.md).
+- Connector and table `collection_method` overrides previously hard-coded in Python have been migrated to `solution_analyzer_overrides.csv`, giving a single editable source of truth alongside the existing per-entity overrides.
 
 ### v9.6 - ASIM Field Collection & Schema Browser
 
