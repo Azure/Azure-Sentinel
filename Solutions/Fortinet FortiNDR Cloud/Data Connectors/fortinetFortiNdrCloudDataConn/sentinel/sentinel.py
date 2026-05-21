@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timezone
 
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.identity import ClientSecretCredential
@@ -43,15 +44,25 @@ def post_data(events: list[dict], log_type_suffix: str):
         raise
 
     # Must exactly match the stream declaration name in your ARM template
-    stream_name = "Custom-FortinetFortiNdrCloudRaw_CL"
+    stream_name = "Custom-FortinetFortiNdrCloudRaw"
+
+    logging.info("Wrapping events to be uploaded:")
+    logging.info(events)
 
     wrapped_events = []
     for event in events:
+        event_time = event.get('timestamp')
+        if not event_time:
+            event_time = datetime.now(
+                timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         wrapped_events.append({
+            "TimeGenerated": event_time,
             "LogTypeSuffix": log_type_suffix.lower(),
             "RawData": json.dumps(event)
         })
 
+    logging.info(f"Events were successfully wrapped.")
+    logging.info(wrapped_events)
     try:
         logging.info(
             f"Uploading {len(wrapped_events)} packaged events to stream {stream_name} via Log Ingestion Client."
@@ -75,7 +86,17 @@ def post_data(events: list[dict], log_type_suffix: str):
         )
         raise
     except HttpResponseError as e:
-        logging.error(f"SentinelClient: HTTP error during upload: {e}")
+        error_details = "No inner error details provided by Azure."
+        if hasattr(e, 'response') and e.response:
+            try:
+                # Unpack the raw text response body containing the structural validation breakdown
+                error_details = e.response.text()
+            except Exception:
+                pass
+
+        logging.error(
+            f"SentinelClient: HTTP error during upload (Status {e.status_code}): {e.message}")
+        logging.error(f"Azure API Schema Validation Details: {error_details}")
         raise
     except Exception as e:
         logging.error(
