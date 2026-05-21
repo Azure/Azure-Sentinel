@@ -58,7 +58,7 @@ def post_data(events: list[dict], log_type_suffix: str):
         wrapped_events.append({
             "TimeGenerated": event_time,
             "LogTypeSuffix": log_type_suffix.lower(),
-            "RawData": json.dumps(event)
+            "RawData": json.dumps(event),
         })
 
     logging.info(f"Events were successfully wrapped.")
@@ -71,7 +71,8 @@ def post_data(events: list[dict], log_type_suffix: str):
         client.upload(
             rule_id=DCR_ID,
             stream_name=stream_name,
-            logs=wrapped_events
+            logs=wrapped_events,
+            api_version="2023-04-24"
         )
 
         logging.info(
