@@ -45,7 +45,7 @@ def post_data(events: list[dict], log_type_suffix: str):
         raise
 
     # Must exactly match the stream declaration name in your ARM template
-    stream_name = "Custom-FortinetFortiNdrCloudRaw"
+    stream_name = "Custom-FortinetFortiNdrCloudRaw_CL"
 
     logging.info("Wrapping events to be uploaded:")
 
