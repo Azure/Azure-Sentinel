@@ -1,6 +1,6 @@
 ---
 name: update-solution-analyzer
-description: "Guidelines for modifying Solutions Analyzer scripts. Use when: editing mapper, doc generator, interactive docs, ASIM browser, collect_table_info, collect_asim_fields, upload_to_kusto, or any script in Tools/Solutions Analyzer/. Covers: keeping docs in sync, index synchronization, entity page synchronization, CSV output changes, script documentation updates."
+description: "MANDATORY guidelines for ANY edit to ANY file under Tools/Solutions Analyzer/ — including the mapper (map_solutions_connectors_tables.py), doc generator (generate_connector_docs.py), interactive docs (generate_interactive_docs.py), ASIM browser, collect_table_info, collect_asim_fields, upload_to_kusto, compare_runs, solution_analyzer_overrides.csv, filter_field_resolution.yaml, or any other script/config in that folder. Use when: editing/modifying/refactoring/fixing/renaming/tweaking ANY logic in those files, even one-line fixes such as renaming a classification, escaping a character, adjusting a regex, adding an override row, suppressing a false positive, or changing a constant. Covers: keeping script-docs in sync, README Version History changelog rules (MUST be updated on EVERY script change in the same commit), CSV output sync with upload_to_kusto.py, static/interactive index synchronization, and markdown/HTML entity page synchronization."
 ---
 
 # Update Solution Analyzer Scripts
@@ -18,6 +18,8 @@ When updating a script, update the corresponding doc in `script-docs/` to reflec
 - New CSV output: create a new page under `script-docs/csv/`, add a row to the summary table in the script doc, and add the new CSV to `script-docs/csv/README.md` (both the "By generating script" and "By role" sections)
 
 ## README Changelog
+
+**MANDATORY for every script change, including small fixes.** Renames, escape-character tweaks, regex adjustments, override-row additions, false-positive suppressions, and one-line behavior changes all qualify and must appear in the changelog. There is no "too small to log" threshold for Solutions Analyzer scripts.
 
 Update the `## Version History` section in `Tools/Solutions Analyzer/README.md`:
 - Add the change under the **latest version heading** at the top of the changelog

@@ -75,3 +75,5 @@ When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`, f
 
 - **`run-solution-analyzer`** — running the mapper, doc generator, ASIM browser, and `upload_to_kusto`; output locations; force-refresh and caching.
 - **`update-solution-analyzer`** — modifying scripts, updating `script-docs/`, README changelog rules, CSV output sync with `upload_to_kusto.py`, and static/interactive index plus markdown/HTML entity page synchronization.
+
+**MANDATORY:** Before editing ANY file under `Tools/Solutions Analyzer/` — including small fixes such as renames, regex/pattern tweaks, escaping changes, override additions, or one-line behavior changes — first load `.github/skills/update-solution-analyzer/SKILL.md` and follow it. In particular, **every script change must add or extend an entry in the `## Version History` section of `Tools/Solutions Analyzer/README.md`** within the same commit. Small fixes are NOT exempt.

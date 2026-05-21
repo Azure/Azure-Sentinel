@@ -198,6 +198,24 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.11 - Collection Method Classification Refinements and Override Refactor
+
+**Classification fixes:**
+- **`REST Pull API` → `REST Push API` rename.** The pattern previously labelled `REST Pull API` (workspace `sharedKeys`, push/webhook/HTTP-endpoint patterns, promotion from `Unknown (Custom Log)` on HTTP Data Collector detection) actually describes connectors that *push* into Sentinel via the Azure Monitor HTTP Data Collector API or the Logs Ingestion API (DCR/DCE). The classification has been renamed accordingly. CCF `RestApiPoller` (genuinely pull) remains classified as `CCF`.
+- **Tenant-diagnostics override** for table-level `collection_method`. Tables in the Entra / Intune / Graph categories, or whose `resource_types` indicate a tenant-scoped diagnostic setting, are now classified as `Azure Diagnostics` and override any connector-inferred `Native`. This fixes tables fed by `AzureActiveDirectory` / Entra connectors that were previously misclassified `Native`. `method_source` records `tenant_diagnostics(category=...)` or `tenant_diagnostics(resource_types)`.
+- **`SecurityAlert` / `SecurityIncident` → `Internal`.** Both tables are populated by Sentinel itself (alerts authored by analytic rules, incidents synthesized from alerts). The `MicrosoftThreatProtection` connector's ARM `dataTypes` block erroneously lists them, which previously caused them to inherit a connector-driven method. They now have explicit `Internal` overrides.
+- **CCF suppresses sibling-ARM `Azure Function`.** The sibling-ARM-template scan (originally added for the NordPass/Dataminr pattern) was adding `Azure Function` to CCF v2 connectors that ship `azuredeploy_*_poller_connector.json` files containing a Function App. CCF v2's Function App is the codeless-platform poller runner — internal orchestration, not a customer-facing collection mechanism — so the `Azure Function` tag is now suppressed when any CCF variant is already present. API and per-table attribution from the ARM scan are still recorded. Fixes 8 connectors (1Password, CyberArk, Illumio, Jira, OCI x2, Salesforce Service Cloud, Sophos) that previously showed `CCF|Azure Function`.
+- **`Azure Function (TI Upload API)` supersedes generic REST.** When a connector is reclassified as `Azure Function (TI Upload API)` (via connector-code patterns, the `_UploadIndicatorsAPI` filename suffix, or an override), any pre-existing `REST Pull API` / `REST Push API` methods are dropped — TI Upload API *is* a specific Sentinel management-plane REST push, so the generic REST label is redundant. Fixes MISP2Sentinel's `Azure Function (TI Upload API)|REST Push API` classification.
+- **Drop redundant `Azure Function` when `Azure Function (TI Upload API)` is present.** The combined `Azure Function (TI Upload API)|Azure Function` label is redundant (the parenthesized form is itself an Azure Function variant) and was also creating an `Unknown`-method fallback page in generated docs.
+- **Escape `|` in collection-method link labels** so combined methods (e.g. `AMA|MMA`) don't break markdown table cells in generated documentation.
+
+**Override system refactor:**
+- **`filter_field_resolution.yaml`** — filter-field dispatch rules (which connector content patterns map to which filter-field categories) extracted from Python into a YAML config with five rule types: `direct`, `gated`, `priority`, `any_of`, and `prefix`. Includes a `skip_flag` mechanism so a higher-priority match can suppress lower-priority rules. The YAML is lazy-loaded on first use.
+- **Connector and table collection-method overrides migrated to `solution_analyzer_overrides.csv`.** The 23 `TABLE_NAME_COLLECTION_METHOD_OVERRIDES` entries and 4 connector-level overrides previously hard-coded in Python now live in the existing override CSV (which already carried other manual classifications), giving a single editable source of truth.
+
+**Documentation:**
+- `script-docs/map_solutions_connectors_tables.md` updated to match the actual resolver chain: the table-level `collection_method` resolution section is rewritten as 13 numbered steps that now correctly include `resource_types`, `source_azure_monitor`, the `_CL` fallback, the tenant-diagnostics override, normalization, and the final override-CSV application. The filter-fields section documents the new YAML dispatch table. The collection-method "Key Design Decisions" list adds entries for the CCF sibling-ARM suppression and the TI Upload supersedes rule.
+
 ### v9.10 - Table Collection Method Back-Propagation and Precedence Rules
 
 **Table-level `collection_method` resolution:**
