@@ -445,18 +445,19 @@ After all patterns are detected, the final method is selected using this priorit
 > - **Azure Function filename is strong**: Connectors with "FunctionApp" in the filename are Azure Functions regardless of content patterns
 > - **Title-based AMA/MMA is strongest**: When a connector title explicitly includes "AMA" or "Legacy Agent", it overrides all other patterns
 > - **MMA content patterns override AMA metadata**: MMA-era patterns like `OmsSolutions` and `InstallAgent*` take precedence over AMA detection from table metadata
+> - **CCF suppresses sibling-ARM `Azure Function`**: The sibling-ARM-template scan (NordPass/Dataminr pattern) discovers Function App + DCR / Log Ingestion API resources and adds `Azure Function` to the method list. When the connector has already self-identified as `CCF` / `CCF Push` / `CCF (Legacy)`, the `Azure Function` method addition is suppressed: CCF v2 deployments include a Function App as the codeless-platform's poller runner, but from the customer's perspective the connector is still CCF. The API and per-table attribution from the ARM scan are still recorded.
+> - **`Azure Function (TI Upload API)` supersedes generic REST**: When a connector is reclassified as `Azure Function (TI Upload API)` (via connector-code patterns, the `_UploadIndicatorsAPI` filename suffix, or an override), any pre-existing `REST Pull API` / `REST Push API` methods are dropped from the method list — TI Upload API is a specific Sentinel management-plane REST push, so the generic REST label is redundant.
 
 #### Table-Level `collection_method` Resolution
 
-`tables.csv` has its own `collection_method` column, resolved per table in this order:
+`tables.csv` has its own `collection_method` column, resolved per table in this order. The first rule that yields a non-empty value wins, except for the tenant-diagnostics override (step 10) which can also overwrite a connector-inferred `Native`. Override-CSV entries (step 11) are applied last and overwrite whatever the resolver produced.
 
-1. **ASIM short-circuit** — any table whose name starts with `ASim` (case-insensitive) is classified as `Various`. ASIM is a normalization layer that aggregates events from many heterogeneous sources, so a single "collection method" is not meaningful.
-2. **Intrinsic value** from `tables_reference.csv` (e.g. `AMA` for tables with VM resource types).
+1. **ASIM short-circuit** — any table whose name starts with `ASim` / `_ASim` / `_Im_` (case-insensitive) is classified as `Various`. ASIM is a normalization layer that aggregates events from many heterogeneous sources, so a single "collection method" is not meaningful.
+2. **Intrinsic value** from `tables_reference.csv` `collection_method` column (e.g. `AMA` for tables with VM resource types).
 3. **Defender XDR override** — `source_defender_xdr=Yes` → `Defender`.
-4. **Azure Resources override** — table category `Azure Resources` → `Azure Diagnostics`.
-5. **Inherited from feeding connectors** when all of them use a single distinct informative method (1:1 method relationship across all connectors that ingest the table). Connector `collection_method` values are atomized on `|` before set comparison, so a connector declaring `CCF|Azure Function` contributes both methods.
-6. **Published-connector trump** — if step 5 finds disagreement but the table is fed by both published (marketplace) and unpublished connectors, only the published connectors’ methods are kept. If that yields a single distinct method, it is used.
-7. **Precedence collapse** when feeding connectors still disagree and the disagreement is a known generation overlap. Newer / canonical technology wins, applied iteratively until no further collapse is possible:
+4. **Inherited from feeding connectors** when all of them use a single distinct informative method (1:1 method relationship across all connectors that ingest the table). Connector `collection_method` values are atomized on `|` before set comparison, so a connector declaring `CCF|Azure Function` contributes both methods.
+5. **Published-connector trump** — if step 4 finds disagreement but the table is fed by both published (marketplace) and unpublished connectors, only the published connectors’ methods are kept. If that yields a single distinct method, it is used.
+6. **Precedence collapse** when feeding connectors still disagree and the disagreement is a known generation overlap. Newer / canonical technology wins, applied iteratively until no further collapse is possible:
 
    | Co-feeding methods | Inferred method |
    |:-------------------|:----------------|
@@ -464,13 +465,25 @@ After all patterns are detected, the final method is selected using this priorit
    | `CCF` + `CCF (Legacy)` | `CCF` |
    | `Azure Function` + `CCF` | `CCF` |
 
+7. **Azure Resources category** — table category includes `Azure Resources` → `Azure Diagnostics`.
+8. **Resource-types fallback** — `tables_reference.resource_types` is non-empty (and not the `-` placeholder) → `Azure Diagnostics` (`method_source = resource_types`).
+9. **`source_azure_monitor=Yes` fallback** — any table documented as an Azure Monitor table without a more specific signal → `Azure Diagnostics` (catches App Insights / Microsoft Graph / Entra B2C / Intune tables that lack `resource_types`).
+10. **`_CL` last-resort fallback** — table name ends with `_CL` and nothing else attributed it → `Custom` (umbrella label intentionally distinct from `CCF`; covers Customer CCF and Log Ingestion API custom logs which cannot be distinguished from the public data).
+11. **Tenant-diagnostics override** — fires when the current value is empty *or* `Native`. Triggers if either:
+    - the table's `category` set intersects `{Entra, Intune, Microsoft Graph, Azure Active Directory}`, or
+    - every `resource_types` token starts with a tenant-scope provider prefix (`microsoft.aadiam`, `microsoft.aad/domainservices`, `microsoft.azureadgraph`, `microsoft.intune`, `microsoft.aadcustomsecurityattributes`).
+
+    These tables are delivered via Entra/Intune/Graph tenant Diagnostic Settings, not the ARM connector. The override corrects `Native` inferred from connectors (e.g. `AzureActiveDirectory`) whose ARM `dataTypes` list these tables but which actually configure a tenant diagnostic setting. The constants live at the top of `map_solutions_connectors_tables.py` (`TENANT_DIAGNOSTICS_CATEGORIES`, `TENANT_DIAGNOSTICS_RESOURCE_PREFIXES`).
+12. **Normalization** — `_normalize_collection_method` lowercases-then-canonicalizes (`native` → `Native`, legacy `MMA` → `AMA`) and `_collapse_parenthesized_refinement` collapses pipe-multivalues like `Azure Function (TI Upload API)|Azure Function` to the canonical base.
+13. **Override CSV (last)** — entries in `solution_analyzer_overrides.csv` with `Entity=Table` and `Field=collection_method` are applied to `tables.csv` rows after resolution. Used for tables that need explicit classification independent of resolver behavior — for example, `SecurityAlert` and `SecurityIncident` are marked `Internal` because the `MicrosoftThreatProtection` connector's ARM `dataTypes` list includes them but Sentinel produces them internally.
+
 Comparisons are case-insensitive throughout.
 
 **Diagnostic columns recorded on every row of `tables.csv`:**
 
 | Column | Description |
 |--------|-------------|
-| `collection_method_source` | How the value was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence({rule trail})`. |
+| `collection_method_source` | How the value was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `connector`, `connector_published_only`, `connector_precedence({rule trail})`, `category=Azure Resources`, `resource_types`, `source_azure_monitor`, `cl_table_fallback`, `tenant_diagnostics(category=...)`, `tenant_diagnostics(resource_types)`. Override-CSV writes do **not** update this column — the source reflects the resolver's last decision. |
 | `collection_method_candidates` | Comma-separated set of distinct atomized methods seen across feeding connectors (or `Various` for ASIM tables). |
 | `feeding_connector_ids` | Comma-separated IDs of every connector that ingests the table, for traceability. |
 
@@ -605,9 +618,19 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 
 #### Detection Logic
 
-Filter field extraction runs in two complementary passes:
+Filter field extraction runs in two complementary passes. The first pass is **table-aware**: it dispatches each curated field to a target table using the rules in [`filter_field_resolution.yaml`](../filter_field_resolution.yaml). The YAML supports five rule types:
 
-**Pass 1 — curated whitelist (table-aware).** A small set of well-known selection fields is matched against KQL where-predicates and mapped to their canonical tables based on which table the query references:
+| Rule type | Semantics |
+|-----------|-----------|
+| `direct` | Field always attributes to a fixed table (e.g. `DeviceVendor` → `CommonSecurityLog`). |
+| `gated` | Field attributes to the configured table only if that table appears in the query (e.g. `Facility` → `Syslog` only when `Syslog` is referenced). |
+| `priority` | Try each candidate table in order; pick the first one present in the query's tables (e.g. `EventID` → `WindowsEvent` > `SecurityEvent` > `Event`). |
+| `any_of` | Pick any candidate that appears; with `prefer_local: true`, prefer tables in the current sub-query over global tables. |
+| `prefix` | Pick the first query table whose name starts with a tag from `prefix_groups` (e.g. `EventVendor` → first table whose name starts with `asim`/`_asim`/`_im_`). |
+
+An optional `skip_flag` on a field references a boolean from the calling context. When set, the field is skipped entirely — used for ASIM parsers, which `extend` `EventVendor`/`EventProduct` rather than filter on them. Editing the YAML changes filter-field attribution without touching the script.
+
+**Pass 1 — curated whitelist (table-aware).** The fields configured in `filter_field_resolution.yaml` are matched against KQL where-predicates and dispatched per the rules above:
 
    - `DeviceVendor`/`DeviceProduct`/`DeviceEventClassID` → CommonSecurityLog
    - `EventVendor`/`EventProduct`/`EventType` → Context-dependent (ASIM tables)

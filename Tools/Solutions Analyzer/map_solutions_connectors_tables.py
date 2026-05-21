@@ -41,7 +41,7 @@ COLLECTION_METHOD_PRECEDENCE = (
     "CCF",
     "Azure Function",
     "Logic App",
-    "REST Push API",
+    "REST Pull API",
     "AMA",
     "Azure Diagnostics",
     "Syslog",
@@ -383,6 +383,27 @@ COLLECTION_METHOD_NORMALIZE: Dict[str, str] = {
 # `solution_analyzer_overrides.csv` (rows
 # `Table,<TableName>,collection_method,<Value>`), which `collect_table_info.py`
 # applies when rebuilding `tables_reference.csv`.
+
+# Tenant-scope diagnostics rule (see COLLECTION_METHOD_GUIDANCE.md §4.x):
+# Azure Monitor tables whose category is one of {Entra, Intune, Microsoft
+# Graph, Azure Active Directory} -- or whose resource_types are all
+# tenant-scope providers -- are delivered through a *tenant* Diagnostic
+# Setting (Entra/Intune/Graph), not the ARM connector. They should be
+# classified as 'Azure Diagnostics' even when connector evidence (e.g.
+# SigninLogs feeding Entra ID connector) would otherwise infer 'Native'.
+TENANT_DIAGNOSTICS_CATEGORIES: Set[str] = {
+    'Entra',
+    'Intune',
+    'Microsoft Graph',
+    'Azure Active Directory',
+}
+TENANT_DIAGNOSTICS_RESOURCE_PREFIXES: Tuple[str, ...] = (
+    'microsoft.aadiam',
+    'microsoft.aad/domainservices',
+    'microsoft.azureadgraph',
+    'microsoft.intune',
+    'microsoft.aadcustomsecurityattributes',
+)
 
 
 def _table_categories(ref: Dict[str, str]) -> Set[str]:
@@ -5939,6 +5960,25 @@ TI_UPLOAD_METHOD = "Azure Function (TI Upload API)"
 TI_UPLOAD_TABLES: Tuple[str, ...] = ("ThreatIntelIndicators", "ThreatIntelObjects")
 _TI_UPLOAD_SKIP_DIRS = {".python_packages", "__pycache__", "node_modules", ".venv", "venv"}
 
+# Methods superseded by TI Upload API. When a connector is reclassified as
+# Azure Function (TI Upload API), generic REST classifications are dropped:
+# TI Upload API is a specific Sentinel management-plane REST push, so the
+# generic 'REST Pull API'/'REST Push API' label is redundant.
+_TI_UPLOAD_SUPERSEDES: Set[str] = {"REST Pull API", "REST Push API"}
+
+
+def _drop_ti_upload_superseded(methods: List[str], reasons: List[str]) -> Tuple[List[str], List[str]]:
+    """Filter REST methods (and their parallel reasons) superseded by TI Upload API."""
+    kept_methods: List[str] = []
+    kept_reasons: List[str] = []
+    for i, m in enumerate(methods):
+        if m in _TI_UPLOAD_SUPERSEDES:
+            continue
+        kept_methods.append(m)
+        if i < len(reasons):
+            kept_reasons.append(reasons[i])
+    return kept_methods, kept_reasons
+
 # Friendly API name per matched URL substring. Stored in the `ingestion_api`
 # field, alongside the existing `Log Ingestion API` / `HTTP Data Collector API`
 # values used for non-TI Azure Function connectors.
@@ -5956,30 +5996,6 @@ TI_UPLOAD_API_NAME_BY_PATTERN: Dict[str, str] = {
 # without a pattern match (e.g. via the `_UploadIndicatorsAPI` filename
 # heuristic or via overrides such as Datalake2SentinelConnector).
 TI_UPLOAD_DEFAULT_API_NAME = "STIX 2.1 Upload Indicators API"
-
-
-def _strip_redundant_af_for_ti_upload(
-    methods: List[str], reasons: List[str]
-) -> Tuple[List[str], List[str]]:
-    """When a connector is classified as ``Azure Function (TI Upload API)``,
-    the parallel ``Azure Function`` tag is redundant (TI Upload IS hosted
-    in an Azure Function). Strip the ``Azure Function`` entry and its
-    paired reason in-place-safe order. Returns the cleaned lists.
-    """
-    if TI_UPLOAD_METHOD not in methods or "Azure Function" not in methods:
-        return methods, reasons
-    cleaned_methods: List[str] = []
-    cleaned_reasons: List[str] = []
-    # Keep parallel arrays aligned: drop the first occurrence of 'Azure Function'.
-    dropped = False
-    for i, m in enumerate(methods):
-        r = reasons[i] if i < len(reasons) else ""
-        if not dropped and m == "Azure Function":
-            dropped = True
-            continue
-        cleaned_methods.append(m)
-        cleaned_reasons.append(r)
-    return cleaned_methods, cleaned_reasons
 
 
 def solution_uses_ti_upload_api(solution_dir: Optional[Path]) -> Optional[str]:
@@ -6231,7 +6247,7 @@ def determine_ingestion_api(
     """Determine whether a connector uses the Log Ingestion API or HTTP Data Collector API.
     
     This is only applicable to connectors that push data via an API:
-    CCF Push, Azure Function, REST Push API, and Unknown (Custom Log).
+    CCF Push, Azure Function, REST Pull API, and Unknown (Custom Log).
     
     CCF and CCF (Legacy) are excluded because their ingestion mechanism is
     platform-managed (Sentinel PaaS) — the connector definition doesn't configure
@@ -6240,7 +6256,7 @@ def determine_ingestion_api(
     Detection priority:
     1. CCF Push → always Log Ingestion API (DCR-based, solution code pushes data)
     2. Azure Function → scan Python code for API patterns
-    3. REST Push API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
+    3. REST Pull API / Unknown (Custom Log) → check connector JSON for sharedKeys/WorkspaceId patterns
     4. Fallback: table column suffix heuristic from table_schemas
     
     Args:
@@ -6259,7 +6275,7 @@ def determine_ingestion_api(
     """
     # Only applicable to collection methods where the solution code pushes data via an API
     # CCF and CCF (Legacy) are excluded — their ingestion is platform-managed
-    api_methods = {"CCF Push", "Azure Function", "REST Push API", "Unknown (Custom Log)"}
+    api_methods = {"CCF Push", "Azure Function", "REST Pull API", "Unknown (Custom Log)"}
     if collection_method not in api_methods:
         return "", ""
     
@@ -6427,7 +6443,7 @@ def determine_collection_method(
     - AMA (Azure Monitor Agent): Uses Azure Monitor Agent for CEF/Syslog collection
     - MMA (Log Analytics Agent): Legacy agent using workspace ID/key
     - Azure Diagnostics: Uses Azure diagnostic settings
-    - REST Push API: Connector pushes data to Sentinel via Azure Monitor HTTP Data Collector API / Logs Ingestion API
+    - REST Pull API: Direct REST Pull API integration
     - Native: Built-in Microsoft integrations
     
     Detection Priority:
@@ -6436,7 +6452,7 @@ def determine_collection_method(
     3. Native Microsoft integrations
     4. CCF patterns (content-based)
     5. Azure Function patterns
-    6. REST Push API patterns
+    6. REST Pull API patterns
     7. Table metadata fallback
     
     Args:
@@ -6596,17 +6612,15 @@ def determine_collection_method(
                                       'InstallAgentOnLinuxNonAzure' in content):
         all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
     
-    # === PRIORITY 9: REST Push API patterns ===
-    # External system pushes data to Sentinel via Azure Monitor HTTP Data Collector API
-    # or Logs Ingestion API (workspace sharedKeys / DCR + DCE).
+    # === PRIORITY 9: REST Pull API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
-        all_matches.append(("REST Push API", "Title/description mentions REST API"))
+        all_matches.append(("REST Pull API", "Title/description mentions REST API"))
     if 'push' in conn_title_lower or 'push' in conn_id_lower:
-        all_matches.append(("REST Push API", "Push connector (REST API based)"))
+        all_matches.append(("REST Pull API", "Push connector (REST API based)"))
     if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
-        all_matches.append(("REST Push API", "Webhook pattern (REST API based)"))
+        all_matches.append(("REST Pull API", "Webhook pattern (REST API based)"))
     if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
-        all_matches.append(("REST Push API", "HTTP endpoint/trigger (REST API)"))
+        all_matches.append(("REST Pull API", "HTTP endpoint/trigger (REST API)"))
     
     # === PRIORITY 10: Table metadata-based detection (lowest content-based priority) ===
     # Only use if no stronger patterns detected - this is a fallback
@@ -6642,9 +6656,9 @@ def determine_collection_method(
     
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
-    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Push API
+    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST Pull API
     # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
-    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Defender", "Native", "MMA", "AMA", "REST Push API", "Unknown (Custom Log)", "Unknown"]
+    priority_order = ["Azure Diagnostics", "CCF Push", "CCF", "Azure Function", "Defender", "Native", "MMA", "AMA", "REST Pull API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -9602,7 +9616,19 @@ def main() -> None:
 
             if arm_result:
                 arm_method, arm_api, arm_tables = arm_result
-                if arm_method and arm_method not in methods:
+                # Suppress sibling-ARM 'Azure Function' addition when the
+                # connector has already self-identified as CCF. CCF v2
+                # deployments include a Function App in the sibling
+                # azuredeploy_*_poller_connector.json as the poller runner,
+                # but from the customer's perspective the connector is still
+                # codeless. Keep the API/table attribution since the Function
+                # App genuinely participates in ingestion.
+                ccf_methods = {"CCF", "CCF Push", "CCF (Legacy)"}
+                arm_is_function_for_ccf = (
+                    arm_method == "Azure Function"
+                    and any(m in ccf_methods for m in methods)
+                )
+                if arm_method and arm_method not in methods and not arm_is_function_for_ccf:
                     methods.append(arm_method)
                     method_reasons.append("Sibling ARM template declares Function App + DCR / Log Ingestion API resources")
                 if arm_api and arm_api not in apis:
@@ -9786,14 +9812,10 @@ def main() -> None:
                     existing_method_reasons.append(f"Connector code uses Sentinel TI Upload Indicators API ({match})")
                 else:
                     existing_method_reasons.append(f"Connector code uses legacy Sentinel TI ingestion API ({match})")
-
-            # TI Upload is itself an Azure Function variant: drop the generic
-            # "Azure Function" classification so the combined method does not
-            # show up as `Azure Function (TI Upload API)|Azure Function`.
-            existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
-                existing_methods, existing_method_reasons
-            )
-
+                existing_methods, existing_method_reasons = _drop_ti_upload_superseded(
+                    existing_methods, existing_method_reasons
+                )
+            
             # Add TI Upload API if not already present
             if api_name not in existing_apis:
                 existing_apis.append(api_name)
@@ -9814,7 +9836,7 @@ def main() -> None:
     # connector publishes to the Sentinel STIX Upload Indicators API, which
     # populates the new `ThreatIntelIndicators` / `ThreatIntelObjects` tables.
     # Applied regardless of the original collection_method (covers Unknown,
-    # REST Push API, etc.) but does NOT override an already-detected
+    # REST Pull API, etc.) but does NOT override an already-detected
     # TI_UPLOAD_METHOD classification.
     for connector in connectors_data:
         cid = connector.get('connector_id', '')
@@ -9838,11 +9860,10 @@ def main() -> None:
                 "Connector definition filename suffix '_UploadIndicatorsAPI' "
                 "indicates Sentinel STIX Upload Indicators API ingestion"
             )
-
-        existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
-            existing_methods, existing_method_reasons
-        )
-
+            existing_methods, existing_method_reasons = _drop_ti_upload_superseded(
+                existing_methods, existing_method_reasons
+            )
+        
         if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis:
             existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
             existing_api_reasons.append(
@@ -9898,11 +9919,10 @@ def main() -> None:
             existing_methods.append(TI_UPLOAD_METHOD)
             if not connector.get('collection_method_reason'):
                 existing_method_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
-
-        existing_methods, existing_method_reasons = _strip_redundant_af_for_ti_upload(
-            existing_methods, existing_method_reasons
-        )
-
+            existing_methods, existing_method_reasons = _drop_ti_upload_superseded(
+                existing_methods, existing_method_reasons
+            )
+        
         if TI_UPLOAD_DEFAULT_API_NAME not in existing_apis and not connector.get('ingestion_api'):
             existing_apis.append(TI_UPLOAD_DEFAULT_API_NAME)
             existing_api_reasons.append("Override classified connector as Sentinel TI Upload Indicators API")
@@ -10627,6 +10647,34 @@ def main() -> None:
             collection_method = 'Custom'
             method_source = 'cl_table_fallback'
 
+        # Tenant-scope diagnostics override: tables whose category is in
+        # TENANT_DIAGNOSTICS_CATEGORIES, or whose resource_types are *all*
+        # tenant-scope providers, are delivered via Entra/Intune/Graph tenant
+        # Diagnostic Settings. This overrides 'Native' inferred from
+        # connectors like AzureActiveDirectory whose dataTypes list these
+        # tables but which actually configure a tenant diagnostic setting
+        # rather than a true first-party native pipeline.
+        if collection_method in ('', 'Native'):
+            cats = _table_categories(ref)
+            matched_cats = cats & TENANT_DIAGNOSTICS_CATEGORIES
+            rt_tokens = [
+                t.strip().lower()
+                for t in (ref.get('resource_types') or '').split(',')
+                if t.strip() and t.strip() != '-'
+            ]
+            all_tenant_rt = bool(rt_tokens) and all(
+                tok.startswith(TENANT_DIAGNOSTICS_RESOURCE_PREFIXES)
+                for tok in rt_tokens
+            )
+            if matched_cats:
+                collection_method = 'Azure Diagnostics'
+                method_source = (
+                    f"tenant_diagnostics(category={'|'.join(sorted(matched_cats))})"
+                )
+            elif all_tenant_rt:
+                collection_method = 'Azure Diagnostics'
+                method_source = 'tenant_diagnostics(resource_types)'
+
         # Apply normalization (e.g. lowercase 'native' -> 'Native', legacy
         # 'MMA' -> 'AMA') and collapse parenthesized refinements
         # (e.g. 'Azure Function (TI Upload API)|Azure Function' -> 'Azure Function')
@@ -11028,14 +11076,13 @@ def main() -> None:
                     existing_apis, existing_api_reasons, INGESTION_API_PRECEDENCE
                 )
         
-        # Promote Unknown (Custom Log) to REST Push API if ingestion API was detected from JSON patterns
+        # Promote Unknown (Custom Log) to REST Pull API if ingestion API was detected from JSON patterns
         # The presence of sharedKeys/WorkspaceId/PrimaryKey in the connector definition proves
-        # the connector pushes data to Sentinel via the HTTP Data Collector API,
-        # so it should be classified as REST Push API
+        # the connector uses an API-based approach, so it should be classified as REST Pull API
         if primary_method == "Unknown (Custom Log)" and ingestion_api and "Connector definition" in api_reason:
             # Update all methods in the list
             updated_methods = [
-                "REST Push API" if m == "Unknown (Custom Log)" else m
+                "REST Pull API" if m == "Unknown (Custom Log)" else m
                 for m in collection_methods
             ]
             updated_reasons = connector.get('collection_method_reason', '').split('|')
@@ -11059,7 +11106,7 @@ def main() -> None:
         connectors_data = apply_overrides_to_data(connectors_data, overrides, 'connector', 'connector_id')
     
     if promoted_count:
-        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Push API based on ingestion API detection")
+        log_print(f"  Promoted {promoted_count} Unknown (Custom Log) connectors to REST Pull API based on ingestion API detection")
     
     # Recount after overrides (split multi-values)
     ingestion_api_counts = defaultdict(int)
