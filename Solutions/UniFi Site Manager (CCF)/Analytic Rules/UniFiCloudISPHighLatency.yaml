@@ -1,0 +1,69 @@
+id: 77d8f6d0-b45c-ea6e-7c58-daac194a095f
+name: "UniFi Site Manager: ISP High Latency"
+description: |
+  Identifies when ISP latency exceeds acceptable thresholds, impacting VoIP quality, video conferencing, and overall application performance.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_ISPMetrics_CL
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1499
+query: |
+  // UniFi ISP High Latency Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  let AvgLatencyThreshold = 100;
+  let MaxLatencyThreshold = 500;
+  Unifi_SiteManager_ISPMetrics_CL
+  | where TimeGenerated > ago(30m)
+  | mv-expand period = periods
+  | extend 
+      metricTime = todatetime(period.metricTime),
+      avgLatency = toint(period.data.wan.avgLatency),
+      maxLatency = toint(period.data.wan.maxLatency),
+      ispName = tostring(period.data.wan.ispName),
+      ispAsn = tostring(period.data.wan.ispAsn)
+  | where avgLatency > AvgLatencyThreshold or maxLatency > MaxLatencyThreshold
+  | summarize 
+      EventCount = count(),
+      AvgLatency = avg(avgLatency),
+      MaxLatency = max(maxLatency),
+      FirstSeen = min(metricTime),
+      LastSeen = max(metricTime)
+      by siteId, ispName, ispAsn
+  | extend 
+      TimeGenerated = now(),
+      AvgLatencyRounded = round(AvgLatency, 1)
+  | project
+      TimeGenerated,
+      SiteId = siteId,
+      ISPName = ispName,
+      ISPAsn = ispAsn,
+      AvgLatencyMs = AvgLatencyRounded,
+      MaxLatencyMs = MaxLatency,
+      EventCount,
+      FirstSeen,
+      LastSeen
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ISPName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

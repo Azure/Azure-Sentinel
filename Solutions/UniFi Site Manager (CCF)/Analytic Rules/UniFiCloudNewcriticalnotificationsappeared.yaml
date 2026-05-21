@@ -1,0 +1,50 @@
+id: e4b75722-7239-f247-558f-d2e851ea0b38
+name: "UniFi Site Manager: New critical notifications appeared"
+description: |
+  Identifies when the UniFi critical-notification count increases since the previous poll, signaling at least one new critical-severity alarm has appeared.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Sites_CL
+queryFrequency: 15m
+queryPeriod: 45m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  let prev = Unifi_SiteManager_Sites_CL
+            | where TimeGenerated between (ago(30m) .. ago(15m))
+            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+            | project siteId_s = tostring(siteId),
+                      prevCritical = toint(siteStatistics.counts.criticalNotification);
+        Unifi_SiteManager_Sites_CL
+        | where TimeGenerated > ago(15m)
+        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
+        | extend siteId_s = tostring(siteId),
+                 siteName = tostring(meta.name),
+                 CriticalCount = toint(siteStatistics.counts.criticalNotification)
+        | join kind=inner prev on siteId_s
+        | where CriticalCount > prevCritical
+        | extend NewCriticals = CriticalCount - prevCritical
+        | extend Activity = strcat(NewCriticals, ' new critical notification(s) - count went ', prevCritical, ' -> ', CriticalCount)
+        | project TimeGenerated, siteId, siteName, Activity, prevCritical, CriticalCount, NewCriticals
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: siteName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

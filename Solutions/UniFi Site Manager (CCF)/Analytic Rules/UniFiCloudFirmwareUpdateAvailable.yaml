@@ -1,0 +1,62 @@
+id: 83b88ab5-21ca-5dd2-df91-6db4354f9360
+name: "UniFi Site Manager: Firmware Update Available"
+description: |
+  Identifies UniFi devices with firmware updates available. Keeping firmware patched is critical as updates often include security vulnerability fixes.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Devices_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  // UniFi Firmware Update Available Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  let DeviceThreshold = 1;
+  Unifi_SiteManager_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by id
+  | where isnotempty(updateAvailable)
+  | summarize 
+      DevicesNeedingUpdate = count(),
+      DeviceList = make_list(pack(
+          "name", coalesce(name, "Unnamed"),
+          "model", model,
+          "currentVersion", version,
+          "availableVersion", updateAvailable,
+          "ip", ip
+      )),
+      Models = make_set(model),
+      ProductLines = make_set(productLine)
+  | where DevicesNeedingUpdate >= DeviceThreshold
+  | extend 
+      TimeGenerated = now(),
+      AffectedModels = strcat_array(Models, ", "),
+      AffectedProductLines = strcat_array(ProductLines, ", ")
+  | project
+      TimeGenerated,
+      DevicesNeedingUpdate,
+      AffectedModels,
+      AffectedProductLines
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AffectedProductLines
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: AnyAlert
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

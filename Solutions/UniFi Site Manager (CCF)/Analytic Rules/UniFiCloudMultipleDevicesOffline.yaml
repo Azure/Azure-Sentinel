@@ -1,0 +1,58 @@
+id: 9283b576-5350-fca1-3979-dacb6acd1d16
+name: "UniFi Site Manager: Multiple Devices Offline"
+description: |
+  Identifies when multiple UniFi devices go offline simultaneously, typically signaling a power outage, upstream connectivity failure, or infrastructure issue requiring investigation.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Devices_CL
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+  - T1499
+query: |
+  // UniFi Multiple Devices Offline Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  let OfflineThreshold = 3;
+  Unifi_SiteManager_Devices_CL
+  | where TimeGenerated > ago(30m)
+  | summarize arg_max(TimeGenerated, *) by id
+  | where status == "offline"
+  | summarize 
+      OfflineDeviceCount = count(),
+      OfflineDevices = make_list(coalesce(name, id)),
+      OfflineModels = make_list(model),
+      OfflineIPs = make_list(ip),
+      ProductLines = make_set(productLine)
+  | where OfflineDeviceCount >= OfflineThreshold
+  | extend 
+      TimeGenerated = now(),
+      OfflineDeviceList = strcat_array(OfflineDevices, ", "),
+      AffectedProductLines = strcat_array(ProductLines, ", ")
+  | project
+      TimeGenerated,
+      OfflineDeviceCount,
+      OfflineDeviceList,
+      AffectedProductLines
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AffectedProductLines
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: PT4H
+    matchingMethod: AnyAlert
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

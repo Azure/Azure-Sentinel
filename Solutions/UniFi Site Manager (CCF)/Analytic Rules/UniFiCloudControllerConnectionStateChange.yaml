@@ -1,0 +1,64 @@
+id: ac1efe0f-654e-264e-07be-c1b60e698343
+name: "UniFi Site Manager: Controller Connection State Change"
+description: |
+  Identifies when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change, which may indicate a network outage, power loss, or device failure.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Hosts_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - CommandAndControl
+relevantTechniques:
+  - T1489
+  - T1071
+query: |
+  // UniFi Controller Connection State Change Detection
+  // Author: Fetch Labs (https://sentinel.blog)
+  Unifi_SiteManager_Hosts_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(lastConnectionStateChange)
+  | extend ConnectionChange = todatetime(lastConnectionStateChange)
+  | where ConnectionChange > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by id
+  | extend 
+      HostTypeDisplay = case(
+          hostType == "ucore", "UniFi OS Console",
+          hostType == "uck", "Cloud Key",
+          hostType == "uckp", "Cloud Key+",
+          hostType == "udm", "Dream Machine",
+          hostType == "udmpro", "Dream Machine Pro",
+          hostType == "udmse", "Dream Machine SE",
+          hostType == "self-hosted", "Self-Hosted",
+          hostType
+      )
+  | project
+      TimeGenerated,
+      ConnectionChangeTime = ConnectionChange,
+      HostId = id,
+      HostType = hostType,
+      HostTypeDisplay,
+      IPAddress = ipAddress,
+      IsBlocked = isBlocked,
+      IsOwner = owner
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
