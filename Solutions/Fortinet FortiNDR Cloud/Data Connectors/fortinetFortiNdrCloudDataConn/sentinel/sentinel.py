@@ -33,7 +33,8 @@ def post_data(events: list[dict], log_type_suffix: str):
         logging.info("Creating the Log Ingestion Client object.")
         client = LogsIngestionClient(
             endpoint=AZURE_ENDPOINT,
-            credential=creds
+            credential=creds,
+            api_version="2023-04-24"
         )
 
     except Exception as e:
@@ -47,7 +48,6 @@ def post_data(events: list[dict], log_type_suffix: str):
     stream_name = "Custom-FortinetFortiNdrCloudRaw"
 
     logging.info("Wrapping events to be uploaded:")
-    logging.info(events)
 
     wrapped_events = []
     for event in events:
@@ -61,8 +61,7 @@ def post_data(events: list[dict], log_type_suffix: str):
             "RawData": json.dumps(event),
         })
 
-    logging.info(f"Events were successfully wrapped.")
-    logging.info(wrapped_events)
+    logging.info("Events were successfully wrapped.")
     try:
         logging.info(
             f"Uploading {len(wrapped_events)} packaged events to stream {stream_name} via Log Ingestion Client."
@@ -71,8 +70,7 @@ def post_data(events: list[dict], log_type_suffix: str):
         client.upload(
             rule_id=DCR_ID,
             stream_name=stream_name,
-            logs=wrapped_events,
-            api_version="2023-04-24"
+            logs=wrapped_events
         )
 
         logging.info(
