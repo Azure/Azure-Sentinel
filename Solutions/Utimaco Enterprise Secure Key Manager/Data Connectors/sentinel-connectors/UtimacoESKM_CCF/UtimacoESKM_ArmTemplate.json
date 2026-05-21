@@ -1,0 +1,759 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "string",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is setup"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "string",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is setup"
+            }
+        },
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "username": {
+            "type": "securestring",
+            "defaultValue": "-NA-"
+        },
+        "password": {
+            "type": "securestring",
+            "defaultValue": "-NA-"
+        },
+        "BaseUrl": {
+            "type": "securestring",
+            "defaultValue": "-NA-"
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "Utimaco Enterprise Secure Key Manager (ESKM)",
+        "_solutionVersion": "1.0.3",
+        "_solutionAuthor": "Utimaco",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-UtimacoESKMConnector",
+        "dataConnectorVersionConnectorDefinition": "1.0.3",
+        "dataConnectorVersionConnections": "1.0.3",
+        "_solutionTier": "Community",
+        "_dataConnectorContentIdConnections": "UtimacoESKMConnectorConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_dataConnectorContentIdConnectorDefinition": "UtimacoESKMConnectorConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_logAnalyticsTableId1": "UtimacoESKMKmipServerLogs_CL"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "Utimaco Enterprise Secure Key Manager (ESKM)",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+                            "apiVersion": "2022-09-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "Customizable",
+                            "properties": {
+                                "connectorUiConfig": {
+                                    "id": "UtimacoESKMConnector",
+                                    "title": "Utimaco Enterprise Secure Key Manager (ESKM)",
+                                    "publisher": "Utimaco",
+                                    "descriptionMarkdown": "The Utimaco ESKM connector ingests KMIP server logs from Utimaco Enterprise Secure Key Manager (ESKM) into Microsoft Sentinel.\n\nSupports Basic authentication (username/password).\n\nFor more information, visit [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager).",
+                                    "graphQueriesTableName": "UtimacoESKMKmipServerLogs_CL",
+                                    "graphQueries": [
+                                        {
+                                            "metricName": "Total KMIP server events received",
+                                            "legend": "{{graphQueriesTableName}}",
+                                            "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(14d) | summarize count() by bin(TimeGenerated, 1d)"
+                                        }
+                                    ],
+                                    "dataTypes": [
+                                        {
+                                            "name": "{{graphQueriesTableName}}",
+                                            "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                                        }
+                                    ],
+                                    "connectivityCriteria": [
+                                        {
+                                            "type": "HasDataConnectors"
+                                        }
+                                    ],
+                                    "sampleQueries": [
+                                        {
+                                            "description": "All KMIP server events from the last 24 hours",
+                                            "query": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h) | take 100"
+                                        },
+                                        {
+                                            "description": "Events grouped by event type",
+                                            "query": "{{graphQueriesTableName}} | summarize count() by Event | order by count_ desc"
+                                        },
+                                        {
+                                            "description": "Failed KMIP Client Operations with reason codes",
+                                            "query": "{{graphQueriesTableName}} | where Result != 'SUCCESS' | summarize count() by Operation, Result, Reason | order by count_ desc"
+                                        },
+                                        {
+                                            "description": "Authentication failures by client IP and user",
+                                            "query": "{{graphQueriesTableName}} | where Event == 'Authentication Failure' | summarize FailureCount = count() by IP, User | order by FailureCount desc"
+                                        },
+                                        {
+                                            "description": "KMIP operations by object type",
+                                            "query": "{{graphQueriesTableName}} | where isnotempty(Operation) | summarize count() by Operation, ObjectType | order by count_ desc"
+                                        }
+                                    ],
+                                    "permissions": {
+                                        "resourceProvider": [
+                                            {
+                                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                                "permissionsDisplayText": "read and write permissions are required.",
+                                                "providerDisplayName": "Workspace",
+                                                "scope": "Workspace",
+                                                "requiredPermissions": {
+                                                    "write": true,
+                                                    "read": true,
+                                                    "delete": false
+                                                }
+                                            }
+                                        ],
+                                        "customs": [
+                                            {
+                                                "name": "Utimaco ESKM Account Credentials",
+                                                "description": "Utimaco ESKM account credentials (username and password) are required to authenticate to the ESKM management API. See [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager)."
+                                            }
+                                        ]
+                                    },
+                                    "instructionSteps": [
+                                        {
+                                            "title": "Step 1 - Prerequisites",
+                                            "description": "Ensure you have a Utimaco ESKM management account with permissions to access the management API. Note the base URL of your ESKM appliance (typically `https://<eskm-host>:8443`)."
+                                        },
+                                        {
+                                            "title": "Step 2 - Connect to Utimaco ESKM",
+                                            "description": "Provide your Utimaco ESKM management API base URL and account credentials below, then click Connect.",
+                                            "instructions": [
+                                                {
+                                                    "type": "Textbox",
+                                                    "parameters": {
+                                                        "label": "API Base URL",
+                                                        "placeholder": "https://<eskm-host>:8443",
+                                                        "type": "text",
+                                                        "name": "BaseUrl",
+                                                        "validations": {
+                                                            "required": true
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "type": "Textbox",
+                                                    "parameters": {
+                                                        "label": "Username",
+                                                        "placeholder": "Enter username",
+                                                        "type": "text",
+                                                        "name": "username",
+                                                        "validations": {
+                                                            "required": true
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "type": "Textbox",
+                                                    "parameters": {
+                                                        "label": "Password",
+                                                        "placeholder": "Enter password",
+                                                        "type": "password",
+                                                        "name": "password",
+                                                        "validations": {
+                                                            "required": true
+                                                        }
+                                                    }
+                                                },
+                                                {
+                                                    "type": "ConnectionToggleButton",
+                                                    "parameters": {
+                                                        "connectLabel": "connect",
+                                                        "name": "connect"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('_logAnalyticsTableId1')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime",
+                                            "description": "Event timestamp (mapped from ts field)"
+                                        },
+                                        {
+                                            "name": "Action",
+                                            "type": "string",
+                                            "description": "Subsystem or component generating the log (e.g., KMIP Server)"
+                                        },
+                                        {
+                                            "name": "Event",
+                                            "type": "string",
+                                            "description": "Event type (e.g., StateChange, Authentication Failure, Authentication Success, ClientOperation)"
+                                        },
+                                        {
+                                            "name": "Message",
+                                            "type": "string",
+                                            "description": "Full human-readable log message"
+                                        },
+                                        {
+                                            "name": "IP",
+                                            "type": "string",
+                                            "description": "Client IP address associated with the event"
+                                        },
+                                        {
+                                            "name": "User",
+                                            "type": "string",
+                                            "description": "KMIP user account associated with the operation"
+                                        },
+                                        {
+                                            "name": "UUID",
+                                            "type": "string",
+                                            "description": "Unique identifier of the KMIP managed object"
+                                        },
+                                        {
+                                            "name": "Operation",
+                                            "type": "string",
+                                            "description": "KMIP operation performed (e.g., CREATE, DESTROY, REGISTER, ACTIVATE, REVOKE, SIGN, GET, LOCATE, CERTIFY, ADD_ATTRIBUTE)"
+                                        },
+                                        {
+                                            "name": "ObjectType",
+                                            "type": "string",
+                                            "description": "Type of KMIP object (e.g., SYMMETRIC_KEY, PUBLIC_KEY, PRIVATE_KEY, CERTIFICATE)"
+                                        },
+                                        {
+                                            "name": "Result",
+                                            "type": "string",
+                                            "description": "Operation result (e.g., SUCCESS, OPERATION_FAILED)"
+                                        },
+                                        {
+                                            "name": "Reason",
+                                            "type": "string",
+                                            "description": "Reason code when operation fails (e.g., PERMISSION_DENIED, ITEM_NOT_FOUND)"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "UtimacoESKMDCR",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "Direct",
+                            "properties": {
+                                "streamDeclarations": {
+                                    "Custom-UtimacoESKMKmipServerLogs_CL": {
+                                        "columns": [
+                                            {
+                                                "name": "ts",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "action",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "event",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "message",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "ip",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "user",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "uuid",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "operation",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "objectType",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "result",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "reason",
+                                                "type": "string"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "clv2ws1"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "Custom-UtimacoESKMKmipServerLogs_CL"
+                                        ],
+                                        "destinations": [
+                                            "clv2ws1"
+                                        ],
+                                        "outputStream": "Custom-UtimacoESKMKmipServerLogs_CL",
+                                        "transformKql": "source | extend TimeGenerated = todatetime(['ts']) | project TimeGenerated, Action = tostring(['action']), Event = tostring(['event']), Message = tostring(['message']), IP = tostring(['ip']), User = tostring(['user']), UUID = tostring(['uuid']), Operation = tostring(['operation']), ObjectType = tostring(['objectType']), Result = tostring(['result']), Reason = tostring(['reason'])"
+                                    }
+                                ]
+                            },
+                            "dependsOn": [
+                                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('_logAnalyticsTableId1'))]"
+                            ]
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "UtimacoESKMConnector",
+                    "title": "Utimaco Enterprise Secure Key Manager (ESKM)",
+                    "publisher": "Utimaco",
+                    "descriptionMarkdown": "The Utimaco ESKM connector ingests KMIP server logs from Utimaco Enterprise Secure Key Manager (ESKM) into Microsoft Sentinel.\n\nSupports Basic authentication (username/password).\n\nFor more information, visit [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager).",
+                    "graphQueriesTableName": "UtimacoESKMKmipServerLogs_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total KMIP server events received",
+                            "legend": "{{graphQueriesTableName}}",
+                            "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(14d) | summarize count() by bin(TimeGenerated, 1d)"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All KMIP server events from the last 24 hours",
+                            "query": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h) | take 100"
+                        },
+                        {
+                            "description": "Events grouped by event type",
+                            "query": "{{graphQueriesTableName}} | summarize count() by Event | order by count_ desc"
+                        },
+                        {
+                            "description": "Failed KMIP Client Operations with reason codes",
+                            "query": "{{graphQueriesTableName}} | where Result != 'SUCCESS' | summarize count() by Operation, Result, Reason | order by count_ desc"
+                        },
+                        {
+                            "description": "Authentication failures by client IP and user",
+                            "query": "{{graphQueriesTableName}} | where Event == 'Authentication Failure' | summarize FailureCount = count() by IP, User | order by FailureCount desc"
+                        },
+                        {
+                            "description": "KMIP operations by object type",
+                            "query": "{{graphQueriesTableName}} | where isnotempty(Operation) | summarize count() by Operation, ObjectType | order by count_ desc"
+                        }
+                    ],
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": false
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Utimaco ESKM Account Credentials",
+                                "description": "Utimaco ESKM account credentials (username and password) are required to authenticate to the ESKM management API. See [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager)."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Step 1 - Prerequisites",
+                            "description": "Ensure you have a Utimaco ESKM management account with permissions to access the management API. Note the base URL of your ESKM appliance (typically `https://<eskm-host>:8443`)."
+                        },
+                        {
+                            "title": "Step 2 - Connect to Utimaco ESKM",
+                            "description": "Provide your Utimaco ESKM management API base URL and account credentials below, then click Connect.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "API Base URL",
+                                        "placeholder": "https://<eskm-host>:8443",
+                                        "type": "text",
+                                        "name": "BaseUrl",
+                                        "validations": {
+                                            "required": true
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Username",
+                                        "placeholder": "Enter username",
+                                        "type": "text",
+                                        "name": "username",
+                                        "validations": {
+                                            "required": true
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Password",
+                                        "placeholder": "Enter password",
+                                        "type": "password",
+                                        "name": "password",
+                                        "validations": {
+                                            "required": true
+                                        }
+                                    }
+                                },
+                                {
+                                    "type": "ConnectionToggleButton",
+                                    "parameters": {
+                                        "connectLabel": "connect",
+                                        "name": "connect"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "Utimaco Enterprise Secure Key Manager (ESKM)",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "connectorDefinitionName",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        },
+                        "BaseUrl": {
+                            "defaultValue": "BaseUrl",
+                            "type": "string"
+                        },
+                        "username": {
+                            "defaultValue": "username",
+                            "type": "string"
+                        },
+                        "password": {
+                            "defaultValue": "password",
+                            "type": "securestring"
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnections'),'-dataPoller1')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[parameters('connectorDefinitionName')]",
+                                "dataType": "UtimacoESKMKmipServerLogs_CL",
+                                "dcrConfig": {
+                                    "streamName": "Custom-UtimacoESKMKmipServerLogs_CL",
+                                    "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                                },
+                                "auth": {
+                                    "type": "Basic",
+                                    "UserName": "[parameters('username')]",
+                                    "Password": "[parameters('password')]"
+                                },
+                                "request": {
+                                    "apiEndpoint": "[concat(parameters('BaseUrl'),'/api/manage/v1/log/kmipserver')]",
+                                    "httpMethod": "GET",
+                                    "rateLimitQPS": 10,
+                                    "queryWindowInMin": 5,
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60,
+                                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
+                                    "headers": {
+                                        "Accept": "application/json"
+                                    },
+                                    "queryParameters": {
+                                        "log": "current",
+                                        "lines": "1",
+                                        "startTime": "{_QueryWindowStartTime}",
+                                        "endTime": "{_QueryWindowEndTime}"
+                                    }
+                                },
+                                "paging": {
+                                    "pagingType": "NextPageToken",
+                                    "nextPageTokenJsonPath": "$.nextOffset",
+                                    "NextPageParaName": "offset"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$.logs"
+                                    ],
+                                    "format": "json"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "apiVersion": "2023-04-01-preview",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                            "version": "[variables('dataConnectorVersionConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2022-06-24",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "Utimaco Enterprise Secure Key Manager (ESKM)",
+                "publisherDisplayName": "Utimaco",
+                "description": "The Utimaco ESKM connector ingests KMIP server logs from Utimaco Enterprise Secure Key Manager (ESKM) into Microsoft Sentinel.\n\nSupports Basic authentication (username/password).\n\nFor more information, visit [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager).",
+                "descriptionHtml": "The Utimaco ESKM connector ingests KMIP server logs from Utimaco Enterprise Secure Key Manager (ESKM) into Microsoft Sentinel.\n\nSupports Basic authentication (username/password).\n\nFor more information, visit [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager).",
+                "icon": "data:image/png;base64,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",
+                "parentId": "[variables('_solutionId')]"
+            }
+        }
+    ]
+}
