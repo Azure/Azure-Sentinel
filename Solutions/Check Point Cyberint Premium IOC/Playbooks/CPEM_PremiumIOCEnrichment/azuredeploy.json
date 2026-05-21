@@ -80,6 +80,7 @@
       "properties": {
         "displayName": "[variables('AzureSentinelConnectionName')]",
         "parameterValueType": "Alternative",
+        "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
@@ -214,33 +215,49 @@
               "type": "Foreach",
               "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
               "actions": {
-                "Enrich_IP": {
-                  "type": "Http",
-                  "inputs": {
-                    "method": "POST",
-                    "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
-                    "headers": {
-                      "Accept": "application/json",
-                      "Content-Type": "application/json",
-                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
-                      "X-Integration-Type": "Azure Sentinel Premium IOC",
-                      "X-Integration-Version": "1.0"
+                "Scope_Enrich_IP": {
+                  "type": "Scope",
+                  "actions": {
+                    "Enrich_IP": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
+                        "headers": {
+                          "Accept": "application/json",
+                          "Content-Type": "application/json",
+                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                          "X-Integration-Type": "Azure Sentinel Premium IOC",
+                          "X-Integration-Version": "1.0"
+                        },
+                        "body": {
+                          "type": "ipv4",
+                          "value": "@{items('For_each_IP')?['Address']}"
+                        }
+                      },
+                      "runAfter": {}
                     },
-                    "body": {
-                      "type": "ipv4",
-                      "value": "@{items('For_each_IP')?['Address']}"
+                    "Append_IP_result": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "EnrichmentComment",
+                        "value": "<br><strong>IP: @{items('For_each_IP')?['Address']}</strong> — Malicious: @{json(string(body('Enrich_IP')))?['malicious']} | Confidence: @{json(string(body('Enrich_IP')))?['confidence']} | Severity: @{json(string(body('Enrich_IP')))?['severity']} | Activity: @{json(string(body('Enrich_IP')))?['activity']} | Kill Chain: @{json(string(body('Enrich_IP')))?['kill_chain_stage']} | Malware Family: @{json(string(body('Enrich_IP')))?['malware_family']} | First Seen: @{json(string(body('Enrich_IP')))?['first_seen']}"
+                      },
+                      "runAfter": {
+                        "Enrich_IP": ["Succeeded"]
+                      }
                     }
                   },
                   "runAfter": {}
                 },
-                "Append_IP_result": {
+                "Append_IP_error": {
                   "type": "AppendToStringVariable",
                   "inputs": {
                     "name": "EnrichmentComment",
-                    "value": "<br><strong>IP: @{items('For_each_IP')?['Address']}</strong> — Malicious: @{json(string(body('Enrich_IP')))?['malicious']} | Confidence: @{json(string(body('Enrich_IP')))?['confidence']} | Severity: @{json(string(body('Enrich_IP')))?['severity']} | Activity: @{json(string(body('Enrich_IP')))?['activity']} | Kill Chain: @{json(string(body('Enrich_IP')))?['kill_chain_stage']} | Malware Family: @{json(string(body('Enrich_IP')))?['malware_family']} | First Seen: @{json(string(body('Enrich_IP')))?['first_seen']}"
+                    "value": "<br><strong>IP: @{items('For_each_IP')?['Address']}</strong> — Enrichment failed; the IOC could not be enriched."
                   },
                   "runAfter": {
-                    "Enrich_IP": ["Succeeded"]
+                    "Scope_Enrich_IP": ["Failed", "TimedOut", "Skipped"]
                   }
                 }
               },
@@ -252,121 +269,169 @@
               "type": "Foreach",
               "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
               "actions": {
-                "Select_hash_type": {
-                  "type": "Compose",
-                  "inputs": "@if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 64), 'sha256', if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 40), 'sha1', if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 32), 'md5', 'sha256')))",
-                  "runAfter": {}
-                },
-                "Enrich_FileHash": {
-                  "type": "Http",
-                  "inputs": {
-                    "method": "POST",
-                    "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
-                    "headers": {
-                      "Accept": "application/json",
-                      "Content-Type": "application/json",
-                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
-                      "X-Integration-Type": "Azure Sentinel Premium IOC",
-                      "X-Integration-Version": "1.0"
+                "Scope_Enrich_FileHash": {
+                  "type": "Scope",
+                  "actions": {
+                    "Select_hash_type": {
+                      "type": "Compose",
+                      "inputs": "@if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 64), 'sha256', if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 40), 'sha1', if(equals(length(coalesce(items('For_each_FileHash')?['Value'], '')), 32), 'md5', 'sha256')))",
+                      "runAfter": {}
                     },
-                    "body": {
-                      "type": "@{outputs('Select_hash_type')}",
-                      "value": "@{items('For_each_FileHash')?['Value']}"
+                    "Enrich_FileHash": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
+                        "headers": {
+                          "Accept": "application/json",
+                          "Content-Type": "application/json",
+                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                          "X-Integration-Type": "Azure Sentinel Premium IOC",
+                          "X-Integration-Version": "1.0"
+                        },
+                        "body": {
+                          "type": "@{outputs('Select_hash_type')}",
+                          "value": "@{items('For_each_FileHash')?['Value']}"
+                        }
+                      },
+                      "runAfter": {
+                        "Select_hash_type": ["Succeeded"]
+                      }
+                    },
+                    "Append_FileHash_result": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "EnrichmentComment",
+                        "value": "<br><strong>Hash (@{outputs('Select_hash_type')}): @{items('For_each_FileHash')?['Value']}</strong> — Malicious: @{json(string(body('Enrich_FileHash')))?['malicious']} | Confidence: @{json(string(body('Enrich_FileHash')))?['confidence']} | Severity: @{json(string(body('Enrich_FileHash')))?['severity']} | Activity: @{json(string(body('Enrich_FileHash')))?['activity']} | Malware Family: @{json(string(body('Enrich_FileHash')))?['malware_family']} | Threat Actors: @{join(coalesce(json(string(body('Enrich_FileHash')))?['threat_actors'], json('[]')), ', ')} | CVEs: @{join(coalesce(json(string(body('Enrich_FileHash')))?['cves'], json('[]')), ', ')}"
+                      },
+                      "runAfter": {
+                        "Enrich_FileHash": ["Succeeded"]
+                      }
                     }
                   },
-                  "runAfter": {
-                    "Select_hash_type": ["Succeeded"]
-                  }
+                  "runAfter": {}
                 },
-                "Append_FileHash_result": {
+                "Append_FileHash_error": {
                   "type": "AppendToStringVariable",
                   "inputs": {
                     "name": "EnrichmentComment",
-                    "value": "<br><strong>Hash (@{outputs('Select_hash_type')}): @{items('For_each_FileHash')?['Value']}</strong> — Malicious: @{json(string(body('Enrich_FileHash')))?['malicious']} | Confidence: @{json(string(body('Enrich_FileHash')))?['confidence']} | Severity: @{json(string(body('Enrich_FileHash')))?['severity']} | Activity: @{json(string(body('Enrich_FileHash')))?['activity']} | Malware Family: @{json(string(body('Enrich_FileHash')))?['malware_family']} | Threat Actors: @{join(coalesce(json(string(body('Enrich_FileHash')))?['threat_actors'], json('[]')), ', ')} | CVEs: @{join(coalesce(json(string(body('Enrich_FileHash')))?['cves'], json('[]')), ', ')}"
+                    "value": "<br><strong>Hash: @{items('For_each_FileHash')?['Value']}</strong> — Enrichment failed; the IOC could not be enriched."
                   },
                   "runAfter": {
-                    "Enrich_FileHash": ["Succeeded"]
+                    "Scope_Enrich_FileHash": ["Failed", "TimedOut", "Skipped"]
                   }
                 }
               },
               "runAfter": {
-                "For_each_IP": ["Succeeded"]
+                "For_each_IP": ["Succeeded", "Failed", "TimedOut", "Skipped"]
               }
             },
             "For_each_Domain": {
               "type": "Foreach",
               "foreach": "@body('Entities_-_Get_DNS')?['DNSresolutions']",
               "actions": {
-                "Enrich_Domain": {
-                  "type": "Http",
-                  "inputs": {
-                    "method": "POST",
-                    "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
-                    "headers": {
-                      "Accept": "application/json",
-                      "Content-Type": "application/json",
-                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
-                      "X-Integration-Type": "Azure Sentinel Premium IOC",
-                      "X-Integration-Version": "1.0"
+                "Scope_Enrich_Domain": {
+                  "type": "Scope",
+                  "actions": {
+                    "Enrich_Domain": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
+                        "headers": {
+                          "Accept": "application/json",
+                          "Content-Type": "application/json",
+                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                          "X-Integration-Type": "Azure Sentinel Premium IOC",
+                          "X-Integration-Version": "1.0"
+                        },
+                        "body": {
+                          "type": "domain",
+                          "value": "@{items('For_each_Domain')?['DomainName']}"
+                        }
+                      },
+                      "runAfter": {}
                     },
-                    "body": {
-                      "type": "domain",
-                      "value": "@{items('For_each_Domain')?['DomainName']}"
+                    "Append_Domain_result": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "EnrichmentComment",
+                        "value": "<br><strong>Domain: @{items('For_each_Domain')?['DomainName']}</strong> — Malicious: @{json(string(body('Enrich_Domain')))?['malicious']} | Confidence: @{json(string(body('Enrich_Domain')))?['confidence']} | Severity: @{json(string(body('Enrich_Domain')))?['severity']} | Activity: @{json(string(body('Enrich_Domain')))?['activity']} | Malware Family: @{json(string(body('Enrich_Domain')))?['malware_family']} | Threat Actors: @{join(coalesce(json(string(body('Enrich_Domain')))?['threat_actors'], json('[]')), ', ')}"
+                      },
+                      "runAfter": {
+                        "Enrich_Domain": ["Succeeded"]
+                      }
                     }
                   },
                   "runAfter": {}
                 },
-                "Append_Domain_result": {
+                "Append_Domain_error": {
                   "type": "AppendToStringVariable",
                   "inputs": {
                     "name": "EnrichmentComment",
-                    "value": "<br><strong>Domain: @{items('For_each_Domain')?['DomainName']}</strong> — Malicious: @{json(string(body('Enrich_Domain')))?['malicious']} | Confidence: @{json(string(body('Enrich_Domain')))?['confidence']} | Severity: @{json(string(body('Enrich_Domain')))?['severity']} | Activity: @{json(string(body('Enrich_Domain')))?['activity']} | Malware Family: @{json(string(body('Enrich_Domain')))?['malware_family']} | Threat Actors: @{join(coalesce(json(string(body('Enrich_Domain')))?['threat_actors'], json('[]')), ', ')}"
+                    "value": "<br><strong>Domain: @{items('For_each_Domain')?['DomainName']}</strong> — Enrichment failed; the IOC could not be enriched."
                   },
                   "runAfter": {
-                    "Enrich_Domain": ["Succeeded"]
+                    "Scope_Enrich_Domain": ["Failed", "TimedOut", "Skipped"]
                   }
                 }
               },
               "runAfter": {
-                "For_each_FileHash": ["Succeeded"]
+                "For_each_FileHash": ["Succeeded", "Failed", "TimedOut", "Skipped"]
               }
             },
             "For_each_URL": {
               "type": "Foreach",
               "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
               "actions": {
-                "Enrich_URL": {
-                  "type": "Http",
-                  "inputs": {
-                    "method": "POST",
-                    "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
-                    "headers": {
-                      "Accept": "application/json",
-                      "Content-Type": "application/json",
-                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
-                      "X-Integration-Type": "Azure Sentinel Premium IOC",
-                      "X-Integration-Version": "1.0"
+                "Scope_Enrich_URL": {
+                  "type": "Scope",
+                  "actions": {
+                    "Enrich_URL": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('API_Base_URL')}/ioc-intel/enrichment-api/v1/enrichment",
+                        "headers": {
+                          "Accept": "application/json",
+                          "Content-Type": "application/json",
+                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                          "X-Integration-Type": "Azure Sentinel Premium IOC",
+                          "X-Integration-Version": "1.0"
+                        },
+                        "body": {
+                          "type": "url",
+                          "value": "@{items('For_each_URL')?['Url']}"
+                        }
+                      },
+                      "runAfter": {}
                     },
-                    "body": {
-                      "type": "url",
-                      "value": "@{items('For_each_URL')?['Url']}"
+                    "Append_URL_result": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "EnrichmentComment",
+                        "value": "<br><strong>URL: @{items('For_each_URL')?['Url']}</strong> — Malicious: @{json(string(body('Enrich_URL')))?['malicious']} | Confidence: @{json(string(body('Enrich_URL')))?['confidence']} | Severity: @{json(string(body('Enrich_URL')))?['severity']} | Activity: @{json(string(body('Enrich_URL')))?['activity']} | Kill Chain: @{json(string(body('Enrich_URL')))?['kill_chain_stage']} | Malware Family: @{json(string(body('Enrich_URL')))?['malware_family']}"
+                      },
+                      "runAfter": {
+                        "Enrich_URL": ["Succeeded"]
+                      }
                     }
                   },
                   "runAfter": {}
                 },
-                "Append_URL_result": {
+                "Append_URL_error": {
                   "type": "AppendToStringVariable",
                   "inputs": {
                     "name": "EnrichmentComment",
-                    "value": "<br><strong>URL: @{items('For_each_URL')?['Url']}</strong> — Malicious: @{json(string(body('Enrich_URL')))?['malicious']} | Confidence: @{json(string(body('Enrich_URL')))?['confidence']} | Severity: @{json(string(body('Enrich_URL')))?['severity']} | Activity: @{json(string(body('Enrich_URL')))?['activity']} | Kill Chain: @{json(string(body('Enrich_URL')))?['kill_chain_stage']} | Malware Family: @{json(string(body('Enrich_URL')))?['malware_family']}"
+                    "value": "<br><strong>URL: @{items('For_each_URL')?['Url']}</strong> — Enrichment failed; the IOC could not be enriched."
                   },
                   "runAfter": {
-                    "Enrich_URL": ["Succeeded"]
+                    "Scope_Enrich_URL": ["Failed", "TimedOut", "Skipped"]
                   }
                 }
               },
               "runAfter": {
-                "For_each_Domain": ["Succeeded"]
+                "For_each_Domain": ["Succeeded", "Failed", "TimedOut", "Skipped"]
               }
             },
             "Add_comment_to_incident": {
@@ -385,7 +450,7 @@
                 "path": "/Incidents/Comment"
               },
               "runAfter": {
-                "For_each_URL": ["Succeeded"]
+                "For_each_URL": ["Succeeded", "Failed", "TimedOut", "Skipped"]
               }
             }
           }
