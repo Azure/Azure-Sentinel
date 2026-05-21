@@ -1,0 +1,43 @@
+{
+ "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+ "contentVersion": "1.0.0.0",
+ "parameters": {
+ "workspaceName": {
+ "type": "string",
+ "metadata": { "description": "Log Analytics Workspace name" }
+ }
+ },
+ "resources": [
+ {
+ "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+ "apiVersion": "2025-02-01",
+ "name": "[concat(parameters('workspaceName'), '/vimAuthenticationStealthTalk')]",
+ "properties": {
+ "etag": "*",
+ "displayName": "vimAuthenticationStealthTalk",
+ "category": "ASIM",
+ "FunctionAlias": "vimAuthenticationStealthTalk",
+ "query": "let Parser = (\n starttime : datetime = datetime(null),\n endtime : datetime = datetime(null),\n username_has_any : dynamic = dynamic([]),\n targetappname_has_any : dynamic = dynamic([]),\n srcipaddr_has_any_prefix : dynamic = dynamic([]),\n srchostname_has_any : dynamic = dynamic([]),\n eventtype_in : dynamic = dynamic([]),\n eventresultdetails_in : dynamic = dynamic([]),\n eventresult : string = '*',\n disabled : bool = false\n) {\n StealthTalkAnomalousAuth_CL\n | where not(disabled)\n | where (isnull(starttime) or TimeGenerated >= starttime)\n and (isnull(endtime) or TimeGenerated <= endtime)\n | extend\n _OriginalEventType = EventType,\n _EventResult = iff(EventType == 'MultiFailLogin', 'Failure', 'Success')\n | where (eventresult == '*' or _EventResult =~ eventresult)\n | where (array_length(username_has_any) == 0\n or UserId has_any (username_has_any))\n | where (array_length(srcipaddr_has_any_prefix) == 0\n or has_any_ipv4_prefix(IpAddress, srcipaddr_has_any_prefix))\n | where (array_length(eventtype_in) == 0\n or 'Logon' in~ (eventtype_in))\n | extend\n EventSchemaVersion = '0.1.3',\n EventSchema = 'Authentication',\n EventProduct = 'StealthTalk',\n EventVendor = 'StealthTalk',\n EventType = 'Logon',\n EventResult = _EventResult,\n EventCount = int(1),\n EventStartTime = TimeGenerated,\n EventEndTime = TimeGenerated,\n EventUid = RawEventId,\n EventSeverity = case(\n Severity == 'High', 'High',\n Severity == 'Medium', 'Medium',\n Severity == 'Low', 'Low',\n 'Informational'\n ),\n EventResultDetails = case(\n _OriginalEventType == 'MultiFailLogin',\n strcat('Failed attempts: ', tostring(PassedAttempts), ', blocked for: ', tostring(LoginBlockingSeconds), 's'),\n _OriginalEventType == 'GeoAnomalyLogin',\n strcat('Login from ', LoginCity, ' (', LoginCountry, '), assigned: ', AssignedCity, ' (', AssignedCountry, ')'),\n _OriginalEventType == 'NewDeviceLogin',\n strcat('New device: ', NewDeviceId, ', OS: ', NewDeviceOS),\n _OriginalEventType == 'OffHoursLogin',\n strcat('Deviation: ', tostring(DeviationMinutes), ' min, weekend: ', tostring(IsWeekend)),\n ''\n ),\n EventOriginalType = _OriginalEventType,\n TargetUserId = UserId,\n TargetUserIdType = 'Other',\n TargetUsername = UserId,\n TargetUsernameType = 'Other',\n SrcDeviceId = DeviceId,\n SrcIpAddr = iff(isnotempty(IpAddress), IpAddress, ''),\n SrcGeoCountry = iff(isnotempty(LoginCountry), LoginCountry, ''),\n SrcGeoCity = iff(isnotempty(LoginCity), LoginCity, ''),\n AdditionalFields = bag_pack(\n 'AppVersion', AppVersion,\n 'AssignedCountry', AssignedCountry,\n 'AssignedCity', AssignedCity,\n 'NewDeviceId', NewDeviceId,\n 'NewDeviceOS', NewDeviceOS,\n 'DeviationMinutes', DeviationMinutes,\n 'IsWeekend', IsWeekend,\n 'PassedAttempts', PassedAttempts,\n 'LoginBlockingSeconds', LoginBlockingSeconds,\n 'WorkingHoursStart', WorkingHoursStart,\n 'WorkingHoursEnd', WorkingHoursEnd\n )\n | project\n TimeGenerated, EventSchemaVersion, EventSchema, EventProduct, EventVendor,\n EventType, EventResult, EventResultDetails, EventSeverity, EventOriginalType,\n EventCount, EventStartTime, EventEndTime, EventUid,\n TargetUserId, TargetUserIdType, TargetUsername, TargetUsernameType,\n SrcDeviceId, SrcIpAddr, SrcGeoCountry, SrcGeoCity, AdditionalFields\n};\nParser(\n starttime = starttime,\n endtime = endtime,\n username_has_any = username_has_any,\n targetappname_has_any = targetappname_has_any,\n srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,\n srchostname_has_any = srchostname_has_any,\n eventtype_in = eventtype_in,\n eventresultdetails_in = eventresultdetails_in,\n eventresult = eventresult,\n disabled = disabled\n)",
+ "FunctionParameters": "starttime:datetime=datetime(null), endtime:datetime=datetime(null), username_has_any:dynamic=dynamic([]), targetappname_has_any:dynamic=dynamic([]), srcipaddr_has_any_prefix:dynamic=dynamic([]), srchostname_has_any:dynamic=dynamic([]), eventtype_in:dynamic=dynamic([]), eventresultdetails_in:dynamic=dynamic([]), eventresult:string='*', disabled:bool=False",
+ "version": 2
+ }
+ },
+ {
+ "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+ "apiVersion": "2025-02-01",
+ "name": "[concat(parameters('workspaceName'), '/ASimAuthenticationStealthTalk')]",
+ "dependsOn": [
+ "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspaceName'), 'vimAuthenticationStealthTalk')]"
+ ],
+ "properties": {
+ "etag": "*",
+ "displayName": "ASimAuthenticationStealthTalk",
+ "category": "ASIM",
+ "FunctionAlias": "ASimAuthenticationStealthTalk",
+ "query": "vimAuthenticationStealthTalk(disabled=disabled)",
+ "FunctionParameters": "disabled:bool=False",
+ "version": 2
+ }
+ }
+ ]
+}

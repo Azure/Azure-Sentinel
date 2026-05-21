@@ -1,0 +1,701 @@
+{
+  "version": "Notebook/1.0",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "fromTemplateId": "sentinel-StealthTalkAnomalousAuth",
+  "isLocked": false,
+  "styleSettings": {},
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# StealthTalk - Anomalous Auth Monitor\n\nReal-time detection and analysis dashboard for **`StealthTalkAnomalousAuth_CL`** events (DCR: `StealthTalk-Sentinel-DCR`).\n\n| Severity | Analytics Rule | Trigger condition | Schedule |\n|---|---|---|---|\n| High | `LoginOutsideWorkZone` | Country **or** city mismatch | Every 15 min / lookback 1 h |\n| High | `PasswordBruteForce` | >= 9 consecutive failed attempts | Every 15 min / lookback 5 h |\n| Medium | `MultiNewDevicesRegistration` | >= 2 distinct new device IDs / 24 h | Every 30 min / lookback 24 h |\n| Low | `AfterHoursWork` | Systematic off-hours pattern on 2+ days | Every 1 h / lookback 48 h |"
+      },
+      "name": "header-title",
+      "id": "294e660f-98a7-47f4-b8c8-98f669ce979f"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "p-timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": " Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "p-severity",
+            "version": "KqlParameterItem/1.0",
+            "name": "Severity",
+            "label": " Severity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "datatable(Severity:string)['High','Medium','Low']",
+            "value": [
+              "High",
+              "Medium",
+              "Low"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "p-userid",
+            "version": "KqlParameterItem/1.0",
+            "name": "UserId",
+            "label": " User ID",
+            "type": 1,
+            "isRequired": false,
+            "value": "",
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "global-parameters",
+      "id": "bb53cad7-f44f-439c-9151-2be59e6fb694"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| summarize\n Total = count(),\n HighSev = countif(Severity == 'High'),\n MedSev = countif(Severity == 'Medium'),\n LowSev = countif(Severity == 'Low'),\n AffectedUsers = dcount(UserId)\n| mv-expand Stats = pack_array(\n bag_pack('Metric', ' Total Events', 'Value', Total),\n bag_pack('Metric', ' High Severity', 'Value', HighSev),\n bag_pack('Metric', ' Medium Severity', 'Value', MedSev),\n bag_pack('Metric', ' Low Severity', 'Value', LowSev),\n bag_pack('Metric', ' Users Affected', 'Value', AffectedUsers)\n )\n| project\n Metric = tostring(Stats.Metric),\n Value = toint(Stats.Value)",
+        "size": 4,
+        "title": "Executive Summary",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "useGrouping": true
+              }
+            }
+          }
+        },
+        "crossComponentResources": []
+      },
+      "name": "stats-tiles",
+      "id": "a44d1204-3faf-42d7-ace3-e0cf3943a33a"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": " Events Timeline - by type (1 h bins)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "OffHoursLogin",
+              "color": "yellow"
+            },
+            {
+              "seriesName": "NewDeviceLogin",
+              "color": "orange"
+            },
+            {
+              "seriesName": "GeoAnomalyLogin",
+              "color": "red"
+            },
+            {
+              "seriesName": "MultiFailLogin",
+              "color": "redBright"
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "events-timeline",
+      "id": "d65fd3be-c6b7-4ef4-9154-c7cd99a7cec5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize Count = count() by EventType\n| extend Label = case(\n EventType == 'OffHoursLogin', ' Off-Hours Login',\n EventType == 'NewDeviceLogin', ' New Device Login',\n EventType == 'GeoAnomalyLogin',' Geo Anomaly',\n EventType == 'MultiFailLogin', ' Brute Force',\n EventType\n )",
+        "size": 3,
+        "title": " Event Type Distribution",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "crossComponentResources": []
+      },
+      "customWidth": "30",
+      "name": "event-pie",
+      "id": "94b1f8f6-4208-4220-aafe-b4954d8f489f"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| extend RiskPts = case(Severity == 'High', 10, Severity == 'Medium', 5, 1)\n| summarize\n TotalRisk = sum(RiskPts),\n TotalEvents = count(),\n HighEvents = countif(Severity == 'High'),\n MedEvents = countif(Severity == 'Medium'),\n LowEvents = countif(Severity == 'Low'),\n AnomalyTypes = make_set(EventType),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend RiskLevel = case(\n TotalRisk >= 50, ' Critical',\n TotalRisk >= 20, ' High',\n TotalRisk >= 10, ' Medium',\n ' Low'\n )\n| extend AnomalyTypeCount = array_length(AnomalyTypes)\n| order by TotalRisk desc\n| take 20",
+        "size": 1,
+        "title": " User Risk Leaderboard (Top 20)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalRisk",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed",
+                "customColumnWidthSetting": "90px"
+              }
+            },
+            {
+              "columnMatch": "HighEvents",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "MedEvents",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "RiskLevel",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Critical",
+                    "representation": "critical"
+                  },
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "High",
+                    "representation": "failed"
+                  },
+                  {
+                    "operator": "contains",
+                    "thresholdValue": "Medium",
+                    "representation": "warning"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "success"
+                  }
+                ]
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "TotalRisk",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "customWidth": "70",
+      "name": "risk-leaderboard",
+      "id": "89fdea78-c1f5-4cda-9a72-cff895491e13"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Multi-Vector Correlation\n\nUsers with **2 or more** anomaly types simultaneously - highest investigation priority."
+      },
+      "name": "section-correlation",
+      "id": "e2f4f6b0-eb0d-4e3c-bfda-1ec2eb8bb4a6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| summarize\n EventTypes = make_set(EventType),\n EventCount = count(),\n HasOffHours = countif(EventType == 'OffHoursLogin') > 0,\n HasNewDevice = countif(EventType == 'NewDeviceLogin') > 0,\n HasGeoAnomaly = countif(EventType == 'GeoAnomalyLogin')> 0,\n HasBruteForce = countif(EventType == 'MultiFailLogin') > 0,\n TotalRisk = sum(case(Severity == 'High', 10, Severity == 'Medium', 5, 1)),\n FirstSeen = min(TimeGenerated),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend AnomalyTypeCount = toint(HasOffHours) + toint(HasNewDevice) + toint(HasGeoAnomaly) + toint(HasBruteForce)\n| where AnomalyTypeCount >= 2\n| order by AnomalyTypeCount desc, TotalRisk desc",
+        "size": 0,
+        "title": "Multi-Vector Attack Suspects",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "AnomalyTypeCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright"
+              }
+            },
+            {
+              "columnMatch": "TotalRisk",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "correlation-table",
+      "id": "226acd04-50c8-4311-921b-f36efe274d85"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## Off-Hours Activity\n\n**Rule:** `AfterHoursWork` | **Severity:** Low | **Schedule:** every 1 h, lookback 48 h\n\nDetects systematic logins outside working hours: weekends (`IsWeekend == true`) or deviation > 3 h (`DeviationMinutes >= 180`) across 2+ days with >= 3 attempts."
+      },
+      "name": "section-offhours",
+      "id": "03a85889-2b6f-4d52-b4da-fb86fbd6b0d9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'OffHoursLogin'\n| summarize Count = count() by bin(TimeGenerated, 2h), IsWeekend\n| extend Label = iff(IsWeekend, 'Weekend', 'After-Hours')\n| order by TimeGenerated asc",
+        "size": 1,
+        "title": "Timeline - Off-Hours Login (2 h bins)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": {
+          "xAxis": "TimeGenerated",
+          "yAxis": [
+            "Count"
+          ],
+          "group": "Label",
+          "seriesLabelSettings": [
+            {
+              "seriesName": "Weekend",
+              "color": "orange"
+            },
+            {
+              "seriesName": "After-Hours",
+              "color": "yellow"
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "customWidth": "60",
+      "name": "offhours-timeline",
+      "id": "a706c76c-bf16-4b3a-8e2e-294055f8384b"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'OffHoursLogin'\n| extend HourOfDay = datetime_part('Hour', TimeGenerated)\n| summarize Count = count() by HourOfDay\n| order by HourOfDay asc",
+        "size": 3,
+        "title": "Login Hour Distribution",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "crossComponentResources": []
+      },
+      "customWidth": "40",
+      "name": "offhours-hour-dist",
+      "id": "060a5977-7b88-4270-947e-d1fbe1ef6481"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'OffHoursLogin'\n| summarize\n TotalLogins = count(),\n WeekendLogins = countif(IsWeekend == true),\n AfterHoursLogins = countif(IsWeekend == false),\n AvgDevMin = round(avg(DeviationMinutes), 0),\n MaxDevMin = max(DeviationMinutes),\n DistinctDays = dcount(format_datetime(TimeGenerated, 'yyyy-MM-dd')),\n Devices = make_set(DeviceId),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend MaxDevHours = round(toreal(MaxDevMin) / 60.0, 1)\n| where TotalLogins >= 3 and DistinctDays >= 2\n| order by TotalLogins desc",
+        "size": 1,
+        "title": "Top Users - Systematic Off-Hours (>= 3 logins, 2+ days)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalLogins",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "yellow"
+              }
+            },
+            {
+              "columnMatch": "MaxDevHours",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orangeRed"
+              }
+            },
+            {
+              "columnMatch": "WeekendLogins",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "offhours-users",
+      "id": "222201f7-3258-45bb-9c77-6e079a8af4b9"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## New Device Anomalies\n\n**Rule:** `MultiNewDevicesRegistration` | **Severity:** Medium | **Schedule:** every 30 min, lookback 24 h\n\nDetects registration of >= 2 new devices within 24 h - possible account takeover or device farming."
+      },
+      "name": "section-device",
+      "id": "de1f7dd8-1c6e-4178-9ef1-56cf00dcf176"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'NewDeviceLogin'\n| summarize Count = count() by bin(TimeGenerated, 2h)\n| order by TimeGenerated asc",
+        "size": 1,
+        "title": "New Device Registrations - Timeline",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart",
+        "crossComponentResources": []
+      },
+      "customWidth": "50",
+      "name": "device-timeline",
+      "id": "7f17650e-7ac3-4f77-88e6-8c24fc4a0beb"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'NewDeviceLogin'\n| summarize Count = count() by NewDeviceOS\n| order by Count desc",
+        "size": 3,
+        "title": "New Device OS Distribution",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "crossComponentResources": []
+      },
+      "customWidth": "50",
+      "name": "device-os-pie",
+      "id": "f33d3ec8-d129-4d3b-9ecf-9b13c3151658"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'NewDeviceLogin'\n| summarize\n NewDeviceCount = dcount(NewDeviceId),\n NewDevices = make_set(NewDeviceId),\n OSList = make_set(NewDeviceOS),\n FirstRegistration = min(TimeGenerated),\n LastRegistration = max(TimeGenerated)\n by UserId\n| where NewDeviceCount >= 2\n| order by NewDeviceCount desc",
+        "size": 1,
+        "title": "Users with Multiple New Devices (>= 2) within Lookback",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "NewDeviceCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "device-users",
+      "id": "bd351bb1-12c6-4231-a9b2-22755d167b05"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## Geo Anomaly Logins\n\n**Rule:** `LoginOutsideWorkZone` | **Severity:** High | **Schedule:** every 15 min, lookback 1 h\n\nEvery login from a country/city not matching the assigned geo zone creates an incident."
+      },
+      "name": "section-geo",
+      "id": "dd80227d-b7c5-471e-8bcc-e47b22cb148e"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'GeoAnomalyLogin'\n| summarize Count = count() by LoginCountry",
+        "size": 0,
+        "title": " Anomalous Login Locations - World Map",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "LoginCountry",
+          "sizeSettings": "Count",
+          "sizeAggregation": "Sum",
+          "legendMetric": "Count",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "Count",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "orangeRed"
+          }
+        },
+        "crossComponentResources": []
+      },
+      "customWidth": "60",
+      "name": "geo-map",
+      "id": "5956d481-5192-4d73-86c0-5ab80c4ab17f"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'GeoAnomalyLogin'\n| summarize\n Events = count(),\n CountryMismatches= countif(LoginCountry != AssignedCountry),\n CityMismatches = countif(LoginCity != AssignedCity),\n LoginCountries = make_set(LoginCountry),\n IPAddresses = make_set(IpAddress),\n LastSeen = max(TimeGenerated)\n by UserId, AssignedCountry, AssignedCity\n| order by Events desc",
+        "size": 1,
+        "title": "Geo Mismatch Details per User",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright"
+              }
+            },
+            {
+              "columnMatch": "CountryMismatches",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "customWidth": "40",
+      "name": "geo-table",
+      "id": "5919a6a7-b34e-4b64-b592-18d936e7a055"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'GeoAnomalyLogin'\n| extend CountryMismatch = LoginCountry != AssignedCountry\n| project TimeGenerated, UserId, DeviceId, LoginCountry, LoginCity, AssignedCountry, AssignedCity, CountryMismatch, IpAddress, RawEventId\n| order by TimeGenerated desc\n| take 100",
+        "size": 2,
+        "title": "Recent Geo Anomaly Events (last 100)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "CountryMismatch",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "true",
+                    "representation": "critical"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "success"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "geo-recent",
+      "id": "b10b12a6-effd-4991-b07c-8c871b44749c"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\n## Brute Force / Password Attack\n\n**Rule:** `PasswordBruteForce` | **Severity:** High | **Schedule:** every 15 min, lookback 5 h\n\nDetects `MultiFailLogin` events with `PassedAttempts >= 9`. Account blocking is applied automatically."
+      },
+      "name": "section-bruteforce",
+      "id": "682750b3-3b42-415a-8f36-28ded814242c"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'MultiFailLogin'\n| summarize\n Events = count(),\n MaxAttempts = max(PassedAttempts)\n by bin(TimeGenerated, 30m)\n| order by TimeGenerated asc",
+        "size": 1,
+        "title": "Brute Force Events Timeline (30 min bins)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "crossComponentResources": []
+      },
+      "customWidth": "50",
+      "name": "bf-timeline",
+      "id": "2739f401-9df3-462f-b31e-c03eee7cf5f6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'MultiFailLogin'\n| summarize\n AttackCount = count(),\n MaxAttempts = max(PassedAttempts),\n TotalAttempts = sum(PassedAttempts),\n MaxBlockSec = max(LoginBlockingSeconds),\n TotalBlockMin = sum(LoginBlockingSeconds) / 60,\n AffectedDevices = make_set(DeviceId),\n LastAttack = max(TimeGenerated)\n by UserId\n| extend MaxBlockMin = round(toreal(MaxBlockSec) / 60.0, 1)\n| order by MaxAttempts desc",
+        "size": 1,
+        "title": "Brute Force - Target Accounts",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "MaxAttempts",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright"
+              }
+            },
+            {
+              "columnMatch": "AttackCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "MaxBlockMin",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "customWidth": "50",
+      "name": "bf-table",
+      "id": "a8d9db57-e37f-4261-9e4c-4c916cd304c9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where EventType == 'MultiFailLogin'\n| project\n TimeGenerated,\n UserId,\n DeviceId,\n PassedAttempts,\n BlockMinutes = LoginBlockingSeconds / 60,\n AppVersion,\n RawEventId\n| order by TimeGenerated desc\n| take 50",
+        "size": 2,
+        "title": "Recent Brute Force Events (last 50)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "PassedAttempts",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redBright"
+              }
+            },
+            {
+              "columnMatch": "BlockMinutes",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ]
+        },
+        "crossComponentResources": []
+      },
+      "name": "bf-recent",
+      "id": "8a7d57c5-8286-4ba6-8f29-1fea0207b1c9"
+    }
+  ],
+  "context": {
+    "ownerId": ""
+  },
+  "fallbackResourceIds": []
+}
