@@ -1,0 +1,142 @@
+id: 2df3fa1f-d573-4e0a-82f2-da62d3f2973f
+name: Anomalous .NET runtime loading for fileless payload
+description: |
+  Identifies when the .NET engine is loaded by an untrusted file path or a hijacked native tool. Malware uses this technique to execute malicious code entirely in memory to remain invisible. Legitimate .NET applications usually run from secure directories like Program Files and are digitally signed by known vendors.
+  References:
+  https://www.microsoft.com/en-us/security/blog/2026/05/14/kazuar-anatomy-of-a-nation-state-botnet/
+  https://r136a1.dev/2026/01/14/command-and-evade-turlas-kazuar-v3-loader/
+
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceImageLoadEvents
+tactics:
+  - DefenseEvasion
+  - Execution
+relevantTechniques:
+  - T1562.001
+  - T1055
+query: |
+  // -----------------------------------------------------------------------------
+  // DETECTION STRATEGY: ETW-Patching Resistant .NET In-Memory Execution
+  // 
+  // THE MECHANIC: Advanced malware (like Kazuar) often executes .NET payloads 
+  // entirely in memory to avoid disk-based antivirus scans. To hide this execution 
+  // from EDRs, the malware patches Event Tracing for Windows (ETW) in user-mode 
+  // (e.g., overwriting ntdll.dll!EtwEventWrite with a return instruction). This blinds 
+  // the EDR, preventing it from seeing the standard 'ClrUnbackedModuleLoaded' 
+  // events that usually trigger memory execution alerts.
+  //
+  // THE RESILIENCE: While user-mode ETW can be easily patched by malware running 
+  // with standard privileges, the malware CANNOT hide the physical loading of the 
+  // .NET runtime engine (CLR) DLLs themselves. DLL loads trigger kernel-level 
+  // callbacks (PsSetLoadImageNotifyRoutine) which user-mode malware cannot intercept. 
+  // This query relies exclusively on DeviceImageLoadEvents (kernel-driven telemetry) 
+  // to detect when native Windows tools (LOLBins) or untrusted binaries running from 
+  // user-writable paths unexpectedly load the .NET execution engine. By shifting 
+  // detection to the kernel-level prerequisite of the attack, we render the user-mode 
+  // ETW patch irrelevant.
+  // -----------------------------------------------------------------------------
+  
+  // Define a list of native Windows binaries (LOLBins) that are written in C/C++.
+  // Under normal circumstances, these native tools have no legitimate reason to boot 
+  // up the .NET runtime. If they load 'clr.dll' or 'mscoree.dll', it is a highly reliable 
+  // indicator that they have been hijacked (e.g., via malicious COM object instantiation) 
+  // to host a fileless .NET payload.
+  
+  // Note: Binaries like powershell.exe, csc.exe, or msbuild.exe are built on or deeply integrated with
+  // .NET, so loading clr.dll is perfectly normal for them.
+  let AnomalousLOLBins = dynamic([
+    // Tier 1: Most Heavily Abused Processes
+    "rundll32.exe", "regsvr32.exe", "mshta.exe", "dllhost.exe", "svchost.exe", "spoolsv.exe", "werfault.exe", "explorer.exe",
+    // Tier 2: Scripting & Automation Hosts
+    "wscript.exe", "cscript.exe", "wmic.exe", "msiexec.exe",
+    // Tier 3: Admin & Setup Utilities
+    "odbcconf.exe", "control.exe", "cmstp.exe", "certutil.exe"
+  ]);
+  
+  // Base Query: Look for the .NET Execution Engine DLLs being loaded into memory
+  DeviceImageLoadEvents
+  // STEP 1: Identify processes loading the .NET Common Language Runtime (CLR) engines.
+  // 'mscoree.dll'   -> The traditional .NET execution engine.
+  // 'clr.dll'       -> The core .NET framework runtime.
+  // 'mscorwks.dll'  -> Legacy .NET workstation runtime.
+  // 'coreclr.dll'   -> The modern .NET Core runtime.
+  | where FileName in~ ("clr.dll", "mscoree.dll", "mscorwks.dll", "coreclr.dll")
+  
+
+  // STEP 2: Apply Behavioral Filters to isolate malicious injection/loading.
+  // We use a strict Whitelist approach for paths. We only trust strict, Admin-secured directories.
+  // By using regex anchored to the start of the string (^), we prevent attackers from 
+  // bypassing the rule by creating a fake "Program Files" folder inside a user-writable 
+  // directory (e.g., C:\Users\Public\Program Files\malware.exe).
+
+  | extend IsTrustedPath = InitiatingProcessFolderPath matches regex @"^[a-zA-Z]:\\(?:Program Files|Program Files \(x86\)|Windows)(?:\\|$)"
+
+
+  // STEP 2: Apply Behavioral Filters to isolate malicious injection/loading.
+  | where 
+    // CONDITION A: A native Windows LOLBin is suddenly loading the .NET engine.
+    (InitiatingProcessFileName in~ (AnomalousLOLBins))
+    or 
+    // CONDITION B: An executable running from ANY untrusted, user-writable directory 
+    // (AppData, Temp, PerfLogs, etc.) is loading the .NET engine.
+    (not(IsTrustedPath))
+  
+  // EXCLUSION: Filter out poorly behaved legitimate software (like user-context auto-updaters) 
+  // by ensuring the binary's internal version metadata does not belong to a trusted software vendor.
+  // Note: Schema recommends using SHA1 over SHA256 as it is more reliably populated.
+  // Insert legitimate internal tool hashes or signer here if they legitimately run .NET from Temp/AppData.
+  // | where InitiatingProcessSHA1 !in~ ("<Legit_SHA1_1>", "<Legit_SHA1_2>")
+  // | where InitiatingProcessVersionInfoCompanyName !in~ ( "Microsoft Corporation", "Google LLC", "Google Inc", "Cisco Systems, Inc.", "Intel Corporation" )
+  
+  // STEP 3: Format the output for triage.
+  // We surface the Command Line, Folder Path, and SHA1 hash for immediate context.
+  | extend timestamp = Timestamp
+  | project 
+    Timestamp,
+    timestamp,
+    DeviceName, 
+    ActionType,
+    LoadedDll = FileName, 
+    InitiatingProcessAccountName,
+    InitiatingProcessFileName, 
+    InitiatingProcessFolderPath, 
+    InitiatingProcessCommandLine, 
+    InitiatingProcessParentFileName,
+    InitiatingProcessVersionInfoCompanyName,
+    InitiatingProcessSHA1
+  | project-reorder 
+    Timestamp,
+    DeviceName,
+    InitiatingProcessAccountName,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    LoadedDll,
+    InitiatingProcessFolderPath,
+    InitiatingProcessParentFileName
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.0
+
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Younes Al Taleb
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
