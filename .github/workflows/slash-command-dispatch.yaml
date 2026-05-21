@@ -21,9 +21,14 @@ permissions:
 jobs:
   pull-request-status:
     if: |
-      github.actor != 'dependabot[bot]' && 
-      !github.event.pull_request.head.repo.fork && 
+      github.event_name == 'issue_comment' &&
+      github.actor != 'dependabot[bot]' &&
       github.event.issue.pull_request && 
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      ) &&
       (
         contains(github.event.comment.body, '/package') || 
         contains(github.event.comment.body, '/Package') || 
@@ -35,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: pull-request-status
     if: |
-      needs.pull-request-status.outputs.isPullRequestMerged == 'False' && 
-      !github.event.pull_request.head.repo.fork
+      github.event_name == 'issue_comment' &&
+      needs.pull-request-status.outputs.isPullRequestMerged == 'False'
     steps:
       - name: Generate GitHub App token
         id: generate_token
@@ -49,7 +54,7 @@ jobs:
         uses: peter-evans/slash-command-dispatch@4e1c50465f191a0ce64750ff69c4c96bd25745c7 # v4.0.0
         with:
           token: ${{ steps.generate_token.outputs.token }}
-          permission: none
+          permission: write
           commands: package,Package,PACKAGE
           repository: ${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}
           issue-type: pull-request

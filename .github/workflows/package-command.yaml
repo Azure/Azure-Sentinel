@@ -21,20 +21,31 @@ permissions:
 
 jobs:
   validate-and-create-package:
-    if: ${{ !github.event.pull_request.head.repo.fork && !contains(github.event.client_payload.pull_request.head.ref , 'dependabot/') && !contains(github.event.client_payload.pullRequestBranchName , 'dependabot/') }}
+    if: ${{ github.event.client_payload.pull_request.head.repo.fork == false && !contains(github.event.client_payload.pull_request.head.ref , 'dependabot/') && !contains(github.event.client_payload.pullRequestBranchName , 'dependabot/') }}
     runs-on: ubuntu-latest
     outputs:
       is-automated-pr: ${{ steps.checkAutomatedPR.outputs.isAutomatedPR }}
       package-created: ${{ steps.validateAndCreatePackage.outputs.isCreatePackage }}
     steps:
       - name: Validate inputs
+        env:
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
+          PULL_REQUEST_NUMBER: ${{ env.PULL_REQUEST_NUMBER }}
         run: |
-          if [ -z "${{ env.BRANCH_NAME }}" ]; then
+          if [ -z "$BRANCH_NAME" ]; then
             echo "::error::Branch name is required"
             exit 1
           fi
-          if [ -z "${{ env.PULL_REQUEST_NUMBER }}" ]; then
+          if ! echo "$BRANCH_NAME" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Invalid branch name format"
+            exit 1
+          fi
+          if [ -z "$PULL_REQUEST_NUMBER" ]; then
             echo "::error::Pull request number is required"
+            exit 1
+          fi
+          if ! echo "$PULL_REQUEST_NUMBER" | grep -Eq '^[0-9]+$'; then
+            echo "::error::Pull request number must be numeric"
             exit 1
           fi
 
@@ -75,8 +86,10 @@ jobs:
         id: checkAutomatedPR
         if: env.skip_pipeline != 'true'
         shell: pwsh
+        env:
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
         run: |
-          $branchName = "${{ env.BRANCH_NAME }}"
+          $branchName = $env:BRANCH_NAME
           Write-Host "Pull Request Branch Name is $branchName"
           $isAutomatedPR = $branchName -like '*automated-pr'
           if ($isAutomatedPR) {
@@ -145,6 +158,7 @@ jobs:
         if: steps.uploadDataFileArtifact.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
         run: |
           git config --global user.email "noreply@github.com"
           git config --global user.name "GitHub Actions Bot"
@@ -152,7 +166,7 @@ jobs:
           git add -A
           if ! git diff --cached --quiet; then
             git commit -m '[skip ci] Automated package addition to Pull Request'
-            git push origin HEAD:${{ env.BRANCH_NAME }}
+            git push origin HEAD:$BRANCH_NAME
           else
             echo "No changes to commit"
           fi
