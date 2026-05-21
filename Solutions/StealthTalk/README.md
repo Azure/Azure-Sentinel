@@ -15,7 +15,7 @@ The StealthTalk Anomalous Authentication solution surfaces suspicious user-authe
 
 ## Prerequisites
 
-1. A Microsoft Microsoft Sentinel-enabled Log Analytics workspace.
+1. A Microsoft Sentinel-enabled Log Analytics workspace.
 2. A deployed StealthTalk Enterprise instance configured to send anomalous-auth events to the Log Analytics workspace via the Logs Ingestion API. StealthTalk authenticates to Azure with a service principal granted the **Monitoring Metrics Publisher** role on the deployed Data Collection Rule.
 3. Workspace ASIM Authentication parsers (Microsoft's `FullDeploymentAuthentication.json`) deployed in the workspace before this Solution is installed. The Solution's `imAuthentication` extension parser overrides the union so that StealthTalk events are returned by `imAuthentication()` alongside Microsoft-built-in sources.
 4. For the Teams playbook: a Microsoft Teams channel with an incoming-webhook workflow already created. The webhook URL is configured as a deployment parameter.

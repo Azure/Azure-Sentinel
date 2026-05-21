@@ -22,7 +22,7 @@
     },
     {
       "description": "StealthTalk events visible through the standard ASIM Authentication union",
-      "query": "imAuthentication\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
+      "query": "imAuthentication()\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
     }
   ],
   "dataTypes": [
@@ -79,36 +79,32 @@
   },
   "instructionSteps": [
     {
-      "title": "STEP 1 - Deploy the ingestion infrastructure",
-      "description": "Deploy the custom log table, Data Collection Endpoint and Data Collection Rule into your workspace's resource group using the included ARM template `Data Connectors/ARM/StealthTalk_Ingestion.json`. The template parameters allow you to rename the table (default `StealthTalkAnomalousAuth_CL`), customise the DCE/DCR names, and set the table retention."
+      "title": "STEP 1 - Auto-deployed ingestion infrastructure (review only)",
+      "description": "When the Solution is installed via the Microsoft Sentinel Content Hub, the following resources are deployed automatically into the workspace's resource group:\n\n1. **Custom log table** `StealthTalkAnomalousAuth_CL` (21-field stream).\n2. **Data Collection Endpoint** `StealthTalk-Sentinel-DCE`.\n3. **Data Collection Rule** `StealthTalk-Sentinel-DCR` with `Custom-StealthTalkAnomalousAuth_CL` stream declaration and a one-to-one transform.\n4. **ASIM Authentication 0.1.3 parsers** as workspace saved-search functions: `vimAuthenticationStealthTalk` (filtering) and `ASimAuthenticationStealthTalk` (non-filtering).\n5. **`imAuthentication` extension parser** that registers the StealthTalk source in the workspace ASIM Authentication union (overrides Microsoft's `imAuthentication` saved-search to include the StealthTalk vim parser).\n6. **`ASimDisabledParsers` watchlist** + Microsoft Sentinel onboarding state (idempotent).\n\nNo user action is required at this step beyond installing the Solution. The remaining steps configure StealthTalk to push events into the deployed DCR. Pre-requisite: Microsoft's `FullDeploymentAuthentication.json` ASIM Authentication parser pack must be deployed in the workspace before this Solution is installed."
     },
     {
-      "title": "STEP 2 - Deploy the ASIM Authentication parsers",
-      "description": "Two parser ARM templates are shipped under `Parsers/`:\n\n1. `Parsers/vimASimAuthenticationStealthTalk.json` - installs `vimAuthenticationStealthTalk` (filtering parser, ASIM Authentication 0.1.3 contract) and `ASimAuthenticationStealthTalk` (non-filtering wrapper).\n2. `Parsers/imAuthentication_extension.json` - overrides the workspace `imAuthentication()` union function so StealthTalk events are returned alongside Microsoft built-in sources. **Prerequisite:** Microsoft's `FullDeploymentAuthentication.json` ASIM parser pack must already be deployed in the workspace - install it from the Azure-Sentinel GitHub repository first if it is not.\n\nDeploy both via Azure Portal -> 'Deploy a custom template' -> 'Build your own template in the editor' -> 'Load file', supplying your workspace name as the parameter."
+      "title": "STEP 2 - Capture the DCE endpoint and DCR Immutable ID",
+      "description": "In the Azure portal, open the Data Collection Endpoint and Data Collection Rule resources deployed in Step 1:\n\n- From the **Data Collection Endpoint** properties, copy the **Logs Ingestion endpoint URI** (looks like `https://stealthtalk-sentinel-dce-<suffix>.<region>.ingest.monitor.azure.com`).\n- From the **Data Collection Rule** Overview, copy the **Immutable ID** (looks like `dcr-<guid>`).\n\nYou will paste both values into the StealthTalk admin console in Step 5."
     },
     {
-      "title": "STEP 3 - Capture the DCE endpoint and DCR Immutable ID",
-      "description": "Open the Data Collection Endpoint and Data Collection Rule resources in the same resource group. From the DCE properties, copy the **Logs Ingestion endpoint URI**. From the DCR Overview, copy the **Immutable ID** (e.g. `dcr-...`). You will paste both into the StealthTalk admin console."
+      "title": "STEP 3 - Create a Microsoft Entra App Registration for StealthTalk",
+      "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**. StealthTalk uses this service principal to authenticate to the Logs Ingestion API via OAuth."
     },
     {
-      "title": "STEP 4 - Create a Microsoft Entra App Registration for StealthTalk",
-      "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**."
+      "title": "STEP 4 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR",
+      "description": "Open the Data Collection Rule deployed in Step 1 -> **Access control (IAM)** -> **+ Add role assignment**.\n\n- Role: **Monitoring Metrics Publisher**\n- Assign access to: **User, group, or service principal**\n- Select the App Registration from Step 3\n\nRBAC role assignments cannot be performed by the Solution install template, so this step is manual."
     },
     {
-      "title": "STEP 5 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR",
-      "description": "Open the Data Collection Rule -> Access control (IAM) -> Add role assignment -> Role: **Monitoring Metrics Publisher** -> Assign access to: User, group, or service principal -> select the App Registration created in Step 4 -> Review + assign."
+      "title": "STEP 5 - Configure StealthTalk to send events",
+      "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 2 and 3:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 2\n- **DCR Immutable ID** - from Step 2\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`\n- **Tenant ID, App (client) ID, Client secret** - from Step 3\n\nSave and trigger a test event. The StealthTalk console reports success/failure of the OAuth handshake and the first event delivery."
     },
     {
-      "title": "STEP 6 - Configure StealthTalk to send events",
-      "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 3 and 4:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 3.\n- **DCR Immutable ID** - from Step 3.\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`.\n- **Tenant ID / App ID / Client secret** - from Step 4.\n\nSave and trigger one or more anomalous events (use the included simulator scripts under `assets/Scripts/`) to validate the pipeline."
+      "title": "STEP 6 - Verify ingestion and ASIM normalisation",
+      "description": "Run the **Sample queries** above in **Logs**. All must return rows within a few minutes of test events:\n\n- Raw `StealthTalkAnomalousAuth_CL` table populated.\n- ASIM union view via `imAuthentication() | where EventVendor == 'StealthTalk'` returns the same events normalised to the ASIM Authentication schema.\n\nIf the raw table is empty: verify the StealthTalk console reports successful OAuth and event delivery, and confirm the App Registration has the **Monitoring Metrics Publisher** role on the DCR (Step 4). If the raw table has rows but ASIM union is empty: re-check that Microsoft's `FullDeploymentAuthentication.json` parser pack is deployed."
     },
     {
-      "title": "STEP 7 - Verify ingestion and ASIM normalisation",
-      "description": "Run the validation queries (see the **README** or the **Validation** sample queries above). All three queries must return matching counts within a few minutes of triggering events:\n\n- Raw `StealthTalkAnomalousAuth_CL` count > 0.\n- `vimAuthenticationStealthTalk` count > 0.\n- `imAuthentication | where EventVendor == \"StealthTalk\"` count > 0.\n\nIf the third query returns zero, the `imAuthentication` extension parser was not deployed correctly - redeploy `Parsers/imAuthentication_extension.json` from Step 2."
-    },
-    {
-      "title": "STEP 8 - Enable analytic rules, hunting queries, workbook, and playbook",
-      "description": "Under **Content management -> Content hub -> StealthTalk -> Manage**, enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Teams Playbook. For the Playbook, supply the Teams incoming-webhook URL of your channel as a deployment parameter, and create an Automation Rule to run the Playbook on incidents from any StealthTalk analytic rule."
+      "title": "STEP 7 - Enable analytic rules, hunting queries, workbook, and playbook",
+      "description": "In the Microsoft Sentinel **Content hub**, open the **StealthTalk Anomalous Authentication** Solution and click **Manage**. Enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Microsoft Teams Playbook. For the Playbook, after deployment, grant its system-assigned managed identity the **Microsoft Sentinel Responder** role on the workspace, and grant the **Azure Security Insights** service principal the **Microsoft Sentinel Automation Contributor** role on the playbook's resource group. Then create an **Automation Rule** in Microsoft Sentinel that runs the playbook on incidents from the four StealthTalk analytic rules."
     }
   ]
 }

@@ -102,7 +102,6 @@
     "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
     "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
     "_playbookcontentProductId1": "[guid(variables('_solutionId'),'Playbook',variables('_playbookContentId1'),variables('playbookVersion1'))]",
-    "blanks": "[replace('b', 'b', '')]",
     "uiConfigId1": "StealthTalkAnomalousAuth",
     "_uiConfigId1": "[variables('uiConfigId1')]",
     "dataConnectorContentId1": "StealthTalkAnomalousAuth",
@@ -228,7 +227,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Identifies systematic off-hours activity for a single StealthTalk user - repeated authentications\noutside the user's configured working hours OR on weekends, observed across at least two\ndistinct calendar days within a 48-hour window. The pattern is a common indicator of credential\nmisuse, insider threat, or compromise of the account by an attacker operating in a different\ntimezone.\n\nAn \"off-hours event\" is one where IsWeekend=true OR DeviationMinutes >= 180 (i.e. >= 3 hours\nafter the configured working-hours end). Three or more such events on at least two distinct\ndays are required for an incident to fire - a single late-evening login is not enough.",
-                "displayName": "StealthTalk - After Hours Work",
+                "displayName": "StealthTalk - After hours work",
                 "enabled": false,
                 "query": "let LookbackPeriod    = 48h;\nlet MinAttempts       = 3;\nlet MinDistinctDays   = 2;\nlet OffHoursThreshold = 180;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"OffHoursLogin\"\n| where IsWeekend == true or DeviationMinutes >= OffHoursThreshold\n| summarize\n    AttemptCount   = count(),\n    DistinctDays   = dcount(format_datetime(TimeGenerated, 'yyyy-MM-dd')),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated),\n    DeviceIds      = make_set(DeviceId),\n    MaxDeviation   = max(DeviationMinutes),\n    WeekendsCount  = countif(IsWeekend == true),\n    AppVersions    = make_set(AppVersion)\n  by UserId\n| where AttemptCount >= MinAttempts and DistinctDays >= MinDistinctDays\n| extend\n    AlertName    = \"AfterHoursWork\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" performed \", AttemptCount, \" off-hours logins\",\n        \" across \", DistinctDays, \" distinct days.\",\n        \" Max deviation from working hours: \", MaxDeviation, \" min.\",\n        \" Weekend logins: \", WeekendsCount, \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, AttemptCount, DistinctDays, MaxDeviation,\n    WeekendsCount, DeviceIds, AppVersions, FirstSeen, LastSeen,\n    AlertName, AlertDetails\n",
                 "queryFrequency": "PT1H",
@@ -259,20 +258,20 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "UserId"
+                        "columnName": "UserId",
+                        "identifier": "Name"
                       }
                     ],
                     "entityType": "Account"
                   }
                 ],
                 "customDetails": {
-                  "FirstSeen": "FirstSeen",
-                  "MaxDeviation": "MaxDeviation",
-                  "LastSeen": "LastSeen",
-                  "DistinctDays": "DistinctDays",
+                  "AttemptCount": "AttemptCount",
                   "WeekendsCount": "WeekendsCount",
-                  "AttemptCount": "AttemptCount"
+                  "MaxDeviation": "MaxDeviation",
+                  "FirstSeen": "FirstSeen",
+                  "LastSeen": "LastSeen",
+                  "DistinctDays": "DistinctDays"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "StealthTalk: After-Hours Work - {{UserId}} ({{AttemptCount}} events / {{DistinctDays}} days)",
@@ -280,13 +279,13 @@
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "enabled": true,
+                    "matchingMethod": "Selected",
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "5h",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "lookbackDuration": "5h",
-                    "reopenClosedIncident": false,
-                    "enabled": true,
-                    "matchingMethod": "Selected"
+                    ]
                   },
                   "createIncident": true
                 }
@@ -328,7 +327,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
         "contentKind": "AnalyticsRule",
-        "displayName": "StealthTalk - After Hours Work",
+        "displayName": "StealthTalk - After hours work",
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
@@ -358,7 +357,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Identifies a single StealthTalk user registering two or more previously-unseen devices within\na 24-hour window. Sudden registration of multiple new devices is a strong indicator of\naccount takeover (an attacker enrolling their own device after credential theft) or\ndevice-farm abuse.\n\nThe rule fires when a user produces two or more distinct NewDeviceId values within the\nlookback window, regardless of operating system. Look at the OSList custom detail to spot\ncross-platform patterns (e.g. an iOS-only user suddenly enrolling an Android device).",
-                "displayName": "StealthTalk - Multi New Devices Registration",
+                "displayName": "StealthTalk - Multi new devices registration",
                 "enabled": false,
                 "query": "let LookbackPeriod = 24h;\nlet MinNewDevices  = 2;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"NewDeviceLogin\"\n| summarize\n    NewDeviceCount  = dcount(NewDeviceId),\n    NewDevices      = make_set(NewDeviceId),\n    NewDeviceOSList = make_set(NewDeviceOS),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated),\n    AppVersions     = make_set(AppVersion)\n  by UserId\n| where NewDeviceCount >= MinNewDevices\n| extend\n    AlertName    = \"MultiNewDevicesRegistration\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" registered \", NewDeviceCount, \" new devices within 24 hours.\",\n        \" Device IDs: \", tostring(NewDevices), \".\",\n        \" Operating systems: \", tostring(NewDeviceOSList), \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, NewDeviceCount, NewDevices, NewDeviceOSList,\n    FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails\n",
                 "queryFrequency": "PT30M",
@@ -390,19 +389,19 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "UserId"
+                        "columnName": "UserId",
+                        "identifier": "Name"
                       }
                     ],
                     "entityType": "Account"
                   }
                 ],
                 "customDetails": {
+                  "NewDevices": "NewDevices",
                   "NewDeviceOSList": "NewDeviceOSList",
                   "NewDeviceCount": "NewDeviceCount",
                   "LastSeen": "LastSeen",
-                  "FirstSeen": "FirstSeen",
-                  "NewDevices": "NewDevices"
+                  "FirstSeen": "FirstSeen"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "StealthTalk: Multi New Devices - {{UserId}} ({{NewDeviceCount}} new devices)",
@@ -410,13 +409,13 @@
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "enabled": true,
+                    "matchingMethod": "Selected",
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "5h",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "lookbackDuration": "5h",
-                    "reopenClosedIncident": false,
-                    "enabled": true,
-                    "matchingMethod": "Selected"
+                    ]
                   },
                   "createIncident": true
                 }
@@ -458,7 +457,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
         "contentKind": "AnalyticsRule",
-        "displayName": "StealthTalk - Multi New Devices Registration",
+        "displayName": "StealthTalk - Multi new devices registration",
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
@@ -488,7 +487,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Identifies a single StealthTalk authentication originating from a country or city that does\nnot match the user's assigned (expected) geographic zone. Each individual mismatch is\ntreated as an incident - there is no aggregation threshold, since a single login from an\nunexpected country is high-confidence evidence of a credential issue.\n\nAn incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs\nfrom AssignedCity. Source IPv4, raw event ID, and both the observed and expected\ngeo-locations are surfaced as entities and custom details for the SOC analyst.",
-                "displayName": "StealthTalk - Login Outside Work Zone",
+                "displayName": "StealthTalk - Login outside work zone",
                 "enabled": false,
                 "query": "let LookbackPeriod = 1h;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"GeoAnomalyLogin\"\n| where LoginCountry != AssignedCountry\n     or LoginCity    != AssignedCity\n| extend\n    CountryMismatch = LoginCountry != AssignedCountry,\n    CityMismatch    = LoginCity    != AssignedCity,\n    AlertName       = \"LoginOutsideWorkZone\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" logged in from \", LoginCity, \" (\", LoginCountry, \")\",\n        \" - assigned zone: \", AssignedCity, \" (\", AssignedCountry, \").\",\n        \" Source IP: \", IpAddress, \".\",\n        \" Country mismatch: \", tostring(LoginCountry != AssignedCountry), \".\",\n        \" City mismatch: \", tostring(LoginCity != AssignedCity), \".\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    LoginCountry, LoginCity, AssignedCountry, AssignedCity,\n    CountryMismatch, CityMismatch, IpAddress,\n    AppVersion, RawEventId, AlertName, AlertDetails\n",
                 "queryFrequency": "PT15M",
@@ -519,8 +518,8 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "UserId"
+                        "columnName": "UserId",
+                        "identifier": "Name"
                       }
                     ],
                     "entityType": "Account"
@@ -528,8 +527,8 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "HostName",
-                        "columnName": "DeviceId"
+                        "columnName": "DeviceId",
+                        "identifier": "HostName"
                       }
                     ],
                     "entityType": "Host"
@@ -537,22 +536,22 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "IpAddress"
+                        "columnName": "IpAddress",
+                        "identifier": "Address"
                       }
                     ],
                     "entityType": "IP"
                   }
                 ],
                 "customDetails": {
-                  "LoginCountry": "LoginCountry",
-                  "AssignedCountry": "AssignedCountry",
                   "AppVersion": "AppVersion",
+                  "AssignedCountry": "AssignedCountry",
                   "CountryMismatch": "CountryMismatch",
-                  "AssignedCity": "AssignedCity",
-                  "CityMismatch": "CityMismatch",
+                  "LoginCountry": "LoginCountry",
                   "LoginCity": "LoginCity",
-                  "EventReference": "RawEventId"
+                  "EventReference": "RawEventId",
+                  "AssignedCity": "AssignedCity",
+                  "CityMismatch": "CityMismatch"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "StealthTalk: Login Outside Work Zone - {{UserId}} from {{LoginCity}} ({{LoginCountry}})",
@@ -560,13 +559,13 @@
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "enabled": true,
+                    "matchingMethod": "Selected",
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "5h",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "lookbackDuration": "5h",
-                    "reopenClosedIncident": false,
-                    "enabled": true,
-                    "matchingMethod": "Selected"
+                    ]
                   },
                   "createIncident": true
                 }
@@ -608,7 +607,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
         "contentKind": "AnalyticsRule",
-        "displayName": "StealthTalk - Login Outside Work Zone",
+        "displayName": "StealthTalk - Login outside work zone",
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
@@ -638,7 +637,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Identifies a brute-force authentication attempt against a single StealthTalk user account.\nThe StealthTalk anti-brute-force subsystem emits a `MultiFailLogin` event when consecutive\nfailed authentication attempts from a user trigger an automatic account lockout. This\nrule fires when the reported number of consecutive failures is 9 or more, indicating a\ndetermined credential-guessing attack rather than a legitimate user fat-fingering.\n\nThe lockout duration (LoginBlockingSeconds) is surfaced as a custom detail so the SOC\nanalyst can prioritise based on attack persistence.",
-                "displayName": "StealthTalk - Password Brute Force",
+                "displayName": "StealthTalk - Password brute force",
                 "enabled": false,
                 "query": "let LookbackPeriod    = 5h;\nlet MinFailedAttempts = 9;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"MultiFailLogin\"\n| where PassedAttempts >= MinFailedAttempts\n| extend\n    BlockingMinutes = LoginBlockingSeconds / 60,\n    AlertName       = \"PasswordBruteForce\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" had \", PassedAttempts, \" consecutive failed login attempts\",\n        \" on device \", DeviceId, \".\",\n        \" Account blocked for \", LoginBlockingSeconds, \" seconds\",\n        \" (\", LoginBlockingSeconds / 60, \" min).\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    PassedAttempts, LoginBlockingSeconds, BlockingMinutes,\n    AppVersion, RawEventId, AlertName, AlertDetails\n",
                 "queryFrequency": "PT15M",
@@ -668,8 +667,8 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Name",
-                        "columnName": "UserId"
+                        "columnName": "UserId",
+                        "identifier": "Name"
                       }
                     ],
                     "entityType": "Account"
@@ -677,19 +676,19 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "HostName",
-                        "columnName": "DeviceId"
+                        "columnName": "DeviceId",
+                        "identifier": "HostName"
                       }
                     ],
                     "entityType": "Host"
                   }
                 ],
                 "customDetails": {
-                  "EventReference": "RawEventId",
-                  "BlockingMinutes": "BlockingMinutes",
                   "LoginBlockingSeconds": "LoginBlockingSeconds",
-                  "AppVersion": "AppVersion",
-                  "PassedAttempts": "PassedAttempts"
+                  "BlockingMinutes": "BlockingMinutes",
+                  "EventReference": "RawEventId",
+                  "PassedAttempts": "PassedAttempts",
+                  "AppVersion": "AppVersion"
                 },
                 "alertDetailsOverride": {
                   "alertDisplayNameFormat": "StealthTalk: Password Brute Force - {{UserId}} ({{PassedAttempts}} failed attempts)",
@@ -697,13 +696,13 @@
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
+                    "enabled": true,
+                    "matchingMethod": "Selected",
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "5h",
                     "groupByEntities": [
                       "Account"
-                    ],
-                    "lookbackDuration": "5h",
-                    "reopenClosedIncident": false,
-                    "enabled": true,
-                    "matchingMethod": "Selected"
+                    ]
                   },
                   "createIncident": true
                 }
@@ -745,7 +744,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
         "contentKind": "AnalyticsRule",
-        "displayName": "StealthTalk - Password Brute Force",
+        "displayName": "StealthTalk - Password brute force",
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
@@ -1059,12 +1058,13 @@
             },
             {
               "type": "Microsoft.Logic/workflows",
-              "apiVersion": "2017-07-01",
+              "apiVersion": "2019-05-01",
               "name": "[[parameters('PlaybookName')]",
               "location": "[[variables('workspace-location-inline')]",
               "tags": {
                 "hidden-SentinelTemplateName": "StealthTalk-AlertToTeams",
                 "hidden-SentinelTemplateVersion": "1.0.0",
+                "LogicAppsCategory": "security",
                 "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
               },
               "identity": {
@@ -1220,12 +1220,28 @@
           ],
           "metadata": {
             "title": "StealthTalk - Alert to Microsoft Teams",
-            "description": "When a Microsoft Microsoft Sentinel incident is created, post a formatted Adaptive Card with the incident summary into a Microsoft Teams channel via a Power Automate Workflow webhook.",
+            "description": "When a Microsoft Sentinel incident is created, post a formatted Adaptive Card with the incident summary into a Microsoft Teams channel via a Power Automate Workflow webhook.",
             "prerequisites": [
               "A Microsoft Teams channel with a Workflows incoming webhook ('When a Teams Webhook request is received' followed by 'Post card in a chat or channel') already configured. The webhook URL is provided as a deployment parameter.",
               "After deployment, grant the Logic App's system-assigned managed identity the **Microsoft Sentinel Responder** role on the Microsoft Sentinel workspace.",
               "Grant the **Microsoft Sentinel Automation Contributor** role to the Azure Security Insights service principal on the Logic App resource group.",
               "Create an Automation Rule in Microsoft Sentinel to run this playbook on incidents from the four StealthTalk analytic rules."
+            ],
+            "postDeployment": [
+              "Grant the Logic App's system-assigned managed identity the **Microsoft Sentinel Responder** role on the Microsoft Sentinel workspace.",
+              "Grant the **Microsoft Sentinel Automation Contributor** role to the Azure Security Insights service principal on the Logic App resource group.",
+              "Create a Microsoft Sentinel **Automation Rule** that runs this playbook on incidents from the four StealthTalk analytic rules: `StealthTalk - After hours work`, `StealthTalk - Multi new devices registration`, `StealthTalk - Login outside work zone`, `StealthTalk - Password brute force`.",
+              "Configure the **TeamsWebhookUrl** parameter with the Workflows incoming-webhook URL from the target Teams channel."
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "Initial release",
+                "notes": [
+                  "Initial release of the StealthTalk Alert-to-Teams playbook.",
+                  "Microsoft Sentinel incident trigger; Adaptive Card posted to Teams via Power Automate Workflows incoming webhook."
+                ]
+              }
             ],
             "lastUpdateTime": "2026-05-13T00:00:00Z",
             "entities": [
@@ -1237,14 +1253,7 @@
               "Notification",
               "Teams",
               "Incident"
-            ],
-            "releaseNotes": {
-              "version": "1.0.0",
-              "title": "[variables('blanks')]",
-              "notes": [
-                "Initial version"
-              ]
-            }
+            ]
           }
         },
         "packageKind": "Solution",
@@ -1307,7 +1316,7 @@
                     },
                     {
                       "description": "StealthTalk events visible through the standard ASIM Authentication union",
-                      "query": "imAuthentication\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
+                      "query": "imAuthentication()\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
                     }
                   ],
                   "dataTypes": [
@@ -1364,36 +1373,32 @@
                   },
                   "instructionSteps": [
                     {
-                      "description": "Deploy the custom log table, Data Collection Endpoint and Data Collection Rule into your workspace's resource group using the included ARM template `Data Connectors/ARM/StealthTalk_Ingestion.json`. The template parameters allow you to rename the table (default `StealthTalkAnomalousAuth_CL`), customise the DCE/DCR names, and set the table retention.",
-                      "title": "STEP 1 - Deploy the ingestion infrastructure"
+                      "description": "When the Solution is installed via the Microsoft Sentinel Content Hub, the following resources are deployed automatically into the workspace's resource group:\n\n1. **Custom log table** `StealthTalkAnomalousAuth_CL` (21-field stream).\n2. **Data Collection Endpoint** `StealthTalk-Sentinel-DCE`.\n3. **Data Collection Rule** `StealthTalk-Sentinel-DCR` with `Custom-StealthTalkAnomalousAuth_CL` stream declaration and a one-to-one transform.\n4. **ASIM Authentication 0.1.3 parsers** as workspace saved-search functions: `vimAuthenticationStealthTalk` (filtering) and `ASimAuthenticationStealthTalk` (non-filtering).\n5. **`imAuthentication` extension parser** that registers the StealthTalk source in the workspace ASIM Authentication union (overrides Microsoft's `imAuthentication` saved-search to include the StealthTalk vim parser).\n6. **`ASimDisabledParsers` watchlist** + Microsoft Sentinel onboarding state (idempotent).\n\nNo user action is required at this step beyond installing the Solution. The remaining steps configure StealthTalk to push events into the deployed DCR. Pre-requisite: Microsoft's `FullDeploymentAuthentication.json` ASIM Authentication parser pack must be deployed in the workspace before this Solution is installed.",
+                      "title": "STEP 1 - Auto-deployed ingestion infrastructure (review only)"
                     },
                     {
-                      "description": "Two parser ARM templates are shipped under `Parsers/`:\n\n1. `Parsers/vimASimAuthenticationStealthTalk.json` - installs `vimAuthenticationStealthTalk` (filtering parser, ASIM Authentication 0.1.3 contract) and `ASimAuthenticationStealthTalk` (non-filtering wrapper).\n2. `Parsers/imAuthentication_extension.json` - overrides the workspace `imAuthentication()` union function so StealthTalk events are returned alongside Microsoft built-in sources. **Prerequisite:** Microsoft's `FullDeploymentAuthentication.json` ASIM parser pack must already be deployed in the workspace - install it from the Azure-Sentinel GitHub repository first if it is not.\n\nDeploy both via Azure Portal -> 'Deploy a custom template' -> 'Build your own template in the editor' -> 'Load file', supplying your workspace name as the parameter.",
-                      "title": "STEP 2 - Deploy the ASIM Authentication parsers"
+                      "description": "In the Azure portal, open the Data Collection Endpoint and Data Collection Rule resources deployed in Step 1:\n\n- From the **Data Collection Endpoint** properties, copy the **Logs Ingestion endpoint URI** (looks like `https://stealthtalk-sentinel-dce-<suffix>.<region>.ingest.monitor.azure.com`).\n- From the **Data Collection Rule** Overview, copy the **Immutable ID** (looks like `dcr-<guid>`).\n\nYou will paste both values into the StealthTalk admin console in Step 5.",
+                      "title": "STEP 2 - Capture the DCE endpoint and DCR Immutable ID"
                     },
                     {
-                      "description": "Open the Data Collection Endpoint and Data Collection Rule resources in the same resource group. From the DCE properties, copy the **Logs Ingestion endpoint URI**. From the DCR Overview, copy the **Immutable ID** (e.g. `dcr-...`). You will paste both into the StealthTalk admin console.",
-                      "title": "STEP 3 - Capture the DCE endpoint and DCR Immutable ID"
+                      "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**. StealthTalk uses this service principal to authenticate to the Logs Ingestion API via OAuth.",
+                      "title": "STEP 3 - Create a Microsoft Entra App Registration for StealthTalk"
                     },
                     {
-                      "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**.",
-                      "title": "STEP 4 - Create a Microsoft Entra App Registration for StealthTalk"
+                      "description": "Open the Data Collection Rule deployed in Step 1 -> **Access control (IAM)** -> **+ Add role assignment**.\n\n- Role: **Monitoring Metrics Publisher**\n- Assign access to: **User, group, or service principal**\n- Select the App Registration from Step 3\n\nRBAC role assignments cannot be performed by the Solution install template, so this step is manual.",
+                      "title": "STEP 4 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR"
                     },
                     {
-                      "description": "Open the Data Collection Rule -> Access control (IAM) -> Add role assignment -> Role: **Monitoring Metrics Publisher** -> Assign access to: User, group, or service principal -> select the App Registration created in Step 4 -> Review + assign.",
-                      "title": "STEP 5 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR"
+                      "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 2 and 3:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 2\n- **DCR Immutable ID** - from Step 2\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`\n- **Tenant ID, App (client) ID, Client secret** - from Step 3\n\nSave and trigger a test event. The StealthTalk console reports success/failure of the OAuth handshake and the first event delivery.",
+                      "title": "STEP 5 - Configure StealthTalk to send events"
                     },
                     {
-                      "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 3 and 4:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 3.\n- **DCR Immutable ID** - from Step 3.\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`.\n- **Tenant ID / App ID / Client secret** - from Step 4.\n\nSave and trigger one or more anomalous events (use the included simulator scripts under `assets/Scripts/`) to validate the pipeline.",
-                      "title": "STEP 6 - Configure StealthTalk to send events"
+                      "description": "Run the **Sample queries** above in **Logs**. All must return rows within a few minutes of test events:\n\n- Raw `StealthTalkAnomalousAuth_CL` table populated.\n- ASIM union view via `imAuthentication() | where EventVendor == 'StealthTalk'` returns the same events normalised to the ASIM Authentication schema.\n\nIf the raw table is empty: verify the StealthTalk console reports successful OAuth and event delivery, and confirm the App Registration has the **Monitoring Metrics Publisher** role on the DCR (Step 4). If the raw table has rows but ASIM union is empty: re-check that Microsoft's `FullDeploymentAuthentication.json` parser pack is deployed.",
+                      "title": "STEP 6 - Verify ingestion and ASIM normalisation"
                     },
                     {
-                      "description": "Run the validation queries (see the **README** or the **Validation** sample queries above). All three queries must return matching counts within a few minutes of triggering events:\n\n- Raw `StealthTalkAnomalousAuth_CL` count > 0.\n- `vimAuthenticationStealthTalk` count > 0.\n- `imAuthentication | where EventVendor == \"StealthTalk\"` count > 0.\n\nIf the third query returns zero, the `imAuthentication` extension parser was not deployed correctly - redeploy `Parsers/imAuthentication_extension.json` from Step 2.",
-                      "title": "STEP 7 - Verify ingestion and ASIM normalisation"
-                    },
-                    {
-                      "description": "Under **Content management -> Content hub -> StealthTalk -> Manage**, enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Teams Playbook. For the Playbook, supply the Teams incoming-webhook URL of your channel as a deployment parameter, and create an Automation Rule to run the Playbook on incidents from any StealthTalk analytic rule.",
-                      "title": "STEP 8 - Enable analytic rules, hunting queries, workbook, and playbook"
+                      "description": "In the Microsoft Sentinel **Content hub**, open the **StealthTalk Anomalous Authentication** Solution and click **Manage**. Enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Microsoft Teams Playbook. For the Playbook, after deployment, grant its system-assigned managed identity the **Microsoft Sentinel Responder** role on the workspace, and grant the **Azure Security Insights** service principal the **Microsoft Sentinel Automation Contributor** role on the playbook's resource group. Then create an **Automation Rule** in Microsoft Sentinel that runs the playbook on incidents from the four StealthTalk analytic rules.",
+                      "title": "STEP 7 - Enable analytic rules, hunting queries, workbook, and playbook"
                     }
                   ]
                 }
@@ -1513,7 +1518,7 @@
             },
             {
               "description": "StealthTalk events visible through the standard ASIM Authentication union",
-              "query": "imAuthentication\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
+              "query": "imAuthentication()\n| where TimeGenerated > ago(24h)\n| where EventVendor == \"StealthTalk\""
             }
           ],
           "availability": {
@@ -1556,36 +1561,32 @@
           },
           "instructionSteps": [
             {
-              "description": "Deploy the custom log table, Data Collection Endpoint and Data Collection Rule into your workspace's resource group using the included ARM template `Data Connectors/ARM/StealthTalk_Ingestion.json`. The template parameters allow you to rename the table (default `StealthTalkAnomalousAuth_CL`), customise the DCE/DCR names, and set the table retention.",
-              "title": "STEP 1 - Deploy the ingestion infrastructure"
+              "description": "When the Solution is installed via the Microsoft Sentinel Content Hub, the following resources are deployed automatically into the workspace's resource group:\n\n1. **Custom log table** `StealthTalkAnomalousAuth_CL` (21-field stream).\n2. **Data Collection Endpoint** `StealthTalk-Sentinel-DCE`.\n3. **Data Collection Rule** `StealthTalk-Sentinel-DCR` with `Custom-StealthTalkAnomalousAuth_CL` stream declaration and a one-to-one transform.\n4. **ASIM Authentication 0.1.3 parsers** as workspace saved-search functions: `vimAuthenticationStealthTalk` (filtering) and `ASimAuthenticationStealthTalk` (non-filtering).\n5. **`imAuthentication` extension parser** that registers the StealthTalk source in the workspace ASIM Authentication union (overrides Microsoft's `imAuthentication` saved-search to include the StealthTalk vim parser).\n6. **`ASimDisabledParsers` watchlist** + Microsoft Sentinel onboarding state (idempotent).\n\nNo user action is required at this step beyond installing the Solution. The remaining steps configure StealthTalk to push events into the deployed DCR. Pre-requisite: Microsoft's `FullDeploymentAuthentication.json` ASIM Authentication parser pack must be deployed in the workspace before this Solution is installed.",
+              "title": "STEP 1 - Auto-deployed ingestion infrastructure (review only)"
             },
             {
-              "description": "Two parser ARM templates are shipped under `Parsers/`:\n\n1. `Parsers/vimASimAuthenticationStealthTalk.json` - installs `vimAuthenticationStealthTalk` (filtering parser, ASIM Authentication 0.1.3 contract) and `ASimAuthenticationStealthTalk` (non-filtering wrapper).\n2. `Parsers/imAuthentication_extension.json` - overrides the workspace `imAuthentication()` union function so StealthTalk events are returned alongside Microsoft built-in sources. **Prerequisite:** Microsoft's `FullDeploymentAuthentication.json` ASIM parser pack must already be deployed in the workspace - install it from the Azure-Sentinel GitHub repository first if it is not.\n\nDeploy both via Azure Portal -> 'Deploy a custom template' -> 'Build your own template in the editor' -> 'Load file', supplying your workspace name as the parameter.",
-              "title": "STEP 2 - Deploy the ASIM Authentication parsers"
+              "description": "In the Azure portal, open the Data Collection Endpoint and Data Collection Rule resources deployed in Step 1:\n\n- From the **Data Collection Endpoint** properties, copy the **Logs Ingestion endpoint URI** (looks like `https://stealthtalk-sentinel-dce-<suffix>.<region>.ingest.monitor.azure.com`).\n- From the **Data Collection Rule** Overview, copy the **Immutable ID** (looks like `dcr-<guid>`).\n\nYou will paste both values into the StealthTalk admin console in Step 5.",
+              "title": "STEP 2 - Capture the DCE endpoint and DCR Immutable ID"
             },
             {
-              "description": "Open the Data Collection Endpoint and Data Collection Rule resources in the same resource group. From the DCE properties, copy the **Logs Ingestion endpoint URI**. From the DCR Overview, copy the **Immutable ID** (e.g. `dcr-...`). You will paste both into the StealthTalk admin console.",
-              "title": "STEP 3 - Capture the DCE endpoint and DCR Immutable ID"
+              "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**. StealthTalk uses this service principal to authenticate to the Logs Ingestion API via OAuth.",
+              "title": "STEP 3 - Create a Microsoft Entra App Registration for StealthTalk"
             },
             {
-              "description": "Create a new App Registration in your Microsoft Entra tenant. Generate a client secret (or use a certificate). Note the **Tenant ID**, **App (client) ID** and **Client secret**.",
-              "title": "STEP 4 - Create a Microsoft Entra App Registration for StealthTalk"
+              "description": "Open the Data Collection Rule deployed in Step 1 -> **Access control (IAM)** -> **+ Add role assignment**.\n\n- Role: **Monitoring Metrics Publisher**\n- Assign access to: **User, group, or service principal**\n- Select the App Registration from Step 3\n\nRBAC role assignments cannot be performed by the Solution install template, so this step is manual.",
+              "title": "STEP 4 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR"
             },
             {
-              "description": "Open the Data Collection Rule -> Access control (IAM) -> Add role assignment -> Role: **Monitoring Metrics Publisher** -> Assign access to: User, group, or service principal -> select the App Registration created in Step 4 -> Review + assign.",
-              "title": "STEP 5 - Grant the App Registration the Monitoring Metrics Publisher role on the DCR"
+              "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 2 and 3:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 2\n- **DCR Immutable ID** - from Step 2\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`\n- **Tenant ID, App (client) ID, Client secret** - from Step 3\n\nSave and trigger a test event. The StealthTalk console reports success/failure of the OAuth handshake and the first event delivery.",
+              "title": "STEP 5 - Configure StealthTalk to send events"
             },
             {
-              "description": "In the StealthTalk admin console, configure the Microsoft Sentinel/Log Analytics integration with the values captured in Steps 3 and 4:\n\n- **DCE endpoint** - the Logs Ingestion endpoint URI from Step 3.\n- **DCR Immutable ID** - from Step 3.\n- **Stream name** - `Custom-StealthTalkAnomalousAuth_CL`.\n- **Tenant ID / App ID / Client secret** - from Step 4.\n\nSave and trigger one or more anomalous events (use the included simulator scripts under `assets/Scripts/`) to validate the pipeline.",
-              "title": "STEP 6 - Configure StealthTalk to send events"
+              "description": "Run the **Sample queries** above in **Logs**. All must return rows within a few minutes of test events:\n\n- Raw `StealthTalkAnomalousAuth_CL` table populated.\n- ASIM union view via `imAuthentication() | where EventVendor == 'StealthTalk'` returns the same events normalised to the ASIM Authentication schema.\n\nIf the raw table is empty: verify the StealthTalk console reports successful OAuth and event delivery, and confirm the App Registration has the **Monitoring Metrics Publisher** role on the DCR (Step 4). If the raw table has rows but ASIM union is empty: re-check that Microsoft's `FullDeploymentAuthentication.json` parser pack is deployed.",
+              "title": "STEP 6 - Verify ingestion and ASIM normalisation"
             },
             {
-              "description": "Run the validation queries (see the **README** or the **Validation** sample queries above). All three queries must return matching counts within a few minutes of triggering events:\n\n- Raw `StealthTalkAnomalousAuth_CL` count > 0.\n- `vimAuthenticationStealthTalk` count > 0.\n- `imAuthentication | where EventVendor == \"StealthTalk\"` count > 0.\n\nIf the third query returns zero, the `imAuthentication` extension parser was not deployed correctly - redeploy `Parsers/imAuthentication_extension.json` from Step 2.",
-              "title": "STEP 7 - Verify ingestion and ASIM normalisation"
-            },
-            {
-              "description": "Under **Content management -> Content hub -> StealthTalk -> Manage**, enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Teams Playbook. For the Playbook, supply the Teams incoming-webhook URL of your channel as a deployment parameter, and create an Automation Rule to run the Playbook on incidents from any StealthTalk analytic rule.",
-              "title": "STEP 8 - Enable analytic rules, hunting queries, workbook, and playbook"
+              "description": "In the Microsoft Sentinel **Content hub**, open the **StealthTalk Anomalous Authentication** Solution and click **Manage**. Enable the four Analytic Rule templates, the three Hunting Query templates, the Workbook, and the Microsoft Teams Playbook. For the Playbook, after deployment, grant its system-assigned managed identity the **Microsoft Sentinel Responder** role on the workspace, and grant the **Azure Security Insights** service principal the **Microsoft Sentinel Automation Contributor** role on the playbook's resource group. Then create an **Automation Rule** in Microsoft Sentinel that runs the playbook on incidents from the four StealthTalk analytic rules.",
+              "title": "STEP 7 - Enable analytic rules, hunting queries, workbook, and playbook"
             }
           ],
           "id": "[variables('_uiConfigId1')]"

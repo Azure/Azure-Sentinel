@@ -14,7 +14,7 @@ by one of the StealthTalk anomalous-auth analytic rules.
  deeplinks to the incident).
 
 The playbook fires for every incident; the SOC scopes it to StealthTalk-only by configuring
-a Microsoft Microsoft Sentinel **Automation Rule** that runs this playbook only when the incident's analytic
+a Microsoft Sentinel **Automation Rule** that runs this playbook only when the incident's analytic
 rule name matches one of the four StealthTalk rules.
 
 ## Prerequisites
@@ -49,7 +49,7 @@ After deploying via the Solution or directly via the ARM template:
  - Conditions - add **one** condition with multi-select values:
  - Property: `Analytic rule name`
  - Operator: `Equals`
- - Values: `StealthTalk - After Hours Work`, `StealthTalk - Multi New Devices Registration`, `StealthTalk - Login Outside Work Zone`, `StealthTalk - Password Brute Force`.
+ - Values: `StealthTalk - After hours work`, `StealthTalk - Multi new devices registration`, `StealthTalk - Login outside work zone`, `StealthTalk - Password brute force`.
  - Actions: **Run playbook** -> select this Logic App.
 
  > Important: use **one** condition with multiple values, not four separate OR-conditions - Microsoft Sentinel UI evaluates multi-value conditions correctly; four OR-conditions sometimes don't trigger.
