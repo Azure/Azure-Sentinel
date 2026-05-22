@@ -23,18 +23,22 @@ query: |
   Unifi_SiteManager_ISPMetrics_CL
   | where TimeGenerated > ago(1h)
   | mv-expand period = periods
-  | extend 
+  | extend
       metricTime = todatetime(period.metricTime),
       uptime = todouble(period.data.wan.uptime),
       downtime = toint(period.data.wan.downtime),
       ispName = tostring(period.data.wan.ispName),
-      ispAsn = tostring(period.data.wan.ispAsn)
-  | summarize 
+      ispAsn = tostring(period.data.wan.ispAsn),
+      siteIdStr = tostring(siteId)
+  // De-duplicate periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, uptime, downtime, ispAsn) by siteIdStr, ispName, metricTime
+  | where metricTime > ago(1h)
+  | summarize
       AvgUptime = round(avg(uptime), 3),
       MinUptime = round(min(uptime), 3),
       TotalDowntimeSeconds = sum(downtime),
       MeasurementCount = count()
-      by siteId, ispName, ispAsn
+      by siteId = siteIdStr, ispName, ispAsn
   | where AvgUptime < SLAThreshold
   | extend 
       TimeGenerated = now(),
@@ -64,4 +68,4 @@ incidentConfiguration:
     lookbackDuration: P1D
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1
