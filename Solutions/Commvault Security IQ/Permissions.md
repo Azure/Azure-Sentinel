@@ -40,7 +40,7 @@ This document provides detailed steps to configure the required permissions for 
 4. If **RBAC (Role-Based Access Control)** is enabled:
    - Go to the **Access Control (IAM)** section.
    - Click on **Add Role Assignment**.
-   - In the **Role** dropdown, select **Key Vault Secrets Officer**.
+   - In the **Role** dropdown, select **Key Vault Secrets User**.
    - In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
    - Search for the **Managed Identity** of each Logic App:
      - `logic-app-disable-data-aging`
