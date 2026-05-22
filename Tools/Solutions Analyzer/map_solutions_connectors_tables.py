@@ -5961,14 +5961,25 @@ TI_UPLOAD_TABLES: Tuple[str, ...] = ("ThreatIntelIndicators", "ThreatIntelObject
 _TI_UPLOAD_SKIP_DIRS = {".python_packages", "__pycache__", "node_modules", ".venv", "venv"}
 
 # Methods superseded by TI Upload API. When a connector is reclassified as
-# Azure Function (TI Upload API), generic REST classifications are dropped:
-# TI Upload API is a specific Sentinel management-plane REST push, so the
-# generic 'REST Pull API'/'REST Push API' label is redundant.
-_TI_UPLOAD_SUPERSEDES: Set[str] = {"REST Pull API", "REST Push API"}
+# Azure Function (TI Upload API), the generic / parent classifications are
+# dropped: TI Upload IS a specific Azure Function variant publishing via the
+# Sentinel management-plane REST push, so keeping the generic
+# 'REST Pull API' / 'REST Push API' label alongside it is redundant, and the
+# unrefined 'Azure Function' parent is implied by the refined form (avoids
+# noisy composite labels like 'Azure Function (TI Upload API)|Azure Function'
+# in the connectors and statistics breakdowns).
+_TI_UPLOAD_SUPERSEDES: Set[str] = {"REST Pull API", "REST Push API", "Azure Function"}
 
 
 def _drop_ti_upload_superseded(methods: List[str], reasons: List[str]) -> Tuple[List[str], List[str]]:
-    """Filter REST methods (and their parallel reasons) superseded by TI Upload API."""
+    """Filter methods (and their parallel reasons) superseded by TI Upload API.
+
+    Removes any method listed in ``_TI_UPLOAD_SUPERSEDES`` — currently the
+    generic ``Azure Function`` parent and the ``REST Pull API`` / ``REST Push API``
+    family — so that a connector reclassified as
+    ``Azure Function (TI Upload API)`` no longer carries the redundant parent
+    or sibling label in its composite ``collection_method``.
+    """
     kept_methods: List[str] = []
     kept_reasons: List[str] = []
     for i, m in enumerate(methods):

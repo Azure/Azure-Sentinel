@@ -198,6 +198,11 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.8 - TI Upload API supersedes generic Azure Function
+
+**Connector collection-method classification fix:**
+- Generic `Azure Function` is now dropped from a connector's `collection_method` whenever the same connector is also reclassified as `Azure Function (TI Upload API)`. TI Upload IS a specific Azure Function variant, so keeping the unrefined parent alongside it produced noisy composite labels like `Azure Function (TI Upload API)|Azure Function` (13 affected connectors in the current data set) which showed up as their own line in the Statistics page's Collection Methods breakdown. `_TI_UPLOAD_SUPERSEDES` now contains `{"REST Pull API", "REST Push API", "Azure Function"}`; the existing REST-supersession behaviour is unchanged.
+
 ### v9.7 - Logic Apps Index, Filter-Field Coverage, and Collection-Method Refinements
 
 **Logic Apps connector index:**
