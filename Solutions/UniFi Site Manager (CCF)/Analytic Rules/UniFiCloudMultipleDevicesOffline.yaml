@@ -21,18 +21,29 @@ query: |
   // UniFi Multiple Devices Offline Detection
   // Author: Fetch Labs (https://sentinel.blog)
   let OfflineThreshold = 3;
+  let prev_offline_ids = toscalar(
+      Unifi_SiteManager_Devices_CL
+      | where TimeGenerated between (ago(45m) .. ago(15m))
+      | summarize arg_max(TimeGenerated, *) by id
+      | where status == "offline"
+      | summarize make_set(id)
+  );
   Unifi_SiteManager_Devices_CL
-  | where TimeGenerated > ago(30m)
+  | where TimeGenerated > ago(15m)
   | summarize arg_max(TimeGenerated, *) by id
   | where status == "offline"
-  | summarize 
+  | summarize
       OfflineDeviceCount = count(),
       OfflineDevices = make_list(coalesce(name, id)),
       OfflineModels = make_list(model),
       OfflineIPs = make_list(ip),
-      ProductLines = make_set(productLine)
+      ProductLines = make_set(productLine),
+      CurrentOfflineIds = make_set(id)
   | where OfflineDeviceCount >= OfflineThreshold
-  | extend 
+  | extend NewlyOffline = set_difference(CurrentOfflineIds, prev_offline_ids)
+  | extend NewlyOfflineCount = array_length(NewlyOffline)
+  | where NewlyOfflineCount > 0
+  | extend
       TimeGenerated = now(),
       OfflineDeviceList = strcat_array(OfflineDevices, ", "),
       AffectedProductLines = strcat_array(ProductLines, ", ")
@@ -54,4 +65,4 @@ incidentConfiguration:
     lookbackDuration: PT4H
     matchingMethod: AnyAlert
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

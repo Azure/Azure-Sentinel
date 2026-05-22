@@ -17,22 +17,27 @@ tactics:
 relevantTechniques:
   - T1498
 query: |
-  let prev = Unifi_SiteManager_Sites_CL
-            | where TimeGenerated between (ago(30m) .. ago(15m))
-            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-            | mv-expand pi = todynamic(tostring(siteStatistics.wans.WAN2.wanIssues))
-            | extend siteId_s = tostring(siteId), prevIdx = tolong(pi.index)
-            | distinct siteId_s, prevIdx;
-        Unifi_SiteManager_Sites_CL
-        | where TimeGenerated > ago(15m)
-        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-        | where isnotempty(tostring(siteStatistics.wans.WAN2))
-        | extend siteId_s = tostring(siteId), siteName = tostring(meta.name)
-        | mv-expand issue = todynamic(tostring(siteStatistics.wans.WAN2.wanIssues))
-        | extend idx = tolong(issue.index)
-        | join kind=leftanti prev on $left.siteId_s == $right.siteId_s, $left.idx == $right.prevIdx
-        | extend Activity = strcat('New WAN2 issue index ', idx, ' on secondary WAN (downtime=', tostring(issue.wanDowntime), ' highLatency=', tostring(issue.highLatency), ')')
-        | project TimeGenerated, siteId, siteName, Activity, IssueIndex=idx, IssueDetail=issue
+  // UniFi reports a monotonically-rising wanIssues.count rather than discrete events.
+  // Detect a NEW occurrence by checking whether the per-site max(count) has grown
+  // in the most recent 15-min window vs the prior 15-min window.
+  Unifi_SiteManager_Sites_CL
+  | where TimeGenerated > ago(45m)
+  | extend siteId_s = tostring(siteId), siteName = tostring(meta.name)
+  | where isnotempty(tostring(siteStatistics.wans.WAN2))
+  | mv-expand issue = todynamic(tostring(siteStatistics.wans.WAN2.wanIssues))
+  | extend issueCount = tolong(issue.count), idx = tolong(issue.index)
+  | summarize
+      PrevMaxCount = maxif(issueCount, TimeGenerated < ago(15m)),
+      CurrentMaxCount = maxif(issueCount, TimeGenerated >= ago(15m)),
+      LatestIndex = maxif(idx, TimeGenerated >= ago(15m))
+      by siteId_s, siteName
+  | extend PrevMaxCount = coalesce(PrevMaxCount, tolong(0))
+  | where CurrentMaxCount > PrevMaxCount
+  | extend
+      TimeGenerated = now(),
+      Delta = CurrentMaxCount - PrevMaxCount,
+      Activity = strcat('New WAN2 issue: count rose from ', PrevMaxCount, ' to ', CurrentMaxCount)
+  | project TimeGenerated, siteId = siteId_s, siteName, Activity, IssueIndex = LatestIndex, PrevMaxCount, CurrentMaxCount, Delta
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -46,4 +51,4 @@ incidentConfiguration:
     lookbackDuration: PT5H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

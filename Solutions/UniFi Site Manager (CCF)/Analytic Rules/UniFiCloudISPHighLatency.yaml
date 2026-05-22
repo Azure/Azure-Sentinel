@@ -20,25 +20,30 @@ relevantTechniques:
 query: |
   // UniFi ISP High Latency Detection
   // Author: Fetch Labs (https://sentinel.blog)
-  let AvgLatencyThreshold = 100;
-  let MaxLatencyThreshold = 500;
+  let AvgLatencyThreshold = 200;
+  let MaxLatencyThreshold = 1000;
+  let SustainedPeriodCount = 2;
   Unifi_SiteManager_ISPMetrics_CL
   | where TimeGenerated > ago(30m)
   | mv-expand period = periods
-  | extend 
+  | extend
       metricTime = todatetime(period.metricTime),
       avgLatency = toint(period.data.wan.avgLatency),
       maxLatency = toint(period.data.wan.maxLatency),
       ispName = tostring(period.data.wan.ispName),
       ispAsn = tostring(period.data.wan.ispAsn)
+  // De-duplicate periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, avgLatency, maxLatency, ispAsn) by tostring(siteId), ispName, metricTime
+  | where metricTime > ago(30m)
   | where avgLatency > AvgLatencyThreshold or maxLatency > MaxLatencyThreshold
-  | summarize 
+  | summarize
       EventCount = count(),
       AvgLatency = avg(avgLatency),
       MaxLatency = max(maxLatency),
       FirstSeen = min(metricTime),
       LastSeen = max(metricTime)
       by siteId, ispName, ispAsn
+  | where EventCount >= SustainedPeriodCount
   | extend 
       TimeGenerated = now(),
       AvgLatencyRounded = round(AvgLatency, 1)
@@ -65,4 +70,4 @@ incidentConfiguration:
     lookbackDuration: PT4H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

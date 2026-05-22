@@ -20,24 +20,29 @@ relevantTechniques:
 query: |
   // UniFi ISP Downtime Detection
   // Author: Fetch Labs (https://sentinel.blog)
+  let MinDowntimeSeconds = 60;
   Unifi_SiteManager_ISPMetrics_CL
   | where TimeGenerated > ago(30m)
   | mv-expand period = periods
-  | extend 
+  | extend
       metricTime = todatetime(period.metricTime),
       downtime = toint(period.data.wan.downtime),
       uptime = todouble(period.data.wan.uptime),
       ispName = tostring(period.data.wan.ispName),
       ispAsn = tostring(period.data.wan.ispAsn)
+  // De-duplicate periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, downtime, uptime, ispAsn) by tostring(siteId), ispName, metricTime
+  | where metricTime > ago(30m)
   | where downtime > 0
-  | summarize 
+  | summarize
       TotalDowntimeSeconds = sum(downtime),
       EventCount = count(),
       AvgUptime = round(avg(uptime), 2),
       FirstSeen = min(metricTime),
       LastSeen = max(metricTime)
       by siteId, ispName, ispAsn
-  | extend 
+  | where TotalDowntimeSeconds >= MinDowntimeSeconds
+  | extend
       TimeGenerated = now(),
       DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)
   | project
@@ -64,4 +69,4 @@ incidentConfiguration:
     lookbackDuration: PT4H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1
