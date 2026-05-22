@@ -158,7 +158,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
 | `--skip-marketplace` | `False` | Skip Azure Marketplace availability checking |
 | `--refresh-marketplace` | `False` | Force refresh of marketplace cache (ignore cached results) |
-| `--force-refresh` | `""` | Force re-analysis of specified types, ignoring cached results. Comma-separated list of: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`. Use `all` to refresh everything, or `all-offline` to refresh all except network-dependent types. When `tables` is included, also re-runs `collect_table_info.py` with `--refresh-cache`. When `asim` is included, also re-runs `collect_asim_fields.py` with `--refresh-cache`. |
+| `--force-refresh` | `""` | Force re-analysis of specified types, ignoring cached results. Comma-separated list of: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`, `learn_docs`. Use `all` to refresh everything, or `all-offline` to refresh all except network-dependent types. When `tables` is included, also re-runs `collect_table_info.py` with `--refresh-cache`. When `asim` is included, also re-runs `collect_asim_fields.py` with `--refresh-cache`. When `learn_docs` is included, refetches the Microsoft Learn `data-connectors-reference` anchor index. |
 
 ### Example Usage
 

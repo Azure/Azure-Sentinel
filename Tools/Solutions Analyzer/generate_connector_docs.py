@@ -58,13 +58,18 @@ _INTERACTIVE_INDEX_PATH: str = "index.html"
 ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
 ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
 
-# ASIM icon/badge HTML - using img tags to control size for proper text alignment
+# ASIM icon/badge HTML - using img tags to control size for proper text alignment.
+# Inline ``style`` is used (not the legacy ``height`` attribute) because the
+# published interactive site's stylesheet sets ``img { height: auto }`` which
+# overrides the HTML ``height`` attribute and lets these badges render at their
+# native (much larger) pixel dimensions. Inline ``style`` wins over the CSS
+# rule and keeps the badge sized to match heading / inline text.
 # Large badge for page titles (H1 headers) - sized to match heading text (~32px)
-ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" height="32">'
+ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" style="height:32px;width:auto;vertical-align:middle">'
 # Small logo for inline use (lists, tables, section headers) - sized to match text (~16px)
-ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 # Small logo for root-level files (no ../ prefix needed)
-ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 
 # Icons for unpublished, deprecated, and discovered items
 UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors/content
@@ -5693,7 +5698,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             connector_deprecation_date = connector_ref.get('deprecation_date', '')
             if connector_deprecation_date:
                 f.write(f"| **Deprecated** | {connector_deprecation_date} |\n")
-            
+
+            # Microsoft Learn deep-link (populated by the mapper from the
+            # `data-connectors-reference` page anchors).
+            learn_doc_url = connector_ref.get('learn_doc_url', '') or first_entry.get('learn_doc_url', '')
+            if learn_doc_url:
+                f.write(f"| **Microsoft Learn** | [View on Learn]({learn_doc_url}) |\n")
+
             f.write("\n")
             
             # Description

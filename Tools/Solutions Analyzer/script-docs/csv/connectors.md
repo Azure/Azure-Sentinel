@@ -49,6 +49,7 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 | `ingestion_api` | `Log Ingestion API`, `HTTP Data Collector API`, `Undetermined`, or empty (CCF/Native are platform-managed) | Multi-rule detection |
 | `ingestion_api_reason` | Human-readable explanation of how `ingestion_api` was determined | Computed |
 | `is_clv1` | `true` if any of the connector's tables use the legacy Custom Log V1 schema | CLv1 detection |
+| `learn_doc_url` | Deep-link to the connector's section on the Microsoft Learn [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) page (e.g. `…#cisco-secure-endpoint-via-codeless-connector-framework`). Populated when the connector's title slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page, with `[Recommended]` / `[Preview]` prefixes and trailing `(Preview)` markers stripped. Empty when no anchor matches. | Anchor scrape of Learn page, cached as `data_connectors_reference_anchors.json` |
 
 ## Related CSVs
 

@@ -36,7 +36,7 @@ git pull origin master
 
 **Quick install for all scripts:**
 ```bash
-pip install requests json5 pyyaml
+pip install requests json5 pyyaml mistune
 ```
 
 **Additional packages for Kusto upload:**
@@ -198,10 +198,22 @@ See the script documentation for details:
 
 ## Version History
 
-### v9.8 - TI Upload API supersedes generic Azure Function
+### v9.8 - TI Upload supersession, ASIM badge sizing, Learn deep-links, and faster HTML generation
 
 **Connector collection-method classification fix:**
 - Generic `Azure Function` is now dropped from a connector's `collection_method` whenever the same connector is also reclassified as `Azure Function (TI Upload API)`. TI Upload IS a specific Azure Function variant, so keeping the unrefined parent alongside it produced noisy composite labels like `Azure Function (TI Upload API)|Azure Function` (13 affected connectors in the current data set) which showed up as their own line in the Statistics page's Collection Methods breakdown. `_TI_UPLOAD_SUPERSEDES` now contains `{"REST Pull API", "REST Push API", "Azure Function"}`; the existing REST-supersession behaviour is unchanged.
+
+**ASIM badge sizing on HTML entity pages:**
+- `ASIM_BADGE_LARGE`, `ASIM_ICON`, and `ASIM_ICON_ROOT` now embed sizing via inline `style="height:…px;width:auto;vertical-align:middle"` instead of the legacy `height="…"` HTML attribute. The published interactive site's stylesheet sets `img { max-width: 100%; height: auto; }`, which overrode the HTML `height` attribute and let the badge PNGs render at their native (page-filling) pixel size on every ASIM parser / ASIM index page. Inline `style` wins over the CSS rule, restoring the intended 32 px heading badge and 16 px inline icon. Other generated `<img>` tags (solution logos) already set both `width` and `height` attributes so they were unaffected.
+
+**Microsoft Learn deep-links on connector pages:**
+- The mapper now fetches the canonical Microsoft Learn page [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) once per run (cached), extracts every `<a name="…">` anchor, and matches each connector by GitHub-style slug of its display name. When a match is found, a new `learn_doc_url` column on `connectors.csv` carries the deep-link (e.g. `https://learn.microsoft.com/azure/sentinel/data-connectors-reference#cisco-secure-endpoint-via-codeless-connector-framework`). The documentation generator renders this as a new "Microsoft Learn" row in the connector header info table on each connector page.
+
+**Markdown → HTML conversion is ~8× faster:**
+- `_generate_html_pages` in `generate_interactive_docs.py` now parallelises per-file conversion across CPU cores using `concurrent.futures.ProcessPoolExecutor` and uses [`mistune`](https://pypi.org/project/mistune/) (v3) as the preferred markdown engine, falling back to Python-Markdown if mistune isn't installed. On the current corpus (10,616 entity pages) this cuts the HTML stage from ~520 s to ~64 s on an 8-core laptop (167 pages/s vs ~20 pages/s previously) while producing visually identical output.
+- All per-file regexes, the slugify / heading-id helpers, and the directory-to-tab maps are now module-level so workers don't re-create them on every file. The worker function lives at module scope so Windows spawn works correctly.
+- Worker count defaults to `min(cpu_count, 8)` and can be overridden with the `SA_HTML_WORKERS` environment variable (set to `1` for serial debugging).
+- New install requirement: `pip install mistune` (optional — the code falls back to the existing `markdown` dependency if mistune is absent, with the older performance characteristics).
 
 ### v9.7 - Logic Apps Index, Filter-Field Coverage, and Collection-Method Refinements
 

@@ -636,7 +636,7 @@ _force_refresh_types: Set[str] = set()
 
 # Analysis types that can be cached
 # Offline types (no network access needed): asim, parsers, solutions, standalone
-# Online types (require network access): marketplace, tables
+# Online types (require network access): marketplace, tables, learn_docs
 ANALYSIS_TYPES = {
     "asim": "ASIM parser analysis",
     "parsers": "Non-ASIM parser analysis",
@@ -644,10 +644,11 @@ ANALYSIS_TYPES = {
     "standalone": "Standalone content item analysis",
     "marketplace": "Marketplace availability check",
     "tables": "Table reference info from Microsoft docs",
+    "learn_docs": "Microsoft Learn data-connectors-reference anchors",
 }
 
 # Analysis types that require network access
-ONLINE_ANALYSIS_TYPES = {"marketplace", "tables"}
+ONLINE_ANALYSIS_TYPES = {"marketplace", "tables", "learn_docs"}
 
 
 def init_cache(cache_dir: Path, force_refresh: str = "") -> None:
@@ -4540,7 +4541,129 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
 # Marketplace cache filename (stored in .cache folder)
 MARKETPLACE_CACHE_FILENAME = "marketplace_data.json"
 
-# Fields extracted from marketplace API response
+# ----- Microsoft Learn data-connectors-reference anchors -----
+# The mapper enriches each connector with a deep-link to its section on the
+# Microsoft Learn `data-connectors-reference` page when the connector's title
+# slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page.
+LEARN_DOCS_URL = "https://learn.microsoft.com/azure/sentinel/data-connectors-reference"
+LEARN_DOCS_CACHE_FILENAME = "data_connectors_reference_anchors.json"
+_LEARN_ANCHOR_RE = re.compile(r'<a\s+(?:[^>]*?\s+)?name="([^"]+)"', re.IGNORECASE)
+_LEARN_SLUG_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify_for_learn(text: str) -> str:
+    """GitHub-style slugify used by the Microsoft Learn TOC.
+
+    Lowercases the input, replaces every run of non-alphanumeric characters
+    with a single hyphen, and strips leading/trailing hyphens. This matches
+    the way Learn generates anchor names for data-connectors-reference
+    section headings.
+    """
+    if not text:
+        return ""
+    return _LEARN_SLUG_NON_ALNUM_RE.sub("-", text.lower()).strip("-")
+
+
+def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Set[str]:
+    """Fetch (and cache) the set of `<a name="…">` anchors on the Learn page.
+
+    The Microsoft Learn `data-connectors-reference` page is a single very
+    large document (~5 MB) with one `<a name="connector-slug">` anchor per
+    connector section. We fetch it at most once per cache lifetime; pass
+    `--force-refresh=learn_docs` to refetch.
+
+    Returns:
+        Set of anchor names (lowercase slugs). Empty set on any failure.
+    """
+    cache_file = cache_dir / LEARN_DOCS_CACHE_FILENAME
+
+    if not force_refresh and cache_file.exists():
+        try:
+            with cache_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            anchors = set(data.get("anchors") or [])
+            if anchors:
+                return anchors
+        except Exception as e:
+            log_print(f"  Warning: could not load Learn docs anchor cache: {e}")
+
+    if not HAS_URLLIB:
+        return set()
+
+    log_print(f"  Fetching Microsoft Learn anchors from {LEARN_DOCS_URL} …")
+    try:
+        request = urllib.request.Request(
+            LEARN_DOCS_URL,
+            headers={"User-Agent": "Mozilla/5.0 (Azure-Sentinel-Solutions-Analyzer)"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            html = response.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        log_print(f"  Warning: failed to fetch Learn docs page: {e}")
+        return set()
+
+    anchors = {m.group(1).lower() for m in _LEARN_ANCHOR_RE.finditer(html)}
+    log_print(f"    Found {len(anchors)} anchors on the Learn data-connectors-reference page")
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        with cache_file.open("w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "url": LEARN_DOCS_URL,
+                    "fetched_at": datetime.now().isoformat(timespec="seconds"),
+                    "anchors": sorted(anchors),
+                },
+                f,
+                indent=2,
+            )
+    except Exception as e:
+        log_print(f"  Warning: could not save Learn docs anchor cache: {e}")
+
+    return anchors
+
+
+def resolve_learn_doc_url(connector_title: str, anchors: Set[str]) -> str:
+    """Return the Learn deep-link URL for a connector title, or '' if no match.
+
+    Tries the connector title's slug first, then a couple of common variants
+    (stripping a trailing "(Preview)" / "(preview)" marker and stripping a
+    trailing "via codeless connector framework" qualifier kept by Learn but
+    sometimes dropped from in-repo titles, and vice-versa).
+    """
+    if not connector_title or not anchors:
+        return ""
+
+    candidates = []
+    primary = _slugify_for_learn(connector_title)
+    if primary:
+        candidates.append(primary)
+
+    # Strip bracketed marketing prefixes like "[Recommended]" / "[Preview]"
+    # that the in-repo title carries but Learn does not. Note: "[Deprecated]"
+    # *is* kept on Learn anchors, so we only strip these two.
+    cleaned = re.sub(
+        r"^\s*\[(recommended|preview)\]\s*", "", connector_title, flags=re.IGNORECASE
+    )
+    if cleaned != connector_title:
+        slug = _slugify_for_learn(cleaned)
+        if slug and slug not in candidates:
+            candidates.append(slug)
+
+    # Stripped of trailing "(preview)" — Learn anchors usually omit it.
+    stripped = re.sub(r"\s*\(\s*preview\s*\)\s*$", "", cleaned, flags=re.IGNORECASE)
+    if stripped != cleaned:
+        slug = _slugify_for_learn(stripped)
+        if slug and slug not in candidates:
+            candidates.append(slug)
+
+    for slug in candidates:
+        if slug in anchors:
+            return f"{LEARN_DOCS_URL}#{slug}"
+
+    return ""
+
+
 MARKETPLACE_FIELDS = [
     'mp_is_published',
     'mp_url',
@@ -11268,6 +11391,26 @@ def main() -> None:
 
     log_print(f"  Found {clv1_table_count} CLv1 tables and {clv1_connector_count} connectors using CLv1 tables")
 
+    # Enrich connectors with Microsoft Learn deep-links from the
+    # `data-connectors-reference` page (cached; refetch with
+    # --force-refresh=learn_docs).
+    learn_anchors = fetch_learn_docs_anchors(
+        cache_dir,
+        force_refresh=("learn_docs" in _force_refresh_types),
+    )
+    learn_matched = 0
+    for connector in connectors_data:
+        title = connector.get('connector_title', '')
+        url = resolve_learn_doc_url(title, learn_anchors) if learn_anchors else ''
+        connector['learn_doc_url'] = url
+        if url:
+            learn_matched += 1
+    if learn_anchors:
+        log_print(
+            f"  Matched {learn_matched} of {len(connectors_data)} connectors "
+            f"to Microsoft Learn anchors"
+        )
+
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
         "Table",
@@ -11331,6 +11474,7 @@ def main() -> None:
         'ingestion_api',
         'ingestion_api_reason',
         'is_clv1',
+        'learn_doc_url',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
