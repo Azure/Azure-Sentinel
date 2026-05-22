@@ -1,9 +1,16 @@
 """Audit report comparing Microsoft Learn `data-connectors-reference` against the analyzer's CSV outputs.
 
-Produces three findings (CSV + a Markdown summary):
-  1. Connectors **in published+Active solutions** that are missing from Learn.
-  2. Connectors documented on Learn but missing from the analyzer.
-  3. Connectors present in both, but with a mismatch in the table list.
+Produces three CSV findings (plus a Markdown summary). All comparisons are
+scoped to **active connectors in published, non-deprecated solutions**:
+  1. `connector_coverage_gaps.csv` — union of (a) active connectors missing
+     from Learn and (b) Learn entries with no active analyzer connector.
+     A `missing_from` column distinguishes the two directions.
+  2. `connector_table_mismatches.csv` — connectors present in both, but
+     with a mismatch in the table list.
+  3. `connector_potential_matches.csv` — pairs of gap rows (one from each
+     direction) that share most of their content tokens. These are typically
+     V1/V2 splits, minor word differences (Audit vs Events), or renames —
+     surfaced for human review without auto-matching.
 
 The Learn HTML is cached at `.cache/data_connectors_reference.html`
 (separate from the anchor-only cache the mapper maintains).  Pass
@@ -41,10 +48,22 @@ from map_solutions_connectors_tables import (  # noqa: E402
 )
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
-_RECOMMENDED_PREFIX_RE = re.compile(r"^\s*\[(?:recommended|preview)\]\s*", re.IGNORECASE)
+# Bracketed marketing prefix on a title. Stripped on both sides so that an
+# in-repo `[Recommended] X` matches a Learn `recommended-x` anchor and an
+# in-repo `Y` matches a Learn `[Deprecated] Y` / `deprecated-y` anchor.
+_RECOMMENDED_PREFIX_RE = re.compile(
+    r"^\s*\[(?:recommended|preview|deprecated)\]\s*", re.IGNORECASE
+)
 _TRAILING_PREVIEW_RE = re.compile(r"\s*\(preview\)\s*$", re.IGNORECASE)
+# Trailing parenthesised clause on a title (used to peel off, iteratively,
+# `(Push)`, `(using Azure Functions)`, `(via Codeless Connector Framework)`,
+# `(Preview)`, etc., so that titles with multiple bracketed suffixes still
+# reach a bare base).
+_PAREN_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
 _LEARN_ANCHOR_DROP_RE = re.compile(r"[&/().:,;'\"!?\[\]{}|*<>=+@#$%^`~\\]")
 _LEARN_ANCHOR_KEEP_RE = re.compile(r"[^a-z0-9\-]")
+_ANCHOR_PREFIX_RE = re.compile(r"^(?:recommended|preview|deprecated)-", re.IGNORECASE)
+_DASH_RUN_RE = re.compile(r"-+")
 
 # Trailing qualifier suffixes mirrored from the mapper. Keep in sync with
 # `_LEARN_QUALIFIER_SUFFIXES` in map_solutions_connectors_tables.py.
@@ -64,6 +83,9 @@ _QUAL_STRIP_RE = re.compile(
     r"-(?:" + "|".join(_QUAL_SUFFIXES) + r")(?=-|$)",
     re.IGNORECASE,
 )
+# Trailing `-v<digits>` on a slug — Learn occasionally splits one in-repo
+# connector into V1/V2 anchors with this suffix.
+_VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=-|$)", re.IGNORECASE)
 
 
 def slugify(text: str) -> str:
@@ -81,11 +103,13 @@ def slugify_learn_anchor(text: str) -> str:
 
 
 def _strip_qualifiers(slug: str) -> str:
+    """Strip trailing qualifier suffixes and `-v\\d+` repeatedly."""
     prev = None
     cur = slug
     while prev != cur:
         prev = cur
         cur = _QUAL_STRIP_RE.sub("", cur).rstrip("-")
+        cur = _VERSION_SUFFIX_RE.sub("", cur).rstrip("-")
     return cur
 
 
@@ -96,27 +120,74 @@ def title_slug_variants(title: str) -> List[str]:
         if s and s not in out:
             out.append(s)
 
-    primary = slugify(title)
-    add(primary)
-    add(slugify_learn_anchor(title))
+    def add_for(text: str) -> None:
+        if not text:
+            return
+        prim = slugify(text)
+        add(prim)
+        add(slugify_learn_anchor(text))
+        if prim:
+            base = _strip_qualifiers(prim)
+            if base and base != prim:
+                for suf in _QUAL_SUFFIXES:
+                    add(f"{base}-{suf}")
+                add(base)
+            else:
+                for suf in _QUAL_SUFFIXES:
+                    add(f"{prim}-{suf}")
+
+    add_for(title)
     stripped = _RECOMMENDED_PREFIX_RE.sub("", title)
     if stripped != title:
-        add(slugify(stripped))
-        add(slugify_learn_anchor(stripped))
-    no_preview = _TRAILING_PREVIEW_RE.sub("", title)
-    if no_preview != title:
-        add(slugify(no_preview))
-        add(slugify_learn_anchor(no_preview))
-    if primary:
-        base = _strip_qualifiers(primary)
-        if base and base != primary:
-            for suf in _QUAL_SUFFIXES:
-                add(f"{base}-{suf}")
-            add(base)
-        else:
-            for suf in _QUAL_SUFFIXES:
-                add(f"{primary}-{suf}")
+        add_for(stripped)
+    # Iteratively peel trailing `(…)` clauses (handles multi-suffix titles).
+    cur = stripped
+    while True:
+        new = _PAREN_SUFFIX_RE.sub("", cur).rstrip()
+        if new == cur or not new:
+            break
+        add_for(new)
+        cur = new
     return out
+
+
+def build_learn_lookup(learn: Dict[str, Dict]) -> Dict[str, str]:
+    """Return `{normalised_slug: original_anchor}` over all Learn anchors.
+
+    Adds extra keys absorbing common diffs vs in-repo titles:
+      * the raw anchor;
+      * dash-collapsed anchor (e.g. `mimecast-audit--authentication-…`
+        → `mimecast-audit-authentication-…`);
+      * anchor with leading `recommended-`/`preview-`/`deprecated-` stripped;
+      * both combined.
+    Earlier (raw) keys win over later normalisations.
+    """
+    lookup: Dict[str, str] = {}
+    def _add(key: str, anchor: str) -> None:
+        if key and key not in lookup:
+            lookup[key] = anchor
+    for slug in learn:
+        _add(slug, slug)
+    for slug in learn:
+        _add(_DASH_RUN_RE.sub("-", slug).strip("-"), slug)
+        no_pref = _ANCHOR_PREFIX_RE.sub("", slug)
+        _add(no_pref, slug)
+        _add(_DASH_RUN_RE.sub("-", no_pref).strip("-"), slug)
+    return lookup
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_STOPWORDS = frozenset({
+    "a", "an", "and", "the", "for", "of", "to", "with", "via", "using",
+    "data", "connector", "connectors", "logs", "log", "sentinel",
+    "microsoft", "azure", "function", "functions", "push", "polling",
+    "ccf", "ccp", "ama", "codeless", "framework", "legacy", "agent",
+    "preview", "recommended", "deprecated", "v1", "v2", "v3",
+})
+
+
+def _core_tokens(title: str) -> Set[str]:
+    return {t for t in _TOKEN_RE.findall(title.lower()) if t not in _STOPWORDS}
 
 
 # ---------- Learn page ----------
@@ -226,6 +297,7 @@ def main() -> None:
         sys.exit(1)
     learn = parse_learn_sections(html)
     print(f"  {len(learn)} connector sections parsed from Learn")
+    learn_lookup = build_learn_lookup(learn)
 
     print("Loading analyzer CSVs …")
     published = load_published_solutions(ANALYZER_DIR / "solutions.csv")
@@ -241,7 +313,7 @@ def main() -> None:
     for c in connectors:
         title = c.get("connector_title", "")
         variants = title_slug_variants(title)
-        match = next((v for v in variants if v in learn), "")
+        match = next((learn_lookup[v] for v in variants if v in learn_lookup), "")
         if match:
             learn_used_slugs.add(match)
         else:
@@ -253,16 +325,21 @@ def main() -> None:
                 "tried_slugs": " | ".join(variants),
             })
 
-    # ---- 2. Connectors in Learn but missing from analyzer (titles only) ----
-    # Match any analyzer connector (regardless of solution/active) by any
-    # known title variant, so "missing" really means "no analyzer hit at all".
-    all_analyzer_slugs: Set[str] = set()
-    for c in load_csv(ANALYZER_DIR / "connectors.csv"):
+    # ---- 2. Connectors in Learn but missing from analyzer (active-published only) ----
+    # Build the slug set from active published connectors only, so "missing
+    # from analyzer" means "no active connector in any published, non-deprecated
+    # solution covers this Learn entry". Use the same normalised lookup
+    # semantics: a Learn anchor is covered if *any* variant of *any* active
+    # connector resolves to that anchor via `learn_lookup`.
+    covered_learn_anchors: Set[str] = set()
+    for c in connectors:
         for v in title_slug_variants(c.get("connector_title", "")):
-            all_analyzer_slugs.add(v)
+            anchor = learn_lookup.get(v)
+            if anchor:
+                covered_learn_anchors.add(anchor)
     missing_from_analyzer = []
     for slug, meta in learn.items():
-        if slug in all_analyzer_slugs:
+        if slug in covered_learn_anchors:
             continue
         missing_from_analyzer.append({
             "learn_slug": slug,
@@ -277,7 +354,7 @@ def main() -> None:
     for c in connectors:
         title = c.get("connector_title", "")
         variants = title_slug_variants(title)
-        match = next((v for v in variants if v in learn), "")
+        match = next((learn_lookup[v] for v in variants if v in learn_lookup), "")
         if not match:
             continue
         cid = c.get("connector_id", "")
@@ -300,6 +377,35 @@ def main() -> None:
             "learn_table_count": len(learn_tables),
         })
 
+    # ---- Build combined coverage-gap rows ----
+    coverage_gaps: List[Dict] = []
+    for r in missing_from_learn:
+        coverage_gaps.append({
+            "missing_from": "learn",
+            "connector_title": r["connector_title"],
+            "connector_id": r["connector_id"],
+            "solution_name": r["solution_name"],
+            "collection_method": r["collection_method"],
+            "learn_slug": "",
+            "learn_url": "",
+            "learn_table_count": "",
+            "learn_tables": "",
+            "tried_slugs": r["tried_slugs"],
+        })
+    for r in missing_from_analyzer:
+        coverage_gaps.append({
+            "missing_from": "analyzer",
+            "connector_title": r["learn_title"],
+            "connector_id": "",
+            "solution_name": "",
+            "collection_method": "",
+            "learn_slug": r["learn_slug"],
+            "learn_url": r["learn_url"],
+            "learn_table_count": r["learn_table_count"],
+            "learn_tables": r["learn_tables"],
+            "tried_slugs": "",
+        })
+
     # ---- Write CSVs ----
     def write_csv(name: str, rows: List[Dict], fieldnames: List[str]) -> Path:
         p = REPORT_DIR / name
@@ -309,19 +415,73 @@ def main() -> None:
             w.writerows(rows)
         return p
 
-    p1 = write_csv("connectors_missing_from_learn.csv",
-                   sorted(missing_from_learn, key=lambda r: r["connector_title"].lower()),
-                   ["connector_id", "connector_title", "solution_name",
-                    "collection_method", "tried_slugs"])
-    p2 = write_csv("connectors_missing_from_analyzer.csv",
-                   sorted(missing_from_analyzer, key=lambda r: r["learn_title"].lower()),
-                   ["learn_slug", "learn_title", "learn_table_count",
-                    "learn_tables", "learn_url"])
-    p3 = write_csv("connector_table_mismatches.csv",
+    # Remove the old split CSVs if present (the audit now publishes one
+    # combined coverage-gap file).
+    for stale in ("connectors_missing_from_learn.csv",
+                  "connectors_missing_from_analyzer.csv"):
+        stale_p = REPORT_DIR / stale
+        if stale_p.exists():
+            stale_p.unlink()
+
+    p1 = write_csv(
+        "connector_coverage_gaps.csv",
+        sorted(coverage_gaps,
+               key=lambda r: (r["missing_from"], r["connector_title"].lower())),
+        ["missing_from", "connector_title", "connector_id", "solution_name",
+         "collection_method", "learn_slug", "learn_url",
+         "learn_table_count", "learn_tables", "tried_slugs"],
+    )
+    p2 = write_csv("connector_table_mismatches.csv",
                    sorted(table_mismatches, key=lambda r: r["connector_title"].lower()),
                    ["connector_id", "connector_title", "solution_name", "learn_slug",
                     "analyzer_table_count", "learn_table_count",
                     "only_in_analyzer", "only_in_learn"])
+
+    # ---- 4. Potential matches between the two gap directions ----
+    # For each (analyzer-side missing, Learn-side missing) pair, compute a
+    # Jaccard similarity over their content tokens (after stripping common
+    # stopwords like `using`, `via`, `function`, `v1`, `v2`, etc.). Pairs
+    # with similarity >= 0.5 are surfaced for human review — these are
+    # typically V1/V2 splits, `Audit` vs `Events`, `Activity` vs `Activities`,
+    # or other one-word differences that should not be auto-matched.
+    potential_matches: List[Dict] = []
+    THRESHOLD = 0.5
+    for a in missing_from_learn:
+        a_tokens = _core_tokens(a["connector_title"])
+        if not a_tokens:
+            continue
+        for l in missing_from_analyzer:
+            l_tokens = _core_tokens(l["learn_title"])
+            if not l_tokens:
+                continue
+            inter = a_tokens & l_tokens
+            if not inter:
+                continue
+            union = a_tokens | l_tokens
+            sim = len(inter) / len(union)
+            if sim < THRESHOLD:
+                continue
+            potential_matches.append({
+                "similarity": f"{sim:.2f}",
+                "analyzer_title": a["connector_title"],
+                "analyzer_connector_id": a["connector_id"],
+                "analyzer_solution": a["solution_name"],
+                "learn_title": l["learn_title"],
+                "learn_slug": l["learn_slug"],
+                "learn_url": f"{LEARN_URL}#{l['learn_slug']}",
+                "shared_tokens": ", ".join(sorted(inter)),
+                "only_in_analyzer": ", ".join(sorted(a_tokens - l_tokens)) or "—",
+                "only_in_learn": ", ".join(sorted(l_tokens - a_tokens)) or "—",
+            })
+    potential_matches.sort(key=lambda r: (-float(r["similarity"]),
+                                          r["analyzer_title"].lower()))
+    p3 = write_csv(
+        "connector_potential_matches.csv",
+        potential_matches,
+        ["similarity", "analyzer_title", "analyzer_connector_id",
+         "analyzer_solution", "learn_title", "learn_slug", "learn_url",
+         "shared_tokens", "only_in_analyzer", "only_in_learn"],
+    )
 
     # ---- Markdown summary ----
     summary = REPORT_DIR / "README.md"
@@ -331,43 +491,55 @@ def main() -> None:
         f.write(f"- Learn sections parsed: **{len(learn)}**\n")
         f.write(f"- Published, non-deprecated solutions: **{len(published)}**\n")
         f.write(f"- Active connectors in those solutions: **{len(connectors)}**\n\n")
-        f.write("## 1. Active connectors missing from Learn\n\n")
-        f.write(f"**{len(missing_from_learn)}** active connectors in published solutions are not on Learn. "
-                f"See [`connectors_missing_from_learn.csv`](connectors_missing_from_learn.csv).\n\n")
+        f.write("## 1. Connector coverage gaps\n\n")
+        f.write(
+            f"**{len(coverage_gaps)}** total gaps — "
+            f"**{len(missing_from_learn)}** active connectors not on Learn, "
+            f"**{len(missing_from_analyzer)}** Learn entries not covered by any active connector. "
+            f"See [`connector_coverage_gaps.csv`](connector_coverage_gaps.csv).\n\n"
+        )
         if missing_from_learn:
-            top = missing_from_learn[:20]
+            f.write("### 1a. Active connectors missing from Learn\n\n")
             f.write("| Title | Solution | Collection method |\n|---|---|---|\n")
-            for r in sorted(top, key=lambda r: r["connector_title"].lower()):
+            for r in sorted(missing_from_learn, key=lambda r: r["connector_title"].lower()):
                 f.write(f"| {r['connector_title']} | {r['solution_name']} | {r['collection_method']} |\n")
-            if len(missing_from_learn) > 20:
-                f.write(f"\n_…and {len(missing_from_learn) - 20} more. Full list in the CSV._\n")
-        f.write("\n## 2. Learn entries with no analyzer match\n\n")
-        f.write(f"**{len(missing_from_analyzer)}** Learn sections have no matching connector in the analyzer. "
-                f"See [`connectors_missing_from_analyzer.csv`](connectors_missing_from_analyzer.csv).\n\n")
+            f.write("\n")
         if missing_from_analyzer:
-            top = missing_from_analyzer[:20]
+            f.write("### 1b. Learn entries with no active analyzer connector\n\n")
             f.write("| Learn title | Tables | URL |\n|---|---|---|\n")
-            for r in sorted(top, key=lambda r: r["learn_title"].lower()):
+            for r in sorted(missing_from_analyzer, key=lambda r: r["learn_title"].lower()):
                 f.write(f"| {r['learn_title']} | {r['learn_table_count']} | [link]({r['learn_url']}) |\n")
-            if len(missing_from_analyzer) > 20:
-                f.write(f"\n_…and {len(missing_from_analyzer) - 20} more. Full list in the CSV._\n")
-        f.write("\n## 3. Table-list mismatches\n\n")
+        f.write("\n## 2. Table-list mismatches\n\n")
         f.write(f"**{len(table_mismatches)}** connectors match by title but have a different set of Log Analytics tables. "
                 f"See [`connector_table_mismatches.csv`](connector_table_mismatches.csv).\n\n")
         if table_mismatches:
-            top = table_mismatches[:20]
-            f.write("| Title | Only in analyzer | Only on Learn |\n|---|---|---|\n")
-            for r in sorted(top, key=lambda r: r["connector_title"].lower()):
+            f.write("| Title | Solution | Only in analyzer | Only on Learn |\n|---|---|---|---|\n")
+            for r in sorted(table_mismatches, key=lambda r: r["connector_title"].lower()):
                 a = r["only_in_analyzer"] or "—"
                 b = r["only_in_learn"] or "—"
-                f.write(f"| {r['connector_title']} | {a} | {b} |\n")
-            if len(table_mismatches) > 20:
-                f.write(f"\n_…and {len(table_mismatches) - 20} more. Full list in the CSV._\n")
+                f.write(f"| {r['connector_title']} | {r['solution_name']} | {a} | {b} |\n")
+        f.write("\n## 3. Potential matches (for manual review)\n\n")
+        f.write(
+            f"**{len(potential_matches)}** pair(s) of gap rows share ≥ 50% of "
+            f"their content tokens after stripping stopwords. These are likely "
+            f"V1/V2 splits, minor word differences (`Audit` vs `Events`), or "
+            f"renames — surfaced here so they can be confirmed or dismissed "
+            f"without auto-matching. See [`connector_potential_matches.csv`](connector_potential_matches.csv).\n\n"
+        )
+        if potential_matches:
+            f.write("| Sim | Analyzer title | Learn title | Only in analyzer | Only on Learn |\n|---|---|---|---|---|\n")
+            for r in potential_matches:
+                f.write(
+                    f"| {r['similarity']} | {r['analyzer_title']} | "
+                    f"[{r['learn_title']}]({r['learn_url']}) | "
+                    f"{r['only_in_analyzer']} | {r['only_in_learn']} |\n"
+                )
 
     print()
-    print(f"  1. Active connectors missing from Learn:    {len(missing_from_learn):4d}  → {p1.relative_to(ANALYZER_DIR)}")
-    print(f"  2. Learn entries missing from analyzer:     {len(missing_from_analyzer):4d}  → {p2.relative_to(ANALYZER_DIR)}")
-    print(f"  3. Table-list mismatches:                   {len(table_mismatches):4d}  → {p3.relative_to(ANALYZER_DIR)}")
+    print(f"  1. Connector coverage gaps:                 {len(coverage_gaps):4d}  → {p1.relative_to(ANALYZER_DIR)}")
+    print(f"       (missing from Learn: {len(missing_from_learn)}, missing from analyzer: {len(missing_from_analyzer)})")
+    print(f"  2. Table-list mismatches:                   {len(table_mismatches):4d}  → {p2.relative_to(ANALYZER_DIR)}")
+    print(f"  3. Potential matches (manual review):       {len(potential_matches):4d}  → {p3.relative_to(ANALYZER_DIR)}")
     print(f"  Summary: {summary.relative_to(ANALYZER_DIR)}")
 
 

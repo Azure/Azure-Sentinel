@@ -198,6 +198,18 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.9 - Learn deep-link heuristics expanded; new "potential matches" audit finding
+
+**Mapper – additional Learn-anchor heuristics:**
+- `[Deprecated]` is now stripped (alongside `[Recommended]` and `[Preview]`) when normalising a connector title for Learn-anchor matching, on both sides. The Learn anchor lookup is also keyed by dash-collapsed and `recommended-`/`preview-`/`deprecated-`-prefix-stripped variants of every raw anchor, so an analyzer slug like `mimecast-audit-authentication-using-azure-functions` resolves to the Learn anchor `mimecast-audit--authentication-using-azure-functions` (which the Learn anchor flavour produces because `&` between two spaces collapses to `--`).
+- Title variant generation now iteratively peels trailing `(…)` clauses, so multi-suffix titles like `Cloudflare (Preview) (using Azure Functions)`, `Abnormal Security (Push)`, and `Auth0 Logs (via Codeless Connector Framework)` reach a bare base from which all qualifier suffixes are then tried.
+- The internal "base slug" (used to detach a qualifier suffix and re-attach a different one) now also strips trailing `-v\d+`, so `Dynatrace Attacks` matches `Dynatrace Attacks V1` / `V2`.
+- Together these lift the Learn match rate on the current corpus from 330/615 (54%) to 360/615 (59%).
+
+**Audit – new "potential matches" finding:**
+- The same heuristics are mirrored in `reports/learn_docs_audit.py`. Combined with the renormalised anchor lookup, the audit's coverage-gap count drops from 117 to 99 (82 active connectors missing from Learn, down from 92; 17 Learn entries with no active analyzer connector, down from 25).
+- New report `connector_potential_matches.csv` (and a section 3 in the audit README) pairs each "missing from Learn" row with each "missing from analyzer" row and surfaces those whose content tokens overlap by ≥ 50% (Jaccard, after stripping stopwords like `using`, `via`, `function`, `v1`, `v2`). These are typically V1/V2 splits, `Audit` vs `Events`, or one-word renames — surfaced for human review without auto-matching.
+
 ### v9.8 - TI Upload supersession, ASIM badge sizing, Learn deep-links, and faster HTML generation
 
 **Connector collection-method classification fix:**

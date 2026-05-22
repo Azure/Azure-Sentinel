@@ -4571,6 +4571,22 @@ _LEARN_QUALIFIER_STRIP_RE = re.compile(
     r"-(?:" + "|".join(_LEARN_QUALIFIER_SUFFIXES) + r")(?=-|$)",
     re.IGNORECASE,
 )
+# Trailing -v<digits> on a slug (e.g., `-v1`, `-v2`). Learn often splits a
+# single in-repo connector into V1/V2 anchors; stripping this from the slug
+# base lets the analyzer-side bare title match both.
+_LEARN_VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=-|$)", re.IGNORECASE)
+# Trailing parenthesised clause on a title (e.g., `Cloudflare (Preview)`).
+_LEARN_PAREN_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
+# Leading bracket marketing prefix on a title (`[Recommended]`,
+# `[Preview]`, `[Deprecated]`) and on a Learn anchor slug
+# (`recommended-`, `preview-`, `deprecated-`).
+_LEARN_BRACKET_PREFIX_RE = re.compile(
+    r"^\s*\[(?:recommended|preview|deprecated)\]\s*", re.IGNORECASE
+)
+_LEARN_ANCHOR_PREFIX_RE = re.compile(
+    r"^(?:recommended|preview|deprecated)-", re.IGNORECASE
+)
+_LEARN_DASH_RUN_RE = re.compile(r"-+")
 
 
 def _slugify_for_learn(text: str) -> str:
@@ -4711,10 +4727,11 @@ def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Se
 
 
 def _learn_base_slug(slug: str) -> str:
-    """Strip trailing Learn qualifier suffixes (e.g. `-using-azure-functions`,
-    `-ccf`, `-via-legacy-agent`, `-preview`) from a slug, repeatedly, until
-    no more strip away. Used to align analyzer titles against Learn anchors
-    that carry different (or extra) qualifier suffixes.
+    r"""Strip trailing Learn qualifier suffixes (e.g. `-using-azure-functions`,
+    `-ccf`, `-via-legacy-agent`, `-preview`) and any trailing `-v\d+` from a
+    slug, repeatedly, until no more strip away. Used to align analyzer titles
+    against Learn anchors that carry different (or extra) qualifier suffixes
+    or that split one in-repo connector into V1/V2 anchors.
     """
     if not slug:
         return slug
@@ -4723,24 +4740,70 @@ def _learn_base_slug(slug: str) -> str:
     while prev != cur:
         prev = cur
         cur = _LEARN_QUALIFIER_STRIP_RE.sub("", cur).rstrip("-")
+        cur = _LEARN_VERSION_SUFFIX_RE.sub("", cur).rstrip("-")
     return cur
 
 
-def resolve_learn_doc_url(connector_title: str, anchors: Set[str]) -> str:
-    """Return the Learn deep-link URL for a connector title, or '' if no match.
+def build_learn_anchor_lookup(anchors: Set[str]) -> Dict[str, str]:
+    """Build a normalised lookup `{key: original_anchor}` over Learn anchors.
+
+    The lookup adds extra keys that absorb common normalisation differences
+    between in-repo connector titles and Learn page anchor slugs:
+      * the raw anchor itself;
+      * the anchor with runs of `-` collapsed to single `-`
+        (so `mimecast-audit--authentication-using-azure-functions`
+         is reachable as the GitHub-style slug);
+      * the anchor with a leading `recommended-` / `preview-` /
+        `deprecated-` prefix stripped (Learn sometimes carries these,
+        in-repo titles usually do not);
+      * both transformations combined.
+    Later additions never overwrite earlier ones, so the raw anchor wins.
+    """
+    lookup: Dict[str, str] = {}
+    def _add(key: str, anchor: str) -> None:
+        if key and key not in lookup:
+            lookup[key] = anchor
+
+    for anchor in anchors:
+        _add(anchor, anchor)
+    for anchor in anchors:
+        collapsed = _LEARN_DASH_RUN_RE.sub("-", anchor).strip("-")
+        _add(collapsed, anchor)
+        stripped = _LEARN_ANCHOR_PREFIX_RE.sub("", anchor)
+        _add(stripped, anchor)
+        stripped_collapsed = _LEARN_DASH_RUN_RE.sub("-", stripped).strip("-")
+        _add(stripped_collapsed, anchor)
+    return lookup
+
+
+def resolve_learn_doc_url(connector_title: str, anchors) -> str:
+    r"""Return the Learn deep-link URL for a connector title, or '' if no match.
+
+    `anchors` is either a `Set[str]` of raw anchors (legacy callers) or a
+    pre-built lookup dict from `build_learn_anchor_lookup`. Passing the
+    lookup avoids rebuilding it for every connector.
 
     Matching strategy (first hit wins):
-      1. Primary slug of the title.
-      2. Same, with `[Recommended]` / `[Preview]` bracketed prefix stripped.
-      3. Same, with trailing `(Preview)` qualifier stripped.
-      4. Base slug (all trailing qualifier suffixes stripped — e.g.
-         `(via Codeless Connector Framework)`, `via Legacy Agent`,
-         `(using Azure Functions)`) combined with each known Learn qualifier
-         suffix (`-using-azure-functions`, `-ccf`, `-ccp`, etc.).
+      1. Primary slug of the title (GitHub-style and Learn-anchor flavour).
+      2. Same, with `[Recommended]` / `[Preview]` / `[Deprecated]` bracketed
+         prefix stripped.
+      3. Same, after stripping each trailing `(…)` clause iteratively
+         (e.g. `Cloudflare (Preview) (using Azure Functions)` → `Cloudflare`).
+      4. Base slug (all trailing qualifier suffixes and `-v\d+` stripped)
+         combined with each known Learn qualifier suffix.
       5. The bare base slug, in case Learn omits qualifiers entirely.
+    All variants are also checked against a normalised anchor lookup so
+    that double-dashes and `recommended-`/`deprecated-` prefixes on the
+    Learn side do not block a match.
     """
     if not connector_title or not anchors:
         return ""
+
+    lookup: Dict[str, str]
+    if isinstance(anchors, dict):
+        lookup = anchors
+    else:
+        lookup = build_learn_anchor_lookup(set(anchors))
 
     candidates: List[str] = []
 
@@ -4748,47 +4811,47 @@ def resolve_learn_doc_url(connector_title: str, anchors: Set[str]) -> str:
         if slug and slug not in candidates:
             candidates.append(slug)
 
-    primary = _slugify_for_learn(connector_title)
-    _add(primary)
-    # Also try the Learn-anchor flavour (drops `&/():` etc., preserves `--`).
-    _add(_slugify_learn_anchor(connector_title))
+    def _add_slug_variants(text: str) -> None:
+        if not text:
+            return
+        primary = _slugify_for_learn(text)
+        _add(primary)
+        _add(_slugify_learn_anchor(text))
+        if primary:
+            base = _learn_base_slug(primary)
+            if base and base != primary:
+                for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                    _add(f"{base}-{suffix}")
+                _add(base)
+            else:
+                for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                    _add(f"{primary}-{suffix}")
 
-    # Strip bracketed marketing prefixes like "[Recommended]" / "[Preview]"
-    # that the in-repo title carries but Learn does not. Note: "[Deprecated]"
-    # *is* kept on Learn anchors, so we only strip these two.
-    cleaned = re.sub(
-        r"^\s*\[(recommended|preview)\]\s*", "", connector_title, flags=re.IGNORECASE
-    )
+    _add_slug_variants(connector_title)
+
+    # Strip bracketed marketing prefixes like `[Recommended]` / `[Preview]` /
+    # `[Deprecated]` that the in-repo title carries but Learn anchors usually
+    # do not (Learn deprecated entries become `deprecated-<slug>` anchors,
+    # absorbed via the lookup normalisation).
+    cleaned = _LEARN_BRACKET_PREFIX_RE.sub("", connector_title)
     if cleaned != connector_title:
-        _add(_slugify_for_learn(cleaned))
-        _add(_slugify_learn_anchor(cleaned))
+        _add_slug_variants(cleaned)
 
-    # Strip trailing "(preview)" — Learn anchors usually omit it.
-    stripped = re.sub(r"\s*\(\s*preview\s*\)\s*", " ", cleaned, flags=re.IGNORECASE).strip()
-    if stripped != cleaned:
-        _add(_slugify_for_learn(stripped))
-        _add(_slugify_learn_anchor(stripped))
-
-    # Try qualifier-suffix variants. Compute a base from the primary slug by
-    # stripping every known Learn qualifier suffix, then re-append each known
-    # suffix to try matching Learn's wording for the same connector.
-    if primary:
-        base = _learn_base_slug(primary)
-        if base and base != primary:
-            for suffix in _LEARN_QUALIFIER_SUFFIXES:
-                _add(f"{base}-{suffix}")
-            # And the bare base, in case Learn omits all qualifiers.
-            _add(base)
-        else:
-            # Primary had no recognised qualifier; still try adding each suffix
-            # in case Learn appends one the analyzer title omitted (e.g.,
-            # analyzer "1Password" → Learn "1password-using-azure-functions").
-            for suffix in _LEARN_QUALIFIER_SUFFIXES:
-                _add(f"{primary}-{suffix}")
+    # Iteratively strip trailing `(…)` clauses from the title and try the
+    # result at each step (handles `Cloudflare (Preview) (using Azure Functions)`,
+    # `Auth0 Logs (via Codeless Connector Framework)`, `Abnormal Security (Push)`).
+    cur = cleaned
+    while True:
+        new = _LEARN_PAREN_SUFFIX_RE.sub("", cur).rstrip()
+        if new == cur or not new:
+            break
+        _add_slug_variants(new)
+        cur = new
 
     for slug in candidates:
-        if slug in anchors:
-            return f"{LEARN_DOCS_URL}#{slug}"
+        anchor = lookup.get(slug)
+        if anchor:
+            return f"{LEARN_DOCS_URL}#{anchor}"
 
     return ""
 
@@ -11527,10 +11590,11 @@ def main() -> None:
         cache_dir,
         force_refresh=("learn_docs" in _force_refresh_types),
     )
+    learn_lookup = build_learn_anchor_lookup(learn_anchors) if learn_anchors else {}
     learn_matched = 0
     for connector in connectors_data:
         title = connector.get('connector_title', '')
-        url = resolve_learn_doc_url(title, learn_anchors) if learn_anchors else ''
+        url = resolve_learn_doc_url(title, learn_lookup) if learn_lookup else ''
         connector['learn_doc_url'] = url
         if url:
             learn_matched += 1
