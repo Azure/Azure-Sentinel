@@ -4547,8 +4547,30 @@ MARKETPLACE_CACHE_FILENAME = "marketplace_data.json"
 # slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page.
 LEARN_DOCS_URL = "https://learn.microsoft.com/azure/sentinel/data-connectors-reference"
 LEARN_DOCS_CACHE_FILENAME = "data_connectors_reference_anchors.json"
+LEARN_DOCS_HTML_CACHE_FILENAME = "data_connectors_reference.html"
 _LEARN_ANCHOR_RE = re.compile(r'<a\s+(?:[^>]*?\s+)?name="([^"]+)"', re.IGNORECASE)
 _LEARN_SLUG_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Trailing qualifier suffixes that Learn appends to anchor slugs but that the
+# in-repo connector title may render differently (or omit). When a primary
+# slug doesn't match an anchor, we strip these from both sides and try the
+# bare base, then re-add each variant. Order matters: longer first.
+_LEARN_QUALIFIER_SUFFIXES = (
+    "using-azure-functions",
+    "using-azure-function",
+    "via-codeless-connector-framework",
+    "via-legacy-agent",
+    "polling-ccf",
+    "polling-ccp",  # typo on Learn for a couple of entries
+    "via-ama",
+    "ccf",
+    "ccp",  # typo on Learn for a couple of entries (e.g. box-events-ccp)
+    "preview",
+)
+_LEARN_QUALIFIER_STRIP_RE = re.compile(
+    r"-(?:" + "|".join(_LEARN_QUALIFIER_SUFFIXES) + r")(?=-|$)",
+    re.IGNORECASE,
+)
 
 
 def _slugify_for_learn(text: str) -> str:
@@ -4564,6 +4586,76 @@ def _slugify_for_learn(text: str) -> str:
     return _LEARN_SLUG_NON_ALNUM_RE.sub("-", text.lower()).strip("-")
 
 
+# Characters that the Learn page's heading-anchor generator drops entirely
+# (no replacement, no dash). Spaces and `-` are handled separately.
+_LEARN_ANCHOR_DROP_RE = re.compile(r"[&/().:,;'\"!?\[\]{}|*<>=+@#$%^`~\\]")
+_LEARN_ANCHOR_KEEP_RE = re.compile(r"[^a-z0-9\-]")
+
+
+def _slugify_learn_anchor(text: str) -> str:
+    """Reproduce the Learn data-connectors-reference anchor algorithm.
+
+    Unlike `_slugify_for_learn` (which collapses every non-alnum run to a
+    single dash), the live Learn page drops certain punctuation outright
+    (so `Pub/Sub` -> `pubsub`, `Audit & Authentication` -> `audit--auth…`)
+    and preserves consecutive dashes (so `XDR - Incidents` -> `xdr---incidents`).
+
+    Rules, applied in order:
+      1. Lowercase.
+      2. Drop characters in `_LEARN_ANCHOR_DROP_RE` with no replacement.
+      3. Replace each whitespace character with `-`.
+      4. Drop any remaining non `[a-z0-9-]` character.
+      5. Strip leading/trailing `-`. Consecutive `-` are preserved.
+    """
+    if not text:
+        return ""
+    s = text.lower()
+    s = _LEARN_ANCHOR_DROP_RE.sub("", s)
+    s = "".join("-" if c.isspace() else c for c in s)
+    s = _LEARN_ANCHOR_KEEP_RE.sub("", s)
+    return s.strip("-")
+
+
+def fetch_learn_docs_html(cache_dir: Path, force_refresh: bool = False) -> str:
+    """Fetch (and cache) the raw Learn `data-connectors-reference` HTML.
+
+    Shared by both the anchor-set extractor and out-of-band consumers (e.g.,
+    the `reports/learn_docs_audit.py` audit). The HTML is cached at
+    `.cache/data_connectors_reference.html`. Returns an empty string on any
+    fetch/network failure.
+    """
+    html_cache = cache_dir / LEARN_DOCS_HTML_CACHE_FILENAME
+    if not force_refresh and html_cache.exists():
+        try:
+            return html_cache.read_text(encoding="utf-8")
+        except Exception as e:
+            log_print(f"  Warning: could not read cached Learn HTML: {e}")
+
+    if not HAS_URLLIB:
+        return ""
+
+    log_print(f"  Fetching Microsoft Learn HTML from {LEARN_DOCS_URL} …")
+    try:
+        request = urllib.request.Request(
+            LEARN_DOCS_URL,
+            headers={"User-Agent": "Mozilla/5.0 (Azure-Sentinel-Solutions-Analyzer)"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            html = response.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        log_print(f"  Warning: failed to fetch Learn docs page: {e}")
+        return ""
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        html_cache.write_text(html, encoding="utf-8")
+        log_print(f"    Cached {len(html):,} bytes → {html_cache.name}")
+    except Exception as e:
+        log_print(f"  Warning: could not save Learn HTML cache: {e}")
+
+    return html
+
+
 def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Set[str]:
     """Fetch (and cache) the set of `<a name="…">` anchors on the Learn page.
 
@@ -4571,6 +4663,12 @@ def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Se
     large document (~5 MB) with one `<a name="connector-slug">` anchor per
     connector section. We fetch it at most once per cache lifetime; pass
     `--force-refresh=learn_docs` to refetch.
+
+    Maintains two cache artefacts:
+      * `data_connectors_reference.html` — the raw page (shared with the
+        out-of-band audit report).
+      * `data_connectors_reference_anchors.json` — the extracted anchor
+        index, regenerated whenever the HTML is re-fetched.
 
     Returns:
         Set of anchor names (lowercase slugs). Empty set on any failure.
@@ -4587,19 +4685,8 @@ def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Se
         except Exception as e:
             log_print(f"  Warning: could not load Learn docs anchor cache: {e}")
 
-    if not HAS_URLLIB:
-        return set()
-
-    log_print(f"  Fetching Microsoft Learn anchors from {LEARN_DOCS_URL} …")
-    try:
-        request = urllib.request.Request(
-            LEARN_DOCS_URL,
-            headers={"User-Agent": "Mozilla/5.0 (Azure-Sentinel-Solutions-Analyzer)"},
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            html = response.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        log_print(f"  Warning: failed to fetch Learn docs page: {e}")
+    html = fetch_learn_docs_html(cache_dir, force_refresh=force_refresh)
+    if not html:
         return set()
 
     anchors = {m.group(1).lower() for m in _LEARN_ANCHOR_RE.finditer(html)}
@@ -4623,21 +4710,48 @@ def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Se
     return anchors
 
 
+def _learn_base_slug(slug: str) -> str:
+    """Strip trailing Learn qualifier suffixes (e.g. `-using-azure-functions`,
+    `-ccf`, `-via-legacy-agent`, `-preview`) from a slug, repeatedly, until
+    no more strip away. Used to align analyzer titles against Learn anchors
+    that carry different (or extra) qualifier suffixes.
+    """
+    if not slug:
+        return slug
+    prev = None
+    cur = slug
+    while prev != cur:
+        prev = cur
+        cur = _LEARN_QUALIFIER_STRIP_RE.sub("", cur).rstrip("-")
+    return cur
+
+
 def resolve_learn_doc_url(connector_title: str, anchors: Set[str]) -> str:
     """Return the Learn deep-link URL for a connector title, or '' if no match.
 
-    Tries the connector title's slug first, then a couple of common variants
-    (stripping a trailing "(Preview)" / "(preview)" marker and stripping a
-    trailing "via codeless connector framework" qualifier kept by Learn but
-    sometimes dropped from in-repo titles, and vice-versa).
+    Matching strategy (first hit wins):
+      1. Primary slug of the title.
+      2. Same, with `[Recommended]` / `[Preview]` bracketed prefix stripped.
+      3. Same, with trailing `(Preview)` qualifier stripped.
+      4. Base slug (all trailing qualifier suffixes stripped — e.g.
+         `(via Codeless Connector Framework)`, `via Legacy Agent`,
+         `(using Azure Functions)`) combined with each known Learn qualifier
+         suffix (`-using-azure-functions`, `-ccf`, `-ccp`, etc.).
+      5. The bare base slug, in case Learn omits qualifiers entirely.
     """
     if not connector_title or not anchors:
         return ""
 
-    candidates = []
+    candidates: List[str] = []
+
+    def _add(slug: str) -> None:
+        if slug and slug not in candidates:
+            candidates.append(slug)
+
     primary = _slugify_for_learn(connector_title)
-    if primary:
-        candidates.append(primary)
+    _add(primary)
+    # Also try the Learn-anchor flavour (drops `&/():` etc., preserves `--`).
+    _add(_slugify_learn_anchor(connector_title))
 
     # Strip bracketed marketing prefixes like "[Recommended]" / "[Preview]"
     # that the in-repo title carries but Learn does not. Note: "[Deprecated]"
@@ -4646,16 +4760,31 @@ def resolve_learn_doc_url(connector_title: str, anchors: Set[str]) -> str:
         r"^\s*\[(recommended|preview)\]\s*", "", connector_title, flags=re.IGNORECASE
     )
     if cleaned != connector_title:
-        slug = _slugify_for_learn(cleaned)
-        if slug and slug not in candidates:
-            candidates.append(slug)
+        _add(_slugify_for_learn(cleaned))
+        _add(_slugify_learn_anchor(cleaned))
 
-    # Stripped of trailing "(preview)" — Learn anchors usually omit it.
-    stripped = re.sub(r"\s*\(\s*preview\s*\)\s*$", "", cleaned, flags=re.IGNORECASE)
+    # Strip trailing "(preview)" — Learn anchors usually omit it.
+    stripped = re.sub(r"\s*\(\s*preview\s*\)\s*", " ", cleaned, flags=re.IGNORECASE).strip()
     if stripped != cleaned:
-        slug = _slugify_for_learn(stripped)
-        if slug and slug not in candidates:
-            candidates.append(slug)
+        _add(_slugify_for_learn(stripped))
+        _add(_slugify_learn_anchor(stripped))
+
+    # Try qualifier-suffix variants. Compute a base from the primary slug by
+    # stripping every known Learn qualifier suffix, then re-append each known
+    # suffix to try matching Learn's wording for the same connector.
+    if primary:
+        base = _learn_base_slug(primary)
+        if base and base != primary:
+            for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                _add(f"{base}-{suffix}")
+            # And the bare base, in case Learn omits all qualifiers.
+            _add(base)
+        else:
+            # Primary had no recognised qualifier; still try adding each suffix
+            # in case Learn appends one the analyzer title omitted (e.g.,
+            # analyzer "1Password" → Learn "1password-using-azure-functions").
+            for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                _add(f"{primary}-{suffix}")
 
     for slug in candidates:
         if slug in anchors:
