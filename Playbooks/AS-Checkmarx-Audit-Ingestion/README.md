@@ -186,7 +186,7 @@ This playbook is deployed in a **Disabled** state. After waiting for role assign
 Click on the run to view the execution details. Verify that all steps completed successfully, particularly the "**HTTP - Send Audit Events to DCR**" step inside the `Until Paginate Audit Logs` loop.
 
 > [!NOTE]
-> Because the playbook ingests current-day events only (see the scope note at the top of this README), the initial run will ingest events that have occurred so far on the day it is run. Keeping the playbook enabled for daily runs is what builds up history over time. If the current day has no audit activity yet, the run will complete successfully without ingesting any rows.
+> Because the playbook ingests current-day events only, the initial run will ingest events that have occurred so far on the day it is run. Keeping the playbook enabled for daily runs is what builds up history over time. If the current day has no audit activity yet, the run will complete successfully without ingesting any rows.
 
 #
 
