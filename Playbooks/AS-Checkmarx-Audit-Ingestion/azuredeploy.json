@@ -10,9 +10,9 @@
         ],
         "postDeployment": [
             "1. Allow up to 10 minutes for role assignments to propagate",
-            "2. Enable the Logic App (deployed in Disabled state) and run it to backfill"
+            "2. Enable the Logic App (deployed in Disabled state) and run it"
         ],
-        "lastUpdateTime": "2026-04-28T00:00:00Z",
+        "lastUpdateTime": "2026-04-28T00:00:00.000Z",
         "support": {
             "tier": "partner"
         },
@@ -65,6 +65,20 @@
                 "description": "Name of the Key Vault secret containing the Checkmarx client secret or refresh token"
             }
         },
+        "DataCollectionEndpointName": {
+            "type": "string",
+            "defaultValue": "dce-checkmarx-audit-ingestion",
+            "metadata": {
+                "description": "Name of the Data Collection Endpoint. Override the default if deploying multiple ingestion playbooks into the same resource group to avoid name collisions."
+            }
+        },
+        "DataCollectionRuleName": {
+            "type": "string",
+            "defaultValue": "dcr-checkmarx-audit-ingestion",
+            "metadata": {
+                "description": "Name of the Data Collection Rule. Override the default if deploying multiple ingestion playbooks into the same resource group to avoid name collisions."
+            }
+        },
         "CheckmarxIAMBaseUrl": {
             "type": "string",
             "defaultValue": "https://us.iam.checkmarx.net",
@@ -101,14 +115,6 @@
                 "description": "OAuth grant type. Use 'refresh_token' with a refresh token stored in Key Vault, or 'client_credentials' with a client secret stored in Key Vault."
             }
         },
-        "LookbackDays": {
-            "type": "int",
-            "defaultValue": 1,
-            "minValue": 1,
-            "metadata": {
-                "description": "Number of days prior to each run to pull audit events from. Set higher for an initial backfill, then lower for steady-state daily runs."
-            }
-        },
         "AuditPageSize": {
             "type": "int",
             "defaultValue": 100,
@@ -120,13 +126,11 @@
     "variables": {
         "tableName": "CheckmarxAuditEvents_CL",
         "streamName": "Custom-CheckmarxAuditEvents_CL",
-        "dataCollectionEndpointName": "dce-checkmarx-audit-ingestion",
-        "dataCollectionRuleName": "dcr-checkmarx-audit-ingestion",
         "connectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
         "keyVaultRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
         "monitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
         "kvRoleAssignmentDeploymentName": "[concat('kv-role-', uniqueString(parameters('PlaybookName'), parameters('KeyVaultName'), resourceGroup().id))]",
-        "dcrRoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName')), parameters('PlaybookName'), 'MonitoringMetricsPublisher')]"
+        "dcrRoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName')), parameters('PlaybookName'), 'MonitoringMetricsPublisher')]"
     },
     "resources": [
         {
@@ -157,7 +161,7 @@
         {
             "type": "Microsoft.Insights/dataCollectionEndpoints",
             "apiVersion": "2022-06-01",
-            "name": "[variables('dataCollectionEndpointName')]",
+            "name": "[parameters('DataCollectionEndpointName')]",
             "location": "[parameters('WorkspaceLocation')]",
             "properties": {
                 "networkAcls": {
@@ -168,14 +172,14 @@
         {
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2022-06-01",
-            "name": "[variables('dataCollectionRuleName')]",
+            "name": "[parameters('DataCollectionRuleName')]",
             "location": "[parameters('WorkspaceLocation')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
                 "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('tableName'))]"
             ],
             "properties": {
-                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
                 "streamDeclarations": {
                     "[variables('streamName')]": {
                         "columns": [
@@ -241,8 +245,8 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('connectionName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
             ],
             "properties": {
                 "state": "Disabled",
@@ -267,16 +271,6 @@
                                         "name": "AuditPageSize",
                                         "type": "integer",
                                         "value": "[parameters('AuditPageSize')]"
-                                    },
-                                    {
-                                        "name": "FromDate",
-                                        "type": "string",
-                                        "value": "[concat('@{formatDateTime(addDays(utcNow(), -', parameters('LookbackDays'), '), ''yyyy-MM-ddTHH:mm:ssZ'')}')]"
-                                    },
-                                    {
-                                        "name": "ToDate",
-                                        "type": "string",
-                                        "value": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}"
                                     },
                                     {
                                         "name": "AuditOffset",
@@ -359,7 +353,7 @@
                                 "HTTP_-_Get_Audit_Logs_Page": {
                                     "type": "Http",
                                     "inputs": {
-                                        "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/audit?limit=@{variables(''AuditPageSize'')}&offset=@{variables(''AuditOffset'')}&from-date=@{variables(''FromDate'')}&to-date=@{variables(''ToDate'')}')]",
+                                        "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/audit?limit=@{variables(''AuditPageSize'')}&offset=@{variables(''AuditOffset'')}')]",
                                         "method": "GET",
                                         "headers": {
                                             "Accept": "application/json",
@@ -415,7 +409,7 @@
                                         "HTTP_-_Send_Audit_Events_to_DCR": {
                                             "type": "Http",
                                             "inputs": {
-                                                "uri": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))).immutableId, '/streams/', variables('streamName'), '?api-version=2023-01-01')]",
+                                                "uri": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))).immutableId, '/streams/', variables('streamName'), '?api-version=2023-01-01')]",
                                                 "method": "POST",
                                                 "headers": {
                                                     "Content-Type": "application/json"
@@ -535,12 +529,13 @@
             }
         },
         {
-            "type": "Microsoft.Insights/dataCollectionRules/providers/roleAssignments",
+            "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[concat(variables('dataCollectionRuleName'), '/Microsoft.Authorization/', variables('dcrRoleAssignmentName'))]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]",
+            "name": "[variables('dcrRoleAssignmentName')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
             ],
             "properties": {
                 "roleDefinitionId": "[variables('monitoringMetricsPublisherRoleId')]",
@@ -615,19 +610,19 @@
         },
         "dataCollectionEndpointId": {
             "type": "string",
-            "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+            "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]"
         },
         "dataCollectionRuleId": {
             "type": "string",
-            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
         },
         "dcrImmutableId": {
             "type": "string",
-            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))).immutableId]"
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))).immutableId]"
         },
         "logsIngestionEndpoint": {
             "type": "string",
-            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint]"
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))).logsIngestion.endpoint]"
         },
         "managedIdentityPrincipalId": {
             "type": "string",
