@@ -487,6 +487,13 @@ def main(mytimer: func.TimerRequest) -> None:
                 logging.info(
                     f"From Time: [{fromtime}], blob doesn't exist, using 7 days backfill."
                 )
+            else:
+                max_lookback = int((current_date - timedelta(days=7)).timestamp())
+                if fromtime < max_lookback:
+                    logging.warning(
+                        f"Checkpoint [{fromtime}] is older than 7 days. Capping fromtime to [{max_lookback}]."
+                    )
+                    fromtime = max_lookback
 
         logging.info(
             f"Starts at: [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}]"
