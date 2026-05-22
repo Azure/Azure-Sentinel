@@ -331,7 +331,7 @@ CheckmarxAuditEvents_CL
 **No data appearing in Log Analytics:**
 * Wait several minutes after the first successful run — ingestion is asynchronous.
 * Verify the **CheckmarxAuditEvents_CL** table exists under **Custom Logs** in the workspace.
-* Confirm there were audit events in your Checkmarx tenant **on the day the run executed**. The playbook ingests current-day events only; if the current day had no activity at run time, no rows are ingested. See the scope note at the top of this README.
+* Confirm there were audit events in your Checkmarx tenant **on the day the run executed**. The playbook ingests current-day events only; if the current day had no activity at run time, no rows are ingested.
 * Check the Logic App run history for any errors.
 
 **Condition step is skipped for a page:**
