@@ -16,30 +16,29 @@ tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1562
+subTechniques:
+  - T1562.001
 query: |
   let prev = Unifi_SiteManager_Sites_CL
-            | where TimeGenerated between (ago(30m) .. ago(15m))
-            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-            | project siteId_s = tostring(siteId),
-                      prevIpsMode = tostring(siteStatistics.gateway.ipsMode),
-                      prevInspection = tostring(siteStatistics.gateway.inspectionState);
-        Unifi_SiteManager_Sites_CL
-        | where TimeGenerated > ago(15m)
-        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-        | extend siteId_s = tostring(siteId),
-                 siteName = tostring(meta.name),
-                 ipsMode = tostring(siteStatistics.gateway.ipsMode),
-                 inspectionState = tostring(siteStatistics.gateway.inspectionState)
-        | join kind=inner prev on siteId_s
-        | where (ipsMode != 'ips' and prevIpsMode == 'ips')
-             or (inspectionState != 'on' and prevInspection == 'on')
-        | extend Activity = strcat('Threat protection degraded - ipsMode: ', prevIpsMode, ' -> ', ipsMode, ', inspection: ', prevInspection, ' -> ', inspectionState)
-        | project TimeGenerated, siteId, siteName, Activity, prevIpsMode, ipsMode, prevInspection, inspectionState
+      | where TimeGenerated between (ago(30m) .. ago(15m))
+      | summarize arg_max(TimeGenerated, *) by tostring(SiteId)
+      | project siteId_s = tostring(SiteId), prevIpsMode = IpsMode, prevInspection = InspectionState;
+  Unifi_SiteManager_Sites_CL
+  | where TimeGenerated > ago(15m)
+  | summarize arg_max(TimeGenerated, *) by tostring(SiteId)
+  | extend siteId_s = tostring(SiteId)
+  | join kind=inner prev on siteId_s
+  | where (IpsMode != 'ips' and prevIpsMode == 'ips')
+       or (InspectionState != 'on' and prevInspection == 'on')
+  | extend Activity = strcat('Threat protection degraded - IpsMode: ', prevIpsMode, ' -> ', IpsMode, ', inspection: ', prevInspection, ' -> ', InspectionState)
+  | project TimeGenerated, SiteId, SiteName, Activity, prevIpsMode, IpsMode, prevInspection, InspectionState
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: siteName
+        columnName: SiteId
+      - identifier: DnsDomain
+        columnName: SiteName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -48,4 +47,4 @@ incidentConfiguration:
     lookbackDuration: PT5H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

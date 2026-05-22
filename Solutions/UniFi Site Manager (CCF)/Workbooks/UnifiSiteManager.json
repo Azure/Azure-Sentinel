@@ -112,7 +112,7 @@
               "showDefault": false
             },
             "defaultValue": "value::all",
-            "query": "let H = Unifi_SiteManager_Hosts_CL\n    | summarize arg_max(TimeGenerated, *) by id\n    | project hostId = id, FriendlyName = tostring(reportedState.name);\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| summarize arg_max(TimeGenerated, *) by siteId\n| join kind=leftouter H on hostId\n| extend MetaName = tostring(meta.name), Suffix = substring(tostring(siteId), 0, 6)\n| project value = tostring(siteId),\n          label = coalesce(\n              iif(isnotempty(FriendlyName), FriendlyName, ''),\n              iif(MetaName != 'default' and isnotempty(MetaName), MetaName, ''),\n              strcat(MetaName, ' (', Suffix, ')'))\n| order by label asc",
+            "query": "let H = Unifi_SiteManager_Hosts_CL\n    | summarize arg_max(TimeGenerated, *) by Id\n    | project HostId = Id, FriendlyName = tostring(ReportedState.name);\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| summarize arg_max(TimeGenerated, *) by SiteId\n| join kind=leftouter H on HostId\n| extend MetaName = tostring(Meta.name), Suffix = substring(tostring(SiteId), 0, 6)\n| project value = tostring(SiteId),\n          label = coalesce(\n              iif(isnotempty(FriendlyName), FriendlyName, ''),\n              iif(MetaName != 'default' and isnotempty(MetaName), MetaName, ''),\n              strcat(MetaName, ' (', Suffix, ')'))\n| order by label asc",
             "crossComponentResources": [
               "{Workspace}"
             ],
@@ -132,42 +132,6 @@
         "json": "<div style=\"display:flex;align-items:center;padding:8px 0 16px 0;border-bottom:1px solid #1e293b\"><svg width=\"40\" height=\"40\" style=\"margin-right:14px;flex-shrink:0;fill:#0559C9\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path d=\"M494.2 0h-31.8v31.8h31.8zM383.1 222.4v-63.6h63.5v63.5h63.5c1.1 58.9-3.4 110.2-33.3 161.6-86.6 152.4-300.5 172.9-414 39.2C36.3 392.4 17.2 355 8.3 315c-4.5-21.7-6.5-49.2-6.5-72.5V4h127l.2 242c.6 31.3 6.3 63.5 25 88 53.9 73 167.9 66.3 212.1-13.1 15.9-26.6 17.3-68.7 17-98.5m15.8-174.8h47.6v47.6H510v63.5h-63.5V95.3h-47.6z\"/></svg><div><div style=\"font-size:22px;font-weight:600;letter-spacing:-0.5px\">UniFi Site Manager</div><div style=\"font-size:13px;color:#94a3b8;margin-top:2px\">Estate-wide visibility across every UniFi-managed site, host, device and ISP link. Site health, device inventory, ISP performance, firmware drift, security posture and admin operations polled every 5 minutes from the Site Manager API. Scope every panel with the time range and Sites filter below; the Hunts tab embeds the 8 packaged hunting queries.</div></div></div>"
       },
       "name": "header"
-    },
-    {
-      "type": 1,
-      "content": {
-        "json": "<div style=\"border-left:4px solid #3b82f6;padding:6px 12px;margin:8px 0 0 0;background:rgba(59,130,246,0.05);font-size:14px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;color:#94a3b8\">Estate at a glance</div>"
-      },
-      "name": "div-estate-at-a-glance-2e4bd3"
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId);\nlet SelectedHostIds = toscalar(S | summarize make_set(hostId));\nlet H = Unifi_SiteManager_Hosts_CL | where \"value::all\" in~ ({SiteFilter}) or id in (SelectedHostIds) | summarize arg_max(TimeGenerated, *) by id;\nlet D = Unifi_SiteManager_Devices_CL | summarize arg_max(TimeGenerated, *) by id;\nlet I = SecurityIncident | where TimeGenerated > ago(7d) | where Title startswith \"UniFi Site Manager\" | summarize arg_max(LastModifiedTime, *) by IncidentNumber | where Status != \"Closed\";\nunion\n  (S | summarize V=toreal(count())                                                              | extend Metric=\"Sites\",                Order=1),\n  (H | summarize V=toreal(count())                                                              | extend Metric=\"Hosts\",                Order=2),\n  (D | summarize V=toreal(count())                                                              | extend Metric=\"Devices (estate)\",     Order=3),\n  (D | where status =~ \"online\"                                                                 | summarize V=toreal(count()) | extend Metric=\"Online\",                Order=4),\n  (D | where status =~ \"offline\"                                                                | summarize V=toreal(count()) | extend Metric=\"Offline\",               Order=5),\n  (D | where firmwareStatus in~ (\"updateAvailable\",\"updatePending\")                             | summarize V=toreal(count()) | extend Metric=\"Need firmware update\", Order=6),\n  (S | extend WanUptime=todouble(siteStatistics.percentages.wanUptime)                          | summarize V=todouble(round(avg(WanUptime),1)) | extend Metric=\"Avg WAN uptime %\", Order=7),\n  (I | summarize V=toreal(count())                                                              | extend Metric=\"Open incidents\",       Order=8)\n| order by Order asc | project Metric, Value=V",
-        "size": 3,
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "crossComponentResources": [
-          "{Workspace}"
-        ],
-        "visualization": "tiles",
-        "tileSettings": {
-          "titleContent": {
-            "columnMatch": "Metric",
-            "formatter": 1
-          },
-          "leftContent": {
-            "columnMatch": "Value",
-            "formatter": 12,
-            "formatOptions": {
-              "palette": "auto"
-            }
-          },
-          "showBorder": false
-        }
-      },
-      "name": "q-f4405255"
     },
     {
       "type": 11,
@@ -249,6 +213,42 @@
         "version": "NotebookGroup/1.0",
         "groupType": "editable",
         "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "<div style=\"border-left:4px solid #3b82f6;padding:6px 12px;margin:8px 0 0 0;background:rgba(59,130,246,0.05);font-size:14px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;color:#94a3b8\">Estate at a glance</div>"
+            },
+            "name": "div-estate-at-a-glance-2e4bd3"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId);\nlet SelectedHostIds = toscalar(S | summarize make_set(HostId));\nlet H = Unifi_SiteManager_Hosts_CL | where \"value::all\" in~ ({SiteFilter}) or Id in (SelectedHostIds) | summarize arg_max(TimeGenerated, *) by Id;\nlet D = Unifi_SiteManager_Devices_CL | summarize arg_max(TimeGenerated, *) by Id;\nlet I = SecurityIncident | where TimeGenerated > ago(7d) | where Title startswith \"UniFi Site Manager\" | summarize arg_max(LastModifiedTime, *) by IncidentNumber | where Status != \"Closed\";\nunion\n  (S | summarize V=toreal(count())                                                              | extend Metric=\"Sites\",                Order=1),\n  (H | summarize V=toreal(count())                                                              | extend Metric=\"Hosts\",                Order=2),\n  (D | summarize V=toreal(count())                                                              | extend Metric=\"Devices (estate)\",     Order=3),\n  (D | where Status =~ \"online\"                                                                 | summarize V=toreal(count()) | extend Metric=\"Online\",                Order=4),\n  (D | where Status =~ \"offline\"                                                                | summarize V=toreal(count()) | extend Metric=\"Offline\",               Order=5),\n  (D | where FirmwareStatus in~ (\"UpdateAvailable\",\"updatePending\")                             | summarize V=toreal(count()) | extend Metric=\"Need firmware update\", Order=6),\n  (S | extend WanUptime=todouble(SiteStatistics.percentages.wanUptime)                          | summarize V=todouble(round(avg(WanUptime),1)) | extend Metric=\"Avg WAN uptime %\", Order=7),\n  (I | summarize V=toreal(count())                                                              | extend Metric=\"Open incidents\",       Order=8)\n| order by Order asc | project Metric, Value=V",
+              "size": 3,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Metric",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  }
+                },
+                "showBorder": false
+              }
+            },
+            "name": "q-f4405255"
+          },
           {
             "type": 1,
             "content": {
@@ -381,7 +381,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by id\n        | project hostId = id, FriendlyName = tostring(reportedState.name)\n      ) on hostId\n    | extend MetaName = tostring(meta.name), Suffix = substring(tostring(siteId), 0, 6)\n    | project siteId = tostring(siteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(siteId)\n| extend siteId=tostring(siteId),\n         Total=toint(siteStatistics.counts.totalDevice),\n         Offline=toint(siteStatistics.counts.offlineDevice),\n         OfflineGW=toint(siteStatistics.counts.offlineGatewayDevice),\n         PendingUpdates=toint(siteStatistics.counts.pendingUpdateDevice),\n         CritNotifs=toint(siteStatistics.counts.criticalNotification),\n         WanUptime=todouble(siteStatistics.percentages.wanUptime),\n         TxRetry=todouble(siteStatistics.percentages.txRetry)\n| join kind=leftouter _siteNames on siteId\n| extend IssueScore = Offline*5 + OfflineGW*10 + PendingUpdates*1 + CritNotifs*3 + iif(WanUptime < 95, 5, 0)\n| where IssueScore > 0\n| project SiteName, IssueScore, Offline, OfflineGW, PendingUpdates, CritNotifs, WanUptime, TxRetry\n| order by IssueScore desc",
+              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | where isnotempty(SiteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by Id\n        | project HostId = Id, FriendlyName = tostring(ReportedState.name)\n      ) on HostId\n    | extend MetaName = tostring(Meta.name), Suffix = substring(tostring(SiteId), 0, 6)\n    | project SiteId = tostring(SiteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n| where isnotempty(SiteId)\n| project-away SiteName\n| extend SiteId=tostring(SiteId),\n         Total=toint(SiteStatistics.counts.totalDevice),\n         Offline=toint(SiteStatistics.counts.offlineDevice),\n         OfflineGW=toint(SiteStatistics.counts.offlineGatewayDevice),\n         PendingUpdates=toint(SiteStatistics.counts.pendingUpdateDevice),\n         CritNotifs=toint(SiteStatistics.counts.criticalNotification),\n         WanUptime=todouble(SiteStatistics.percentages.wanUptime),\n         TxRetry=todouble(SiteStatistics.percentages.txRetry)\n| join kind=leftouter _siteNames on SiteId\n| extend IssueScore = Offline*5 + OfflineGW*10 + PendingUpdates*1 + CritNotifs*3 + iif(WanUptime < 95, 5, 0)\n| where IssueScore > 0\n| project SiteName, IssueScore, Offline, OfflineGW, PendingUpdates, CritNotifs, WanUptime, TxRetry\n| order by IssueScore desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -476,7 +476,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId);\nunion\n  (S | summarize V=toreal(count())                                            | extend Metric=\"Total sites\",        Order=1),\n  (S | where isOwner == true                                                  | summarize V=toreal(count()) | extend Metric=\"Owned\",              Order=2),\n  (S | extend U=todouble(siteStatistics.percentages.wanUptime) | where U < 95 | summarize V=toreal(count()) | extend Metric=\"WAN uptime < 95%\",   Order=3),\n  (S | extend C=toint(siteStatistics.counts.criticalNotification) | where C>0 | summarize V=toreal(count()) | extend Metric=\"Critical notifs\",    Order=4),\n  (S | extend O=toint(siteStatistics.counts.offlineDevice) | where O > 0     | summarize V=toreal(count()) | extend Metric=\"Has offline devices\", Order=5),\n  (S | extend P=toint(siteStatistics.counts.pendingUpdateDevice) | where P>0 | summarize V=toreal(count()) | extend Metric=\"Pending updates\",     Order=6),\n  (S | extend Insp=tostring(siteStatistics.gateway.inspectionState) | where Insp != \"on\" | summarize V=toreal(count()) | extend Metric=\"DPI off / no inspect\", Order=7)\n| order by Order asc | project Metric, Value=V",
+              "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId);\nunion\n  (S | summarize V=toreal(count())                                            | extend Metric=\"Total sites\",        Order=1),\n  (S | where IsOwner == true                                                  | summarize V=toreal(count()) | extend Metric=\"Owned\",              Order=2),\n  (S | extend U=todouble(SiteStatistics.percentages.wanUptime) | where U < 95 | summarize V=toreal(count()) | extend Metric=\"WAN uptime < 95%\",   Order=3),\n  (S | extend C=toint(SiteStatistics.counts.criticalNotification) | where C>0 | summarize V=toreal(count()) | extend Metric=\"Critical notifs\",    Order=4),\n  (S | extend O=toint(SiteStatistics.counts.offlineDevice) | where O > 0     | summarize V=toreal(count()) | extend Metric=\"Has offline devices\", Order=5),\n  (S | extend P=toint(SiteStatistics.counts.pendingUpdateDevice) | where P>0 | summarize V=toreal(count()) | extend Metric=\"Pending updates\",     Order=6),\n  (S | extend Insp=tostring(SiteStatistics.gateway.inspectionState) | where Insp != \"on\" | summarize V=toreal(count()) | extend Metric=\"DPI off / no inspect\", Order=7)\n| order by Order asc | project Metric, Value=V",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -512,7 +512,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by id\n        | project hostId = id, FriendlyName = tostring(reportedState.name)\n      ) on hostId\n    | extend MetaName = tostring(meta.name), Suffix = substring(tostring(siteId), 0, 6)\n    | project siteId = tostring(siteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(siteId)\n| extend siteId=tostring(siteId),\n         Wired=toint(siteStatistics.counts.wiredClient),\n         WiFi=toint(siteStatistics.counts.wifiClient),\n         Guest=toint(siteStatistics.counts.guestClient),\n         Devices=toint(siteStatistics.counts.totalDevice)\n| join kind=leftouter _siteNames on siteId\n| project SiteName, Devices, Wired, WiFi, Guest",
+              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | where isnotempty(SiteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by Id\n        | project HostId = Id, FriendlyName = tostring(ReportedState.name)\n      ) on HostId\n    | extend MetaName = tostring(Meta.name), Suffix = substring(tostring(SiteId), 0, 6)\n    | project SiteId = tostring(SiteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n| extend SiteId=tostring(SiteId),\n         Wired=toint(SiteStatistics.counts.wiredClient),\n         WiFi=toint(SiteStatistics.counts.wifiClient),\n         Guest=toint(SiteStatistics.counts.guestClient),\n         Devices=toint(SiteStatistics.counts.totalDevice)\n| join kind=leftouter _siteNames on SiteId\n| project SiteName, Devices, Wired, WiFi, Guest",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -529,7 +529,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(siteId)\n| extend ISP=tostring(siteStatistics.ispInfo.name),\n         Org=tostring(siteStatistics.ispInfo.organization)\n| summarize Sites=count(), Orgs=make_set(Org) by ISP\n| order by Sites desc",
+              "query": "Unifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n| extend ISP=tostring(SiteStatistics.ispInfo.name),\n         Org=tostring(SiteStatistics.ispInfo.organization)\n| summarize Sites=count(), Orgs=make_set(Org) by ISP\n| order by Sites desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -564,7 +564,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by id\n        | project hostId = id, FriendlyName = tostring(reportedState.name)\n      ) on hostId\n    | extend MetaName = tostring(meta.name), Suffix = substring(tostring(siteId), 0, 6)\n    | project siteId = tostring(siteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(siteId)\n| extend siteId=tostring(siteId),\n         Timezone=tostring(meta.timezone),\n         Permission=permission,\n         Devices=toint(siteStatistics.counts.totalDevice),\n         Offline=toint(siteStatistics.counts.offlineDevice),\n         WanUptime=todouble(siteStatistics.percentages.wanUptime),\n         TxRetry=todouble(siteStatistics.percentages.txRetry),\n         ISP=tostring(siteStatistics.ispInfo.name),\n         IPSMode=tostring(siteStatistics.gateway.ipsMode),\n         Inspection=tostring(siteStatistics.gateway.inspectionState),\n         LastSnapshot=TimeGenerated\n| join kind=leftouter _siteNames on siteId\n| project SiteName, Permission, Devices, Offline, WanUptime, TxRetry, ISP, IPSMode, Inspection, Timezone, LastSnapshot\n| order by SiteName asc",
+              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | where isnotempty(SiteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by Id\n        | project HostId = Id, FriendlyName = tostring(ReportedState.name)\n      ) on HostId\n    | extend MetaName = tostring(Meta.name), Suffix = substring(tostring(SiteId), 0, 6)\n    | project SiteId = tostring(SiteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n| where isnotempty(SiteId)\n| project-away SiteName\n| extend SiteId=tostring(SiteId),\n         Timezone=tostring(Meta.timezone),\n         Permission=Permission,\n         Devices=toint(SiteStatistics.counts.totalDevice),\n         Offline=toint(SiteStatistics.counts.offlineDevice),\n         WanUptime=todouble(SiteStatistics.percentages.wanUptime),\n         TxRetry=todouble(SiteStatistics.percentages.txRetry),\n         ISP=tostring(SiteStatistics.ispInfo.name),\n         IPSMode=tostring(SiteStatistics.gateway.ipsMode),\n         Inspection=tostring(SiteStatistics.gateway.inspectionState),\n         LastSnapshot=TimeGenerated\n| join kind=leftouter _siteNames on SiteId\n| project SiteName, Permission, Devices, Offline, WanUptime, TxRetry, ISP, IPSMode, Inspection, Timezone, LastSnapshot\n| order by SiteName asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -652,7 +652,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let M = Unifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend AvgL=todouble(p.data.wan.avgLatency),\n         MaxL=todouble(p.data.wan.maxLatency),\n         PL  =todouble(p.data.wan.packetLoss),\n         DT  =todouble(p.data.wan.downtime),\n         UT  =todouble(p.data.wan.uptime);\nunion\n  (M | summarize V=todouble(round(avg(AvgL),1)) | extend Metric=\"Avg latency (ms)\",   Order=1),\n  (M | summarize V=todouble(round(max(MaxL),0)) | extend Metric=\"Peak latency (ms)\",  Order=2),\n  (M | summarize V=todouble(round(avg(PL),2))   | extend Metric=\"Avg packet loss %\",  Order=3),\n  (M | summarize V=todouble(round(sum(DT),0))   | extend Metric=\"Total downtime (s)\", Order=4),\n  (M | summarize V=todouble(round(avg(UT),2))   | extend Metric=\"Avg uptime %\",       Order=5),\n  (M | summarize V=toreal(count())              | extend Metric=\"Samples\",            Order=6)\n| order by Order asc | project Metric, Value=V",
+              "query": "let M = Unifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend AvgL=todouble(p.data.wan.avgLatency),\n         MaxL=todouble(p.data.wan.maxLatency),\n         PL  =todouble(p.data.wan.packetLoss),\n         DT  =todouble(p.data.wan.downtime),\n         UT  =todouble(p.data.wan.uptime);\nunion\n  (M | summarize V=todouble(round(avg(AvgL),1)) | extend Metric=\"Avg latency (ms)\",   Order=1),\n  (M | summarize V=todouble(round(max(MaxL),0)) | extend Metric=\"Peak latency (ms)\",  Order=2),\n  (M | summarize V=todouble(round(avg(PL),2))   | extend Metric=\"Avg packet loss %\",  Order=3),\n  (M | summarize V=todouble(round(sum(DT),0))   | extend Metric=\"Total downtime (s)\", Order=4),\n  (M | summarize V=todouble(round(avg(UT),2))   | extend Metric=\"Avg uptime %\",       Order=5),\n  (M | summarize V=toreal(count())              | extend Metric=\"Samples\",            Order=6)\n| order by Order asc | project Metric, Value=V",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -688,7 +688,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend t=todatetime(p.metricTime), L=todouble(p.data.wan.avgLatency)\n| where isnotnull(t) and isnotnull(L)\n| join kind=leftouter (H) on $left.siteId == $right.siteId\n| summarize Latency=avg(L) by bin(t, 30m), SiteName\n| order by t asc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend t=todatetime(p.metricTime), L=todouble(p.data.wan.avgLatency)\n| where isnotnull(t) and isnotnull(L)\n| join kind=leftouter (H) on $left.SiteId == $right.SiteId\n| summarize Latency=avg(L) by bin(t, 30m), SiteName\n| order by t asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -706,7 +706,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend t=todatetime(p.metricTime), PL=todouble(p.data.wan.packetLoss)\n| where isnotnull(t)\n| join kind=leftouter (H) on $left.siteId == $right.siteId\n| summarize PacketLoss=avg(PL) by bin(t, 30m), SiteName\n| order by t asc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend t=todatetime(p.metricTime), PL=todouble(p.data.wan.packetLoss)\n| where isnotnull(t)\n| join kind=leftouter (H) on $left.SiteId == $right.SiteId\n| summarize PacketLoss=avg(PL) by bin(t, 30m), SiteName\n| order by t asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -731,7 +731,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend t=todatetime(p.metricTime),\n         Down=todouble(p.data.wan.download_kbps),\n         Up  =todouble(p.data.wan.upload_kbps)\n| where isnotnull(t)\n| join kind=leftouter (H) on $left.siteId == $right.siteId\n| summarize DownKbps=avg(Down), UpKbps=avg(Up) by bin(t, 30m), SiteName\n| order by t asc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend t=todatetime(p.metricTime),\n         Down=todouble(p.data.wan.download_kbps),\n         Up  =todouble(p.data.wan.upload_kbps)\n| where isnotnull(t)\n| join kind=leftouter (H) on $left.SiteId == $right.SiteId\n| summarize DownKbps=avg(Down), UpKbps=avg(Up) by bin(t, 30m), SiteName\n| order by t asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -756,7 +756,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend UT=todouble(p.data.wan.uptime)\n| join kind=leftouter (H) on $left.siteId == $right.siteId\n| summarize AvgUptime=round(avg(UT),2), MinUptime=round(min(UT),2), Samples=count() by SiteName\n| order by AvgUptime asc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend UT=todouble(p.data.wan.uptime)\n| join kind=leftouter (H) on $left.SiteId == $right.SiteId\n| summarize AvgUptime=round(avg(UT),2), MinUptime=round(min(UT),2), Samples=count() by SiteName\n| order by AvgUptime asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -823,7 +823,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let D = Unifi_SiteManager_Devices_CL | summarize arg_max(TimeGenerated, *) by id;\nunion\n  (D | summarize V=toreal(count())                                                | extend Metric=\"Total devices\",       Order=1),\n  (D | where status =~ \"online\"                                                   | summarize V=toreal(count()) | extend Metric=\"Online\",              Order=2),\n  (D | where status =~ \"offline\"                                                  | summarize V=toreal(count()) | extend Metric=\"Offline\",             Order=3),\n  (D | where firmwareStatus =~ \"upToDate\"                                         | summarize V=toreal(count()) | extend Metric=\"Up-to-date firmware\", Order=4),\n  (D | where firmwareStatus =~ \"updateAvailable\"                                  | summarize V=toreal(count()) | extend Metric=\"Updates available\",   Order=5),\n  (D | where firmwareStatus =~ \"updatePending\"                                    | summarize V=toreal(count()) | extend Metric=\"Pending update\",      Order=6),\n  (D | where isConsole == true                                                    | summarize V=toreal(count()) | extend Metric=\"Consoles\",            Order=7),\n  (D | where productLine =~ \"protect\"                                             | summarize V=toreal(count()) | extend Metric=\"Protect devices\",    Order=8)\n| order by Order asc | project Metric, Value=V",
+              "query": "let D = Unifi_SiteManager_Devices_CL | summarize arg_max(TimeGenerated, *) by Id;\nunion\n  (D | summarize V=toreal(count())                                                | extend Metric=\"Total devices\",       Order=1),\n  (D | where Status =~ \"online\"                                                   | summarize V=toreal(count()) | extend Metric=\"Online\",              Order=2),\n  (D | where Status =~ \"offline\"                                                  | summarize V=toreal(count()) | extend Metric=\"Offline\",             Order=3),\n  (D | where FirmwareStatus =~ \"upToDate\"                                         | summarize V=toreal(count()) | extend Metric=\"Up-to-date firmware\", Order=4),\n  (D | where FirmwareStatus =~ \"UpdateAvailable\"                                  | summarize V=toreal(count()) | extend Metric=\"Updates available\",   Order=5),\n  (D | where FirmwareStatus =~ \"updatePending\"                                    | summarize V=toreal(count()) | extend Metric=\"Pending update\",      Order=6),\n  (D | where IsConsole == true                                                    | summarize V=toreal(count()) | extend Metric=\"Consoles\",            Order=7),\n  (D | where ProductLine =~ \"protect\"                                             | summarize V=toreal(count()) | extend Metric=\"Protect devices\",    Order=8)\n| order by Order asc | project Metric, Value=V",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -859,7 +859,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| summarize Count=count() by productLine\n| order by Count desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| summarize Count=count() by ProductLine\n| order by Count desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -876,7 +876,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| summarize Count=count() by firmwareStatus\n| order by Count desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| summarize Count=count() by FirmwareStatus\n| order by Count desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -893,7 +893,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| summarize Count=count() by model\n| order by Count desc | take 12",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| summarize Count=count() by Model\n| order by Count desc | take 12",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -917,7 +917,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| where firmwareStatus != \"upToDate\" or status != \"online\"\n| extend Issues = strcat_array(pack_array(\n    iif(status != \"online\", strcat(\"status:\", status), \"\"),\n    iif(firmwareStatus != \"upToDate\", strcat(\"firmware:\", firmwareStatus), \"\")\n  ), \",\")\n| extend Issues = trim_start(\",\", trim_end(\",\", replace_string(Issues, \",,\", \",\")))\n| project name, model, productLine, version, status, firmwareStatus, ip, adoptionTime, Issues\n| order by status asc, firmwareStatus asc",
+              "query": "Unifi_SiteManager_Devices_CL\n| where isnotempty(Id)\n| summarize arg_max(TimeGenerated, *) by Id\n| where isnotempty(Status) and isnotempty(FirmwareStatus)\n| where FirmwareStatus != \"upToDate\" or Status != \"online\"\n| extend Priority = case(\n    IsConsole == true and FirmwareStatus != \"upToDate\", \"CONSOLE OUT OF DATE\",\n    IsConsole == true and Status != \"online\",            \"CONSOLE OFFLINE\",\n    Status != \"online\",                                  \"Device offline\",\n    FirmwareStatus != \"upToDate\",                        \"Firmware update\",\n    \"\")\n| extend Issues = strcat_array(pack_array(\n    iif(Status != \"online\", strcat(\"Status:\", Status), \"\"),\n    iif(FirmwareStatus != \"upToDate\", strcat(\"firmware:\", FirmwareStatus), \"\")\n  ), \", \")\n| extend Issues = trim_start(\", \", trim_end(\", \", replace_string(Issues, \", , \", \", \")))\n| project Priority, Name, Model, ProductLine, Version, Status, FirmwareStatus, IsConsole, Ip, AdoptionTime, Issues\n| order by case(Priority startswith \"CONSOLE\", 0, Priority == \"Device offline\", 1, 2) asc, Status asc, FirmwareStatus asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -929,15 +929,121 @@
               "gridSettings": {
                 "formatters": [
                   {
-                    "columnMatch": "status",
-                    "formatter": 11
+                    "columnMatch": "Priority",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "contains",
+                          "thresholdValue": "CONSOLE",
+                          "representation": "critical",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Device offline",
+                          "representation": "4",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Firmware update",
+                          "representation": "pending",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
                   },
                   {
-                    "columnMatch": "firmwareStatus",
-                    "formatter": 11
+                    "columnMatch": "Status",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "online",
+                          "representation": "success",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "offline",
+                          "representation": "critical",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
                   },
                   {
-                    "columnMatch": "productLine",
+                    "columnMatch": "FirmwareStatus",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "upToDate",
+                          "representation": "success",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "updateAvailable",
+                          "representation": "critical",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "updatePending",
+                          "representation": "pending",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "IsConsole",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "4",
+                          "text": "Console"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": ""
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "ProductLine",
                     "formatter": 11
                   },
                   {
@@ -962,7 +1068,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| project name, model, productLine, version, status, firmwareStatus, ip, mac, isConsole, isManaged, startupTime, adoptionTime\n| order by productLine asc, status asc, name asc",
+              "query": "Unifi_SiteManager_Devices_CL\n| where isnotempty(Id)\n| summarize arg_max(TimeGenerated, *) by Id\n| where isnotempty(Status)\n| project Name, Model, ProductLine, Version, Status, FirmwareStatus, IsConsole, Ip, Mac, IsManaged, StartupTime, AdoptionTime\n| order by IsConsole desc, ProductLine asc, Status asc, Name asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -974,15 +1080,88 @@
               "gridSettings": {
                 "formatters": [
                   {
-                    "columnMatch": "status",
-                    "formatter": 11
+                    "columnMatch": "Status",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "online",
+                          "representation": "success",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "offline",
+                          "representation": "critical",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
                   },
                   {
-                    "columnMatch": "firmwareStatus",
-                    "formatter": 11
+                    "columnMatch": "FirmwareStatus",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "upToDate",
+                          "representation": "success",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "updateAvailable",
+                          "representation": "critical",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "updatePending",
+                          "representation": "pending",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": "{0}"
+                        }
+                      ]
+                    }
                   },
                   {
-                    "columnMatch": "productLine",
+                    "columnMatch": "IsConsole",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "true",
+                          "representation": "4",
+                          "text": "Console"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "unknown",
+                          "text": ""
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "ProductLine",
                     "formatter": 11
                   }
                 ]
@@ -1016,7 +1195,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId);\nunion\n  (S | extend M=tostring(siteStatistics.gateway.ipsMode)         | where M =~ \"ips\"   | summarize V=toreal(count()) | extend Metric=\"IPS active\",     Order=1),\n  (S | extend M=tostring(siteStatistics.gateway.ipsMode)         | where M =~ \"ids\"   | summarize V=toreal(count()) | extend Metric=\"IDS only\",       Order=2),\n  (S | extend M=tostring(siteStatistics.gateway.ipsMode)         | where M =~ \"off\"   | summarize V=toreal(count()) | extend Metric=\"No IPS/IDS\",     Order=3),\n  (S | extend I=tostring(siteStatistics.gateway.inspectionState) | where I =~ \"on\"    | summarize V=toreal(count()) | extend Metric=\"Inspecting\",     Order=4),\n  (S | extend I=tostring(siteStatistics.gateway.inspectionState) | where I != \"on\"    | summarize V=toreal(count()) | extend Metric=\"Inspect off\",    Order=5),\n  (S | extend R=toint(siteStatistics.gateway.ipsSignature.rulesCount) | summarize V=todouble(round(avg(R),0)) | extend Metric=\"Avg sigs / gateway\", Order=6),\n  (S | extend C=toint(siteStatistics.counts.criticalNotification) | summarize V=todouble(sum(C)) | extend Metric=\"Critical notifs\",  Order=7)\n| order by Order asc | project Metric, Value=V",
+              "query": "let S = Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId);\nunion\n  (S | extend M=tostring(SiteStatistics.gateway.ipsMode)         | where M =~ \"ips\"   | summarize V=toreal(count()) | extend Metric=\"IPS active\",     Order=1),\n  (S | extend M=tostring(SiteStatistics.gateway.ipsMode)         | where M =~ \"ids\"   | summarize V=toreal(count()) | extend Metric=\"IDS only\",       Order=2),\n  (S | extend M=tostring(SiteStatistics.gateway.ipsMode)         | where M =~ \"off\"   | summarize V=toreal(count()) | extend Metric=\"No IPS/IDS\",     Order=3),\n  (S | extend I=tostring(SiteStatistics.gateway.inspectionState) | where I =~ \"on\"    | summarize V=toreal(count()) | extend Metric=\"Inspecting\",     Order=4),\n  (S | extend I=tostring(SiteStatistics.gateway.inspectionState) | where I != \"on\"    | summarize V=toreal(count()) | extend Metric=\"Inspect off\",    Order=5),\n  (S | extend R=toint(SiteStatistics.gateway.ipsSignature.rulesCount) | summarize V=todouble(round(avg(R),0)) | extend Metric=\"Avg sigs / gateway\", Order=6),\n  (S | extend C=toint(SiteStatistics.counts.criticalNotification) | summarize V=todouble(sum(C)) | extend Metric=\"Critical notifs\",  Order=7)\n| order by Order asc | project Metric, Value=V",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1052,7 +1231,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by id\n        | project hostId = id, FriendlyName = tostring(reportedState.name)\n      ) on hostId\n    | extend MetaName = tostring(meta.name), Suffix = substring(tostring(siteId), 0, 6)\n    | project siteId = tostring(siteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(siteId)\n| extend siteId=tostring(siteId),\n         IPSMode=tostring(siteStatistics.gateway.ipsMode),\n         Inspection=tostring(siteStatistics.gateway.inspectionState),\n         RulesCount=toint(siteStatistics.gateway.ipsSignature.rulesCount),\n         RulesetType=tostring(siteStatistics.gateway.ipsSignature.type),\n         CriticalNotifs=toint(siteStatistics.counts.criticalNotification)\n| join kind=leftouter _siteNames on siteId\n| project SiteName, IPSMode, Inspection, RulesCount, RulesetType, CriticalNotifs\n| order by IPSMode asc, SiteName asc",
+              "query": "let _siteNames = Unifi_SiteManager_Sites_CL\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | where isnotempty(SiteId)\n    | join kind=leftouter (\n        Unifi_SiteManager_Hosts_CL\n        | summarize arg_max(TimeGenerated, *) by Id\n        | project HostId = Id, FriendlyName = tostring(ReportedState.name)\n      ) on HostId\n    | extend MetaName = tostring(Meta.name), Suffix = substring(tostring(SiteId), 0, 6)\n    | project SiteId = tostring(SiteId),\n              SiteName = coalesce(\n                  iif(isnotempty(FriendlyName), FriendlyName, \"\"),\n                  iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"),\n                  strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n| extend SiteId=tostring(SiteId),\n         IPSMode=tostring(SiteStatistics.gateway.ipsMode),\n         Inspection=tostring(SiteStatistics.gateway.inspectionState),\n         RulesCount=toint(SiteStatistics.gateway.ipsSignature.rulesCount),\n         RulesetType=tostring(SiteStatistics.gateway.ipsSignature.type),\n         CriticalNotifs=toint(SiteStatistics.counts.criticalNotification)\n| join kind=leftouter _siteNames on SiteId\n| project SiteName, IPSMode, Inspection, RulesCount, RulesetType, CriticalNotifs\n| order by IPSMode asc, SiteName asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1105,7 +1284,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| extend siteId=tostring(siteId), Sigs=toint(siteStatistics.gateway.ipsSignature.rulesCount)\n| where isnotnull(Sigs)\n| join kind=leftouter H on siteId\n| summarize Sigs=max(Sigs) by bin(TimeGenerated, 1h), SiteName\n| order by TimeGenerated asc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated {TimeRange}\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| extend SiteId=tostring(SiteId), Sigs=toint(SiteStatistics.gateway.ipsSignature.rulesCount)\n| where isnotnull(Sigs)\n| join kind=leftouter H on SiteId\n| summarize Sigs=max(Sigs) by bin(TimeGenerated, 1h), SiteName\n| order by TimeGenerated asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1214,7 +1393,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | summarize make_set(hostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by id\n| extend HostName=tostring(reportedState.name),\n         Firmware=tostring(reportedState.controller_uuid),\n         Hardware=tostring(reportedState.hardware.shortname),\n         LastBackup=todatetime(latestBackupTime),\n         LastStateChange=todatetime(lastConnectionStateChange),\n         RegistrationTime=todatetime(registrationTime)\n| project HostName, hostType, ipAddress, Hardware, isBlocked, owner, LastStateChange, LastBackup, RegistrationTime\n| order by HostName asc",
+              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | summarize make_set(HostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or Id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by Id\n| extend HostName=tostring(ReportedState.name),\n         Firmware=tostring(ReportedState.controller_uuid),\n         Hardware=tostring(ReportedState.hardware.shortname),\n         LastBackup=todatetime(LatestBackupTime),\n         LastStateChange=todatetime(LastConnectionStateChange),\n         RegistrationTime=todatetime(RegistrationTime)\n| project HostName, HostType, IpAddress, Hardware, IsBlocked, Owner, LastStateChange, LastBackup, RegistrationTime\n| order by HostName asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1261,7 +1440,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | summarize make_set(hostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by id\n| extend HostName=tostring(reportedState.name),\n         LastBackup=todatetime(latestBackupTime),\n         HoursSince=toint((now() - todatetime(latestBackupTime)) / 1h)\n| where isnotnull(HoursSince)\n| extend Bucket=case(HoursSince < 24, \"<24h\", HoursSince < 168, \"<7d\", HoursSince < 720, \"<30d\", \"30+ days\")\n| summarize Hosts=count() by Bucket\n| order by case(Bucket==\"<24h\",1, Bucket==\"<7d\",2, Bucket==\"<30d\",3, 4) asc",
+              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | summarize make_set(HostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or Id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by Id\n| extend HostName=tostring(ReportedState.name),\n         LastBackup=todatetime(LatestBackupTime),\n         HoursSince=toint((now() - todatetime(LatestBackupTime)) / 1h)\n| where isnotnull(HoursSince)\n| extend Bucket=case(HoursSince < 24, \"<24h\", HoursSince < 168, \"<7d\", HoursSince < 720, \"<30d\", \"30+ days\")\n| summarize Hosts=count() by Bucket\n| order by case(Bucket==\"<24h\",1, Bucket==\"<7d\",2, Bucket==\"<30d\",3, 4) asc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1278,7 +1457,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(siteId)\n    | summarize make_set(hostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by id\n| extend HostName=tostring(reportedState.name),\n         LastBackup=todatetime(latestBackupTime),\n         HoursSinceBackup=toint((now() - todatetime(latestBackupTime)) / 1h)\n| where HoursSinceBackup > 48 or isnull(HoursSinceBackup)\n| project HostName, hostType, ipAddress, LastBackup, HoursSinceBackup\n| order by HoursSinceBackup desc nulls first",
+              "query": "let _selectedHostIds = toscalar(\n    Unifi_SiteManager_Sites_CL\n    | where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n    | summarize arg_max(TimeGenerated, *) by tostring(SiteId)\n    | summarize make_set(HostId));\nUnifi_SiteManager_Hosts_CL\n| where \"value::all\" in~ ({SiteFilter}) or Id in (_selectedHostIds)\n| summarize arg_max(TimeGenerated, *) by Id\n| extend HostName=tostring(ReportedState.name),\n         LastBackup=todatetime(LatestBackupTime),\n         HoursSinceBackup=toint((now() - todatetime(LatestBackupTime)) / 1h)\n| where HoursSinceBackup > 48 or isnull(HoursSinceBackup)\n| project HostName, HostType, IpAddress, LastBackup, HoursSinceBackup\n| order by HoursSinceBackup desc nulls first",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1406,7 +1585,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Hosts_CL\n| where TimeGenerated > ago(7d)\n| summarize Snapshots=count(), DistinctStates=dcount(lastConnectionStateChange) by id\n| where DistinctStates > 1\n| order by DistinctStates desc",
+              "query": "Unifi_SiteManager_Hosts_CL\n| where TimeGenerated > ago(7d)\n| summarize Snapshots=count(), DistinctStates=dcount(LastConnectionStateChange) by Id\n| where DistinctStates > 1\n| order by DistinctStates desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1436,7 +1615,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(24h)\n| summarize StateChanges=dcount(status) by id, name\n| where StateChanges > 1\n| order by StateChanges desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(24h)\n| summarize StateChanges=dcount(Status) by Id, Name\n| where StateChanges > 1\n| order by StateChanges desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1555,7 +1734,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| summarize Versions=dcount(version), Models=dcount(model), Devices=count() by productLine\n| order by Versions desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| summarize Versions=dcount(Version), Models=dcount(Model), Devices=count() by ProductLine\n| order by Versions desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1597,7 +1776,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| summarize Devices=count(), UpdatesAvailable=countif(firmwareStatus == \"updateAvailable\"), Pending=countif(firmwareStatus == \"updatePending\") by model\n| where UpdatesAvailable > 0 or Pending > 0\n| extend DriftPct = round(100.0 * (UpdatesAvailable + Pending) / Devices, 1)\n| order by DriftPct desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| summarize Devices=count(), UpdatesAvailable=countif(FirmwareStatus == \"UpdateAvailable\"), Pending=countif(FirmwareStatus == \"updatePending\") by Model\n| where UpdatesAvailable > 0 or Pending > 0\n| extend DriftPct = round(100.0 * (UpdatesAvailable + Pending) / Devices, 1)\n| order by DriftPct desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1732,7 +1911,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by id\n| where isnotempty(adoptionTime)\n| extend AdoptionTime = todatetime(adoptionTime),\n         Hour = hourofday(todatetime(adoptionTime)),\n         DayOfWeek = dayofweek(todatetime(adoptionTime)) / 1d\n| where Hour < 7 or Hour > 19 or DayOfWeek in (0, 6)\n| project AdoptionTime, name, model, productLine\n| order by AdoptionTime desc",
+              "query": "Unifi_SiteManager_Devices_CL\n| summarize arg_max(TimeGenerated, *) by Id\n| where isnotempty(AdoptionTime)\n| extend AdoptionTime = todatetime(AdoptionTime),\n         Hour = hourofday(todatetime(AdoptionTime)),\n         DayOfWeek = dayofweek(todatetime(AdoptionTime)) / 1d\n| where Hour < 7 or Hour > 19 or DayOfWeek in (0, 6)\n| project AdoptionTime, Name, Model, ProductLine\n| order by AdoptionTime desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1763,7 +1942,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| extend siteId=tostring(siteId), Ip=tostring(siteStatistics.wans.WAN.externalIp)\n| where isnotempty(Ip)\n| summarize DistinctIPs=dcount(Ip), IPList=make_set(Ip) by siteId\n| where DistinctIPs > 1\n| join kind=leftouter H on siteId\n| project SiteName, DistinctIPs, IPList",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| extend SiteId=tostring(SiteId), Ip=tostring(SiteStatistics.wans.WAN.externalIp)\n| where isnotempty(Ip)\n| summarize DistinctIPs=dcount(Ip), IPList=make_set(Ip) by SiteId\n| where DistinctIPs > 1\n| join kind=leftouter H on SiteId\n| project SiteName, DistinctIPs, IPList",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1882,7 +2061,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend PL=todouble(p.data.wan.packetLoss), Lat=todouble(p.data.wan.avgLatency)\n| join kind=leftouter H on siteId\n| summarize HighLossPeriods=countif(PL > 1), HighLatPeriods=countif(Lat > 100), Total=count() by SiteName\n| where HighLossPeriods > 0 or HighLatPeriods > 0\n| extend LossPct=round(100.0*HighLossPeriods/Total, 1), LatPct=round(100.0*HighLatPeriods/Total, 1)\n| order by HighLossPeriods desc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend PL=todouble(p.data.wan.packetLoss), Lat=todouble(p.data.wan.avgLatency)\n| join kind=leftouter H on SiteId\n| summarize HighLossPeriods=countif(PL > 1), HighLatPeriods=countif(Lat > 100), Total=count() by SiteName\n| where HighLossPeriods > 0 or HighLatPeriods > 0\n| extend LossPct=round(100.0*HighLossPeriods/Total, 1), LatPct=round(100.0*HighLatPeriods/Total, 1)\n| order by HighLossPeriods desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1937,7 +2116,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(siteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by id | project hostId=id, FriendlyName=tostring(reportedState.name)) on hostId | extend MetaName=tostring(meta.name), Suffix=substring(tostring(siteId), 0, 6) | project siteId=tostring(siteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(siteId) in~ ({SiteFilter})\n| mv-expand p = periods\n| extend ML=todouble(p.data.wan.maxLatency), AL=todouble(p.data.wan.avgLatency)\n| join kind=leftouter H on siteId\n| summarize AvgPeakLat=round(avg(ML),0), AvgMeanLat=round(avg(AL),0), WorstPeak=round(max(ML),0) by SiteName\n| extend Tail = round(AvgPeakLat - AvgMeanLat, 0)\n| order by Tail desc",
+              "query": "let H = Unifi_SiteManager_Sites_CL | summarize arg_max(TimeGenerated, *) by tostring(SiteId) | join kind=leftouter (Unifi_SiteManager_Hosts_CL | summarize arg_max(TimeGenerated, *) by Id | project HostId=Id, FriendlyName=tostring(ReportedState.name)) on HostId | extend MetaName=tostring(Meta.name), Suffix=substring(tostring(SiteId), 0, 6) | project SiteId=tostring(SiteId), SiteName=coalesce(iif(isnotempty(FriendlyName), FriendlyName, \"\"), iif(MetaName != \"default\" and isnotempty(MetaName), MetaName, \"\"), strcat(MetaName, \" (\", Suffix, \")\"));\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(7d)\n| where \"value::all\" in~ ({SiteFilter}) or tostring(SiteId) in~ ({SiteFilter})\n| mv-expand p = Periods\n| extend ML=todouble(p.data.wan.maxLatency), AL=todouble(p.data.wan.avgLatency)\n| join kind=leftouter H on SiteId\n| summarize AvgPeakLat=round(avg(ML),0), AvgMeanLat=round(avg(AL),0), WorstPeak=round(max(ML),0) by SiteName\n| extend Tail = round(AvgPeakLat - AvgMeanLat, 0)\n| order by Tail desc",
               "size": 0,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",

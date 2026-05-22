@@ -16,22 +16,25 @@ tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1562
+subTechniques:
+  - T1562.001
 query: |
   Unifi_SiteManager_Sites_CL
         | where TimeGenerated > ago(7d)
-        | extend siteName = tostring(meta.name),
-                 rulesCount = toint(siteStatistics.gateway.ipsSignature.rulesCount)
+  | extend rulesCount = toint(SiteStatistics.gateway.ipsSignature.rulesCount)
         | where isnotnull(rulesCount)
-        | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by siteId, siteName
+        | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by SiteId, SiteName
         | where MaxCount > 100 and toreal(rulesCount) / MaxCount < 0.5
         | extend DropPct = round(100.0 * (1 - toreal(rulesCount) / MaxCount), 1)
         | extend Activity = strcat('IPS rules dropped to ', rulesCount, ' (from ', MaxCount, ', -', DropPct, '%)')
-        | project TimeGenerated, siteId, siteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct
+        | project TimeGenerated, SiteId, SiteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: siteName
+        columnName: SiteId
+      - identifier: DnsDomain
+        columnName: SiteName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -40,4 +43,4 @@ incidentConfiguration:
     lookbackDuration: PT12H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

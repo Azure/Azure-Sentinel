@@ -16,35 +16,32 @@ tactics:
   - InitialAccess
 relevantTechniques:
   - T1190
+subTechniques: []
 query: |
-  // UniFi Firmware Update Available Detection
-  // Author: Fetch Labs (https://sentinel.blog)
-  let DeviceThreshold = 1;
   Unifi_SiteManager_Devices_CL
-  | where TimeGenerated > ago(1h)
-  | summarize arg_max(TimeGenerated, *) by id
-  | where isnotempty(updateAvailable)
-  | summarize 
+  | where TimeGenerated > ago(1d)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where isnotempty(UpdateAvailable)
+  | extend DeviceDetail = strcat(coalesce(Name, "Unnamed"), " (", Model, ") ", Version, " -> ", UpdateAvailable, " @", Ip)
+  | summarize
       DevicesNeedingUpdate = count(),
-      DeviceList = make_list(pack(
-          "name", coalesce(name, "Unnamed"),
-          "model", model,
-          "currentVersion", version,
-          "availableVersion", updateAvailable,
-          "ip", ip
-      )),
-      Models = make_set(model),
-      ProductLines = make_set(productLine)
-  | where DevicesNeedingUpdate >= DeviceThreshold
-  | extend 
+      DeviceList = make_list(DeviceDetail),
+      Models = make_set(Model),
+      ProductLines = make_set(ProductLine)
+  | where DevicesNeedingUpdate >= 1
+  | extend
       TimeGenerated = now(),
       AffectedModels = strcat_array(Models, ", "),
-      AffectedProductLines = strcat_array(ProductLines, ", ")
+      AffectedProductLines = strcat_array(ProductLines, ", "),
+      DeviceListString = strcat_array(DeviceList, "; ")
+  | extend Activity = strcat(DevicesNeedingUpdate, ' device(s) have firmware updates available: ', AffectedModels)
   | project
       TimeGenerated,
       DevicesNeedingUpdate,
       AffectedModels,
-      AffectedProductLines
+      AffectedProductLines,
+      Activity,
+      DeviceListString
 entityMappings:
   - entityType: CloudApplication
     fieldMappings:
@@ -58,4 +55,4 @@ incidentConfiguration:
     lookbackDuration: P7D
     matchingMethod: AnyAlert
 kind: Scheduled
-version: 1.0.0
+version: 1.0.2

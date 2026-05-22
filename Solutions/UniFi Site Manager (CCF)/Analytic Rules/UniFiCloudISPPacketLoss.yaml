@@ -17,22 +17,24 @@ tactics:
 relevantTechniques:
   - T1498
   - T1499
+subTechniques:
+  - T1498.001
+  - T1499.002
 query: |
   // UniFi ISP Packet Loss Detection
-  // Author: Fetch Labs (https://sentinel.blog)
   let PacketLossThreshold = 5;
   let MinTotalPacketLoss = 10;
   Unifi_SiteManager_ISPMetrics_CL
   | where TimeGenerated > ago(30m)
-  | mv-expand period = periods
+  | mv-expand period = Periods
   | extend
       metricTime = todatetime(period.metricTime),
       packetLoss = toint(period.data.wan.packetLoss),
       ispName = tostring(period.data.wan.ispName),
       ispAsn = tostring(period.data.wan.ispAsn),
       avgLatency = toint(period.data.wan.avgLatency)
-  // De-duplicate periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
-  | summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(siteId), ispName, metricTime
+  // De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(SiteId), ispName, metricTime
   | where metricTime > ago(30m)
   | where packetLoss >= PacketLossThreshold
   | summarize
@@ -41,12 +43,12 @@ query: |
       AvgLatency = avg(avgLatency),
       FirstSeen = min(metricTime),
       LastSeen = max(metricTime)
-      by siteId, ispName, ispAsn
+      by SiteId, ispName, ispAsn
   | where TotalPacketLoss >= MinTotalPacketLoss
   | extend TimeGenerated = now()
   | project
       TimeGenerated,
-      SiteId = siteId,
+      SiteId = SiteId,
       ISPName = ispName,
       ISPAsn = ispAsn,
       TotalPacketLoss,
@@ -55,6 +57,10 @@ query: |
       FirstSeen,
       LastSeen
 entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteId
   - entityType: CloudApplication
     fieldMappings:
       - identifier: Name

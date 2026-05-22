@@ -17,41 +17,41 @@ tactics:
 relevantTechniques:
   - T1489
   - T1499
+subTechniques:
+  - T1499.002
 query: |
-  // UniFi Multiple Devices Offline Detection
-  // Author: Fetch Labs (https://sentinel.blog)
-  let OfflineThreshold = 3;
-  let prev_offline_ids = toscalar(
-      Unifi_SiteManager_Devices_CL
+  let prev_offline_ids = Unifi_SiteManager_Devices_CL
       | where TimeGenerated between (ago(45m) .. ago(15m))
-      | summarize arg_max(TimeGenerated, *) by id
-      | where status == "offline"
-      | summarize make_set(id)
-  );
+      | summarize arg_max(TimeGenerated, *) by Id
+      | where Status == "offline"
+      | distinct Id;
   Unifi_SiteManager_Devices_CL
   | where TimeGenerated > ago(15m)
-  | summarize arg_max(TimeGenerated, *) by id
-  | where status == "offline"
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where Status == "offline"
+  | extend IsNew = Id !in (prev_offline_ids)
   | summarize
       OfflineDeviceCount = count(),
-      OfflineDevices = make_list(coalesce(name, id)),
-      OfflineModels = make_list(model),
-      OfflineIPs = make_list(ip),
-      ProductLines = make_set(productLine),
-      CurrentOfflineIds = make_set(id)
-  | where OfflineDeviceCount >= OfflineThreshold
-  | extend NewlyOffline = set_difference(CurrentOfflineIds, prev_offline_ids)
-  | extend NewlyOfflineCount = array_length(NewlyOffline)
+      NewlyOfflineCount = countif(IsNew),
+      OfflineDevices = make_list(coalesce(Name, Id)),
+      NewlyOfflineDevices = make_list_if(coalesce(Name, Id), IsNew),
+      ProductLines = make_set(ProductLine)
+  | where OfflineDeviceCount >= 3
   | where NewlyOfflineCount > 0
   | extend
       TimeGenerated = now(),
       OfflineDeviceList = strcat_array(OfflineDevices, ", "),
+      NewlyOfflineList = strcat_array(NewlyOfflineDevices, ", "),
       AffectedProductLines = strcat_array(ProductLines, ", ")
+  | extend Activity = strcat(NewlyOfflineCount, ' device(s) newly offline (', OfflineDeviceCount, ' total offline): ', NewlyOfflineList)
   | project
       TimeGenerated,
       OfflineDeviceCount,
+      NewlyOfflineCount,
       OfflineDeviceList,
-      AffectedProductLines
+      NewlyOfflineList,
+      AffectedProductLines,
+      Activity
 entityMappings:
   - entityType: CloudApplication
     fieldMappings:
@@ -63,6 +63,6 @@ incidentConfiguration:
     enabled: true
     reopenClosedIncident: true
     lookbackDuration: PT4H
-    matchingMethod: AnyAlert
+    matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.1
+version: 1.0.3

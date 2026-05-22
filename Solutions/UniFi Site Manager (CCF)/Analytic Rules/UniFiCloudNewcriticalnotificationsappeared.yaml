@@ -16,28 +16,29 @@ tactics:
   - Impact
 relevantTechniques:
   - T1499
+subTechniques:
+  - T1499.002
 query: |
   let prev = Unifi_SiteManager_Sites_CL
-            | where TimeGenerated between (ago(30m) .. ago(15m))
-            | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-            | project siteId_s = tostring(siteId),
-                      prevCritical = toint(siteStatistics.counts.criticalNotification);
-        Unifi_SiteManager_Sites_CL
-        | where TimeGenerated > ago(15m)
-        | summarize arg_max(TimeGenerated, *) by tostring(siteId)
-        | extend siteId_s = tostring(siteId),
-                 siteName = tostring(meta.name),
-                 CriticalCount = toint(siteStatistics.counts.criticalNotification)
-        | join kind=inner prev on siteId_s
-        | where CriticalCount > prevCritical
-        | extend NewCriticals = CriticalCount - prevCritical
-        | extend Activity = strcat(NewCriticals, ' new critical notification(s) - count went ', prevCritical, ' -> ', CriticalCount)
-        | project TimeGenerated, siteId, siteName, Activity, prevCritical, CriticalCount, NewCriticals
+      | where TimeGenerated between (ago(30m) .. ago(15m))
+      | summarize arg_max(TimeGenerated, *) by tostring(SiteId)
+      | project siteId_s = tostring(SiteId), prevCritical = CriticalNotifications;
+  Unifi_SiteManager_Sites_CL
+  | where TimeGenerated > ago(15m)
+  | summarize arg_max(TimeGenerated, *) by tostring(SiteId)
+  | extend siteId_s = tostring(SiteId), CriticalCount = CriticalNotifications
+  | join kind=inner prev on siteId_s
+  | where CriticalCount > prevCritical
+  | extend NewCriticals = CriticalCount - prevCritical
+  | extend Activity = strcat(NewCriticals, ' new critical notification(s) - count went ', prevCritical, ' -> ', CriticalCount)
+  | project TimeGenerated, SiteId, SiteName, Activity, prevCritical, CriticalCount, NewCriticals
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: siteName
+        columnName: SiteId
+      - identifier: DnsDomain
+        columnName: SiteName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -46,4 +47,4 @@ incidentConfiguration:
     lookbackDuration: PT5H
     matchingMethod: AllEntities
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1
