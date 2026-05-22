@@ -4,7 +4,7 @@ Author: Accelerynt
 
 For any technical questions, please contact [info@accelerynt.com](mailto:info@accelerynt.com)
 
-This playbook will create a unidirectional integration with Microsoft Sentinel. It will pull Checkmarx audit log events into a Microsoft Sentinel custom log table where they can be tracked, queried, and correlated with other security data. This uses Data Collection Rules (DCR), Data Collection Endpoints (DCE), and custom log tables.
+This playbook will create a unidirectional integration with Microsoft Sentinel. It will pull Checkmarx audit log events into a Microsoft Sentinel custom log table on a daily schedule where they can be tracked, queried, and correlated with other security data. This uses Data Collection Rules (DCR), Data Collection Endpoints (DCE), and custom log tables.
 
 ![Checkmarx_Audit_Integration_Demo_1](Images/Checkmarx_Audit_Integration_Demo_1.png)
 
@@ -119,8 +119,8 @@ From the left menu blade, click **Overview** and take note of the **Resource ID*
 
 This single deployment creates the custom log table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), Key Vault API connection, Logic App, and all required role assignments.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-Audit-Ingestion%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-Audit-Ingestion%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-Audit-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-Audit-Ingestion%2Fazuredeploy.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
@@ -137,12 +137,13 @@ In the **Instance details** section:
 * **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](#create-an-azure-key-vault-secret).
 * **Key Vault Resource Group**: Enter the resource group containing the Key Vault.
 * **Key Vault Secret Name**: This can be left as "**checkmarx-integration-secret**" or changed to match the secret name you used.
+* **Data Collection Endpoint Name**: This can be left as the default. Override it only if you are deploying multiple ingestion playbooks into the same resource group and need to avoid a name collision.
+* **Data Collection Rule Name**: This can be left as the default. Override it only if you are deploying multiple ingestion playbooks into the same resource group and need to avoid a name collision.
 * **Checkmarx IAM Base Url**: Enter the IAM base URL for your Checkmarx region referenced in [Checkmarx API Permissions](#checkmarx-api-permissions).
 * **Checkmarx AST Base Url**: Enter the AST base URL for your Checkmarx region referenced in [Checkmarx API Permissions](#checkmarx-api-permissions).
 * **Checkmarx Tenant**: Enter your Checkmarx tenant/realm name (this appears in your Checkmarx URL and authentication settings).
 * **Checkmarx Client Id**: Enter your Checkmarx OAuth Client ID (e.g., "**ast-app**").
 * **Grant Type**: Select the OAuth grant type for Checkmarx authentication. Use `client_credentials` for client ID and secret, or `refresh_token` for refresh token authentication. See [Checkmarx API Permissions](#checkmarx-api-permissions) for details.
-* **Lookback Days**: Number of days prior to each run to pull audit events from. Default is **1**. For the initial backfill, set this higher (e.g., **30**) to ingest historical events, then reduce to **1** for steady-state daily operation. This can be changed later from the Logic App designer without redeploying.
 * **Audit Page Size**: Page size for the Checkmarx `/api/audit` pagination loop. Default is **100**.
 
 Towards the bottom, click on "**Review + create**".
@@ -178,14 +179,14 @@ The following role assignments are created automatically by this deployment:
 
 ### Initial Run
 
-This playbook runs once daily, collecting Checkmarx audit log events from the configured lookback window and ingesting them into Microsoft Sentinel.
+This playbook runs once daily, collecting the current day's Checkmarx audit log events and ingesting them into Microsoft Sentinel.
 
 This playbook is deployed in a **Disabled** state. After waiting for role assignments to propagate, navigate to the Logic App overview page and click "**Enable**" to activate the playbook. Then click "**Run**" > "**Run**" to execute the initial run.
 
 Click on the run to view the execution details. Verify that all steps completed successfully, particularly the "**HTTP - Send Audit Events to DCR**" step inside the `Until Paginate Audit Logs` loop.
 
-> [!TIP]
-> For the initial backfill, set **Lookback Days** higher (e.g., **30**) during deployment to ingest historical events, run the playbook once, then reduce it back to **1** via the Logic App designer's Parameters pane. This avoids redeploying the template.
+> [!NOTE]
+> Because the playbook ingests current-day events only (see the scope note at the top of this README), the initial run will ingest events that have occurred so far on the day it is run. Keeping the playbook enabled for daily runs is what builds up history over time. If the current day has no audit activity yet, the run will complete successfully without ingesting any rows.
 
 #
 
@@ -320,7 +321,6 @@ CheckmarxAuditEvents_CL
 * Verify the access token was successfully obtained.
 * Check that the Checkmarx API endpoint is accessible.
 * Verify the API permissions for your Checkmarx client.
-* Ensure there are audit events within the configured lookback window.
 
 **Logic App fails at "HTTP - Send Audit Events to DCR" step with 403:**
 * Wait up to 10 minutes for the Monitoring Metrics Publisher role assignment to propagate.
@@ -331,11 +331,11 @@ CheckmarxAuditEvents_CL
 **No data appearing in Log Analytics:**
 * Wait several minutes after the first successful run — ingestion is asynchronous.
 * Verify the **CheckmarxAuditEvents_CL** table exists under **Custom Logs** in the workspace.
-* Verify there are audit events in your Checkmarx tenant within the configured lookback window.
+* Confirm there were audit events in your Checkmarx tenant **on the day the run executed**. The playbook ingests current-day events only; if the current day had no activity at run time, no rows are ingested. See the scope note at the top of this README.
 * Check the Logic App run history for any errors.
 
 **Condition step is skipped for a page:**
-* This is normal behavior if the page returned zero events. The condition guards against ingesting empty result sets.
+* This is normal behavior if the page returned zero events. The condition guards against ingesting empty result sets. A run on a day with no current-day audit activity will skip the condition on every page and complete without ingesting rows.
 
-**Pagination loop appears to run forever or hits its iteration limit:**
-* The loop terminates when the API returns a partial page (fewer events than the configured page size). If the API consistently returns full pages of `AuditPageSize` events for an extended period, verify your tenant's audit volume is reasonable for the configured lookback window. Reduce **Lookback Days** if needed.
+**Pagination loop behavior:**
+* The loop requests pages of the current day's audit events and terminates when a page returns fewer events than the configured **Audit Page Size** (including a page that returns zero events). As a safety net, the loop is also bounded by a fixed maximum iteration count, so it cannot run indefinitely. If you observe the loop reaching its iteration limit, verify that your tenant's current-day audit volume is reasonable for the configured page size.
