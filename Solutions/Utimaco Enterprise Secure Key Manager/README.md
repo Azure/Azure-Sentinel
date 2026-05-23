@@ -2,14 +2,14 @@
 
 ## Overview
 
-This solution enables integration of Utimaco ESKM (Enterprise Secure Key Manager) logs with Microsoft Sentinel using the Codeless Connector Platform (CCP). It provides:
+This solution enables integration of Utimaco ESKM (Enterprise Secure Key Manager) logs with Microsoft Sentinel using the Connector Builder (RestApiPoller) platform. It provides:
 - Automated ingestion of KMIP server logs
 - Prebuilt workbook for monitoring key management and authentication activity
 - Analytics rules for threat detection
 - Hunting queries for proactive investigation
 
 ## Features
-- **Data Connector:** Codeless Connector Platform (CCP) poller for ESKM KMIP server logs
+- **Data Connector:** Connector Builder (RestApiPoller) poller for ESKM KMIP server logs
 - **Workbook:** Visualizes key metrics, event distribution, operation outcomes, authentication trends, and activity timeline
 - **Analytics Rules:** Detects brute-force, privilege probing, mass deletion, and authentication anomalies
 - **Hunting Queries:** Surfaces rare users, new source IPs, high-volume key retrievals, and after-hours activity
