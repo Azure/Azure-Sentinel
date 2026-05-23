@@ -1,0 +1,204 @@
+id: 564bf64a-bada-4c6b-8821-53138d660f78
+name: Potential Rootkit Network Activity Missing from MDE
+description: |
+  Identifies outbound network connections logged by perimeter firewalls that are entirely missing from Microsoft Defender for Endpoint (MDE) telemetry. This discrepancy strongly indicates a threat actor operating in kernel space, to hide C2 traffic.
+description-detailed: |
+  Advanced adversaries operating in Ring-0 via BYOVD can unlink WFP (Windows Filtering Platform) callouts or inject raw frames into NDIS. This completely blinds EDR sensors like MDE to outbound network telemetry, while the host otherwise appears healthy. By comparing "Network Truth" (out-of-band firewall appliance logs) against "Host Truth" (EDR telemetry), we trap the adversary in a paradox. Kernel-level tampering on the endpoint cannot hide the physical packet leaving the network boundary.
+severity: High
+
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceNetworkInfo
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Cisco
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - DefenseEvasion
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1562.001
+  - T1562.004
+  - T1011
+
+
+query: |
+  // DETECTION STRATEGY: Rootkit & BYOVD Ring-0 Network Bypass Detection via Firewall-to-EDR Telemetry Delta.
+  // THE MECHANIC: Advanced adversaries operating in Ring-0 via BYOVD can unlink WFP callouts, blinding MDE to outbound network telemetry while the host otherwise appears healthy.
+  // THE RESILIENCE: By comparing "Network Truth" (out-of-band firewall logs) against "Host Truth" (EDR telemetry), we trap the adversary. Endpoint tampering cannot hide the physical packet leaving the perimeter.
+  
+  // Disclaimer: This query can be computationally expensive if run too frequently.
+  
+  // NOTE ON ANALYTICS RULE CONVERSION, SCOPING & COMPUTE:
+  // If converting this Hunting Query into a scheduled Analytics Rule, you MUST do the following to preserve compute and prevent false positives:
+  // 1. Scope 'activeMdeNodes' strictly to "Crown Jewel" critical servers (e.g., Domain Controllers, PKI) to limit the left-anti join compute footprint.
+  // 2. Introduce an ingestion offset using "ago()" (e.g., | where TimeGenerated between (ago(24h) .. ago(1h))) to account for MDE telemetry batching delays and prevent "Ghost Deltas".
+  
+  // Time framing: Hunting blade passes the selected time automatically via StartTimeISO and EndTimeISO
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  
+  // Thresholds: Avoid micro-session noise, DHCP churn, or transient TCP handshakes.
+  let byteThreshold = 50000; 
+  let connThreshold = 5;
+  
+  // Tier 1: Firewall Perimeter Identification
+  // ADAPTATION: Analysts MUST adjust these arrays to match their specific perimeter security stack.
+  let firewallVendors = dynamic(["Palo Alto Networks", "Fortinet", "Check Point", "Cisco", "Zscaler"]);
+  let firewallProducts = dynamic(["Firewall", "PAN-OS", "FortiGate"]);
+  
+  // STEP 1: Identify Active MDE Endpoints (Base Query)
+  // Why: We must ensure the source IP belongs to a machine actively running MDE.
+  // Note: Without this, unmanaged devices (IoT, BYOD) will trigger massive false positives.
+  let activeMdeNodes = DeviceNetworkEvents
+    | where Timestamp between (starttime .. endtime)
+    | where isnotempty(LocalIP)
+    | distinct LocalIP;
+  
+  // STEP 2: Establish "Network Truth" via Perimeter Appliances
+  let firewallTruth = ASimNetworkSessionLogs
+    | where TimeGenerated between (starttime .. endtime)
+    | where isnotempty(SrcIpAddr) and isnotempty(DstIpAddr)
+    | where NetworkProtocol in~ ("TCP")
+    // CONDITION A: Verify the log comes from a perimeter hardware/virtual appliance
+    | where EventVendor has_any (firewallVendors) or EventProduct has_any (firewallProducts)
+    // CONDITION B: Filter out internal-to-internal traffic to focus exclusively on external C2/Exfiltration
+    | where ipv4_is_private(DstIpAddr) == false 
+        and ipv4_is_private(SrcIpAddr) == true
+    // CONDITION C: Ensure the source IP is an active MDE node (Filter early for compute efficiency)
+    | where SrcIpAddr in (activeMdeNodes)
+    // Preserving Context: Use make_set to keep analyst context without blowing up row counts
+    | summarize firewallConnCount = count(), 
+                totalBytes = sum(NetworkBytes), 
+                StartTime = min(TimeGenerated), 
+                EndTime = max(TimeGenerated),
+                destinationPorts = make_set(DstPortNumber, 100),
+                appProtocols = make_set(NetworkApplicationProtocol, 100)
+             by SrcIpAddr, DstIpAddr
+    | where totalBytes >= byteThreshold or firewallConnCount >= connThreshold;
+  
+  // STEP 3: Establish "Host Truth" via EDR Telemetry
+  let mdeTruth = DeviceNetworkEvents
+    | where Timestamp between (starttime .. endtime)
+    | where isnotempty(LocalIP) and isnotempty(RemoteIP)
+    | where Protocol in~ ("TCP")
+    | where ipv4_is_private(RemoteIP) == false
+    // Join Optimization: Use distinct to drastically reduce memory footprint before the anti-join
+    | distinct LocalIP, RemoteIP
+    | project SrcIpAddr = LocalIP, DstIpAddr = RemoteIP;
+  
+  // STEP 4: Capture Endpoint Context & Strict Schema Parsing
+  let deviceMapping = DeviceNetworkInfo
+    | where Timestamp between (starttime .. endtime)
+    | where isnotempty(IPAddresses) and isnotempty(DeviceName)
+    // Expand the JSON array of IP addresses so each IP gets its own row
+    | mv-expand todynamic(IPAddresses)
+    | extend LocalIP = tostring(IPAddresses.IPAddress)
+    | where isnotempty(LocalIP)
+    // Get the most recent heartbeat for each IP address to account for DHCP churn
+    | summarize arg_max(Timestamp, DeviceName, DeviceId) by LocalIP
+    | project SrcIpAddr = LocalIP, RawDeviceName = DeviceName, DeviceId = tostring(DeviceId);
+  
+  // STEP 5: Execute the Delta Anti-Join
+  firewallTruth
+    // Left Anti-Join: Keep ONLY the connections seen by the Firewall that are completely missing from MDE
+    | join kind=leftanti (
+        mdeTruth
+    ) on SrcIpAddr, DstIpAddr
+    // Enrich with Device Details
+    | join kind=leftouter (
+        deviceMapping 
+    ) on SrcIpAddr
+    
+    // EXCLUSION: Built-in tuning guidance for org-specific baselines.
+    // | where DstIpAddr !in~ ("8.8.8.8", "1.1.1.1") // Example: Exclude common DNS bypasses
+    
+    // Data Sanitization
+    // Rename generic schema columns into distinct, narrative evidence
+    | extend timestamp = StartTime, 
+             InternalIP = tostring(SrcIpAddr), 
+             DestinationIP = tostring(DstIpAddr),
+             EvasiveConnectionCount = firewallConnCount,
+             TotalBytesSent = totalBytes,
+             DestinationPorts = destinationPorts
+             // Adhere to Host Entity schema: Parse FQDN into HostName and DnsDomain
+             HostName = tostring(split(RawDeviceName, ".")[0]),
+             DnsDomain = iff(RawDeviceName contains ".", substring(RawDeviceName, indexof(RawDeviceName, ".") + 1), "")
+
+
+    // ANALYST ACTION: Check 'DestinationIP' against Threat Intel. 
+    // If the IP is a known SaaS/Cloud provider, verify if frequency matches beaconing patterns or if the 'TotalBytesSent' aligns with 
+    // anomalous Rclone/exfiltration activity. Run a live response memory scan for hidden drivers.
+             
+    // Ordering Visual Hierarchy
+    // Drop raw artifacts and display the chronology left-to-right
+    | project timestamp,
+              StartTime, 
+              EndTime, 
+              HostName,
+              DnsDomain,
+              DeviceId,
+              InternalIP, 
+              DestinationIP, 
+              EvasiveConnectionCount, 
+              TotalBytesSent, 
+              DestinationPorts,
+              appProtocols
+    | project-reorder timestamp, 
+                      HostName, 
+                      InternalIP, 
+                      DestinationIP, 
+                      EvasiveConnectionCount, 
+                      TotalBytesSent, 
+                      DestinationPorts, 
+                      appProtocols
+    | order by TotalBytesSent desc
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InternalIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+
+alertDetailsOverride:
+  alertDisplayNameFormat: "Evasive Ring-0 Network Activity from {{HostName}} to {{DestinationIP}}"
+  alertDescriptionFormat: "Firewall logs indicate {{HostName}} ({{InternalIP}}) transmitted {{TotalBytesSent}} bytes to {{DestinationIP}}, but Microsoft Defender is completely blind to this traffic, indicating likely kernel-level EDR tampering."
+
+customDetails:
+  Evasive_Connections: EvasiveConnectionCount
+  Bytes_Sent: TotalBytesSent
+  Suspicious_Host: HostName
+  Destination_Ports: DestinationPorts
+
+version: 1.0.0
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection", "Security - Network" ]
