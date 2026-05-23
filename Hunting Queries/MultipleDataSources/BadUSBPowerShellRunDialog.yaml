@@ -1,0 +1,70 @@
+id: 683b2baa-39c3-457d-b64e-2e57c8fc83ba
+name: BadUSB PowerShell execution via Windows Run dialog (HID injection)
+description: |
+  Identifies PowerShell spawned by explorer.exe with a hidden window and remote
+  execution or evasion flags, consistent with BadUSB HID injection payloads that
+  open the Windows Run dialog via WIN+R. Keystroke injection via hardware sets
+  explorer.exe as the parent; pairing -WindowStyle Hidden with any cradle flag is
+  a reliable indicator of automated injection rather than interactive user activity.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Execution
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1059.001
+  - T1564.003
+  - T1200
+query: |
+  let timeframe = 1d;
+  let EvasionFlags = dynamic([
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      "-ExecutionPolicy Bypass",
+      "DownloadString",
+      "IEX",
+      "Invoke-Expression",
+      "WebClient",
+      "Start-Process"
+  ]);
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where FileName in~ ("powershell.exe", "pwsh.exe")
+  | where InitiatingProcessFileName =~ "explorer.exe"
+  | where ProcessCommandLine has_all ("-WindowStyle", "Hidden")
+  | where ProcessCommandLine has_any (EvasionFlags)
+  | project
+      TimeGenerated,
+      DeviceName,
+      AccountName,
+      AccountDomain,
+      ProcessCommandLine,
+      InitiatingProcessFileName,
+      InitiatingProcessCommandLine,
+      ReportId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Endpoints" ]
