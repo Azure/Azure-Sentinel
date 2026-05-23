@@ -1,0 +1,225 @@
+id: c9250fa4-ddf4-4844-a7ae-c6b2f131637b
+name: First-Time Network Connection by Unusual Process
+description: Identifies anomalous network communication from processes that have no historical baseline on a device.
+description-detailed: |
+  This detection profiles the communication behavior of executables by combining their filename with their cryptographically verified digital signature. It is designed to catch four distinct high-risk scenarios:
+  1. Hijacked Binaries (DLL Sideloading/BYOTA): Legitimate, signed software (e.g., Greenshot, Notepad++) that is normally offline but has been introduced to a host to proxy C2 traffic.
+  2. Rogue Enterprise Software (Shadow IT): Unapproved administrative tools or RMMs (e.g., AnyDesk, GoTo Resolve) that were not officially deployed but are being used for lateral movement or exfiltration.
+  3. Plain Droppers: Unsigned or self-signed malware binaries that attempt to "phone home" immediately after execution.
+  4. Identity Spoofing: Malicious files renamed to match legitimate OS processes (e.g., chrome.exe) but which lack the valid certificate of the original vendor.
+  Only truly "new" behaviors are surfaced, while ignoring legitimate software updates that maintain a consistent signing identity.
+  References:
+  https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware
+  https://expel.com/blog/along-for-the-ride-when-legitimate-software-becomes-a-signed-malware-loader/
+  https://www.microsoft.com/en-us/security/blog/2026/04/06/storm-1175-focuses-gaze-on-vulnerable-web-facing-assets-in-high-tempo-medusa-ransomware-operations/
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceInfo
+      - DeviceFileCertificateInfo
+tactics:
+  - CommandAndControl
+  - Exfiltration
+  - DefenseEvasion
+relevantTechniques:
+  - T1574.002
+  - T1071
+  - T1573
+  - T1567
+query: |
+  // DETECTION STRATEGY: Behavioral profiling of evasive network execution contexts using cryptographic identity baselining.
+  // THE MECHANIC: Attackers leverage DLL sideloading or "Bring Your Own Trusted App" (BYOTA) by dropping legitimate signed binaries (e.g., Greenshot, SyncTrayzor) into user-writable directories to proxy C2 traffic and bypass EDR.
+  // THE RESILIENCE: By baselining the [DeviceId + FileName + Signer], this query remains resilient to legitimate software updates (where hashes change but signers stay the same). It traps the attacker the moment they introduce an anomalous communication profile to a host, regardless of the binary's perceived "legitimacy."
+  
+  // ---------------------------------------------------------------------------
+  // Variable Definitions
+  // ---------------------------------------------------------------------------
+  
+  // Why: Establishes a time offset to prevent "Flash Attacks" from contaminating the baseline.
+  let runDelay = 1d; 
+  let baselineDays = 14d;
+  let startBaseline = ago(baselineDays + runDelay);
+  let endBaseline = ago(runDelay);
+  
+  // Why: Prevalent enterprise applications update from user-writable directories and generate massive noise.
+  // Note: Replace this datatable with a Sentinel Watchlist in production: _GetWatchlist('Allowed_Network_Apps')
+  let globalAllowedApps = datatable(FileName:string, Signer:string)[
+    "teams.exe", "Microsoft Corporation",
+    "zoom.exe", "Zoom Video Communications, Inc.",
+    "chrome.exe", "Google LLC",
+    "msedge.exe", "Microsoft Corporation",
+    "onedrive.exe", "Microsoft Corporation"
+  ];
+  
+  // ---------------------------------------------------------------------------
+  // Pipeline Execution
+  // ---------------------------------------------------------------------------
+  
+  // STEP 1: Environmental Scoping
+  let devDevices = DeviceInfo
+    | where Timestamp > startBaseline
+    | where isnotempty(DeviceId)
+    | where MachineGroup has_any ("Dev", "Developers", "Engineering") 
+    | distinct DeviceId;
+  
+  // STEP 2: Certificate Validation & Trust Extraction
+  let trustedCertificates = DeviceFileCertificateInfo
+    | where Timestamp > startBaseline
+    | where isnotempty(SHA1)
+    | where IsSigned == true and IsTrusted == true
+    | summarize arg_max(Timestamp, Signer) by SHA1;
+  
+  // STEP 3: Historical Baselining (The 14-day window)
+  let networkBaseline = DeviceNetworkEvents
+    | where Timestamp between (startBaseline .. endBaseline)
+    | where RemoteIPType == "Public" 
+    | where isnotempty(InitiatingProcessFileName)
+    | lookup kind=leftouter trustedCertificates on $left.InitiatingProcessSHA1 == $right.SHA1
+    | extend ExactSigner = coalesce(Signer, "Unsigned")
+    | summarize by DeviceId, InitiatingProcessFileName, ExactSigner;
+  
+  // STEP 4: Active Window Evaluation (The last 24 hours)
+  let recentActivity = DeviceNetworkEvents
+    | where Timestamp > endBaseline
+    | where RemoteIPType == "Public"
+    | where isnotempty(InitiatingProcessFileName)
+    // CONDITION A: Exclude known Developer machines to reduce noise.
+    | where DeviceId !in (devDevices)
+    | lookup kind=leftouter trustedCertificates on $left.InitiatingProcessSHA1 == $right.SHA1
+    | extend ExactSigner = coalesce(Signer, "Unsigned")
+    // CONDITION B: Pre-filter globally allowed applications (Broadcast hint for memory optimization)
+    | join kind=leftanti globalAllowedApps on $left.InitiatingProcessFileName == $right.FileName and $left.ExactSigner == $right.Signer
+    | summarize 
+        StartTime = min(Timestamp), 
+        EndTime = max(Timestamp), 
+        ConnectionCount = count(), 
+        TargetIPs = make_set(RemoteIP, 5), 
+        TargetPorts = make_set(RemotePort, 5), 
+        TargetURLs = make_set(RemoteUrl, 5) 
+      by 
+        DeviceId, 
+        DeviceName, 
+        InitiatingProcessAccountDomain,
+        InitiatingProcessAccountName, 
+        InitiatingProcessFileName, 
+        ExactSigner, 
+        InitiatingProcessFolderPath, 
+        InitiatingProcessCommandLine, 
+        InitiatingProcessParentFileName, 
+        InitiatingProcessSHA1,
+        InitiatingProcessId;
+  
+  // STEP 5: Delta Comparison & Triage Output Generation
+  recentActivity
+    | join kind=leftanti networkBaseline on DeviceId, InitiatingProcessFileName, ExactSigner
+    
+    // ---------------------------------------------------------------------------
+    // ANALYST ACTION: Evaluate the 'SuspectProcessName' and its 'VerifiedSigner'. 
+    // If the process is a known administrative tool (e.g., AnyDesk, Rclone, NetExec) or 
+    // a hijacked utility (Greenshot) that is NOT part of the standard local baseline, 
+    // investigate the 'TargetIPs' for evidence of data exfiltration or C2 beaconing.
+    
+    // Schema Alignment: Explicitly cast types to match Sentinel entity mapping schemas
+    | extend 
+        timestamp = StartTime, 
+        HostCustomEntity = tostring(DeviceName), 
+        AccountNTDomain = tostring(InitiatingProcessAccountDomain),
+        AccountName = tostring(InitiatingProcessAccountName), 
+        ProcessIdString = tostring(InitiatingProcessId),
+        IPCustomEntity = tostring(TargetIPs[0]), 
+        FileHashCustomEntity = tostring(InitiatingProcessSHA1),
+        HashAlgorithm = "SHA1",
+        // Contextual Renaming: Translate schema language into incident narrative
+        SuspectProcessName = InitiatingProcessFileName,
+        VerifiedSigner = ExactSigner,
+        ExecutionPath = InitiatingProcessFolderPath
+        
+    // Data Sanitization: Drop all unnecessary calculation columns
+    | project 
+        StartTime, 
+        EndTime, 
+        DeviceName, 
+        AccountNTDomain,
+        AccountName, 
+        SuspectProcessName, 
+        VerifiedSigner, 
+        ExecutionPath, 
+        InitiatingProcessCommandLine, 
+        TargetURLs, 
+        TargetIPs, 
+        TargetPorts, 
+        InitiatingProcessParentFileName, 
+        ConnectionCount, 
+        InitiatingProcessSHA1, 
+        ProcessIdString,
+        HashAlgorithm,
+        timestamp, 
+        HostCustomEntity, 
+        IPCustomEntity, 
+        FileHashCustomEntity
+        
+    // Visual Hierarchy: Left-to-right chronological narrative for the Tier 1 Analyst
+    | project-reorder 
+        StartTime, 
+        EndTime, 
+        DeviceName, 
+        AccountNTDomain,
+        AccountName, 
+        SuspectProcessName, 
+        InitiatingProcessCommandLine, 
+        ExecutionPath, 
+        TargetIPs, 
+        TargetURLs, 
+        TargetPorts,
+        VerifiedSigner, 
+        InitiatingProcessParentFileName, 
+        ConnectionCount, 
+        InitiatingProcessSHA1
+customDetails:
+  Suspect_Process: SuspectProcessName
+  Verified_Signer: VerifiedSigner
+  Execution_Path: ExecutionPath
+  Target_IPs: TargetIPs
+alertDetailsOverride:
+  alertDisplayNameFormat: "Anomalous Connection Profile: {{SuspectProcessName}} on {{DeviceName}}"
+  alertDescriptionFormat: "The process {{SuspectProcessName}} (Signed by: {{VerifiedSigner}}) has established a new network connection to {{TargetIPs}}. This behavior is not present in the 14-day baseline for this host and may indicate DLL Sideloading, Rogue RMM usage, or a new Dropper infection."
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdString
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+      - identifier: Value
+        columnName: FileHashCustomEntity
+version: 1.0.0
+
+metadata:
+    source:
+      kind: Community
+    author:
+      name: Younes Al Taleb
+    support:
+      tier: Community
+    categories:
+      domains: [ "Security - Threat Protection" ]
