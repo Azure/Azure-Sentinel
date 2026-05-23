@@ -1,0 +1,132 @@
+id: 
+name: Gentlemen Ransomware Payload Execution and Staging
+description: |
+  This query detects the presence, creation, or execution of known payloads involved in the EtherRAT, TukTuk, and Gentlemen ransomware intrusion chains.
+description-detailed: |
+  References:
+  https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware
+severity: High
+kind: Scheduled
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+tactics:
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1204.002
+  - T1574.002
+query: |
+  // DETECTION STRATEGY: 
+  // Detect the presence, creation, or execution of known payloads involved in the EtherRAT, TukTuk, and Gentlemen ransomware intrusion chain.
+  // 
+  // THE MECHANIC: 
+  // The attackers gain initial access via trojanized MSI files masquerading as Sysinternals utilities. They subsequently drop obfuscated JavaScript, configuration files, and side-load malicious DLLs (like log4net.dll). When executed, these payloads establish persistence and beacon to decentralized C2s.
+  
+  // These are the exact SHA256 hashes of the malicious MSI files, EtherRAT scripts/configs, and TukTuk DLLs recovered during the incident response.
+  // Note: We include configurations and scripts in this list, which means we will detect staging operations even if the executable itself was blocked or not yet run.
+  let sha256Iocs = dynamic([
+      // Tier 1: Initial Access (Trojanized RAMMap.msi)
+      "d9487fdc097f770e5661f9e5dee130068cb179d33716abff1a21c8cb901f25a6",
+      // Tier 2: EtherRAT Payloads & Configs
+      "8c2665adf8bfab65463f2a9bd1b7bb0231de3f5c1e6a2e51479e44aaac2e7bf0", // MVnVmUYj.cmd
+      "4142d5efd4ea2abab77f2f0a917610e2ff976bf9e19d7ad1e9156eccdc5412db", // A7Pnj975bl.cfg
+      "2d4b4bb18b8445e49eeda571982874403befcecf78266e3d405f6529d98bee46", // v72HYLU3OpRBznc.ini
+      // Tier 3: TukTuk Sideloaded DLLs
+      "19021e53b9929fdf4b7d0e0707434d56bb73c1a9b7403c8837b44d1c417198dc", // log4net.dll
+      // Tier 4: Malicious RMM Installer (GoTo Resolve)
+      "1795eacd2c58894ccdd6be8854fe6456c3b069a3a873432343b57b475b256aee"  // smokymo.msi
+  ]);
+  
+  // Note: These map to the exact payload tiers listed above.
+  let sha1Iocs = dynamic([
+      "3d5ee8429ef00824c0351cba507dfeb92b54f83b",
+      "c98ee41f09ae079a5643626f57eb84f92205bb2b",
+      "b44c8084b88d31113ee51758740eb84c251bdae8",
+      "114ec028a3fc4ed50056ee8166b0c39acff6ff03",
+      "ba80d7b038758a129861e1e498e462cc3d68ae20",
+      "aa9218994798ae31a19d3e7e39cfac2e2ee55840"
+  ]);
+  
+  let md5Iocs = dynamic([
+      "73ce2438d4ed475e03727b7b000d2794",
+      "b2d51212744f404714fd909e87254d98",
+      "c92cf9a1af5b1fe25cdcb8771ce52be4",
+      "77fbe265fd65c7f7b6d323fb6de6a4fd",
+      "f985b8d6d635c266fc4779dad77aa75c",
+      "b188fbc6ff5557767e73e4c883a553a3"
+  ]);
+  
+  // Interrogate endpoint file creations, modifications, and process executions
+  DeviceFileEvents
+    // STEP 1: Scan for the exact cryptographic footprint of the malware
+    // CONDITION A: The file being created or modified matches our threat intel
+    | where SHA256 in~ (sha256Iocs) 
+       or SHA1 in~ (sha1Iocs) 
+       or MD5 in~ (md5Iocs)
+       // CONDITION B: The process performing the action matches our threat intel (i.e., the malware is already running and interacting with the system)
+       or InitiatingProcessSHA256 in~ (sha256Iocs)
+       or InitiatingProcessSHA1 in~ (sha1Iocs)
+       or InitiatingProcessMD5 in~ (md5Iocs)
+       
+    // Because these are exact cryptographic hash matches for known malware, false positives should be non-existent. 
+    
+    // STEP 2: Schema Alignment & Entity Preparation
+    | extend timestamp = Timestamp
+    // explicitly cast InitiatingProcessId to a string to satisfy the Process entity schema
+    | extend ProcessIdString = tostring(InitiatingProcessId)
+    
+    // STEP 3: Format the output for triage
+    // ANALYST ACTION: Check the 'Action' column. If it is a FileCreation event, the malware is staging. If 'TargetFile' ends in .dll and 'Process' is a native Windows binary or non-malicious application (like Greenshot.exe), assume active DLL Sideloading and execute ransomware containment procedures immediately.
+    | project timestamp, 
+              DeviceName, 
+              Account = InitiatingProcessAccountName, 
+              Process = InitiatingProcessFileName, 
+              CommandLine = InitiatingProcessCommandLine, 
+              Action = ActionType,
+              TargetFile = FileName, 
+              TargetFolder = FolderPath, 
+              SHA256,
+              ProcessIdString
+              
+    // STEP 4: Visual Hierarchy
+    | project-reorder timestamp, 
+                      DeviceName, 
+                      Account, 
+                      Process, 
+                      CommandLine, 
+                      Action, 
+                      TargetFile, 
+                      TargetFolder,
+                      SHA256
+    | sort by timestamp desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdString
+      - identifier: CommandLine
+        columnName: CommandLine
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetFile
+      - identifier: Directory
+        columnName: TargetFolder
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: SHA256
+customDetails:
+  Staged_Payload: TargetFile
+  Staged_Path: TargetFolder
+  Action_Performed: Action
