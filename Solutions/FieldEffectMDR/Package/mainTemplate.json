@@ -130,7 +130,13 @@
                 "alertDetailsOverride": {
                   "alertSeverityColumnName": "SEVERITY",
                   "alertDescriptionFormat": "{{DETAILS}}\n\nFor full information, visit: {{URL}}\n",
-                  "alertDisplayNameFormat": "Field Effect MDR Alert: ARO-{{ARO}}: {{TITLE}}"
+                  "alertDisplayNameFormat": "Field Effect MDR Alert: ARO-{{ARO}}: {{TITLE}}",
+                  "alertDynamicProperties": [
+                    {
+                      "alertProperty": "ProductName",
+                      "value": "PRODUCT_NAME"
+                    }
+                  ]
                 },
                 "incidentConfiguration": {
                   "createIncident": true,
@@ -140,7 +146,36 @@
                     "reopenClosedIncident": false,
                     "enabled": false
                   }
-                }
+                },
+                "entityMappings": [
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Name",
+                        "columnName": "LastUser"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "identifier": "HostName",
+                        "columnName": "Hostname"
+                      }
+                    ]
+                  }
+                ]
               }
             },
             {
@@ -383,6 +418,46 @@
                         "type": "datetime"
                       }
                     ]
+                  },
+                  "Custom-FieldEffectAROAlerts_SRC": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "serial_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "title",
+                        "type": "string"
+                      },
+                      {
+                        "name": "details_markdown",
+                        "type": "string"
+                      },
+                      {
+                        "name": "details",
+                        "type": "string"
+                      },
+                      {
+                        "name": "display_url",
+                        "type": "string"
+                      },
+                      {
+                        "name": "data",
+                        "type": "dynamic"
+                      }
+                    ]
                   }
                 },
                 "destinations": {
@@ -396,12 +471,12 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Custom-FieldEffectAROAlerts_CL"
+                      "Custom-FieldEffectAROAlerts_SRC"
                     ],
                     "destinations": [
                       "clv2ws2"
                     ],
-                    "transformKql": "source\n| extend d = todynamic(data)\n| extend Agent = todynamic(d.agent_details)\n| project\n    ID = tostring(serial_id),\n    Severity = tostring(d.severity),\n    AROType = tostring(d.type),\n    Title = tostring(d.title),\n    Hostname = tostring(Agent.hostName),\n    IPAddress = tostring(Agent.ipAddress),\n    LastUser = tostring(Agent.lastSessionUser),\n    DetailsMarkdown = tostring(d.details_markdown),\n    DetailsRaw = tostring(d.details),\n    PortalUrl = tostring(d.display_url),\n    TimeGenerated = now()",
+                    "transformKql": "source | extend AROData = todynamic(columnifexists('data','')) | extend Agent = todynamic(AROData.agent_details) | extend ID = tostring(columnifexists('serial_id','')) | extend Severity = tostring(columnifexists('severity','')) | extend AROType = tostring(columnifexists('type','')) | extend Title = tostring(columnifexists('title','')) | extend Hostname = tostring(Agent.hostName) | extend IPAddress = tostring(Agent.ipAddress) | extend LastUser = tostring(Agent.lastSessionUser) | extend DetailsMarkdown = tostring(columnifexists('details_markdown','')) | extend DetailsRaw = tostring(columnifexists('details','')) | extend PortalUrl = tostring(columnifexists('display_url','')) | extend TimeGenerated = now() | project ID, Severity, AROType, Title, Hostname, IPAddress, LastUser, DetailsMarkdown, DetailsRaw, PortalUrl, TimeGenerated",
                     "outputStream": "Custom-FieldEffectAROAlerts_CL"
                   }
                 ]
@@ -635,10 +710,6 @@
               "type": "securestring"
             },
             "dcrConfig": {
-              "defaultValue": {
-                "dataCollectionEndpoint": "data collection Endpoint",
-                "dataCollectionRuleImmutableId": "data collection rule immutableId"
-              },
               "type": "object"
             },
             "bearerToken": {
@@ -691,7 +762,7 @@
                 "connectorDefinitionName": "FieldEffectCCF",
                 "dataType": "FieldEffectARO",
                 "dcrConfig": {
-                  "streamName": "Custom-FieldEffectAROAlerts_CL",
+                  "streamName": "Custom-FieldEffectAROAlerts_SRC",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                 },
@@ -880,7 +951,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "FieldEffectMDR",
         "publisherDisplayName": "Field Effect",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/FieldEffectMDR/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://fieldeffect.com/\">Field Effect</a> solution for Microsoft Sentinel enables you to ingest data from Field Effect's MDR solution into Microsoft Sentinel for centralized visibility and correlation.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>\u2022 Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/FieldEffectMDR/ReleaseNotes.md\">Release Notes</a></p>\n<p>\u2022 There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://fieldeffect.com/\">Field Effect</a> solution for Microsoft Sentinel enables you to ingest data from Field Effect's MDR solution into Microsoft Sentinel for centralized visibility and correlation.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
