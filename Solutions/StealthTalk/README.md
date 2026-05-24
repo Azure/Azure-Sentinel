@@ -49,14 +49,14 @@ StealthTalkAnomalousAuth_CL
 
 ```kql
 // 2) ASIM-normalised events via the StealthTalk vim parser
-vimAuthenticationStealthTalk
+vimAuthenticationStealthTalk()
 | where TimeGenerated > ago(1h)
 | count
 ```
 
 ```kql
 // 3) StealthTalk events visible through the ASIM Authentication union
-imAuthentication
+imAuthentication()
 | where TimeGenerated > ago(1h)
 | where EventVendor == "StealthTalk"
 | count

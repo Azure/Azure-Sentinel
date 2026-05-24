@@ -31,9 +31,26 @@ rule name matches one of the four StealthTalk rules.
 | `PlaybookName` | optional | Name of the Logic App resource. Default: `StealthTalk-LogicApp-AlertToTeams`. |
 | `TeamsWebhookUrl` | required | The Power Automate / Teams Workflow webhook URL captured in step 1 of Prerequisites. The URL contains an embedded HMAC signature and is treated as a secret. |
 
+## Deployment instructions
+
+You can deploy this playbook by using either of the following methods:
+
+1. **Deploy from the Microsoft Sentinel Solution**
+   - In Microsoft Sentinel, open **Content hub**.
+   - Find and open the installed **StealthTalk** solution.
+   - Select **Manage** (or **View solution**) and choose **Deploy** for this playbook.
+   - Enter the required deployment parameters, especially `TeamsWebhookUrl`, and complete the deployment.
+
+2. **Deploy directly from the ARM template**
+   - Open the playbook's `azuredeploy.json` template in the Azure portal (or deploy with your preferred ARM deployment method).
+   - Supply the parameters from the table above:
+     - `PlaybookName` (optional; leave the default unless you want a different Logic App name)
+     - `TeamsWebhookUrl` (required)
+   - Start the deployment and wait for the Logic App and its connections to be created successfully.
+
 ## Post-deployment configuration
 
-After deploying via the Solution or directly via the ARM template:
+After the deployment completes:
 
 1. **Grant the playbook's managed identity access to the Microsoft Sentinel workspace**
  - Open the Log Analytics workspace -> **Access control (IAM)** -> **+ Add role assignment**.
