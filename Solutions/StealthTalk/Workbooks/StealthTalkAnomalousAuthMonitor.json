@@ -8,7 +8,7 @@
     {
       "type": 1,
       "content": {
-        "json": "# StealthTalk - Anomalous Auth Monitor\n\nReal-time detection and analysis dashboard for **`StealthTalkAnomalousAuth_CL`** events (DCR: `StealthTalk-Sentinel-DCR`).\n\n| Severity | Analytics Rule | Trigger condition | Schedule |\n|---|---|---|---|\n| High | `LoginOutsideWorkZone` | Country **or** city mismatch | Every 15 min / lookback 1 h |\n| High | `PasswordBruteForce` | >= 9 consecutive failed attempts | Every 15 min / lookback 5 h |\n| Medium | `MultiNewDevicesRegistration` | >= 2 distinct new device IDs / 24 h | Every 30 min / lookback 24 h |\n| Low | `AfterHoursWork` | Systematic off-hours pattern on 2+ days | Every 1 h / lookback 48 h |"
+        "json": "# StealthTalk - Anomalous Auth Monitor\n\nReal-time detection and analysis dashboard for **`StealthTalkAnomalousAuth_CL`** events (DCR: `StealthTalk-Sentinel-DCR`).\n\n**Filter scope:** **Time Range** and **User ID** apply across the workbook. **Severity** applies to the Overview panels only; per-event-type sections below (Off-Hours, New Devices, Geo Anomaly, Brute Force) are scoped by EventType (each EventType has a fixed severity).\n\n| Severity | Analytics Rule | Trigger condition | Schedule |\n|---|---|---|---|\n| High | `LoginOutsideWorkZone` | Country **or** city mismatch | Every 15 min / lookback 1 h |\n| High | `PasswordBruteForce` | >= 9 consecutive failed attempts | Every 15 min / lookback 5 h |\n| Medium | `MultiNewDevicesRegistration` | >= 2 distinct new device IDs / 24 h | Every 30 min / lookback 24 h |\n| Low | `AfterHoursWork` | Systematic off-hours pattern on 2+ days | Every 1 h / lookback 48 h |"
       },
       "name": "header-title",
       "id": "294e660f-98a7-47f4-b8c8-98f669ce979f"
@@ -104,7 +104,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| summarize\n Total = count(),\n HighSev = countif(Severity == 'High'),\n MedSev = countif(Severity == 'Medium'),\n LowSev = countif(Severity == 'Low'),\n AffectedUsers = dcount(UserId)\n| mv-expand Stats = pack_array(\n bag_pack('Metric', ' Total Events', 'Value', Total),\n bag_pack('Metric', ' High Severity', 'Value', HighSev),\n bag_pack('Metric', ' Medium Severity', 'Value', MedSev),\n bag_pack('Metric', ' Low Severity', 'Value', LowSev),\n bag_pack('Metric', ' Users Affected', 'Value', AffectedUsers)\n )\n| project\n Metric = tostring(Stats.Metric),\n Value = toint(Stats.Value)",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize\n Total = count(),\n HighSev = countif(Severity == 'High'),\n MedSev = countif(Severity == 'Medium'),\n LowSev = countif(Severity == 'Low'),\n AffectedUsers = dcount(UserId)\n| mv-expand Stats = pack_array(\n bag_pack('Metric', 'Total Events', 'Value', Total),\n bag_pack('Metric', 'High Severity', 'Value', HighSev),\n bag_pack('Metric', 'Medium Severity', 'Value', MedSev),\n bag_pack('Metric', 'Low Severity', 'Value', LowSev),\n bag_pack('Metric', 'Users Affected', 'Value', AffectedUsers)\n )\n| project\n Metric = tostring(Stats.Metric),\n Value = toint(Stats.Value)",
         "size": 4,
         "title": "Executive Summary",
         "timeContextFromParameter": "TimeRange",
@@ -177,7 +177,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize Count = count() by EventType\n| extend Label = case(\n EventType == 'OffHoursLogin', ' Off-Hours Login',\n EventType == 'NewDeviceLogin', ' New Device Login',\n EventType == 'GeoAnomalyLogin',' Geo Anomaly',\n EventType == 'MultiFailLogin', ' Brute Force',\n EventType\n )",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize Count = count() by EventType\n| extend Label = case(\n EventType == 'OffHoursLogin', 'Off-Hours Login',\n EventType == 'NewDeviceLogin', 'New Device Login',\n EventType == 'GeoAnomalyLogin','Geo Anomaly',\n EventType == 'MultiFailLogin', 'Brute Force',\n EventType\n )",
         "size": 3,
         "title": "Event Type Distribution",
         "timeContextFromParameter": "TimeRange",
@@ -194,7 +194,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| extend RiskPts = case(Severity == 'High', 10, Severity == 'Medium', 5, 1)\n| summarize\n TotalRisk = sum(RiskPts),\n TotalEvents = count(),\n HighEvents = countif(Severity == 'High'),\n MedEvents = countif(Severity == 'Medium'),\n LowEvents = countif(Severity == 'Low'),\n AnomalyTypes = make_set(EventType),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend RiskLevel = case(\n TotalRisk >= 50, ' Critical',\n TotalRisk >= 20, ' High',\n TotalRisk >= 10, ' Medium',\n ' Low'\n )\n| extend AnomalyTypeCount = array_length(AnomalyTypes)\n| order by TotalRisk desc\n| take 20",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| extend RiskPts = case(Severity == 'High', 10, Severity == 'Medium', 5, 1)\n| summarize\n TotalRisk = sum(RiskPts),\n TotalEvents = count(),\n HighEvents = countif(Severity == 'High'),\n MedEvents = countif(Severity == 'Medium'),\n LowEvents = countif(Severity == 'Low'),\n AnomalyTypes = make_set(EventType),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend RiskLevel = case(\n TotalRisk >= 50, 'Critical',\n TotalRisk >= 20, 'High',\n TotalRisk >= 10, 'Medium',\n 'Low'\n )\n| extend AnomalyTypeCount = array_length(AnomalyTypes)\n| order by TotalRisk desc\n| take 20",
         "size": 1,
         "title": "User Risk Leaderboard (Top 20)",
         "timeContextFromParameter": "TimeRange",
@@ -280,7 +280,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| summarize\n EventTypes = make_set(EventType),\n EventCount = count(),\n HasOffHours = countif(EventType == 'OffHoursLogin') > 0,\n HasNewDevice = countif(EventType == 'NewDeviceLogin') > 0,\n HasGeoAnomaly = countif(EventType == 'GeoAnomalyLogin')> 0,\n HasBruteForce = countif(EventType == 'MultiFailLogin') > 0,\n TotalRisk = sum(case(Severity == 'High', 10, Severity == 'Medium', 5, 1)),\n FirstSeen = min(TimeGenerated),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend AnomalyTypeCount = toint(HasOffHours) + toint(HasNewDevice) + toint(HasGeoAnomaly) + toint(HasBruteForce)\n| where AnomalyTypeCount >= 2\n| order by AnomalyTypeCount desc, TotalRisk desc",
+        "query": "StealthTalkAnomalousAuth_CL\n| where TimeGenerated {TimeRange}\n| where isempty('{UserId}') or UserId == '{UserId}'\n| where Severity in ({Severity})\n| summarize\n EventTypes = make_set(EventType),\n EventCount = count(),\n HasOffHours = countif(EventType == 'OffHoursLogin') > 0,\n HasNewDevice = countif(EventType == 'NewDeviceLogin') > 0,\n HasGeoAnomaly = countif(EventType == 'GeoAnomalyLogin')> 0,\n HasBruteForce = countif(EventType == 'MultiFailLogin') > 0,\n TotalRisk = sum(case(Severity == 'High', 10, Severity == 'Medium', 5, 1)),\n FirstSeen = min(TimeGenerated),\n LastSeen = max(TimeGenerated)\n by UserId\n| extend AnomalyTypeCount = toint(HasOffHours) + toint(HasNewDevice) + toint(HasGeoAnomaly) + toint(HasBruteForce)\n| where AnomalyTypeCount >= 2\n| order by AnomalyTypeCount desc, TotalRisk desc",
         "size": 0,
         "title": "Multi-Vector Attack Suspects",
         "timeContextFromParameter": "TimeRange",
