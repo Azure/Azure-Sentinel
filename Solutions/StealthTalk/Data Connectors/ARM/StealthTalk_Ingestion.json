@@ -2,179 +2,319 @@
  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
  "contentVersion": "1.0.0.0",
  "metadata": {
- "_comment_purpose": "Deploys the StealthTalk anomalous-auth ingestion pipeline into a Log Analytics / Microsoft Sentinel workspace. Installs: 1) custom log table StealthTalkAnomalousAuth_CL (parameterised, customer can rename), 2) Data Collection Endpoint, 3) Data Collection Rule with stream declaration and a one-to-one transform.",
- "_comment_post_deploy": "After deploy, open the DCR -> Access control (IAM) -> add role 'Monitoring Metrics Publisher' to the App Registration that StealthTalk uses to authenticate. Role-assignment is intentionally NOT included in this template because Solution-installed templates cannot grant RBAC."
+  "_comment_purpose": "Deploys the StealthTalk anomalous-auth ingestion pipeline into a Log Analytics / Microsoft Sentinel workspace. Installs: 1) custom log table StealthTalkAnomalousAuth_CL (name is locked; rest of the solution content references it by literal name so it must not diverge), 2) Data Collection Endpoint, 3) Data Collection Rule with stream declaration and a one-to-one transform.",
+  "_comment_post_deploy": "After deploy, open the DCR -> Access control (IAM) -> add role 'Monitoring Metrics Publisher' to the App Registration that StealthTalk uses to authenticate. Role-assignment is intentionally NOT included in this template because Solution-installed templates cannot grant RBAC."
  },
  "parameters": {
- "workspace": {
- "type": "string",
- "metadata": {
- "description": "Name of the existing Log Analytics / Microsoft Sentinel workspace to receive events."
- }
- },
- "tableName": {
- "type": "string",
- "defaultValue": "StealthTalkAnomalousAuth_CL",
- "metadata": {
- "description": "Custom log table name. Must end in '_CL'. Default: StealthTalkAnomalousAuth_CL."
- }
- },
- "dceName": {
- "type": "string",
- "defaultValue": "StealthTalk-Sentinel-DCE",
- "metadata": {
- "description": "Name of the Data Collection Endpoint to be created."
- }
- },
- "dcrName": {
- "type": "string",
- "defaultValue": "StealthTalk-Sentinel-DCR",
- "metadata": {
- "description": "Name of the Data Collection Rule to be created."
- }
- },
- "location": {
- "type": "string",
- "defaultValue": "[resourceGroup().location]",
- "metadata": {
- "description": "Azure region. Defaults to the resource group's region."
- }
- },
- "tableRetentionInDays": {
- "type": "int",
- "defaultValue": 30,
- "minValue": 4,
- "maxValue": 730,
- "metadata": {
- "description": "Retention for the custom log table in days. Must be >= the workspace minimum (4 by default)."
- }
- }
+  "workspace": {
+   "type": "string",
+   "metadata": {
+    "description": "Name of the existing Log Analytics / Microsoft Sentinel workspace to receive events."
+   }
+  },
+  "dceName": {
+   "type": "string",
+   "defaultValue": "StealthTalk-Sentinel-DCE",
+   "metadata": {
+    "description": "Name of the Data Collection Endpoint to be created."
+   }
+  },
+  "dcrName": {
+   "type": "string",
+   "defaultValue": "StealthTalk-Sentinel-DCR",
+   "metadata": {
+    "description": "Name of the Data Collection Rule to be created."
+   }
+  },
+  "location": {
+   "type": "string",
+   "defaultValue": "[resourceGroup().location]",
+   "metadata": {
+    "description": "Azure region. Defaults to the resource group's region."
+   }
+  },
+  "tableRetentionInDays": {
+   "type": "int",
+   "defaultValue": 30,
+   "minValue": 4,
+   "maxValue": 730,
+   "metadata": {
+    "description": "Retention for the custom log table in days. Must be >= the workspace minimum (4 by default)."
+   }
+  }
  },
  "variables": {
- "streamName": "[concat('Custom-', parameters('tableName'))]",
- "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  "streamName": "Custom-StealthTalkAnomalousAuth_CL",
+  "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
  },
  "resources": [
- {
- "type": "Microsoft.OperationalInsights/workspaces/tables",
- "apiVersion": "2025-02-01",
- "name": "[concat(parameters('workspace'), '/', parameters('tableName'))]",
- "properties": {
- "totalRetentionInDays": "[parameters('tableRetentionInDays')]",
- "retentionInDays": "[parameters('tableRetentionInDays')]",
- "plan": "Analytics",
- "schema": {
- "name": "[parameters('tableName')]",
- "columns": [
- { "name": "TimeGenerated", "type": "datetime", "description": "Event UTC time" },
- { "name": "EventType", "type": "string", "description": "OffHoursLogin | NewDeviceLogin | GeoAnomalyLogin | MultiFailLogin" },
- { "name": "UserId", "type": "string", "description": "Anonymised StealthTalk user ID" },
- { "name": "DeviceId", "type": "string", "description": "Device ID associated with the event" },
- { "name": "AppVersion", "type": "string", "description": "StealthTalk app version" },
- { "name": "Severity", "type": "string", "description": "Low | Medium | High" },
- { "name": "RawEventId", "type": "string", "description": "GUID, unique per event" },
- { "name": "LoginTime", "type": "datetime", "description": "OffHoursLogin: actual login time in UTC" },
- { "name": "WorkingHoursStart", "type": "string", "description": "OffHoursLogin: configured start of working day" },
- { "name": "WorkingHoursEnd", "type": "string", "description": "OffHoursLogin: configured end of working day" },
- { "name": "DeviationMinutes", "type": "int", "description": "OffHoursLogin: minutes outside working window" },
- { "name": "IsWeekend", "type": "boolean", "description": "OffHoursLogin: login fell on a weekend" },
- { "name": "NewDeviceId", "type": "string", "description": "NewDeviceLogin: ID of the previously-unseen device" },
- { "name": "NewDeviceOS", "type": "string", "description": "NewDeviceLogin: OS of the new device" },
- { "name": "LoginCountry", "type": "string", "description": "GeoAnomalyLogin: ISO-2 login country" },
- { "name": "LoginCity", "type": "string", "description": "GeoAnomalyLogin: login city" },
- { "name": "AssignedCountry", "type": "string", "description": "GeoAnomalyLogin: ISO-2 assigned (expected) country" },
- { "name": "AssignedCity", "type": "string", "description": "GeoAnomalyLogin: assigned (expected) city" },
- { "name": "IpAddress", "type": "string", "description": "GeoAnomalyLogin: source IPv4" },
- { "name": "PassedAttempts", "type": "int", "description": "MultiFailLogin: consecutive failed attempts" },
- { "name": "LoginBlockingSeconds", "type": "int", "description": "MultiFailLogin: account block duration in seconds" }
- ]
- }
- }
- },
- {
- "type": "Microsoft.Insights/dataCollectionEndpoints",
- "apiVersion": "2024-03-11",
- "name": "[parameters('dceName')]",
- "location": "[parameters('location')]",
- "properties": {
- "networkAcls": {
- "publicNetworkAccess": "Enabled"
- }
- }
- },
- {
- "type": "Microsoft.Insights/dataCollectionRules",
- "apiVersion": "2024-03-11",
- "name": "[parameters('dcrName')]",
- "location": "[parameters('location')]",
- "dependsOn": [
- "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), parameters('tableName'))]",
- "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
- ],
- "properties": {
- "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
- "streamDeclarations": {
- "[variables('streamName')]": {
- "columns": [
- { "name": "TimeGenerated", "type": "datetime" },
- { "name": "EventType", "type": "string" },
- { "name": "UserId", "type": "string" },
- { "name": "DeviceId", "type": "string" },
- { "name": "AppVersion", "type": "string" },
- { "name": "Severity", "type": "string" },
- { "name": "RawEventId", "type": "string" },
- { "name": "LoginTime", "type": "datetime" },
- { "name": "WorkingHoursStart", "type": "string" },
- { "name": "WorkingHoursEnd", "type": "string" },
- { "name": "DeviationMinutes", "type": "int" },
- { "name": "IsWeekend", "type": "boolean" },
- { "name": "NewDeviceId", "type": "string" },
- { "name": "NewDeviceOS", "type": "string" },
- { "name": "LoginCountry", "type": "string" },
- { "name": "LoginCity", "type": "string" },
- { "name": "AssignedCountry", "type": "string" },
- { "name": "AssignedCity", "type": "string" },
- { "name": "IpAddress", "type": "string" },
- { "name": "PassedAttempts", "type": "int" },
- { "name": "LoginBlockingSeconds", "type": "int" }
- ]
- }
- },
- "destinations": {
- "logAnalytics": [
- {
- "workspaceResourceId": "[variables('workspaceResourceId')]",
- "name": "stealthtalkWorkspace"
- }
- ]
- },
- "dataFlows": [
- {
- "streams": [ "[variables('streamName')]" ],
- "destinations": [ "stealthtalkWorkspace" ],
- "outputStream": "[variables('streamName')]",
- "transformKql": "source"
- }
- ]
- }
- }
+  {
+   "type": "Microsoft.OperationalInsights/workspaces/tables",
+   "apiVersion": "2025-02-01",
+   "name": "[concat(parameters('workspace'), '/', 'StealthTalkAnomalousAuth_CL')]",
+   "properties": {
+    "totalRetentionInDays": "[parameters('tableRetentionInDays')]",
+    "retentionInDays": "[parameters('tableRetentionInDays')]",
+    "plan": "Analytics",
+    "schema": {
+     "name": "['StealthTalkAnomalousAuth_CL']",
+     "columns": [
+      {
+       "name": "TimeGenerated",
+       "type": "datetime",
+       "description": "Event UTC time"
+      },
+      {
+       "name": "EventType",
+       "type": "string",
+       "description": "OffHoursLogin | NewDeviceLogin | GeoAnomalyLogin | MultiFailLogin"
+      },
+      {
+       "name": "UserId",
+       "type": "string",
+       "description": "Anonymised StealthTalk user ID"
+      },
+      {
+       "name": "DeviceId",
+       "type": "string",
+       "description": "Device ID associated with the event"
+      },
+      {
+       "name": "AppVersion",
+       "type": "string",
+       "description": "StealthTalk app version"
+      },
+      {
+       "name": "Severity",
+       "type": "string",
+       "description": "Low | Medium | High"
+      },
+      {
+       "name": "RawEventId",
+       "type": "string",
+       "description": "GUID, unique per event"
+      },
+      {
+       "name": "LoginTime",
+       "type": "datetime",
+       "description": "OffHoursLogin: actual login time in UTC"
+      },
+      {
+       "name": "WorkingHoursStart",
+       "type": "string",
+       "description": "OffHoursLogin: configured start of working day"
+      },
+      {
+       "name": "WorkingHoursEnd",
+       "type": "string",
+       "description": "OffHoursLogin: configured end of working day"
+      },
+      {
+       "name": "DeviationMinutes",
+       "type": "int",
+       "description": "OffHoursLogin: minutes outside working window"
+      },
+      {
+       "name": "IsWeekend",
+       "type": "boolean",
+       "description": "OffHoursLogin: login fell on a weekend"
+      },
+      {
+       "name": "NewDeviceId",
+       "type": "string",
+       "description": "NewDeviceLogin: ID of the previously-unseen device"
+      },
+      {
+       "name": "NewDeviceOS",
+       "type": "string",
+       "description": "NewDeviceLogin: OS of the new device"
+      },
+      {
+       "name": "LoginCountry",
+       "type": "string",
+       "description": "GeoAnomalyLogin: ISO-2 login country"
+      },
+      {
+       "name": "LoginCity",
+       "type": "string",
+       "description": "GeoAnomalyLogin: login city"
+      },
+      {
+       "name": "AssignedCountry",
+       "type": "string",
+       "description": "GeoAnomalyLogin: ISO-2 assigned (expected) country"
+      },
+      {
+       "name": "AssignedCity",
+       "type": "string",
+       "description": "GeoAnomalyLogin: assigned (expected) city"
+      },
+      {
+       "name": "IpAddress",
+       "type": "string",
+       "description": "GeoAnomalyLogin: source IPv4"
+      },
+      {
+       "name": "PassedAttempts",
+       "type": "int",
+       "description": "MultiFailLogin: consecutive failed attempts"
+      },
+      {
+       "name": "LoginBlockingSeconds",
+       "type": "int",
+       "description": "MultiFailLogin: account block duration in seconds"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "Microsoft.Insights/dataCollectionEndpoints",
+   "apiVersion": "2024-03-11",
+   "name": "[parameters('dceName')]",
+   "location": "[parameters('location')]",
+   "properties": {
+    "networkAcls": {
+     "publicNetworkAccess": "Enabled"
+    }
+   }
+  },
+  {
+   "type": "Microsoft.Insights/dataCollectionRules",
+   "apiVersion": "2024-03-11",
+   "name": "[parameters('dcrName')]",
+   "location": "[parameters('location')]",
+   "dependsOn": [
+    "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'StealthTalkAnomalousAuth_CL')]",
+    "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]"
+   ],
+   "properties": {
+    "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+    "streamDeclarations": {
+     "[variables('streamName')]": {
+      "columns": [
+       {
+        "name": "TimeGenerated",
+        "type": "datetime"
+       },
+       {
+        "name": "EventType",
+        "type": "string"
+       },
+       {
+        "name": "UserId",
+        "type": "string"
+       },
+       {
+        "name": "DeviceId",
+        "type": "string"
+       },
+       {
+        "name": "AppVersion",
+        "type": "string"
+       },
+       {
+        "name": "Severity",
+        "type": "string"
+       },
+       {
+        "name": "RawEventId",
+        "type": "string"
+       },
+       {
+        "name": "LoginTime",
+        "type": "datetime"
+       },
+       {
+        "name": "WorkingHoursStart",
+        "type": "string"
+       },
+       {
+        "name": "WorkingHoursEnd",
+        "type": "string"
+       },
+       {
+        "name": "DeviationMinutes",
+        "type": "int"
+       },
+       {
+        "name": "IsWeekend",
+        "type": "boolean"
+       },
+       {
+        "name": "NewDeviceId",
+        "type": "string"
+       },
+       {
+        "name": "NewDeviceOS",
+        "type": "string"
+       },
+       {
+        "name": "LoginCountry",
+        "type": "string"
+       },
+       {
+        "name": "LoginCity",
+        "type": "string"
+       },
+       {
+        "name": "AssignedCountry",
+        "type": "string"
+       },
+       {
+        "name": "AssignedCity",
+        "type": "string"
+       },
+       {
+        "name": "IpAddress",
+        "type": "string"
+       },
+       {
+        "name": "PassedAttempts",
+        "type": "int"
+       },
+       {
+        "name": "LoginBlockingSeconds",
+        "type": "int"
+       }
+      ]
+     }
+    },
+    "destinations": {
+     "logAnalytics": [
+      {
+       "workspaceResourceId": "[variables('workspaceResourceId')]",
+       "name": "stealthtalkWorkspace"
+      }
+     ]
+    },
+    "dataFlows": [
+     {
+      "streams": [
+       "[variables('streamName')]"
+      ],
+      "destinations": [
+       "stealthtalkWorkspace"
+      ],
+      "outputStream": "[variables('streamName')]",
+      "transformKql": "source"
+     }
+    ]
+   }
+  }
  ],
  "outputs": {
- "tableName": {
- "type": "string",
- "value": "[parameters('tableName')]"
- },
- "streamName": {
- "type": "string",
- "value": "[variables('streamName')]"
- },
- "dceLogsIngestionEndpoint": {
- "type": "string",
- "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2024-03-11').logsIngestion.endpoint]"
- },
- "dcrImmutableId": {
- "type": "string",
- "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2024-03-11').immutableId]"
- }
+  "streamName": {
+   "type": "string",
+   "value": "[variables('streamName')]"
+  },
+  "dceLogsIngestionEndpoint": {
+   "type": "string",
+   "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2024-03-11').logsIngestion.endpoint]"
+  },
+  "dcrImmutableId": {
+   "type": "string",
+   "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2024-03-11').immutableId]"
+  }
  }
 }
