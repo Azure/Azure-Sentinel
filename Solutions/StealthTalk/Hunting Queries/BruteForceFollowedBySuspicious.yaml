@@ -3,13 +3,16 @@ name: StealthTalk - Brute force followed by suspicious access
 description: |
   Identifies credential-stuffing or brute-force success: a MultiFailLogin event with 9+ failed attempts followed within 2 hours by a GeoAnomalyLogin or NewDeviceLogin for the same user - the closest proxy for "the brute-force eventually succeeded".
 description-detailed: |
-  Joins MultiFailLogin events to subsequent GeoAnomalyLogin or NewDeviceLogin events for the
-  same user, where the second event occurs strictly after the brute force and within 2 hours
-  (timespan comparison, not integer-hour bucketing, so 1h59m is included and 2h01m is not).
-  Each matching pair represents a high-confidence suspected post-compromise access. Because
-  StealthTalk does not emit a "successful login" event in its anomalous-auth feed, the
-  presence of a subsequent anomaly event is the closest proxy for the brute-force having
-  succeeded.
+  Joins MultiFailLogin events to the FIRST subsequent GeoAnomalyLogin or NewDeviceLogin event
+  for the same user, where the second event occurs strictly after the brute force and within
+  2 hours (timespan comparison, not integer-hour bucketing, so 1h59m is included and 2h01m is
+  not). One row per brute-force event is returned (top 1 earliest matching post-event via
+  mv-apply over a materialised per-user post-event list). This avoids the M x N row explosion
+  that would result from a plain self-join when a user has many BF and many subsequent
+  anomaly events in the lookback window. Each row represents a high-confidence suspected
+  post-compromise access. Because StealthTalk does not emit a "successful login" event in
+  its anomalous-auth feed, the presence of a subsequent anomaly event is the closest proxy
+  for the brute-force having succeeded.
 requiredDataConnectors:
   - connectorId: StealthTalkAnomalousAuth
     dataTypes:
@@ -28,19 +31,27 @@ entityMappings:
 query: |
   let lookback = 7d;
   let bfWindow = 2h;
+  let PostEventsByUser = materialize(
+      StealthTalkAnomalousAuth_CL
+      | where TimeGenerated >= ago(lookback)
+      | where EventType in ("GeoAnomalyLogin", "NewDeviceLogin")
+      | project UserId, PostEvent_Time = TimeGenerated, PostEventType = EventType
+      | summarize PostEvents = make_list(pack("PostEvent_Time", PostEvent_Time, "PostEventType", PostEventType)) by UserId
+  );
   StealthTalkAnomalousAuth_CL
   | where TimeGenerated >= ago(lookback)
   | where EventType == "MultiFailLogin"
   | where PassedAttempts >= 9
   | project UserId, BF_Time = TimeGenerated, DeviceId, PassedAttempts
-  | join kind=inner (
-      StealthTalkAnomalousAuth_CL
-      | where TimeGenerated >= ago(lookback)
-      | where EventType in ("GeoAnomalyLogin", "NewDeviceLogin")
-      | project UserId, PostEvent_Time = TimeGenerated, PostEventType = EventType
-    ) on UserId
-  | where PostEvent_Time > BF_Time
-  | where (PostEvent_Time - BF_Time) <= bfWindow
+  | join kind=inner PostEventsByUser on UserId
+  | mv-apply PostEvent = PostEvents on (
+      extend
+          PostEvent_Time = todatetime(PostEvent.PostEvent_Time),
+          PostEventType  = tostring(PostEvent.PostEventType)
+      | where PostEvent_Time > BF_Time
+      | where (PostEvent_Time - BF_Time) <= bfWindow
+      | top 1 by PostEvent_Time asc
+    )
   | project
       UserId,
       BruteForceAt    = BF_Time,
