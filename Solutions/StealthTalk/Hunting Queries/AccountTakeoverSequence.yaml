@@ -4,11 +4,13 @@ description: |
   Identifies the classic three-stage account-takeover pattern for the same StealthTalk user within 24 hours: off-hours login, new device registration, and geo-anomaly login. All three together is high-confidence evidence of credential compromise.
 description-detailed: |
   Joins three event-type subsets (OffHoursLogin, NewDeviceLogin, GeoAnomalyLogin) on UserId
-  and constrains the temporal window to +/-24 hours. Returns one row per matching triple with
-  the new device ID, login country and source IP for triage. Any single one of these events
-  is suspicious; all three for the same account inside a day is high-confidence evidence of
-  compromise (initial credential test -> attacker enrols their own client -> attacker
-  authenticates from a different region).
+  and constrains the temporal window to +/-24 hours. Returns one row per matching triple
+  with the per-event timestamps (T_offhours, T_device, T_geo), the new device ID, login
+  country and source IP, plus computed StartTime/EndTime markers that bracket the full
+  takeover sequence for SOC triage. Any single one of these events is suspicious; all three
+  for the same account inside a day is high-confidence evidence of compromise (initial
+  credential test -> attacker enrols their own client -> attacker authenticates from a
+  different region).
 requiredDataConnectors:
   - connectorId: StealthTalkAnomalousAuth
     dataTypes:
@@ -51,6 +53,10 @@ query: |
   | where T_device between ((T_offhours - TimeWindow) .. (T_offhours + TimeWindow))
   | where T_geo    between ((T_offhours - TimeWindow) .. (T_offhours + TimeWindow))
   | project UserId, T_offhours, T_device, T_geo, NewDeviceId, LoginCountry, IpAddress
-  | extend AlertName = "AccountTakeoverSequence", RiskLevel = "Critical"
-  | distinct UserId, AlertName, RiskLevel, LoginCountry, IpAddress
+  | extend
+      AlertName = "AccountTakeoverSequence",
+      RiskLevel = "Critical",
+      StartTime = min_of(T_offhours, T_device, T_geo),
+      EndTime   = max_of(T_offhours, T_device, T_geo)
+  | distinct UserId, AlertName, RiskLevel, LoginCountry, IpAddress, NewDeviceId, T_offhours, T_device, T_geo, StartTime, EndTime
 version: 1.0.0
