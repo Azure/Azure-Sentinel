@@ -3,12 +3,14 @@ name: StealthTalk - Impossible travel
 description: |
   Identifies a single StealthTalk user authenticating from two different countries within a 30-minute window. Legitimate physical travel between countries cannot occur on that timescale, so this is a strong indicator of stolen credentials.
 description-detailed: |
-  Hunting query that joins the StealthTalk anomalous-auth table to itself on UserId, then
-  retains only pairs where LoginCountry differs and the events are within 30 minutes. Returns
-  paired GeoAnomalyLogin events ordered by elapsed time (smallest gap first), which makes it
-  easy to spot the most egregious cases at the top of the result set. Useful for proactive
-  threat-hunting when a SOC analyst wants to find compromised accounts that may not have
-  triggered a single-event detection.
+  Hunting query that scans GeoAnomalyLogin events ordered per-user by time, and uses
+  serialized prev() to compare each event with the immediately-preceding event of the same
+  user. Pairs where LoginCountry differs and the elapsed time is <= 30 minutes are surfaced
+  as candidate impossible-travel cases. The serialized-scan approach is O(N) per user instead
+  of O(N^2) self-join, keeping the hunt responsive over a 7-day lookback on busy workspaces.
+  Results are ordered by elapsed time (smallest gap first), making the most egregious cases
+  appear at the top. Useful for proactive threat-hunting to find compromised accounts that
+  may not have triggered a single-event detection.
 requiredDataConnectors:
   - connectorId: StealthTalkAnomalousAuth
     dataTypes:
@@ -33,24 +35,25 @@ query: |
   | where TimeGenerated >= ago(lookback)
   | where EventType == "GeoAnomalyLogin"
   | project TimeGenerated, UserId, LoginCountry, LoginCity, IpAddress
-  | join kind=inner (
-      StealthTalkAnomalousAuth_CL
-      | where TimeGenerated >= ago(lookback)
-      | where EventType == "GeoAnomalyLogin"
-      | project TimeGenerated2 = TimeGenerated, UserId,
-                LoginCountry2 = LoginCountry, IpAddress2 = IpAddress
-    ) on UserId
-  | where LoginCountry != LoginCountry2
-  | where TimeGenerated < TimeGenerated2 and TimeGenerated2 <= TimeGenerated + 30m
+  | order by UserId asc, TimeGenerated asc
+  | serialize
+  | extend
+      PrevUser    = prev(UserId),
+      PrevTime    = prev(TimeGenerated),
+      PrevCountry = prev(LoginCountry),
+      PrevIP      = prev(IpAddress)
+  | where UserId == PrevUser
+  | where LoginCountry != PrevCountry
+  | where TimeGenerated - PrevTime <= 30m
   | project
       UserId,
-      FirstCountry   = LoginCountry,
-      SecondCountry  = LoginCountry2,
-      FirstTime      = TimeGenerated,
-      SecondTime     = TimeGenerated2,
-      MinutesBetween = datetime_diff('minute', TimeGenerated2, TimeGenerated),
-      FirstIP        = IpAddress,
-      SecondIP       = IpAddress2
+      FirstCountry   = PrevCountry,
+      SecondCountry  = LoginCountry,
+      FirstTime      = PrevTime,
+      SecondTime     = TimeGenerated,
+      MinutesBetween = datetime_diff('minute', TimeGenerated, PrevTime),
+      FirstIP        = PrevIP,
+      SecondIP       = IpAddress
   | extend AlertName = "ImpossibleTravel"
   | order by MinutesBetween asc
 version: 1.0.0
