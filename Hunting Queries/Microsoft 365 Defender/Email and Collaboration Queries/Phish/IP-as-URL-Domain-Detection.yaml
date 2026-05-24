@@ -1,0 +1,47 @@
+id: 6492c4ea-5e56-4ceb-9974-3c0c39cb4d71
+name: Raw IP Address Used as URL Domain
+description: |
+  Detects delivered inbound emails containing URLs where the domain is a raw IPv4 address.
+  Real services use domain names; attackers occasionally use raw IPs to bypass takedown of
+  malicious domains or to evade reputation-based filters. This pattern is a strong indicator
+  of commodity phishing or malware delivery.
+description-detailed: |
+  This query identifies delivered inbound emails containing URLs where the domain field is a
+  raw IPv4 address (four dotted-quad octets). It joins EmailEvents with EmailUrlInfo on
+  NetworkMessageId to enrich the URL with sender, subject, delivery action, and threat verdict.
+  
+  Attack patterns detected:
+  - Phishing links pointing to compromised IP addresses with no domain registration trail
+  - Commodity malware delivery URLs that avoid DNS-based takedown
+  - Generic spam campaigns bypassing reputation filters via raw IP rotation
+  
+  Tuning notes:
+  - Filter on EmailDirection == "Inbound" to exclude outbound security correspondence that
+    may legitimately reference raw IPs in vulnerability disclosures
+  - Maintain an allowlist of trusted security workflow mailboxes if outbound security
+    correspondence is a common false-positive source
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailUrlInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+  - T1566.002
+query: |
+  EmailUrlInfo
+  | where Timestamp > ago(30d)
+  | where UrlDomain matches regex @"^\d+\.\d+\.\d+\.\d+$"
+  | join kind=inner (
+      EmailEvents
+      | project NetworkMessageId, SenderFromDomain, Subject, DeliveryAction,
+                RecipientEmailAddress, EmailDirection, ThreatTypes
+    ) on NetworkMessageId
+  | where EmailDirection == "Inbound"
+  | where DeliveryAction == "Delivered"
+  | project Timestamp, SenderFromDomain, UrlDomain, Url, DeliveryAction,
+            EmailDirection, ThreatTypes, Subject, RecipientEmailAddress
+  | order by Timestamp desc
+version: 1.0.0
