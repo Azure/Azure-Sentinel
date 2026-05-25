@@ -15,7 +15,8 @@ if ($VersionMode -eq "local") {
 
 if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
     $path = Read-Host "Enter solution data folder path "
-} else {
+}
+else {
     $path = $SolutionDataFolderPath
     Write-Host "Solution Data folder path specified is : $path"
 }
@@ -23,14 +24,12 @@ if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
-if ($path.length -eq 0)
-{
+if ($path.length -eq 0) {
     # path is not provided so check first file from input folder
     $path = "$PSScriptRoot\input"
 
     $inputFile = $(Get-ChildItem $path)
-    if ($inputFile.Count -gt 0)
-    {
+    if ($inputFile.Count -gt 0) {
         $inputFile = $inputFile[0]
         $inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
 
@@ -100,8 +99,7 @@ if ($VersionMode -eq "catalog") {
 }
 
 # Function to increment version based on bump type (for local mode)
-function GetIncrementedVersion($version, $bumpType = "patch")
-{
+function GetIncrementedVersion($version, $bumpType = "patch") {
     if ([string]::IsNullOrWhiteSpace($version)) {
         Write-Host "Warning: Version is null or empty, using default 1.0.0"
         $version = "1.0.0"
@@ -165,12 +163,10 @@ function GetIncrementedVersion($version, $bumpType = "patch")
 }
 
 # Function to get package version from local solution data file instead of Microsoft catalog
-function GetLocalPackageVersion($defaultPackageVersion, $userInputPackageVersion, $packageVersionAttribute, $versionBumpType, $dataFilePath)
-{
+function GetLocalPackageVersion($defaultPackageVersion, $userInputPackageVersion, $packageVersionAttribute, $versionBumpType, $dataFilePath) {
     Write-Host "Using local version from solution data file instead of Microsoft catalog (Bump type: $versionBumpType)"
     
-    if ($packageVersionAttribute -and $null -ne $userInputPackageVersion -and $userInputPackageVersion -ne '')
-    {
+    if ($packageVersionAttribute -and $null -ne $userInputPackageVersion -and $userInputPackageVersion -ne '') {
         Write-Host "Current version from data file: $userInputPackageVersion"
         
         # Validate version format before processing
@@ -286,7 +282,8 @@ try {
         if ($VersionMode -eq "local") {
             # Use local version bumping
             $packageVersion = GetLocalPackageVersion $defaultPackageVersion $userInputPackageVersion $packageVersionAttribute $VersionBump $inputFile.FullName
-        } else {
+        }
+        else {
             # Use catalog API for version management
             $solutionOfferId = $baseMetadata.offerId
             $offerId = "$solutionOfferId"
@@ -386,7 +383,7 @@ try {
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
                             if ($ccpDict.Count -gt 0) {
                                 $isCCPConnectorFile = $false;
-                                foreach($item in $ccpDict) {
+                                foreach ($item in $ccpDict) {
                                     if ($item.DCDefinitionFullPath -eq $finalPath) {
                                         $isCCPConnectorFile = $true
                                         break;
@@ -420,13 +417,17 @@ try {
 
                             GenerateWatchList -json $json -isPipelineRun $isPipelineRun -watchListFileName $watchListFileName.BaseName
                         }
+                        elseif ($objectKeyLowercase -eq "parsers") {
+                            GenerateParsersList -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails
+                        }
                     }
                     else {
                         if ($file -match "(\.yaml)$" -and $objectProperties.Name.ToLower() -ne "parsers") {
                             $objectKeyLowercase = $objectProperties.Name.ToLower()
                             if ($objectKeyLowercase -eq "hunting queries") {
                                 GetHuntingDataMetadata -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
-                            } elseif ($objectKeyLowercase -eq "summary rules" -or $objectKeyLowercase -eq "summaryrules") {
+                            }
+                            elseif ($objectKeyLowercase -eq "summary rules" -or $objectKeyLowercase -eq "summaryrules") {
                                 $summaryRuleFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/summaryRules.ps1"
                                 . $summaryRuleFilePath
                                 GenerateSummaryRules -solutionName $solutionName -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
@@ -477,26 +478,26 @@ try {
         }
 
         $global:analyticRuleCounter -= 1
-		$global:workbookCounter -= 1
-		$global:playbookCounter -= 1
-		$global:connectorCounter -= 1
-		$global:parserCounter -= 1
-		$global:huntingQueryCounter -= 1
-		$global:watchlistCounter -= 1
+        $global:workbookCounter -= 1
+        $global:playbookCounter -= 1
+        $global:connectorCounter -= 1
+        $global:parserCounter -= 1
+        $global:huntingQueryCounter -= 1
+        $global:watchlistCounter -= 1
         $global:summaryRuleCounter -= 1
 
-		updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
-		updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
-		updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
-		updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
-		updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter, $global:summaryRuleCounter)
 
-		updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts $global:playbookCounter, $global:summaryRuleCounter)
+        updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts $global:playbookCounter, $global:summaryRuleCounter)
         
         updateDescriptionCount $global:summaryRuleCounter                           "**Summary Rules:** "                       "{{SummaryRuleCount}}"             $(checkResourceCounts @($global:playbookCounter))
 
-		updateDescriptionCount $global:customConnectorsList.Count                      "**Custom Azure Logic Apps Connectors:** "  "{{LogicAppCustomConnectorCount}}"  $(checkResourceCounts @($global:playbookCounter))
-		updateDescriptionCount $global:functionAppList.Count                           "**Function Apps:** "                       "{{FunctionAppsCount}}"             $(checkResourceCounts @($global:playbookCounter))
+        updateDescriptionCount $global:customConnectorsList.Count                      "**Custom Azure Logic Apps Connectors:** "  "{{LogicAppCustomConnectorCount}}"  $(checkResourceCounts @($global:playbookCounter))
+        updateDescriptionCount $global:functionAppList.Count                           "**Function Apps:** "                       "{{FunctionAppsCount}}"             $(checkResourceCounts @($global:playbookCounter))
         updateDescriptionCount ($global:playbookCounter - $global:customConnectorsList.Count - $global:functionAppList.Count)  "**Playbooks:** "   "{{PlaybookCount}}"       $false
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;

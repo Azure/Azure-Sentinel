@@ -37,9 +37,6 @@ ONPREM_PCE_PORT = int(os.environ.get("ONPREM_PCE_PORT", 443))
 ONPREM_PCE_ORGID = int(os.environ.get("ONPREM_PCE_ORGID", 1))
 
 # Azure config
-AZURE_TENANT_ID = os.environ["AZURE_TENANT_ID"]
-AZURE_CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
-AZURE_CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
 DCE_ENDPOINT = os.environ["DCE_ENDPOINT"]
 DCR_ID = os.environ["DCR_ID"]
 LOG_ANALYTICS_URI = os.environ["LOG_ANALYTICS_URI"]

@@ -81,7 +81,9 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
 
-            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "OAuthForm") {
             $newParameter = [PSCustomObject]@{
@@ -133,9 +135,28 @@ function New-ParametersForConnectorInstuctions($instructions) {
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
+        elseif ($instruction.type -eq "Radio") {
+            # Add a parameter for the radio field itself
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.options[0].value;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
+
+            # Process nested instructions from all options, deduplicating by name
+            foreach ($option in $instruction.parameters.options) {
+                if ($null -ne $option.instructions) {
+                    New-ParametersForConnectorInstuctions $option.instructions
+                }
+            }
+        }
         else {
             $instructionType = $instruction.type;
-            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
+            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm, ContextPane and Radio!"
         }
     }
 }
@@ -757,8 +778,22 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             }
 
             if ($fileContent -is [System.Object[]]) {
-                foreach ($content in $fileContent) {
-                    CCPDataConnectorsResource -fileContent $content;
+                if ($ccpItem.isDynamicStreamName) {
+                    # For dynamic streamName, only create ONE resource with conditional logic
+                    # Store all streamName->destinationTable mappings first
+                    $script:streamNameMappings = @{}
+                    foreach ($content in $fileContent) {
+                        if ($content.properties.dcrConfig.streamName -and $content.properties.destinationTable) {
+                            $script:streamNameMappings[$content.properties.dcrConfig.streamName] = $content.properties.destinationTable
+                        }
+                    }
+                    # Process only the first item, it will be parameterized
+                    CCPDataConnectorsResource -fileContent $fileContent[0];
+                }
+                else {
+                    foreach ($content in $fileContent) {
+                        CCPDataConnectorsResource -fileContent $content;
+                    }
                 }
             }
             else {
@@ -1430,7 +1465,36 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
     if ($isDynamicStreamName) {
         # Handle properties destinationTable and streamName in dc poller file for this solutions as a special case
         $armResource.properties.dcrConfig.streamName = "[[parameters('streamName')[0]]"
-        $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
+        
+        # Build conditional logic for destinationTable based on streamNameMappings
+        if ($script:streamNameMappings -and $script:streamNameMappings.Count -gt 0) {
+            $sortedMappings = $script:streamNameMappings.GetEnumerator() | Sort-Object Name
+            $conditionalLogic = ""
+            $mappingArray = @($sortedMappings)
+            
+            # Build nested if() statements from right to left
+            for ($i = $mappingArray.Count - 1; $i -ge 0; $i--) {
+                $streamName = $mappingArray[$i].Key
+                $destTable = $mappingArray[$i].Value
+                
+                if ($i -eq $mappingArray.Count - 1) {
+                    # Last item (rightmost in the conditional)
+                    $conditionalLogic = "'$destTable'"
+                }
+                else {
+                    # Wrap with if(equals())
+                    $conditionalLogic = "if(equals(parameters('streamName')[0], '$streamName'), '$destTable', $conditionalLogic)"
+                }
+            }
+            
+            $armResource.properties.destinationTable = "[[$conditionalLogic]]"
+        }
+        else {
+            # Fallback to _CL suffix if no mappings found
+            Write-Host "Warning: No streamNameMappings found. Defaulting destinationTable to streamName with _CL suffix." -BackgroundColor Yellow
+            $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
+        }
+        
         $templateContentConnections.properties.mainTemplate.parameters | Add-Member -NotePropertyName "streamName" -NotePropertyValue ([PSCustomObject] @{ type = "array" })
     }
     else {
@@ -1453,7 +1517,9 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
                 $hasCsvDelimiterProperty = [bool]($armResource.properties.dataFormat.PSobject.Properties.name.tolower() -match "csvdelimiter")
                 if ($hasCsvDelimiterProperty) {
                     if ($armResource.properties.dataFormat.CsvDelimiter -eq " ") {
-                        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        if (-not ($global:baseMainTemplate.variables.PSObject.Properties.Name -contains "TemplateEmptySpaceString")) {
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptySpaceString" -NotePropertyValue " "
+                        }
                         $armResource.properties.dataFormat.CsvDelimiter = "[variables('TemplateEmptySpaceString')]"
                     }
                 }

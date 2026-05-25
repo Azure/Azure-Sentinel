@@ -1,5 +1,9 @@
 # Changelog for vimProcessEmpty.yaml
 
+## Version 0.2.0
+
+- (2026-03-17) Update empty parser alphabetically and align with columns from ASimTester.csv - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)
+
 ## Version 0.1.2
 
 - (2023-11-08) Okta connector - [PR #8982](https://github.com/Azure/Azure-Sentinel/pull/8982)
