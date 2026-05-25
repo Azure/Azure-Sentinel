@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                 |
 |-------------|--------------------------------|------------------------------------------------------------------------------------|
-| 3.2.2       | 20-05-2026                     | Updated BloodHound Enterprise solution **logo** (`BHE_Logo.svg`) to align with current branding. |
+| 3.2.2       | 20-05-2026                     | Updated **Data Connector** documentation, API credential instructions, and metric queries; updated Azure deployment URL, solution/connector IDs, and custom table definitions. <br> Updated BloodHound Enterprise solution **logo** (`BHE_Logo.svg`) to align with current branding. |
 | 3.2.1       | 13-01-2026                     | Updated WEBSITE_RUN_FROM_PACKAGE to use Microsoft-managed aka.ms URL               |
 | 3.2.0       | 15-09-2025                     | Added two extra **Workbooks** (Finding Trends & Posture History). Upgraded **Data Connector** to Azure Function. |
 | 3.1.2       | 25-02-2025                     | Bump version for portal deployment                                                 |
