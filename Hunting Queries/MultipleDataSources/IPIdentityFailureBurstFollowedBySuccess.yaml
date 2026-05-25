@@ -1,0 +1,170 @@
+id: 5c3a480b-d7a8-4a9c-a6b5-5bb2e3ebac89
+name: Short-window IP failure burst followed by successful sign-in
+description: |
+  Hunt for IP addresses that fail sign-ins against multiple identities and then
+  authenticate successfully within a short time window. This can highlight
+  password spraying or credential misuse patterns and requires analyst validation.
+description-detailed: |
+  This hypothesis-driven Microsoft Sentinel hunting query correlates interactive
+  (SigninLogs) and non-interactive (AADNonInteractiveUserSignInLogs) Entra ID
+  sign-ins by source IP address. It identifies IPs that generate a burst of failed
+  sign-ins across multiple user identities and then record one or more successful
+  sign-ins within a short correlation window.
+  This pattern can be consistent with password spraying or opportunistic credential
+  misuse, but it is not proof of malicious activity on its own. Analysts should
+  validate each result with identity context, device context, and expected network
+  behavior. Benign causes can include shared egress points, NAT, VPN gateways,
+  enterprise proxies, scripted health checks, and timing overlap from legitimate
+  background application activity.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins
+  - https://attack.mitre.org/techniques/T1110/003/
+  - https://attack.mitre.org/techniques/T1078/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110.003
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let correlationWindow = 15m;
+  let minFailedUsersFromIP = 5;
+  let minFailedAttemptsFromIP = 20;
+  let maxSuccessfulUsersFromIP = 3;
+  let successCodes = dynamic(["0", "50125", "50140", "70043", "70044"]);
+  let signins =
+      union isfuzzy=true
+      (
+          SigninLogs
+          | where TimeGenerated between (starttime .. endtime)
+          | project
+              TimeGenerated,
+              SourceTable = "SigninLogs",
+              UserPrincipalName = tolower(UserPrincipalName),
+              IPAddress,
+              ResultType = tostring(ResultType),
+              ResultDescription,
+              AppDisplayName,
+              ClientAppUsed,
+              CorrelationId
+      ),
+      (
+          AADNonInteractiveUserSignInLogs
+          | where TimeGenerated between (starttime .. endtime)
+          | project
+              TimeGenerated,
+              SourceTable = "AADNonInteractiveUserSignInLogs",
+              UserPrincipalName = tolower(UserPrincipalName),
+              IPAddress,
+              ResultType = tostring(ResultType),
+              ResultDescription,
+              AppDisplayName,
+              ClientAppUsed,
+              CorrelationId
+      )
+      | where isnotempty(UserPrincipalName) and isnotempty(IPAddress);
+  let failedBursts =
+      signins
+      | where ResultType !in (successCodes)
+      | summarize
+          FirstFailure = min(TimeGenerated),
+          LastFailure = max(TimeGenerated),
+          FailedAttempts = count(),
+          FailedUsers = dcount(UserPrincipalName),
+          FailedUserSet = make_set(UserPrincipalName, 50),
+          FailedAppSet = make_set(AppDisplayName, 20),
+          FailedSourceSet = make_set(SourceTable, 2),
+          FailureResultSet = make_set(ResultType, 20)
+          by IPAddress, FailureWindowStart = bin(TimeGenerated, correlationWindow)
+      | where FailedUsers >= minFailedUsersFromIP and FailedAttempts >= minFailedAttemptsFromIP;
+  let successes =
+      signins
+      | where ResultType in (successCodes)
+      | project
+          SuccessTime = TimeGenerated,
+          IPAddress,
+          SuccessUserPrincipalName = UserPrincipalName,
+          SuccessSourceTable = SourceTable,
+          SuccessAppDisplayName = AppDisplayName,
+          SuccessClientApp = ClientAppUsed,
+          SuccessCorrelationId = CorrelationId;
+  failedBursts
+  | join kind=inner successes on IPAddress
+  | where SuccessTime between (FirstFailure .. (LastFailure + correlationWindow))
+  | summarize
+      FirstSuccess = min(SuccessTime),
+      LastSuccess = max(SuccessTime),
+      SuccessEvents = count(),
+      SuccessfulUsersAfterFailures = dcount(SuccessUserPrincipalName),
+      SuccessfulUserSet = make_set(SuccessUserPrincipalName, 25),
+      SuccessSourceSet = make_set(SuccessSourceTable, 2),
+      SuccessAppSet = make_set(SuccessAppDisplayName, 20),
+      SuccessClientAppSet = make_set(SuccessClientApp, 20)
+      by IPAddress,
+      FailureWindowStart,
+      FirstFailure,
+      LastFailure,
+      FailedAttempts,
+      FailedUsers,
+      FailedUserSet,
+      FailedAppSet,
+      FailedSourceSet,
+      FailureResultSet
+  | where SuccessfulUsersAfterFailures > 0 and SuccessfulUsersAfterFailures <= maxSuccessfulUsersFromIP
+  | extend ExposureRatio = round(todouble(FailedUsers) / todouble(SuccessfulUsersAfterFailures), 2)
+  | extend FirstSuccessfulUser = tostring(SuccessfulUserSet[0])
+  | extend AccountName = tostring(split(FirstSuccessfulUser, "@")[0]),
+           AccountUPNSuffix = tostring(split(FirstSuccessfulUser, "@")[1])
+  | project
+      FirstFailure,
+      LastFailure,
+      FirstSuccess,
+      LastSuccess,
+      IPAddress,
+      FailedAttempts,
+      FailedUsers,
+      SuccessfulUsersAfterFailures,
+      ExposureRatio,
+      FailedUserSet,
+      SuccessfulUserSet,
+      FailedAppSet,
+      SuccessAppSet,
+      FailedSourceSet,
+      SuccessSourceSet,
+      FailureResultSet,
+      SuccessEvents,
+      FirstSuccessfulUser,
+      AccountName,
+      AccountUPNSuffix
+  | order by FailedUsers desc, FailedAttempts desc, FirstFailure desc
+  | extend timestamp = FirstFailure, IPCustomEntity = IPAddress, AccountCustomEntity = FirstSuccessfulUser
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

@@ -7,17 +7,17 @@ on:
       - master
     paths:
       # Trigger when any of these files in AWS-S3 directory change
-      - 'DataConnectors/AWS-S3/*.ps1'
-      - 'DataConnectors/AWS-S3/*.py'
-      - 'DataConnectors/AWS-S3/*.md'
-      - 'DataConnectors/AWS-S3/CloudFormation/**'
-      - 'DataConnectors/AWS-S3/Enviornment/**'
-      - 'DataConnectors/AWS-S3/Utils/**'
+      - "DataConnectors/AWS-S3/*.ps1"
+      - "DataConnectors/AWS-S3/*.py"
+      - "DataConnectors/AWS-S3/*.md"
+      - "DataConnectors/AWS-S3/CloudFormation/**"
+      - "DataConnectors/AWS-S3/Enviornment/**"
+      - "DataConnectors/AWS-S3/Utils/**"
       # Don't trigger on zip file changes (to avoid recursion)
-      - '!DataConnectors/AWS-S3/*.zip'
+      - "!DataConnectors/AWS-S3/*.zip"
       # Don't trigger on bundle automation documentation changes (not bundled)
-      - '!DataConnectors/AWS-S3/BUNDLE_AUTOMATION.md'
-  
+      - "!DataConnectors/AWS-S3/BUNDLE_AUTOMATION.md"
+
   # Allow manual workflow dispatch for testing
   workflow_dispatch:
 
@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - name: Generate a token
         id: generate_token
@@ -37,19 +37,19 @@ jobs:
         with:
           app-id: ${{ secrets.APPLICATION_ID }}
           private-key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
-      
+
       - name: Checkout PR branch with sparse checkout
         uses: actions/checkout@v4
         with:
           token: ${{ steps.generate_token.outputs.token }}
           ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 2  # Just need HEAD and parent for git diff
-          persist-credentials: false  # Security: Don't persist credentials after checkout
+          fetch-depth: 2 # Just need HEAD and parent for git diff
+          persist-credentials: false # Security: Don't persist credentials after checkout
           sparse-checkout: |
             DataConnectors/AWS-S3
             .script
           sparse-checkout-cone-mode: false
-      
+
       - name: Restore bundling script from base branch
         run: |
           # Security: Use trusted script from base branch to prevent malicious PR modifications
@@ -57,7 +57,7 @@ jobs:
           git fetch origin ${{ github.base_ref || 'master' }}:refs/remotes/origin/${{ github.base_ref || 'master' }}
           git checkout origin/${{ github.base_ref || 'master' }} -- .script/bundleAwsS3Scripts.sh
           chmod +x .script/bundleAwsS3Scripts.sh
-      
+
       - name: Check if auto-update needed
         id: check_update
         run: |
@@ -68,26 +68,27 @@ jobs:
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Update bundles
         if: steps.check_update.outputs.skip != 'true'
         run: |
           .script/bundleAwsS3Scripts.sh
-      
+
       - name: Commit updated bundles
         if: steps.check_update.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
+
           # Configure remote with token for push (needed due to persist-credentials: false)
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          
+
           # Stage zip files
           git add DataConnectors/AWS-S3/ConfigAwsS3DataConnectorScripts*.zip
-          
+
           # Check if there are changes to commit
           if ! git diff --cached --quiet; then
             git commit -m "Auto-update AWS-S3 DataConnector bundles
@@ -98,7 +99,7 @@ jobs:
             
             [skip ci]"
             
-            git push origin ${{ github.event.pull_request.head.ref }}
+            git push origin "$PR_HEAD_REF"
             
             echo "✅ Successfully updated and committed bundle files"
           else

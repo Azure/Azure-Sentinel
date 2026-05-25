@@ -16,13 +16,43 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
             {
                 new ParserConfiguration()
                 {
+                    Schema= "ASimAlertEvent",
+                    SampleFunctionName= "_Im_AlertEvent",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimAgentEvent",
+                    SampleFunctionName= "_Im_AgentEvent",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimAssetEntity",
+                    SampleFunctionName= "_Im_AssetEntity",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimAuditEvent",
+                    SampleFunctionName= "_Im_AuditEvent",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimAuthentication",
+                    SampleFunctionName= "_Im_Authentication",
+                },
+                new ParserConfiguration()
+                {
+                    Schema= "ASimDhcpEvent",
+                    SampleFunctionName= "_Im_DhcpEvent",
+                },
+                new ParserConfiguration()
+                {
                     Schema= "ASimDns",
                     SampleFunctionName= "_Im_Dns",
                 },
                 new ParserConfiguration()
                 {
-                    Schema= "ASimWebSession",
-                    SampleFunctionName= "_Im_WebSession",
+                    Schema= "ASimFileEvent",
+                    SampleFunctionName= "_Im_FileEvent",
                 },
                 new ParserConfiguration()
                 {
@@ -36,24 +66,19 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
                 },
                 new ParserConfiguration()
                 {
-                    Schema= "ASimAuditEvent",
-                    SampleFunctionName= "_Im_AuditEvent",
-                },
-                new ParserConfiguration()
-                {
                     Schema= "ASimRegistryEvent",
                     SampleFunctionName= "_Im_RegistryEvent",
                 },
                 new ParserConfiguration()
                 {
-                    Schema= "ASimFileEvent",
-                    SampleFunctionName= "_Im_FileEvent",
+                    Schema= "ASimUserManagement",
+                    SampleFunctionName= "_Im_UserManagement",
                 },
                 new ParserConfiguration()
                 {
-                    Schema= "ASimAuthentication",
-                    SampleFunctionName= "_Im_Authentication",
-                },
+                    Schema= "ASimWebSession",
+                    SampleFunctionName= "_Im_WebSession",
+                }
             };
     }
 
