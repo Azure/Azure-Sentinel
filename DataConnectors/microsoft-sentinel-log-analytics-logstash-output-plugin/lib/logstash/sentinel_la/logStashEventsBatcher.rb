@@ -2,6 +2,7 @@
 
 require "logstash/sentinel_la/logAnalyticsClient"
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
+require "logstash/json"
 
 # LogStashAutoResizeBuffer class setting a resizable buffer which is flushed periodically
 # The buffer resize itself according to Azure Loganalytics  and configuration limitations
@@ -17,7 +18,7 @@ class LogStashEventsBatcher
     public
     def batch_event_document(event_document)
         # todo: ensure the json serialization only occurs once. 
-        current_document_size = event_document.to_json.bytesize
+        current_document_size = LogStash::Json.dump(event_document).bytesize
         if (current_document_size >= @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES - 1000)
             @logger.error("Received document above the max allowed size - dropping the document [document size: #{current_document_size}, max allowed size: #{@buffer_config[:flush_each]}")
         else
