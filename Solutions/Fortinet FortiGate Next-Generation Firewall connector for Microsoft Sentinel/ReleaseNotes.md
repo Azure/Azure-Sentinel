@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 |-------------|--------------------------------|-----------------------------------------------------------------------------------------|
-| 3.0.9       | 02-09-2025                     |Update Fortinetfortigate **Playbook**  fix                                               |
+| 3.0.9       | 21-05-2026                     |Updated Fortinetfortigate **Playbook** Function app to fix authlevel                     |                         |
 | 3.0.8       | 26-02-2025                     |**Playbook** functionApp code change                                                     |
 | 3.0.7       | 11-11-2024                     |Removed Deprecated data connectors                                                       |
 | 3.0.6       | 22-08-2024                     |Deprecated data connectors                                                    			 |
