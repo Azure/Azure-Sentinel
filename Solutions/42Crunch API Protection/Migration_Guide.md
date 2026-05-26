@@ -150,28 +150,37 @@ Before starting:
 2. Find **42Crunch API Protection (Push Connector via Codeless Connector Framework)**
 3. Click **Open connector page**
 4. Under **Configuration**, click **Deploy 42Crunch API Protection connector resources**
-5. You will be prompted a confirmation dialog, please click OK to proceed
-6. After connector gets deployer, you will be shown copiable text with: 
-  - Tenant ID (Directory ID)
-  - Entra App Registration Application ID
-  - Entra App Registration Secret (save it as it will be shown only one time)
-  - Data Collection Endpoint Url
-  - Data Collection Rule Immutable ID
-  - Stream Name (FortyTwoCrunchAPIProtectionV2)
-  **Important**. Connector will remain disconnected for a while till data gets ingested into Sentinel. then connector will remain connected.
+5. You will be prompted a confirmation dialog — click **OK** to proceed.
+6. **After deployment completes, copy all output values immediately.** The connector page displays them once in a copiable panel:
+   - `TENANT_ID` — your Azure Directory (tenant) ID
+   - `CLIENT_ID` — Entra App Registration Application ID
+   - `CLIENT_SECRET` — Entra App Registration Secret
+   - `DCE_ENDPOINT` — Data Collection Endpoint URL (e.g. `https://xxx.eastus-1.ingest.monitor.azure.com`)
+   - `DCR_IMMUTABLE_ID` — Data Collection Rule Immutable ID (e.g. `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+   - Stream Name: `Custom-FortyTwoCrunchAPIProtectionV2_CL`
 
-This creates:
+   > ⚠️ **Save `CLIENT_SECRET` within seconds of it appearing.** The output panel is transient — if you navigate away or refresh the page, the secret value is gone permanently. Azure never stores the plaintext secret after initial creation. If you miss it, see [What if you miss the CLIENT_SECRET?](#what-if-you-miss-the-client_secret) below.
+
+   > **Note:** The connector status will show **Disconnected** immediately after deployment. This is expected — it will switch to **Connected** once the first events are ingested into Sentinel (typically a few minutes after the forwarder starts).
+
+This deployment creates:
 - A **Data Collection Endpoint (DCE)** — the HTTPS ingestion URL
 - A **Data Collection Rule (DCR)** — defines the stream schema and routing
 - The **`FortyTwoCrunchAPIProtectionV2_CL`** Log Analytics table
 - An **Entra ID app registration** with `Monitoring Metrics Publisher` role
 
-6. After deployment completes, copy these values from the deployment outputs:
-   - `DCE_ENDPOINT` — e.g. `https://xxx.eastus-1.ingest.monitor.azure.com`
-   - `DCR_IMMUTABLE_ID` — e.g. `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-   - `TENANT_ID` — your Azure tenant ID
-   - `CLIENT_ID` — the Entra app client ID
-   - `CLIENT_SECRET` — the Entra app client secret (**store securely, never commit to git**)
+### What if you miss the CLIENT_SECRET?
+
+If the output panel closed before you could copy the secret:
+
+1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations**
+2. Find the app created by the deployment (search for `42Crunch` or `FortyTwoCrunch`)
+3. Click **Certificates & secrets** → **Client secrets**
+4. Delete the existing secret (its value is unrecoverable — delete it to avoid confusion)
+5. Click **+ New client secret**, set an expiry, and click **Add**
+6. **Copy the new `Value` immediately** — it is shown only once
+
+Update your `.env` file (or Kubernetes/Key Vault secret) with the new `CLIENT_SECRET` before starting the forwarder.
 
 ---
 

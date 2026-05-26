@@ -39,6 +39,7 @@ DCR_STREAM_NAME = os.environ.get("DCR_STREAM_NAME", "Custom-FortyTwoCrunchAPIPro
 LOGS_FOLDER = os.environ.get("LOGS_FOLDER", "/opt/guardian/logs")
 STATE_FOLDER = os.environ.get("STATE_FOLDER", "/app/.state")
 TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "10"))
+MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "500"))
 
 # ── Token cache ────────────────────────────────────────────────────────────────
 _token_cache: dict = {"token": None, "expires_at": 0.0}
@@ -70,23 +71,25 @@ def get_access_token() -> str:
 
 
 def push_events(events: list) -> None:
-    """POST a batch of events to the Azure Monitor DCE/DCR ingestion endpoint."""
+    """POST events to the Azure Monitor DCE/DCR ingestion endpoint in chunks."""
     token = get_access_token()
     url = (
         f"{DCE_ENDPOINT}/dataCollectionRules/{DCR_IMMUTABLE_ID}"
         f"/streams/{DCR_STREAM_NAME}?api-version=2023-01-01"
     )
-    response = requests.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        data=json.dumps(events),
-        timeout=60,
-    )
-    response.raise_for_status()
-    logger.info("Pushed %d event(s) → HTTP %d", len(events), response.status_code)
+    for i in range(0, len(events), MAX_BATCH_SIZE):
+        chunk = events[i : i + MAX_BATCH_SIZE]
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(chunk),
+            timeout=60,
+        )
+        response.raise_for_status()
+        logger.info("Pushed %d event(s) → HTTP %d", len(chunk), response.status_code)
 
 
 def map_log_line(raw_line: str, log_type: int) -> dict | None:
