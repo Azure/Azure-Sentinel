@@ -21,3 +21,7 @@ class GoogleSecOpsApiError(GoogleSecOpsConnectorError):
 
 class SentinelIngestionError(GoogleSecOpsConnectorError):
     """Raised when posting to Sentinel DCR fails."""
+
+
+class GoogleSecOpsTimeoutException(GoogleSecOpsConnectorError):
+    """Raised when the function app approaches its execution timeout."""

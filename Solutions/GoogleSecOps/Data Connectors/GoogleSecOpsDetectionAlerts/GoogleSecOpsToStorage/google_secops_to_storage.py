@@ -17,7 +17,7 @@ from azure.core.exceptions import ResourceNotFoundError
 
 from ..SharedCode import consts
 from ..SharedCode.google_secops_client import GoogleSecOpsClient
-from ..SharedCode.exceptions import GoogleSecOpsConnectorError
+from ..SharedCode.exceptions import GoogleSecOpsConnectorError, GoogleSecOpsTimeoutException
 from ..SharedCode.google_auth import GoogleServiceAccountAuth
 from ..SharedCode.logger import applogger
 from ..SharedCode.state_manager import StateManager
@@ -187,13 +187,15 @@ class GoogleSecOpsToStorage:
 
         file_writer = _DetectionFileWriter(consts.CONN_STRING, consts.FILE_SHARE_NAME_DATA, self._start_time)
         total_detections = 0
+        batch_detections = 0  # detections in the current (in-progress) batch
         batch_count = 0
+
         applogger.info(
             consts.LOG_FORMAT.format(
                 consts.LOG_PREFIX,
                 __method_name,
                 consts.FUNCTION_NAME_FETCHER,
-                f"Starting stream processing with initial page_start={page_start[:10]}",
+                f"Stream started: page_start={page_start[:10]}",
             )
         )
 
@@ -204,20 +206,27 @@ class GoogleSecOpsToStorage:
                         consts.LOG_PREFIX,
                         __method_name,
                         consts.FUNCTION_NAME_FETCHER,
-                        f"Processing batch {batch_count + 1}: page_start={page_start[:10]}, "
-                        f"token={'yes' if page_token else 'no'}",
+                        f"Batch {batch_count + 1} started: page_start={page_start},"
+                        f" page_token={page_token}",
                     )
                 )
                 for raw, next_token, next_start in self._client.stream_detections(
                     page_start_time=page_start,
                     page_token=page_token,
                 ):
+                    if int(time.time()) >= self._start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS:
+                        raise GoogleSecOpsTimeoutException(
+                            f"Function app timeout reached after {consts.FUNCTION_APP_TIMEOUT_SECONDS}s"
+                            f" (batch={batch_count + 1}, batch_detections={batch_detections},"
+                            f" total_detections={total_detections})"
+                        )
                     if raw:
-                        file_writer.write_detection(raw, batch_count+1)
+                        file_writer.write_detection(raw, batch_count + 1)
+                        batch_detections += 1
                         total_detections += 1
                     else:
-                        # Sentinel — flush and update checkpoint
-                        files_written = file_writer.flush(batch_count+1)
+                        # Page boundary — flush buffered detections and advance checkpoint
+                        files_written = file_writer.flush(batch_count + 1)
                         batch_count += 1
                         self._update_checkpoint(page_start, next_token, next_start)
                         applogger.info(
@@ -225,44 +234,38 @@ class GoogleSecOpsToStorage:
                                 consts.LOG_PREFIX,
                                 __method_name,
                                 consts.FUNCTION_NAME_FETCHER,
-                                f"Batch {batch_count} flushed: files={files_written},"
-                                f" total_detections={total_detections}, "
-                                f"next_token={'yes' if next_token else 'no'}, "
-                                f"next_start={'yes' if next_start else 'no'}",
+                                f"Batch {batch_count} complete:"
+                                f" batch_detections={batch_detections},"
+                                f" total_detections={total_detections},"
+                                f" files_written={files_written},"
+                                f" next_page={'yes' if next_token else 'no'},"
+                                f" window_complete={'yes' if next_start else 'no'}",
                             )
                         )
+                        batch_detections = 0  # reset for next batch
 
-                # Return when window is complete or no more pages
+                # Stop when the time window is complete or no further pages remain
                 if next_start or not next_token:
                     applogger.debug(
                         consts.LOG_FORMAT.format(
                             consts.LOG_PREFIX,
                             __method_name,
                             consts.FUNCTION_NAME_FETCHER,
-                            f"Stopping stream: window_complete={bool(next_start)}, "
-                            f"no_more_pages={not bool(next_token)}",
+                            f"Stream ended: window_complete={bool(next_start)},"
+                            f" no_more_pages={not bool(next_token)}",
                         )
                     )
                     break
 
-                # Advance to next page
-                applogger.debug(
-                    consts.LOG_FORMAT.format(
-                        consts.LOG_PREFIX,
-                        __method_name,
-                        consts.FUNCTION_NAME_FETCHER,
-                        "Advancing to next page with token",
-                    )
-                )
                 page_token = next_token
 
-        except GoogleSecOpsConnectorError as exc:
-            applogger.error(
+        except GoogleSecOpsTimeoutException as exc:
+            applogger.warning(
                 consts.LOG_FORMAT.format(
                     consts.LOG_PREFIX,
                     __method_name,
                     consts.FUNCTION_NAME_FETCHER,
-                    f"CRITICAL: API error (batch={batch_count}, detections={total_detections}): {exc}",
+                    f"Timeout: {exc}",
                 )
             )
             applogger.warning(
@@ -270,10 +273,34 @@ class GoogleSecOpsToStorage:
                     consts.LOG_PREFIX,
                     __method_name,
                     consts.FUNCTION_NAME_FETCHER,
-                    f"Cleaning up files for failed batch {batch_count}",
+                    f"Discarding partial batch {batch_count + 1}"
+                    f" ({batch_detections} detections lost),"
+                    f" ingested_detections={total_detections - batch_detections}",
                 )
             )
-            file_writer.flush_batch(batch_count)
+            total_detections -= batch_detections
+            file_writer.flush_batch(batch_count + 1)
+        except GoogleSecOpsConnectorError as exc:
+            applogger.error(
+                consts.LOG_FORMAT.format(
+                    consts.LOG_PREFIX,
+                    __method_name,
+                    consts.FUNCTION_NAME_FETCHER,
+                    f"API error on batch {batch_count + 1}: {exc}",
+                )
+            )
+            applogger.warning(
+                consts.LOG_FORMAT.format(
+                    consts.LOG_PREFIX,
+                    __method_name,
+                    consts.FUNCTION_NAME_FETCHER,
+                    f"Discarding partial batch {batch_count + 1}"
+                    f" ({batch_detections} detections lost),"
+                    f" ingested_detections={total_detections - batch_detections}",
+                )
+            )
+            total_detections -= batch_detections
+            file_writer.flush_batch(batch_count + 1)
             raise
         except Exception as exc:
             applogger.error(
@@ -281,7 +308,7 @@ class GoogleSecOpsToStorage:
                     consts.LOG_PREFIX,
                     __method_name,
                     consts.FUNCTION_NAME_FETCHER,
-                    f"CRITICAL: Unexpected error (batch={batch_count}, detections={total_detections}): {exc}",
+                    f"Unexpected error on batch {batch_count + 1}: {exc}",
                 )
             )
             applogger.warning(
@@ -289,29 +316,34 @@ class GoogleSecOpsToStorage:
                     consts.LOG_PREFIX,
                     __method_name,
                     consts.FUNCTION_NAME_FETCHER,
-                    f"Cleaning up files for failed batch {batch_count}",
+                    f"Discarding partial batch {batch_count + 1}"
+                    f" ({batch_detections} detections lost),"
+                    f" ingested_detections={total_detections - batch_detections}",
                 )
             )
-            file_writer.flush_batch(batch_count)
+            total_detections -= batch_detections
+            file_writer.flush_batch(batch_count + 1)
             raise
         finally:
+            file_writer.close(batch_count)
             applogger.debug(
                 consts.LOG_FORMAT.format(
                     consts.LOG_PREFIX,
                     __method_name,
                     consts.FUNCTION_NAME_FETCHER,
-                    f"Closing file writer, files_written={file_writer._files_written}",
+                    f"File writer closed: total_files_written={file_writer._files_written}",
                 )
             )
-            file_writer.close(batch_count)
 
         applogger.info(
             consts.LOG_FORMAT.format(
                 consts.LOG_PREFIX,
                 __method_name,
                 consts.FUNCTION_NAME_FETCHER,
-                f"Fetch cycle complete: batches={batch_count},"
-                f" detections={total_detections}, files={file_writer._files_written}",
+                f"Fetch cycle complete:"
+                f" batches={batch_count},"
+                f" total_detections={total_detections},"
+                f" total_files={file_writer._files_written}",
             )
         )
 

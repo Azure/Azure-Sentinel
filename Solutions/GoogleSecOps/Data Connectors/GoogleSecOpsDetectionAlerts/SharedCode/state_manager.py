@@ -230,8 +230,22 @@ class StateManager:
 
             # Check if checkpoint is still valid
             if page_start or page_token:
+                if page_token:
+                    # Mid-page resume: always honour the token regardless of staleness,
+                    # since the token is tied to an in-flight query that must be completed.
+                    applogger.info(
+                        consts.LOG_FORMAT.format(
+                            consts.LOG_PREFIX,
+                            __method_name,
+                            "StateManager",
+                            f"Resuming mid-page from checkpoint"
+                            f" (date={page_start[:10] if page_start else 'none'}, token=yes)",
+                        )
+                    )
+                    return page_start, page_token
+
                 if self._is_stale(page_start):
-                    # Checkpoint too old: reset to safe lookback
+                    # No token and checkpoint too old: reset to safe lookback
                     new_start = self._compute_start_time(consts.MAX_LOOKBACK_DAYS)
                     applogger.warning(
                         consts.LOG_FORMAT.format(
@@ -248,10 +262,10 @@ class StateManager:
                         consts.LOG_PREFIX,
                         __method_name,
                         "StateManager",
-                        f"Resuming from checkpoint (date={page_start[:10]}, token={page_token if page_token else 'no'})",
+                        f"Resuming from checkpoint (date={page_start[:10]}, token=no)",
                     )
                 )
-                return page_start, page_token
+                return page_start, None
 
         # No checkpoint: compute start time from configuration
         lookback_days = min(consts.LOOKBACK_DAYS, consts.MAX_LOOKBACK_DAYS)

@@ -95,6 +95,16 @@ class AzureStorageToSentinel:
 
         # Process all eligible files in this cycle
         for filename in file_names:
+            if time.time() >= start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS:
+                applogger.warning(
+                    consts.LOG_FORMAT.format(
+                        consts.LOG_PREFIX,
+                        __method_name,
+                        consts.FUNCTION_NAME_INGESTER,
+                        f"Timeout limit reached after {files_processed} files, stopping early",
+                    )
+                )
+                break
             extracted, posted = self._process_response_file(filename)
             total_extracted += extracted
             total_posted += posted
@@ -282,6 +292,9 @@ class AzureStorageToSentinel:
             sm.delete()
             return 0, 0
 
+        # Strip unused fields before posting to reduce payload size
+        detections = [self._strip_detection(d) for d in detections]
+
         extracted_count = len(detections)
         applogger.info(
             consts.LOG_FORMAT.format(
@@ -319,6 +332,51 @@ class AzureStorageToSentinel:
         if isinstance(response, list):
             return response
         return []
+
+    @staticmethod
+    def _strip_threat(threat: dict) -> dict:
+        """Remove detectionFields from a single threat object."""
+        return {k: v for k, v in threat.items() if k != "detectionFields"}
+
+    @staticmethod
+    def _strip_collection_elements(collection_elements: list) -> list:
+        """Remove detectionFields from every threat inside collectionElements."""
+        result = []
+        for element in collection_elements:
+            references = element.get("references")
+            if not isinstance(references, list):
+                result.append(element)
+                continue
+            cleaned_refs = []
+            for ref in references:
+                entity = ref.get("entity")
+                if isinstance(entity, dict):
+                    entity = {k: v for k, v in entity.items() if k != "additional"}
+                    metadata = entity.get("metadata")
+                    if isinstance(metadata, dict):
+                        threat_list = metadata.get("threat")
+                        if isinstance(threat_list, list):
+                            metadata = {
+                                **metadata,
+                                "threat": [AzureStorageToSentinel._strip_threat(t) for t in threat_list],
+                            }
+                        entity = {**entity, "metadata": metadata}
+                    ref = {**ref, "entity": entity}
+                cleaned_refs.append(ref)
+            result.append({**element, "references": cleaned_refs})
+        return result
+
+    @staticmethod
+    def _strip_detection(event: dict) -> dict:
+        """Return a copy of the event with unused detection fields removed."""
+        result = dict(event)
+
+        # Strip detectionFields from threat objects inside top-level collectionElements
+        col = result.get("collectionElements")
+        if isinstance(col, list):
+            result["collectionElements"] = AzureStorageToSentinel._strip_collection_elements(col)
+
+        return result
 
     def _post_to_sentinel(self, detections: list, filename: str) -> int:
         """Post detections to Sentinel.

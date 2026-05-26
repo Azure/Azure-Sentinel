@@ -54,6 +54,6 @@ def main(mytimer: func.TimerRequest) -> None:
         applogger.info(
             consts.LOG_FORMAT.format(
                 consts.LOG_PREFIX, "main", consts.FUNCTION_NAME_FETCHER,
-                f"ended at {end.isoformat()} (duration={( end - start).total_seconds():.2f}s)",
+                f"ended at {end.isoformat()} (duration={(end - start).total_seconds():.2f}s)",
             )
         )

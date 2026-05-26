@@ -24,6 +24,7 @@ FUNCTION_NAME_FETCHER = "GoogleSecOpsToStorage"  # First function (SecOps → St
 FUNCTION_NAME_INGESTER = (
     "AzureStorageToSentinel"  # Second function (Storage → Sentinel)
 )
+FUNCTION_APP_TIMEOUT_SECONDS = 530
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  GOOGLE SECOPS API CONFIGURATION
