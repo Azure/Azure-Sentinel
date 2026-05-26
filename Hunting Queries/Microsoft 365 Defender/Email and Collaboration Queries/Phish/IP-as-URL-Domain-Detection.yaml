@@ -1,20 +1,17 @@
 id: 6492c4ea-5e56-4ceb-9974-3c0c39cb4d71
 name: Raw IP Address Used as URL Domain
 description: |
-  Detects delivered inbound emails containing URLs where the domain is a raw IPv4 address.
-  Real services use domain names; attackers occasionally use raw IPs to bypass takedown of
-  malicious domains or to evade reputation-based filters. This pattern is a strong indicator
-  of commodity phishing or malware delivery.
+  Detects delivered inbound emails with URLs that use a raw IPv4 address as the domain. This pattern often indicates phishing or malware delivery designed to evade domain-based reputation checks.
 description-detailed: |
   This query identifies delivered inbound emails containing URLs where the domain field is a
   raw IPv4 address (four dotted-quad octets). It joins EmailEvents with EmailUrlInfo on
   NetworkMessageId to enrich the URL with sender, subject, delivery action, and threat verdict.
-  
+
   Attack patterns detected:
   - Phishing links pointing to compromised IP addresses with no domain registration trail
   - Commodity malware delivery URLs that avoid DNS-based takedown
   - Generic spam campaigns bypassing reputation filters via raw IP rotation
-  
+
   Tuning notes:
   - Filter on EmailDirection == "Inbound" to exclude outbound security correspondence that
     may legitimately reference raw IPs in vulnerability disclosures
@@ -33,15 +30,38 @@ relevantTechniques:
 query: |
   EmailUrlInfo
   | where Timestamp > ago(30d)
-  | where UrlDomain matches regex @"^\d+\.\d+\.\d+\.\d+$"
+  | where UrlDomain matches regex @"^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$"
   | join kind=inner (
       EmailEvents
+      | where Timestamp > ago(30d)
+      | where EmailDirection == "Inbound"
+      | where DeliveryAction == "Delivered"
       | project NetworkMessageId, SenderFromDomain, Subject, DeliveryAction,
                 RecipientEmailAddress, EmailDirection, ThreatTypes
     ) on NetworkMessageId
-  | where EmailDirection == "Inbound"
-  | where DeliveryAction == "Delivered"
   | project Timestamp, SenderFromDomain, UrlDomain, Url, DeliveryAction,
             EmailDirection, ThreatTypes, Subject, RecipientEmailAddress
   | order by Timestamp desc
-version: 1.0.0
+entityMappings:
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: UrlDomain
+- entityType: URL
+  fieldMappings:
+    - identifier: Url
+      columnName: Url
+- entityType: Account
+  fieldMappings:
+    - identifier: FullName
+      columnName: RecipientEmailAddress
+version: 1.0.1
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ievgen Bondarenko
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
