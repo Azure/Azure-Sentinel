@@ -1,0 +1,63 @@
+id: 00682c4c-b8b5-5ef7-af33-50891b271b7b
+name: Whisper Security - C2 Communication Detection
+description: |
+  Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperThreatIntel_CL
+queryFrequency: 5m
+queryPeriod: 1h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+- CommandAndControl
+relevantTechniques:
+- T1071
+query: |
+  // MITRE ATT&CK: T1071 - Application Layer Protocol
+  // Tactic: Command and Control
+  // Detects C2 communication by correlating network logs with Whisper threat intel
+  let timeRange = 1h;
+  let threatThreshold = 60;
+  let c2Indicators = WhisperThreatIntel_CL
+      | where TimeGenerated > ago(timeRange)
+      | where isC2 == true
+      | where threatScore > threatThreshold
+      | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;
+  let CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);
+  CommonSecurityLogSafe
+      | where TimeGenerated > ago(timeRange)
+      | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)
+      | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)
+      | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator
+      | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName
+      | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SourceIP
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: DestinationIP
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: DnsDomain
+customDetails:
+  ThreatScore: threatScore
+  ThreatLevel: threatLevel
+  FeedNames: feedNames
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

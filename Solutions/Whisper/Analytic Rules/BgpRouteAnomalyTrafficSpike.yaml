@@ -1,0 +1,66 @@
+id: 1c08a7cb-7ff4-5a37-a961-39c29f8d07bd
+name: Whisper Security - BGP Route Anomaly with Traffic Spike
+description: |
+  Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks.
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperHistory_CL
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+- Collection
+relevantTechniques:
+- T1557
+query: |
+  // MITRE ATT&CK: T1557 - Adversary-in-the-Middle
+  // Tactic: Collection
+  // Detects BGP route origin changes correlated with traffic volume anomalies
+  let lookbackPeriod = 1d;
+  let bgpChanges = WhisperHistory_CL
+      | where TimeGenerated > ago(lookbackPeriod)
+      | where isnotempty(bgpOrigin)
+      | serialize
+      | extend PreviousOrigin = prev(bgpOrigin), PreviousIndicator = prev(indicator)
+      | where indicator == PreviousIndicator
+      | where bgpOrigin != PreviousOrigin
+      | where isnotempty(PreviousOrigin)
+      | project indicator, bgpPrefix, OldOrigin = PreviousOrigin, NewOrigin = bgpOrigin, ChangeTime = snapshotDate;
+  let CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SentBytes:long, ReceivedBytes:long)[]);
+  let trafficBaseline = CommonSecurityLogSafe
+      | where TimeGenerated > ago(lookbackPeriod)
+      | where isnotempty(DestinationIP)
+      | summarize BaselineBytes = avg(SentBytes + ReceivedBytes), BaselineCount = count() by DestinationIP, bin(TimeGenerated, 1h)
+      | summarize AvgBaselineBytes = avg(BaselineBytes), AvgBaselineCount = avg(BaselineCount) by DestinationIP;
+  let recentTraffic = CommonSecurityLogSafe
+      | where TimeGenerated > ago(15m)
+      | where isnotempty(DestinationIP)
+      | summarize RecentBytes = sum(SentBytes + ReceivedBytes), RecentCount = count() by DestinationIP;
+  recentTraffic
+      | join kind=inner (trafficBaseline) on DestinationIP
+      | where RecentBytes > AvgBaselineBytes * 3 or RecentCount > AvgBaselineCount * 3
+      | extend TrafficChange = iff(AvgBaselineBytes > 0, round((RecentBytes - AvgBaselineBytes) / AvgBaselineBytes * 100, 2), 0.0)
+      | join kind=inner (bgpChanges) on $left.DestinationIP == $right.indicator
+      | project TimeGenerated = ChangeTime, IPAddress = DestinationIP, Prefix = bgpPrefix, OriginASN = NewOrigin, OldOriginASN = OldOrigin, TrafficChange, RecentBytes, AvgBaselineBytes
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+customDetails:
+  Prefix: Prefix
+  OriginASN: OriginASN
+  TrafficChange: TrafficChange
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

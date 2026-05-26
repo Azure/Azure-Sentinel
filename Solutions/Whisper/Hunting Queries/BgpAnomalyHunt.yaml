@@ -1,0 +1,51 @@
+id: c63683cc-3a89-5a3f-93a2-548e3807f18f
+name: Whisper - BGP Anomaly Hunt
+description: |
+  Detects ASN reputation degradation by comparing scores across 24-hour windows, flagging increases greater than 20 points.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperASNReputation_CL
+tactics:
+- Collection
+- CredentialAccess
+relevantTechniques:
+- T1557
+query: |
+  // MITRE ATT&CK: T1557 - Adversary-in-the-Middle
+  // Tactic: Collection, CredentialAccess
+  // Detects ASN reputation degradation by comparing scores across
+  // 24-hour windows, flagging increases greater than 20 points.
+  let lookback = 7d;
+  let scoreIncreaseThreshold = 20;
+  let windowSize = 24h;
+  let recentScores = WhisperASNReputation_CL
+  | where TimeGenerated > ago(windowSize)
+  | summarize arg_max(TimeGenerated, *) by asn
+  | project asn, asnName, currentScore = reputationScore, currentLevel = reputationLevel, currentMaxThreat = maxThreatScore, currentAvgThreat = avgThreatScore, hasThreateningPrefixes, country, prefixCount, peerCount, currentTime = TimeGenerated;
+  let olderScores = WhisperASNReputation_CL
+  | where TimeGenerated > ago(lookback) and TimeGenerated <= ago(windowSize)
+  | summarize arg_max(TimeGenerated, *) by asn
+  | project asn, previousScore = reputationScore, previousLevel = reputationLevel, previousTime = TimeGenerated;
+  recentScores
+  | join kind=inner (olderScores) on asn
+  | extend scoreDelta = currentScore - previousScore
+  | where scoreDelta >= scoreIncreaseThreshold
+  | project
+      asn,
+      asnName,
+      previousScore,
+      previousLevel,
+      previousTime,
+      currentScore,
+      currentLevel,
+      currentTime,
+      scoreDelta,
+      currentMaxThreat,
+      currentAvgThreat,
+      hasThreateningPrefixes,
+      country,
+      prefixCount,
+      peerCount
+  | sort by scoreDelta desc
+version: 1.0.0

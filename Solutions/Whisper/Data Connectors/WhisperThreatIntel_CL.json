@@ -1,0 +1,295 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Whisper Security - Threat Intelligence Table",
+    "description": "Deploys the WhisperThreatIntel_CL custom table, Data Collection Endpoint, and Data Collection Rule for ingesting threat intelligence enrichment data from the Whisper Security knowledge graph.",
+    "prerequisites": [
+      "Azure Sentinel workspace",
+      "Whisper API key in Key Vault"
+    ],
+    "version": "1.0.0",
+    "author": {
+      "name": "Whisper Security"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {
+    "tableName": "WhisperThreatIntel_CL",
+    "dceName": "dce-whisper-threat-intel",
+    "dcrName": "dcr-whisper-threat-intel",
+    "customStreamName": "Custom-WhisperThreatIntel_CL",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "indicator",
+              "type": "string",
+              "description": "The IP address, domain, or other indicator value"
+            },
+            {
+              "name": "indicatorType",
+              "type": "string",
+              "description": "Indicator type (ip, domain, etc.)"
+            },
+            {
+              "name": "threatScore",
+              "type": "real",
+              "description": "Numeric threat score from Whisper explain()"
+            },
+            {
+              "name": "threatLevel",
+              "type": "string",
+              "description": "Categorical threat level (none, low, medium, high, critical)"
+            },
+            {
+              "name": "isThreat",
+              "type": "boolean",
+              "description": "Whether the indicator is classified as a threat"
+            },
+            {
+              "name": "isC2",
+              "type": "boolean",
+              "description": "Whether the indicator is associated with command-and-control activity"
+            },
+            {
+              "name": "isMalware",
+              "type": "boolean",
+              "description": "Whether the indicator is associated with malware"
+            },
+            {
+              "name": "isPhishing",
+              "type": "boolean",
+              "description": "Whether the indicator is associated with phishing"
+            },
+            {
+              "name": "isTor",
+              "type": "boolean",
+              "description": "Whether the indicator is a known Tor exit node"
+            },
+            {
+              "name": "isAnonymizer",
+              "type": "boolean",
+              "description": "Whether the indicator is a known anonymizer"
+            },
+            {
+              "name": "isSpam",
+              "type": "boolean",
+              "description": "Whether the indicator is associated with spam"
+            },
+            {
+              "name": "isBruteforce",
+              "type": "boolean",
+              "description": "Whether the indicator is associated with brute-force attacks"
+            },
+            {
+              "name": "isScanner",
+              "type": "boolean",
+              "description": "Whether the indicator is a known scanner"
+            },
+            {
+              "name": "threatSources",
+              "type": "int",
+              "description": "Number of threat feeds reporting this indicator"
+            },
+            {
+              "name": "feedNames",
+              "type": "string",
+              "description": "Comma-separated list of threat feed names"
+            },
+            {
+              "name": "explanation",
+              "type": "string",
+              "description": "Human-readable threat assessment explanation"
+            },
+            {
+              "name": "factors",
+              "type": "string",
+              "description": "JSON-encoded scoring factors from explain()"
+            },
+            {
+              "name": "lastSeen",
+              "type": "dateTime",
+              "description": "Most recent observation timestamp"
+            },
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime",
+              "description": "Event generation timestamp"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "[variables('customStreamName')]": {
+            "columns": [
+              {
+                "name": "indicator",
+                "type": "string"
+              },
+              {
+                "name": "indicatorType",
+                "type": "string"
+              },
+              {
+                "name": "threatScore",
+                "type": "real"
+              },
+              {
+                "name": "threatLevel",
+                "type": "string"
+              },
+              {
+                "name": "isThreat",
+                "type": "boolean"
+              },
+              {
+                "name": "isC2",
+                "type": "boolean"
+              },
+              {
+                "name": "isMalware",
+                "type": "boolean"
+              },
+              {
+                "name": "isPhishing",
+                "type": "boolean"
+              },
+              {
+                "name": "isTor",
+                "type": "boolean"
+              },
+              {
+                "name": "isAnonymizer",
+                "type": "boolean"
+              },
+              {
+                "name": "isSpam",
+                "type": "boolean"
+              },
+              {
+                "name": "isBruteforce",
+                "type": "boolean"
+              },
+              {
+                "name": "isScanner",
+                "type": "boolean"
+              },
+              {
+                "name": "threatSources",
+                "type": "int"
+              },
+              {
+                "name": "feedNames",
+                "type": "string"
+              },
+              {
+                "name": "explanation",
+                "type": "string"
+              },
+              {
+                "name": "factors",
+                "type": "string"
+              },
+              {
+                "name": "lastSeen",
+                "type": "datetime"
+              },
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "whisperWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('customStreamName')]"
+            ],
+            "destinations": [
+              "whisperWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "[variables('customStreamName')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "tableResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+    },
+    "dceResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+    },
+    "dcrResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))).logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]"
+    }
+  }
+}

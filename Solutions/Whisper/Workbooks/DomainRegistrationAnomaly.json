@@ -1,0 +1,102 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Whisper Security - Domain Registration Anomaly\nThis workbook surfaces anomalous domain registration patterns detected through the Whisper Security knowledge graph. Review newly registered domains, registrar change timelines, age distributions, WHOIS privacy rates, and upcoming expirations to identify potential threats."
+      },
+      "name": "header-markdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| where indicatorType == 'domain'\n| where isnotempty(domainAge)\n| where domainAge < 7\n| project indicator, domainAge, registrar, registrant, countries, nameservers, cohostedCount\n| order by domainAge asc",
+        "size": 0,
+        "title": "Newly Registered Domains (Age Less Than 7 Days)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "domainAge",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "newly-registered-domains"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperHistory_CL\n| where indicatorType == 'domain'\n| where isnotempty(registrar)\n| order by indicator asc, snapshotDate asc\n| serialize\n| extend PrevRegistrar = prev(registrar), PrevIndicator = prev(indicator)\n| where indicator == PrevIndicator and registrar != PrevRegistrar\n| project snapshotDate, indicator, PreviousRegistrar = PrevRegistrar, NewRegistrar = registrar, country\n| order by snapshotDate desc",
+        "size": 0,
+        "title": "Registrar Change Timeline",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "registrar-change-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperInfraContext_CL\n| where indicatorType == 'domain'\n| where isnotempty(domainAge)\n| extend AgeBucket = case(\n    domainAge < 7, 'Less than 7 days',\n    domainAge < 30, '7 to 30 days',\n    domainAge < 365, '30 to 365 days',\n    domainAge < 1825, '1 to 5 years',\n    'Over 5 years')\n| summarize DomainCount = count() by AgeBucket\n| order by DomainCount desc",
+        "size": 0,
+        "title": "Domain Age Distribution",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "name": "domain-age-distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperHistory_CL\n| where indicatorType == 'domain'\n| where isnotempty(registrant)\n| extend IsRedacted = iff(registrant has_any ('redacted', 'privacy', 'proxy', 'whoisguard', 'protected', 'withheld', 'not disclosed'), true, false)\n| summarize TotalDomains = dcount(indicator), RedactedDomains = dcountif(indicator, IsRedacted == true)\n| extend VisibleDomains = TotalDomains - RedactedDomains\n| project Category = pack_array('Redacted or Privacy', 'Visible Registration'), Count = pack_array(RedactedDomains, VisibleDomains)\n| mv-expand Category to typeof(string), Count to typeof(long)",
+        "size": 0,
+        "title": "WHOIS Privacy and Redaction Rates",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "whois-privacy-rates"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperHistory_CL\n| where indicatorType == 'domain'\n| where isnotempty(expiryDate)\n| where expiryDate > now() and expiryDate < now() + 30d\n| summarize arg_max(snapshotDate, *) by indicator\n| extend DaysUntilExpiry = datetime_diff('day', expiryDate, now())\n| project indicator, expiryDate, DaysUntilExpiry, registrar, registrant, country\n| order by DaysUntilExpiry asc",
+        "size": 0,
+        "title": "Domains with Expiring Registrations (Next 30 Days)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DaysUntilExpiry",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "expiring-domains"
+    }
+  ],
+  "fallbackResourceIds": [
+    "sentinel"
+  ]
+}

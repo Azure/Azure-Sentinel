@@ -1,0 +1,48 @@
+id: 0a95fa2e-e531-592d-b967-2f3ba669ce49
+name: Whisper - Newly Registered Domain Hunt
+description: |
+  Finds newly registered domains (age less than 14 days) and enriches with threat intelligence to identify suspicious new domains.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+  - WhisperThreatIntel_CL
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583.001
+query: |
+  // MITRE ATT&CK: T1583.001 - Resource Development: Acquire Infrastructure: Domains
+  // Tactic: ResourceDevelopment
+  // Finds newly registered domains (age < 14 days) and enriches with
+  // threat intelligence context to identify suspicious new domains.
+  let lookback = 30d;
+  let maxDomainAgeDays = 14;
+  WhisperInfraContext_CL
+  | where TimeGenerated > ago(lookback)
+  | where domainAge >= 0 and domainAge < maxDomainAgeDays
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | join kind=leftouter (
+      WhisperThreatIntel_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | project indicator, threatScore, threatLevel, isThreat, feedNames, isPhishing, isMalware
+  ) on indicator
+  | project
+      indicator,
+      domainAge,
+      registrar,
+      registrant,
+      countries,
+      nameservers,
+      ipAddresses,
+      asns,
+      asnNames,
+      threatScore = coalesce(threatScore, real(0)),
+      threatLevel = coalesce(threatLevel, "unknown"),
+      isThreat = coalesce(isThreat, false),
+      feedNames = coalesce(feedNames, "none"),
+      isPhishing = coalesce(isPhishing, false),
+      isMalware = coalesce(isMalware, false)
+  | sort by threatScore desc, domainAge asc
+version: 1.0.0
