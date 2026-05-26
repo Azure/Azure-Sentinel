@@ -1,12 +1,9 @@
 id: bb135137-8f33-45b0-8d0f-78437f79d558
 name: Guest account initiating privileged Entra ID operation
 description: |
-  Identifies guest accounts (B2B external identities) acting as the initiator of
-  high-impact Entra ID operations such as role assignments, service principal credential
-  additions, or authentication policy changes. Complements GuestAccountAddedToPrivilegedRole,
-  which detects guests as targets. A guest appearing as the operation initiator is
-  consistent with a compromised B2B account used for post-compromise persistence or
-  lateral movement within the target tenant.
+  Identifies guest accounts (B2B external identities) initiating high-impact Entra ID
+  operations: role assignments, service principal credentials, policy changes. Guest
+  as initiator suggests a compromised B2B account for persistence or lateral pivot.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -42,7 +39,8 @@ query: |
       | where ResultType == 0
       | extend UserUpn = tolower(UserPrincipalName)
       | where isnotempty(UserUpn)
-      | summarize LastSignIn = max(TimeGenerated), SignInIp = any(IPAddress) by UserUpn;
+      | summarize arg_max(TimeGenerated, IPAddress) by UserUpn
+      | project UserUpn, LastSignIn = TimeGenerated, SignInIp = IPAddress;
   // Privileged audit operations initiated by those guest accounts
   AuditLogs
   | where TimeGenerated >= ago(timeframe)
@@ -55,16 +53,16 @@ query: |
         tostring(InitiatedBy.app.ipAddress))
   | where isnotempty(ActorUpn)
   | join kind=inner GuestAccounts on $left.ActorUpn == $right.UserUpn
-  | mv-expand TargetResource = TargetResources
-  | extend TargetName = tostring(TargetResource.displayName)
   | extend AccountName      = tostring(split(ActorUpn, "@")[0])
   | extend AccountUPNSuffix = tostring(split(ActorUpn, "@")[1])
+  | mv-expand TargetResource = TargetResources
+  | extend TargetName = tostring(TargetResource.displayName)
   | summarize
       FirstSeen   = min(TimeGenerated),
       LastSeen    = max(TimeGenerated),
       Operations  = make_set(OperationName),
       Targets     = make_set(TargetName),
-      EventCount  = count()
+      EventCount  = dcount(CorrelationId)
       by ActorUpn, AccountName, AccountUPNSuffix, ActorIp, LastSignIn, SignInIp
   | sort by FirstSeen desc
 entityMappings:
