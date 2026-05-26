@@ -1,10 +1,9 @@
 id: 564bf64a-bada-4c6b-8821-53138d660f78
-name: Potential Rootkit Network Activity Missing from MDE
+name: Potential rootkit network activity missing from MDE
 description: |
   Identifies outbound network connections logged by perimeter firewalls that are entirely missing from Microsoft Defender for Endpoint (MDE) telemetry. This discrepancy strongly indicates a threat actor operating in kernel space, to hide C2 traffic.
 description-detailed: |
   Advanced adversaries operating in Ring-0 via BYOVD can unlink WFP (Windows Filtering Platform) callouts or inject raw frames into NDIS. This completely blinds EDR sensors like MDE to outbound network telemetry, while the host otherwise appears healthy. By comparing "Network Truth" (out-of-band firewall appliance logs) against "Host Truth" (EDR telemetry), we trap the adversary in a paradox. Kernel-level tampering on the endpoint cannot hide the physical packet leaving the network boundary.
-severity: High
 
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
@@ -103,8 +102,9 @@ query: |
     | where Timestamp between (starttime .. endtime)
     | where isnotempty(IPAddresses) and isnotempty(DeviceName)
     // Expand the JSON array of IP addresses so each IP gets its own row
-    | mv-expand todynamic(IPAddresses)
-    | extend LocalIP = tostring(IPAddresses.IPAddress)
+    | extend parsedIPs = todynamic(IPAddresses)
+    | mv-expand parsedIPs
+    | extend LocalIP = tostring(parsedIPs.IPAddress)
     | where isnotempty(LocalIP)
     // Get the most recent heartbeat for each IP address to account for DHCP churn
     | summarize arg_max(Timestamp, DeviceName, DeviceId) by LocalIP
@@ -180,9 +180,6 @@ entityMappings:
       - identifier: Address
         columnName: DestinationIP
 
-alertDetailsOverride:
-  alertDisplayNameFormat: "Potential Rootkit Network Activity from {{HostName}} to {{DestinationIP}}"
-  alertDescriptionFormat: "Firewall logs indicate {{HostName}} ({{InternalIP}}) transmitted {{TotalBytesSent}} bytes to {{DestinationIP}}, but Microsoft Defender is completely blind to this traffic, indicating likely kernel-level EDR tampering."
 
 customDetails:
   Evasive_Connections: EvasiveConnectionCount
