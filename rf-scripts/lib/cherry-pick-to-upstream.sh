@@ -21,8 +21,8 @@ UPSTREAM_BRANCH="${2:-}"
 
 # ── find commits ─────────────────────────────────────────────────────────────
 
-COMMIT_SHAS=$(git log --format="%H" --reverse "${INTERNAL_BRANCH}..${CURRENT_BRANCH}")
-COMMIT_ONELINES=$(git log --oneline --reverse "${INTERNAL_BRANCH}..${CURRENT_BRANCH}")
+COMMIT_SHAS=$(git log --format="%H" --reverse "origin/${INTERNAL_BRANCH}..origin/${CURRENT_BRANCH}")
+COMMIT_ONELINES=$(git log --oneline --reverse "origin/${INTERNAL_BRANCH}..origin/${CURRENT_BRANCH}")
 
 if [[ -z "$COMMIT_SHAS" ]]; then
   echo "No commits found between '$INTERNAL_BRANCH' and '$CURRENT_BRANCH'." >&2
@@ -40,7 +40,7 @@ git checkout -b "$UPSTREAM_BRANCH" "origin/$MASTER_BRANCH"
 
 if ! git cherry-pick $COMMIT_SHAS; then
   git cherry-pick --abort 2>/dev/null || true
-  git checkout "$CURRENT_BRANCH"
+  git checkout master-rf 2>/dev/null || true
   git branch -D "$UPSTREAM_BRANCH" 2>/dev/null || true
   echo "Cherry-pick failed due to conflicts. Run ./rf-scripts/open-upstream-pr.sh locally to resolve." >&2
   exit 1
