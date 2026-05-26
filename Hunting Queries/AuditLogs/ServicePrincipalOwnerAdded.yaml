@@ -15,10 +15,13 @@ query: |
   | where TimeGenerated >= ago(timeframe)
   | where OperationName =~ "Add owner to service principal"
   | where Result =~ "success"
-  | extend TargetSpName = tostring(TargetResources[0].displayName)
-  | extend TargetSpId   = tostring(TargetResources[0].id)
-  | extend NewOwnerUpn  = tostring(TargetResources[1].userPrincipalName)
-  | extend NewOwnerId   = tostring(TargetResources[1].id)
+  | mv-apply T = TargetResources on (
+        summarize
+            TargetSpName = take_anyif(tostring(T.displayName), tostring(T.type) =~ "ServicePrincipal"),
+            TargetSpId   = take_anyif(tostring(T.id), tostring(T.type) =~ "ServicePrincipal"),
+            NewOwnerUpn  = take_anyif(tostring(T.userPrincipalName), tostring(T.type) =~ "User"),
+            NewOwnerId   = take_anyif(tostring(T.id), tostring(T.type) =~ "User")
+    )
   | extend ActorUpn     = tostring(InitiatedBy.user.userPrincipalName)
   | extend ActorApp     = tostring(InitiatedBy.app.displayName)
   | extend Actor        = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
@@ -57,11 +60,11 @@ entityMappings:
         columnName: ActorIp
 version: 1.0.0
 metadata:
-    source:
-        kind: Community
-    author:
-        name: descambiado
-    support:
-        tier: Community
-    categories:
-        domains: [ "Security - Threat Protection", "Identity" ]
+  source:
+    kind: Community
+  author:
+    name: descambiado
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection", "Identity" ]
