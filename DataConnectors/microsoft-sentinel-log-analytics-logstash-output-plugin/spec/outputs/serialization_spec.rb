@@ -2,7 +2,10 @@
 require "rspec"
 require "json"
 
-$LOAD_PATH.unshift(File.expand_path("../support", __dir__))
+require_relative "../support/logstash/json"
+# Prevent library code from attempting to load logstash-core during specs.
+$LOADED_FEATURES << "logstash/json" unless $LOADED_FEATURES.include?("logstash/json")
+$LOADED_FEATURES << "logstash/json.rb" unless $LOADED_FEATURES.include?("logstash/json.rb")
 
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/logStashAutoResizeBuffer"

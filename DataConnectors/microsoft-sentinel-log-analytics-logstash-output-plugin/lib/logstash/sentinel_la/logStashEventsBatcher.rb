@@ -19,8 +19,9 @@ class LogStashEventsBatcher
     def batch_event_document(event_document)
         # todo: ensure the json serialization only occurs once. 
         current_document_size = LogStash::Json.dump(event_document).bytesize
-        if (current_document_size >= @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES - 1000)
-            @logger.error("Received document above the max allowed size - dropping the document [document size: #{current_document_size}, max allowed size: #{@buffer_config[:flush_each]}")
+        max_document_size = @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES - 1000
+        if (current_document_size >= max_document_size)
+            @logger.error("Received document above the max allowed size - dropping the document [document size: #{current_document_size}, max allowed size: #{max_document_size}]")
         else
             batch_event(event_document)
         end
