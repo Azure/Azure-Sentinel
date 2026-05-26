@@ -1,0 +1,40 @@
+id: e5f6a7b8-c9d0-1234-efab-345678901234
+name: Unauthenticated API Endpoint with Sensitive Data
+description: |
+  Detects internet-facing API endpoints with no authentication that handle
+  sensitive data classifications (PII, Financial, PHI, Confidential).
+  Uses StratoSecure_ApiInventory_CL from Phase 6 API inventory discovery.
+severity: Critical
+status: Available
+requiredDataConnectors:
+  - connectorId: StratoSecureFindings
+    dataTypes:
+      - StratoSecure_Findings_CL
+queryFrequency: 6h
+queryPeriod: 6h15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let sensitiveDataClasses = dynamic(["PII", "Financial", "PHI", "Confidential"]);
+  StratoSecure_ApiInventory_CL
+      | where TimeGenerated >= ago(6h)
+      | where InternetExposure == true
+      | where AuthType =~ "none" or isempty(AuthType)
+      | where DataClassification has_any (sensitiveDataClasses)
+      | summarize EndpointCount = count(), Endpoints = make_set(Path, 50),
+          Methods = make_set(Method), DataClasses = make_set(DataClassification),
+          EndTime = max(TimeGenerated)
+          by ApplicationId = ServiceName, StraTenantId
+      | project TimeGenerated = EndTime, ApplicationId, StraTenantId,
+          EndpointCount, Endpoints, Methods, DataClasses
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+version: 1.0.0
+kind: Scheduled
