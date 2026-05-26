@@ -1,11 +1,10 @@
 id: 95ba7476-e617-47fe-a3d8-20904ce721a0
-name: Gentlemen Ransomware Payload Execution and Staging
+name: Gentlemen Ransomware payload execution and staging
 description: |
   This query detects the presence, creation, or execution of known payloads involved in the EtherRAT, TukTuk, and Gentlemen ransomware intrusion chains.
 description-detailed: |
   References:
   https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware
-severity: High
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
@@ -75,7 +74,8 @@ query: |
     | extend timestamp = Timestamp
     // explicitly cast InitiatingProcessId to a string to satisfy the Process entity schema
     | extend ProcessIdString = tostring(InitiatingProcessId)
-    
+    | extend MatchedHash = coalesce(SHA256, SHA1, MD5, InitiatingProcessSHA256, InitiatingProcessSHA1, InitiatingProcessMD5)
+
     // STEP 3: Format the output for triage
     // ANALYST ACTION: Check the 'Action' column. If it is a FileCreation event, the malware is staging. If 'TargetFile' ends in .dll and 'Process' is a native Windows binary or non-malicious application (like Greenshot.exe), assume active DLL Sideloading and execute ransomware containment procedures immediately.
     | project timestamp, 
@@ -86,7 +86,7 @@ query: |
               Action = ActionType,
               TargetFile = FileName, 
               TargetFolder = FolderPath, 
-              SHA256,
+              MatchedHash,
               ProcessIdString
               
     // STEP 4: Visual Hierarchy
@@ -98,7 +98,7 @@ query: |
                       Action, 
                       TargetFile, 
                       TargetFolder,
-                      SHA256
+                      MatchedHash
     | sort by timestamp desc
 entityMappings:
   - entityType: Host
@@ -124,7 +124,7 @@ entityMappings:
   - entityType: FileHash
     fieldMappings:
       - identifier: Value
-        columnName: SHA256
+        columnName: MatchedHash
 customDetails:
   Staged_Payload: TargetFile
   Staged_Path: TargetFolder
