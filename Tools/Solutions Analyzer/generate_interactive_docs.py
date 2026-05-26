@@ -1229,6 +1229,7 @@ def _write_index_html(
         <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
         <div class="navbar-nav-links">
             <a href="{_docs_base_path}README{_link_extension}" class="nav-doc-link" title="Documentation home">📖 Docs</a>
+            <a href="{_docs_base_path}logic-apps/logic-apps-index{_link_extension}" class="nav-doc-link" title="Logic Apps Connectors">🔌 Logic Apps</a>
             <a href="{_docs_base_path}statistics{_link_extension}" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
             <a href="asim-browser.html" class="nav-doc-link" title="ASIM Schema Browser">🔎 ASIM Browser</a>
         </div>
