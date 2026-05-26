@@ -1,11 +1,10 @@
 id: 683b2baa-39c3-457d-b64e-2e57c8fc83ba
-name: BadUSB PowerShell execution via Windows Run dialog (HID injection)
+name: BadUSB HID injection PowerShell via Windows Run dialog
 description: |
-  Identifies PowerShell spawned by explorer.exe with a hidden window and remote
-  execution or evasion flags, consistent with BadUSB HID injection payloads that
-  open the Windows Run dialog via WIN+R. Keystroke injection via hardware sets
-  explorer.exe as the parent; pairing -WindowStyle Hidden with any cradle flag is
-  a reliable indicator of automated injection rather than interactive user activity.
+  Identifies PowerShell spawned by explorer.exe with a hidden window and a
+  remote-execution or evasion flag. Consistent with BadUSB HID injection opening
+  the Windows Run dialog via WIN+R; the explorer.exe parent is the keystroke-
+  injection signal.
 requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
@@ -24,7 +23,6 @@ query: |
       "-NoProfile",
       "-NonInteractive",
       "-EncodedCommand",
-      "-ExecutionPolicy Bypass",
       "DownloadString",
       "IEX",
       "Invoke-Expression",
@@ -37,10 +35,15 @@ query: |
   | where InitiatingProcessFileName =~ "explorer.exe"
   | where ProcessCommandLine has_all ("-WindowStyle", "Hidden")
   | where ProcessCommandLine has_any (EvasionFlags)
+      or ProcessCommandLine has_all ("-ExecutionPolicy", "Bypass")
+  | extend AccountCustomEntity = AccountName
+  | extend HostCustomEntity    = DeviceName
   | project
       TimeGenerated,
       DeviceName,
+      HostCustomEntity,
       AccountName,
+      AccountCustomEntity,
       AccountDomain,
       ProcessCommandLine,
       InitiatingProcessFileName,
@@ -51,13 +54,13 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: AccountName
+        columnName: AccountCustomEntity
       - identifier: NTDomain
         columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: DeviceName
+        columnName: HostCustomEntity
 version: 1.0.0
 metadata:
     source:
@@ -67,4 +70,4 @@ metadata:
     support:
         tier: Community
     categories:
-        domains: [ "Security - Threat Protection", "Endpoints" ]
+        domains: [ "Security - Threat Protection" ]
