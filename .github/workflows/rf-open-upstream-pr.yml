@@ -1,0 +1,187 @@
+name: Open upstream PR
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  open-upstream-pr:
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/open-upstream-pr'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Check commenter has write access
+        id: check-permission
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.payload.comment.user.login,
+            });
+            const level = data.permission;
+            if (!['write', 'admin'].includes(level)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `@${context.payload.comment.user.login} You need write access to trigger this command.`,
+              });
+              core.setFailed('Insufficient permissions.');
+            }
+
+      - name: Get PR branch name
+        id: pr-info
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('branch', pr.head.ref);
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-info.outputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch master and master-rf
+        run: |
+          git fetch origin master master-rf
+
+      - name: Derive upstream branch name
+        id: derive
+        run: |
+          CURRENT="${{ steps.pr-info.outputs.branch }}"
+          STRIPPED="${CURRENT#rf/}"
+          UPSTREAM="feat/${STRIPPED}"
+          echo "upstream_branch=$UPSTREAM" >> "$GITHUB_OUTPUT"
+
+      - name: Check if upstream branch already exists
+        id: check-exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = '${{ steps.derive.outputs.upstream_branch }}';
+            try {
+              await github.rest.repos.getBranch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                branch,
+              });
+              // Branch exists
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `Branch \`${branch}\` already exists on remote. Please delete it or handle manually, then re-trigger.`,
+              });
+              core.setFailed(`Branch ${branch} already exists.`);
+            } catch (e) {
+              if (e.status === 404) {
+                // Branch does not exist — good to proceed
+              } else {
+                throw e;
+              }
+            }
+
+      - name: Cherry-pick commits onto upstream branch
+        id: cherry-pick
+        run: |
+          chmod +x rf-scripts/lib/cherry-pick-to-upstream.sh
+          set +e
+          COMMIT_LIST=$(./rf-scripts/lib/cherry-pick-to-upstream.sh \
+            "${{ steps.pr-info.outputs.branch }}" \
+            "${{ steps.derive.outputs.upstream_branch }}" 2>&1)
+          EXIT_CODE=$?
+          set -e
+          # Make commit list available to later steps (escape for multiline)
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "commit_list<<$EOF" >> "$GITHUB_OUTPUT"
+          echo "$COMMIT_LIST" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
+
+      - name: Comment on failure
+        if: failure() && steps.cherry-pick.conclusion == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                '`/open-upstream-pr` failed — cherry-pick conflict.',
+                '',
+                'Please run the script locally to resolve:',
+                '```',
+                './rf-scripts/open-upstream-pr.sh',
+                '```',
+              ].join('\n'),
+            });
+
+      - name: Push upstream branch
+        id: push
+        run: |
+          TMP_FILE=$(mktemp)
+          git push -u origin "${{ steps.derive.outputs.upstream_branch }}" 2>&1 | tee "$TMP_FILE"
+          OUTPUT=$(cat "$TMP_FILE")
+          rm -f "$TMP_FILE"
+          PR_URL=$(echo "$OUTPUT" | grep -oE "https://github.com/.+/.+/pull/new/[^[:space:]]+" || true)
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Comment success and close PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const upstreamBranch = '${{ steps.derive.outputs.upstream_branch }}';
+            const prUrl = '${{ steps.push.outputs.pr_url }}';
+            const commitList = `${{ steps.cherry-pick.outputs.commit_list }}`;
+
+            const prLink = prUrl
+              ? `[Open PR towards Microsoft](${prUrl})`
+              : `https://github.com/${context.repo.owner}/${context.repo.repo}/compare/${upstreamBranch}`;
+
+            const body = [
+              '`/open-upstream-pr` succeeded. :rocket:',
+              '',
+              `**Upstream branch:** \`${upstreamBranch}\``,
+              `**${prLink}**`,
+              '',
+              '**Cherry-picked commits:**',
+              '```',
+              commitList,
+              '```',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              state: 'closed',
+            });

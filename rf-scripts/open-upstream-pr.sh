@@ -7,8 +7,9 @@ set -euo pipefail
 
 MASTER_BRANCH="master"
 INTERNAL_BRANCH="master-rf"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 red()   { echo -e "\033[0;31m$*\033[0m"; }
 green() { echo -e "\033[0;32m$*\033[0m"; }
@@ -16,7 +17,7 @@ bold()  { echo -e "\033[1m$*\033[0m"; }
 
 abort() { red "Error: $*"; exit 1; }
 
-# ── checks ───────────────────────────────────────────────────────────────────
+# ── checks ────────────────────────────────────────────────────────────────────
 
 git rev-parse --git-dir > /dev/null 2>&1 || abort "Not inside a git repository."
 
@@ -28,28 +29,15 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # ── derive upstream branch name ───────────────────────────────────────────────
 
-# Strip leading rf/ prefix if present, then prepend feat/
 STRIPPED="${CURRENT_BRANCH#rf/}"
 UPSTREAM_BRANCH="feat/${STRIPPED}"
 
-# ── find commits to cherry-pick ───────────────────────────────────────────────
-
-COMMITS=$(git log --oneline --reverse "$INTERNAL_BRANCH..HEAD")
-
-if [[ -z "$COMMITS" ]]; then
-  abort "No commits found between '$INTERNAL_BRANCH' and '$CURRENT_BRANCH'. Nothing to do."
-fi
-
-bold "\nCommits to be cherry-picked onto '$UPSTREAM_BRANCH':"
-echo "$COMMITS"
-echo ""
-
-# ── check if upstream branch already exists ──────────────────────────────────
+# ── check if upstream branch already exists ───────────────────────────────────
 
 LOCAL_EXISTS=false
 REMOTE_EXISTS=false
 
-git show-ref --verify --quiet "refs/heads/$UPSTREAM_BRANCH"       && LOCAL_EXISTS=true  || true
+git show-ref --verify --quiet "refs/heads/$UPSTREAM_BRANCH"          && LOCAL_EXISTS=true  || true
 git show-ref --verify --quiet "refs/remotes/origin/$UPSTREAM_BRANCH" && REMOTE_EXISTS=true || true
 
 if $LOCAL_EXISTS || $REMOTE_EXISTS; then
@@ -59,26 +47,16 @@ if $LOCAL_EXISTS || $REMOTE_EXISTS; then
   $REMOTE_EXISTS && git push origin --delete "$UPSTREAM_BRANCH" 2>/dev/null || true
 fi
 
-# ── create upstream branch from master ───────────────────────────────────────
+# ── run shared logic ──────────────────────────────────────────────────────────
 
-git fetch origin "$MASTER_BRANCH" --quiet
-git checkout -b "$UPSTREAM_BRANCH" "origin/$MASTER_BRANCH"
+bold "\nCommits to be cherry-picked onto '$UPSTREAM_BRANCH':"
 
-# ── cherry-pick commits ───────────────────────────────────────────────────────
-
-COMMIT_SHAS=$(git log --format="%H" --reverse "$INTERNAL_BRANCH..@{-1}")
-
-if ! git cherry-pick $COMMIT_SHAS; then
-  git cherry-pick --abort 2>/dev/null || true
-  git checkout "$CURRENT_BRANCH"
-  git branch -D "$UPSTREAM_BRANCH"
-  red "\nCherry-pick failed due to conflicts."
-  echo "Resolve conflicts manually:"
-  echo "  1. git checkout $UPSTREAM_BRANCH  (recreate manually or re-run after fixing)"
-  echo "  2. git cherry-pick <sha>"
-  echo "  3. Resolve conflicts, then: git cherry-pick --continue"
-  exit 1
+if ! COMMIT_LIST=$("$SCRIPT_DIR/lib/cherry-pick-to-upstream.sh" "$CURRENT_BRANCH" "$UPSTREAM_BRANCH"); then
+  abort "$(cat)"
 fi
+
+echo "$COMMIT_LIST"
+echo ""
 
 # ── push and open PR URL ──────────────────────────────────────────────────────
 
