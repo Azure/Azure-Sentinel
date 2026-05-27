@@ -350,6 +350,16 @@ class AzureStorageToSentinel:
             cleaned_refs = []
             for ref in references:
                 entity = ref.get("entity")
+                event = ref.get("event")
+                if isinstance(event, dict):
+                    principal = event.get("principal")
+                    if isinstance(principal, dict):
+                        ip_geo = principal.get("ipGeoArtifact")
+                        if isinstance(ip_geo, list) and len(ip_geo) > 100:
+                            principal = {**principal, "ipGeoArtifact": ip_geo[:100]}
+                        principal = {k: v for k, v in principal.items() if k != "labels"}
+                        event = {**event, "principal": principal}
+                    ref = {**ref, "event": event}
                 if isinstance(entity, dict):
                     entity = {k: v for k, v in entity.items() if k != "additional"}
                     metadata = entity.get("metadata")
