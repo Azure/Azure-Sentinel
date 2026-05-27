@@ -1,0 +1,81 @@
+id: 3140d3e9-f87c-48aa-8d81-1b78b6c5d7bf
+name: Sign-in from unseen IP within 60 minutes of MFA disabled for account
+description: Identifies successful sign-ins from IP addresses not seen in the prior 30 days occurring within 60 minutes of MFA being disabled for the same account, consistent with post-compromise credential use after weakening authentication.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1556.006
+  - T1078.004
+query: |
+  let timeframe = 1d;
+  let correlationWindow = 60m;
+  let lookback = 30d;
+  let DisabledMFA =
+      AuditLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where OperationName in~ (
+            "Disable Strong Authentication",
+            "User deleted security info"
+        )
+      | where Result =~ "success"
+      | extend AffectedUser = tolower(tostring(TargetResources[0].userPrincipalName))
+      | where isnotempty(AffectedUser)
+      | project AffectedUser, MFADisabledTime = TimeGenerated;
+  let KnownIPs =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where ResultType == 0
+      | project UserPrincipalName = tolower(UserPrincipalName), IPAddress
+      | summarize KnownIPSet = make_set(IPAddress, 1000)
+          by UserPrincipalName;
+  SigninLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where ResultType == 0
+  | extend UserUpn = tolower(UserPrincipalName)
+  | join kind=inner DisabledMFA on $left.UserUpn == $right.AffectedUser
+  | where TimeGenerated >= MFADisabledTime and TimeGenerated <= MFADisabledTime + correlationWindow
+  | join kind=leftouter KnownIPs on $left.UserUpn == $right.UserPrincipalName
+  | where isnull(KnownIPSet) or not(set_has_element(KnownIPSet, IPAddress))
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      TimeGenerated,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      MFADisabledTime,
+      IPAddress,
+      AppDisplayName,
+      Location,
+      AutonomousSystemNumber,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

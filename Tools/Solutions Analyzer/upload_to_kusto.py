@@ -66,6 +66,7 @@ SOLUTION_ANALYZER_FILES: List[Tuple[str, str]] = [
     ("solutions_connectors_tables_mapping_simplified.csv", "solution_analyzer_mapping"),
     ("solutions_connectors_tables_mapping.csv", "solution_analyzer_full_mapping"),
     ("content_tables_mapping.csv", "solution_analyzer_content_tables_mapping"),
+    ("playbook_connectors.csv", "solution_analyzer_playbook_connectors"),
     ("parsers.csv", "solution_analyzer_parsers_lookup"),
     ("asim_parsers.csv", "solution_analyzer_asim_parsers_lookup"),
     ("solution_dependencies.csv", "solution_analyzer_solution_dependencies"),
