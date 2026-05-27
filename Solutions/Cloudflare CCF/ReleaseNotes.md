@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |------------|-------------------------------|--------------------|
+| 3.0.3      | 11-05-2026                    | Modified workbook file and fixed workbook metadata to reference Cloudflare parser and CCF connector; added deployment prerequisites note to connector description |
 | 3.0.2      | 22-04-2026                    | Fixed DCR transformKql for Type field and corrected invalid field data types |
 | 3.0.1      | 08-12-2025                    | Fixed invalid GUIDs, updated analytic rules, aligned URL entity mappings with legacy Cloudflare solution |
 | 3.0.0      | 02-10-2025                    | Includes all CCF connector definitions and configurations. |
