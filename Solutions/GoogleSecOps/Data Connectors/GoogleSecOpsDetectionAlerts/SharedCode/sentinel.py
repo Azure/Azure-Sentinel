@@ -8,7 +8,7 @@ stream name configured as environment variables.
 import inspect
 import json
 
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, AzureAuthorityHosts
 from azure.monitor.ingestion import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
 
@@ -22,11 +22,19 @@ def _get_credential():
     __method_name = inspect.currentframe().f_code.co_name
 
     client_id = consts.AZURE_CLIENT_ID
-    credential = ClientSecretCredential(
-        client_id=client_id,
-        client_secret=consts.AZURE_CLIENT_SECRET,
-        tenant_id=consts.AZURE_TENANT_ID,
-    )
+    if ".us" in consts.SCOPE:
+        credential = ClientSecretCredential(
+            client_id=client_id,
+            client_secret=consts.AZURE_CLIENT_SECRET,
+            tenant_id=consts.AZURE_TENANT_ID,
+            authority=AzureAuthorityHosts.AZURE_GOVERNMENT,
+        )
+    else:
+        credential = ClientSecretCredential(
+            client_id=client_id,
+            client_secret=consts.AZURE_CLIENT_SECRET,
+            tenant_id=consts.AZURE_TENANT_ID,
+        )
     applogger.debug(
         consts.LOG_FORMAT.format(
             consts.LOG_PREFIX,
