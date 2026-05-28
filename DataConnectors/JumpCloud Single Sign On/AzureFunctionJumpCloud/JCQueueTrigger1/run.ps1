@@ -64,7 +64,8 @@ do {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Content-Type", "application/json")
     $headers.Add("x-api-key", "$JCapiToken")
-    $headers.Add("x-org-id", "$JCOrgId")  # Add this line here
+    # JumpCloud org scoping header required by the API.
+    $headers.Add("x-org-id", "$JCOrgId")
     #create $body for request
     $body = '{"service": ["'+ $JCService + '"], ' 
     if ('' -ne $JCSearchAfter){ 
