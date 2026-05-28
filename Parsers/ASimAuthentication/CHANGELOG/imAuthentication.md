@@ -1,5 +1,13 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.12
+
+- (2026-05-05) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
+
+## Version 0.3.11
+
+- (2026-04-29) Add parser Cisco DNAC events from Syslog - [PR #14135](https://github.com/Azure/Azure-Sentinel/pull/14135)
+
 ## Version 0.3.10
 
 - (2026-04-09) Add parser Cisco ISE administrator events from Syslog - [PR #13909](https://github.com/Azure/Azure-Sentinel/pull/13909)

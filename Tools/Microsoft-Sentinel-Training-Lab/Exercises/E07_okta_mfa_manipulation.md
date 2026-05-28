@@ -1,9 +1,8 @@
 # Exercise 7 — Okta MFA Factor Manipulation
 
-**Rule:** `[E3] [Okta] MFA Factor Manipulation` _(the `[E3]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1556.006 (Modify Authentication Process: Multi-Factor Authentication)
-**Difficulty:** Intermediate
+**Rule:** `Lab Stage E3 - MFA Factor Manipulation (Okta)`  
+**Difficulty:** Intermediate  
+**Prerequisites:** None
 
 ---
 
@@ -82,7 +81,7 @@ OktaV2_CL
 
 ### Step 2 — Review the Detection Query
 
-Open the rule `[E3] [Okta] MFA Factor Manipulation` in Advanced Hunting and examine the query. Notice:
+Open the rule `Lab Stage E3 - MFA Factor Manipulation (Okta)` in Advanced Hunting and examine the query. Notice:
 
 - It filters for three MFA-related event types
 - It only alerts on successful operations
@@ -142,3 +141,9 @@ This correlates a foreign login with a subsequent MFA change within 30 minutes �
 - [Advanced hunting identity tables](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-identitylogonevents-table)
 - [MITRE T1556.006 — Modify Authentication Process: MFA](https://attack.mitre.org/techniques/T1556/006/)
 - [Custom detection rules](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 8 — Watchlist Integration](./E08_watchlist_integration.md)**

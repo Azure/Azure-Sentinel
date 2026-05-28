@@ -212,3 +212,9 @@ The AI will call your `firewall_denied_connections` tool with `Lookback = 24h` a
 - [Get started with Microsoft Sentinel MCP server](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started) — overview & prerequisites
 - [Create and use custom Microsoft Sentinel MCP tools](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-create-custom-tool) — custom tool authoring
 
+---
+
+## Next Steps
+
+Continue to **[Exercise 15 — Data Federation with ADLS Gen2](./E15_federation_adls.md)**
+

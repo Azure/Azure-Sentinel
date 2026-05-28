@@ -5,48 +5,23 @@
         "scheduleStartTime": {
             "type": "string",
             "metadata": {
-                "description": "UTC start time for the one-time detection-rules schedule (should run before data ingestion)"
+                "description": "UTC start time for the one-time detection-rules schedule"
             }
         },
         "userAssignedIdentityResourceId": {
             "type": "string",
-            "defaultValue": "",
             "metadata": {
-                "description": "Full resource ID of a pre-created User-Assigned Managed Identity that has been granted the Microsoft Graph CustomDetection.ReadWrite.All application permission. Required when using Managed Identity auth (leave SPN params empty)."
-            }
-        },
-        "spnTenantId": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Microsoft Entra tenant ID for service principal authentication. Provide together with spnClientId and spnClientSecret to use SPN auth instead of Managed Identity."
-            }
-        },
-        "spnClientId": {
-            "type": "string",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Application (client) ID of the service principal with CustomDetection.ReadWrite.All permission."
-            }
-        },
-        "spnClientSecret": {
-            "type": "securestring",
-            "defaultValue": "",
-            "metadata": {
-                "description": "Client secret of the service principal."
+                "description": "Full resource ID of a pre-created User-Assigned Managed Identity with Microsoft Graph CustomDetection.ReadWrite.All permission."
             }
         }
     },
     "variables": {
         "automationAccountName": "[concat('sentineldetections', uniqueString(resourceGroup().id))]",
         "runbookName": "DeployDetectionRules",
-        "scheduleName": "[concat('DeployDetectionRulesOnce-', uniqueString(resourceGroup().id, parameters('scheduleStartTime')))]",
-        "useSpn": "[and(not(empty(parameters('spnTenantId'))), not(empty(parameters('spnClientId'))), not(empty(parameters('spnClientSecret'))))]",
-        "useManagedIdentity": "[and(not(variables('useSpn')), not(empty(parameters('userAssignedIdentityResourceId'))))]"
+        "scheduleName": "[concat('DeployDetectionRulesOnce-', uniqueString(resourceGroup().id, parameters('scheduleStartTime')))]"
     },
     "resources": [
         {
-            "condition": "[variables('useManagedIdentity')]",
             "type": "Microsoft.Automation/automationAccounts",
             "apiVersion": "2023-11-01",
             "name": "[variables('automationAccountName')]",
@@ -54,21 +29,9 @@
             "identity": {
                 "type": "UserAssigned",
                 "userAssignedIdentities": {
-                    "[if(variables('useManagedIdentity'), parameters('userAssignedIdentityResourceId'), 'placeholder')]": {}
+                    "[parameters('userAssignedIdentityResourceId')]": {}
                 }
             },
-            "properties": {
-                "sku": {
-                    "name": "Basic"
-                }
-            }
-        },
-        {
-            "condition": "[variables('useSpn')]",
-            "type": "Microsoft.Automation/automationAccounts",
-            "apiVersion": "2023-11-01",
-            "name": "[variables('automationAccountName')]",
-            "location": "[resourceGroup().location]",
             "properties": {
                 "sku": {
                     "name": "Basic"
@@ -106,7 +69,6 @@
             }
         },
         {
-            "condition": "[variables('useManagedIdentity')]",
             "type": "Microsoft.Automation/automationAccounts/variables",
             "apiVersion": "2023-11-01",
             "name": "[concat(variables('automationAccountName'), '/DetectionRulesManagedIdentityClientId')]",
@@ -115,46 +77,7 @@
             ],
             "properties": {
                 "isEncrypted": false,
-                "value": "[if(variables('useManagedIdentity'), concat('\"', reference(parameters('userAssignedIdentityResourceId'), '2023-01-31').clientId, '\"'), '\"\"')]"
-            }
-        },
-        {
-            "condition": "[variables('useSpn')]",
-            "type": "Microsoft.Automation/automationAccounts/variables",
-            "apiVersion": "2023-11-01",
-            "name": "[concat(variables('automationAccountName'), '/DetectionRulesTenantId')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
-            ],
-            "properties": {
-                "isEncrypted": false,
-                "value": "[concat('\"', parameters('spnTenantId'), '\"')]"
-            }
-        },
-        {
-            "condition": "[variables('useSpn')]",
-            "type": "Microsoft.Automation/automationAccounts/variables",
-            "apiVersion": "2023-11-01",
-            "name": "[concat(variables('automationAccountName'), '/DetectionRulesClientId')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
-            ],
-            "properties": {
-                "isEncrypted": false,
-                "value": "[concat('\"', parameters('spnClientId'), '\"')]"
-            }
-        },
-        {
-            "condition": "[variables('useSpn')]",
-            "type": "Microsoft.Automation/automationAccounts/variables",
-            "apiVersion": "2023-11-01",
-            "name": "[concat(variables('automationAccountName'), '/DetectionRulesClientSecret')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Automation/automationAccounts', variables('automationAccountName'))]"
-            ],
-            "properties": {
-                "isEncrypted": true,
-                "value": "[concat('\"', parameters('spnClientSecret'), '\"')]"
+                "value": "[concat('\"', reference(parameters('userAssignedIdentityResourceId'), '2023-01-31').clientId, '\"')]"
             }
         },
         {
@@ -174,6 +97,5 @@
                 }
             }
         }
-    ],
-    "outputs": {}
+    ]
 }
