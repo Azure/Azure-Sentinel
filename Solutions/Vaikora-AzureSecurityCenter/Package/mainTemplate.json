@@ -91,7 +91,7 @@
   "variables": {
     "_email": "[variables('email')]",
     "_solutionName": "VaikoraSecurityCenter",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.2",
     "_solutionId": "[variables('solutionId')]",
     "logAnalyticsConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
     "playbookVersion1": "1.0.0",
@@ -325,7 +325,7 @@
                       "type": "Query",
                       "inputs": {
                         "from": "@body('Parse_Response')?['actions']",
-                        "where": "@or(or(equals(item()?['severity'], 'high'), equals(item()?['severity'], 'critical')), or(equals(item()?['is_anomaly'], true), equals(item()?['threat_detected'], true)))"
+                        "where": "@or(or(equals(item()?['severity'], 'high'), equals(item()?['severity'], 'critical')), equals(item()?['is_anomaly'], true))"
                       },
                       "runAfter": {
                         "Parse_Response": [
@@ -489,7 +489,7 @@
                 "description": "Identifies high or critical severity security alerts ingested from Vaikora in the last 6 hours, indicating active threats such as malware activity, intrusion attempts, or policy violations.",
                 "displayName": "Vaikora - High severity security alerts",
                 "enabled": false,
-                "query": "Vaikora_SecurityAlerts_CL\n| where TimeGenerated >= ago(6h)\n| where Severity_s in (\"high\", \"critical\")\n| extend AlertId=AlertId_s, AgentId=AgentId_s, ActionType=ActionType_s, Severity=Severity_s, Title=Title_s, Description=Description_s, SourceIP=SourceIP, DestinationIP=DestinationIP_s, SourceHost=SourceHost_s, DestHost=DestinationHost_s, ProcessName=ProcessName_s, UserName=UserName_s, FilePath=FilePath_s, Confidence=ConfidenceScore_d, ThreatFlag=ThreatDetected_b, AnomalyFlag=IsAnomaly_b\n| project TimeGenerated, AlertId, AgentId, ActionType, Severity, Title, Description, SourceIP, DestinationIP, SourceHost, DestHost, ProcessName, UserName, FilePath, Confidence, ThreatFlag, AnomalyFlag\n| order by TimeGenerated desc",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated >= ago(6h)\n| where severity_s in (\"high\", \"critical\")\n| extend ActionId=action_id_s, AgentId=agent_id_s, ActionType=action_type_s, Severity=severity_s, Status=status_s, IsAnomaly=is_anomaly_b, AnomalyScore=anomaly_score_d\n| project TimeGenerated, ActionId, AgentId, ActionType, Severity, Status, IsAnomaly, AnomalyScore\n| order by TimeGenerated desc",
                 "queryFrequency": "PT6H",
                 "queryPeriod": "PT6H",
                 "severity": "High",
@@ -502,7 +502,7 @@
                   {
                     "connectorId": "VaikoraSecurityCenter",
                     "dataTypes": [
-                      "Vaikora_SecurityAlerts_CL"
+                      "Vaikora_AgentSignals_CL"
                     ]
                   }
                 ],
@@ -518,46 +518,19 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Address",
-                        "columnName": "SourceIP"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "IP",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Address",
-                        "columnName": "DestinationIP"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "Host",
-                    "fieldMappings": [
-                      {
-                        "identifier": "HostName",
-                        "columnName": "SourceHost"
-                      }
-                    ]
-                  },
-                  {
                     "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
-                        "columnName": "UserName"
+                        "columnName": "AgentId"
                       }
                     ]
                   }
                 ],
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Vaikora {{Severity_s}} Alert: {{Title_s}}",
-                  "alertDescriptionFormat": "Vaikora detected a {{Severity_s}} severity event on agent {{AgentId_s}}. {{Description_s}}",
-                  "alertSeverityColumnName": "Severity_s"
+                  "alertDisplayNameFormat": "Vaikora {{severity_s}} agent action: {{action_type_s}}",
+                  "alertDescriptionFormat": "Vaikora detected a {{severity_s}} severity action on agent {{agent_id_s}}.",
+                  "alertSeverityColumnName": "severity_s"
                 }
               }
             },
@@ -658,7 +631,7 @@
                 "description": "Identifies actions flagged as anomalies or confirmed threats by Vaikora. Catches behavioral anomalies that fall below high/critical severity but still represent statistically unusual activity worth investigating.",
                 "displayName": "Vaikora - Anomaly detection",
                 "enabled": false,
-                "query": "Vaikora_SecurityAlerts_CL\n| where TimeGenerated >= ago(6h)\n| where IsAnomaly_b == true or ThreatDetected_b == true\n| where Severity_s !in (\"high\", \"critical\")\n| extend AlertId=AlertId_s, AgentId=AgentId_s, ActionType=ActionType_s, Severity=Severity_s, Title=Title_s, Description=Description_s, SourceIP=SourceIP, DestinationIP=DestinationIP_s, SourceHost=SourceHost_s, UserName=UserName_s, Confidence=ConfidenceScore_d, ThreatFlag=ThreatDetected_b, AnomalyFlag=IsAnomaly_b\n| project TimeGenerated, AlertId, AgentId, ActionType, Severity, Title, Description, SourceIP, DestinationIP, SourceHost, UserName, Confidence, ThreatFlag, AnomalyFlag\n| order by Confidence desc, TimeGenerated desc",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated >= ago(6h)\n| where is_anomaly_b == true\n| where severity_s !in (\"high\", \"critical\")\n| extend ActionId=action_id_s, AgentId=agent_id_s, ActionType=action_type_s, Severity=severity_s, Status=status_s, AnomalyScore=anomaly_score_d\n| project TimeGenerated, ActionId, AgentId, ActionType, Severity, Status, AnomalyScore\n| order by AnomalyScore desc, TimeGenerated desc",
                 "queryFrequency": "PT6H",
                 "queryPeriod": "PT6H",
                 "severity": "Medium",
@@ -671,7 +644,7 @@
                   {
                     "connectorId": "VaikoraSecurityCenter",
                     "dataTypes": [
-                      "Vaikora_SecurityAlerts_CL"
+                      "Vaikora_AgentSignals_CL"
                     ]
                   }
                 ],
@@ -683,29 +656,11 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
-                    "fieldMappings": [
-                      {
-                        "identifier": "Address",
-                        "columnName": "SourceIP"
-                      }
-                    ]
-                  },
-                  {
-                    "entityType": "Host",
-                    "fieldMappings": [
-                      {
-                        "identifier": "HostName",
-                        "columnName": "SourceHost"
-                      }
-                    ]
-                  },
-                  {
                     "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
-                        "columnName": "UserName"
+                        "columnName": "AgentId"
                       }
                     ]
                   }
@@ -806,10 +761,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Identifies when no Vaikora data has arrived in the Vaikora_SecurityAlerts_CL table for 12 or more hours, which may indicate a failed playbook, expired API key, or connectivity issue.",
+                "description": "Identifies when no Vaikora data has arrived in the Vaikora_AgentSignals_CL table for 12 or more hours, which may indicate a failed playbook, expired API key, or connectivity issue.",
                 "displayName": "Vaikora - Feed outage detection",
                 "enabled": false,
-                "query": "Vaikora_SecurityAlerts_CL\n| where TimeGenerated >= ago(12h)\n| summarize Count = count()\n| where Count == 0\n| extend Alert=\"No Vaikora data ingested in the last 12 hours\", Suggestion=\"Check the VaikoraToAzureSecurityCenter Logic App run history and verify the Vaikora API key is valid.\"\n| project Alert, Suggestion",
+                "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated >= ago(12h)\n| summarize Count = count()\n| where Count == 0\n| extend Alert=\"No Vaikora data ingested in the last 12 hours\", Suggestion=\"Check the VaikoraToAzureSecurityCenter Logic App run history and verify the Vaikora API key is valid.\"\n| project Alert, Suggestion",
                 "queryFrequency": "PT12H",
                 "queryPeriod": "PT12H",
                 "severity": "Low",
@@ -822,7 +777,7 @@
                   {
                     "connectorId": "VaikoraSecurityCenter",
                     "dataTypes": [
-                      "Vaikora_SecurityAlerts_CL"
+                      "Vaikora_AgentSignals_CL"
                     ]
                   }
                 ]
@@ -910,7 +865,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Vaikora Security Center",
         "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
-        "descriptionHtml": "<p>The Vaikora Security Center solution integrates Vaikora AI-driven security signal detection with Microsoft Sentinel and Azure Defender for Cloud via a Logic App playbook that polls the Vaikora API and writes qualifying alerts to the Vaikora_SecurityAlerts_CL custom table.</p>",
+        "descriptionHtml": "<p>The Vaikora Security Center solution integrates Vaikora AI-driven security signal detection with Microsoft Sentinel and Azure Defender for Cloud via a Logic App playbook that polls the Vaikora API and writes qualifying alerts to the Vaikora_AgentSignals_CL custom table.</p>",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
         "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/vaikora_logo.svg\" width=\"75px\" height=\"75px\">",
