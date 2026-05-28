@@ -1,4 +1,4 @@
-# BitSight Risk Findings CCF Data Connector
+# BitSight Risk Findings Data Connector
 * [Introduction](#Introduction)
 * [Description](#Description)
 * [Folders](#Folders)
@@ -127,8 +127,8 @@ BitsightRiskFindings_CL
 - The package is intentionally limited to the ten agreed monitoring factors and **WARN/BAD** findings only.
 - If **FAIR** findings are needed later, update the DCR transform filter and the related documentation.
 
-This version configures CCF paging to follow the BitSight `links.next` value returned in findings responses.
+This version configures paging to follow the BitSight `links.next` value returned in findings responses.
 
-This version configures BitSight findings paging with `$.links.next` and the `offset` query parameter, which matches the CCF NextPageUrl runtime requirements for this API pattern.
+This version configures BitSight findings paging with `$.links.next` and the `offset` query parameter, which matches the NextPageUrl runtime requirements for this API pattern.
 
-This version uses BitSight findings pagination through the documented `limit` and `offset` query parameters, implemented in CCF with `pagingType: Offset`.
+This version uses BitSight findings pagination through the documented `limit` and `offset` query parameters, implemented in with `pagingType: Offset`.
