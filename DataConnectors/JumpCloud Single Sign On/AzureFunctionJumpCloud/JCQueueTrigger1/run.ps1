@@ -22,7 +22,7 @@ import-module AzTable
 # Retrieve Environment Variables and prep other Variables for the JumpCloud API request
 $JCService = $QueueItem                         #Which eventlog set to rerieve from JumpCloud
 $JCapiToken = $env:JumpCloudApiToken            #JumpCloud API
-$JCOrgId = $env:JumpCloudOrgId                  # Add this line: JumpCloud Org ID
+$JCOrgId = $env:JumpCloudOrgId                  #JumpCloud org scoping header required by API
 $JCuri = $env:JumpCloudUri                      #Standard JumpCloud URI
 #$JCStartTime = $env:JumpCloudStartTime          #Initial Start time to collect logs
 $AzureWebJobsStorage =$env:AzureWebJobsStorage  #Storage Account to use for table to maintain state for log queries between executions
