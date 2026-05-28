@@ -163,6 +163,11 @@ connector-docs/
 │   ├── asim-index.md            # ASIM parsers organized by schema
 │   ├── asim-products-index.md   # ASIM parsers organized by product
 │   └── {parser-name}.md         # Individual ASIM parser pages
+├── logic-apps/                  # Logic Apps connectors / built-in actions
+│   ├── logic-apps-index.md      # Index of all managed/custom connectors and built-in action types referenced by playbooks, with playbook count, solution count, and a Microsoft Learn link when available
+│   ├── managed-{name}.md        # Per-managed-connector page listing every playbook + solution that uses it
+│   ├── custom-{name}.md         # Per-custom-connector page
+│   └── builtin-{name}.md        # Per-built-in-action page (Http, Function, Workflow, ApiManagement)
 ├── solutions/                   # Individual solution pages
 │   ├── 1password.md
 │   ├── aws-cloudfront.md

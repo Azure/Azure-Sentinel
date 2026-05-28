@@ -23,6 +23,7 @@ $standardStreamMapping += @{ Key = 'SENTINEL_NETWORK_SESSION_WINDOWS_FIREWALL_AM
 $standardStreamMapping += @{ Key = 'SENTINEL_PROCESS_EVENTS'; Value = 'Microsoft-ASimProcessEventLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_REGISTRY_EVENTS'; Value = 'Microsoft-ASimRegistryEventLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_USER_MANAGEMENT_ACTIVITY_LOGS'; Value = 'Microsoft-ASimUserManagementActivityLogs' }
+$standardStreamMapping += @{ Key = 'SENTINEL_AGENT_EVENT'; Value = 'Microsoft-ASimAgentEventLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_WEB_SESSION_LOGS'; Value = 'Microsoft-ASimWebSessionLogs' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDTRAIL'; Value = 'Microsoft-AWSCloudTrail' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSCLOUDWATCH'; Value = 'Microsoft-AWSCloudWatch' }
