@@ -1,7 +1,7 @@
 # Permissions Configuration
 
 This document provides detailed steps to configure the required permissions for the Logic Apps:  
-`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-saml-provider`.
+`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-user`.
 
 ---
 
@@ -23,7 +23,7 @@ This document provides detailed steps to configure the required permissions for 
 
 ---
 
-## 2. Grant Key Vault Secrets User Permission on the Key Vault
+## 2. Grant Key Vault Secrets Officer Permission on the Key Vault
 
 ### Steps:
 1. Navigate to the **Azure Portal**.
@@ -40,7 +40,7 @@ This document provides detailed steps to configure the required permissions for 
 4. If **RBAC (Role-Based Access Control)** is enabled:
    - Go to the **Access Control (IAM)** section.
    - Click on **Add Role Assignment**.
-   - In the **Role** dropdown, select **Key Vault Secrets Officer**.
+   - In the **Role** dropdown, select **Key Vault Secrets User**.
    - In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
    - Search for the **Managed Identity** of each Logic App:
      - `logic-app-disable-data-aging`

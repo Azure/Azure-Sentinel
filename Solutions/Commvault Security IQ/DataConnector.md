@@ -28,8 +28,10 @@ This guide provides instructions to configure the **Commvault Cloud Data Connect
 
 | Parameter | Description |
 |-----------|-------------|
+| **Function Name** | (Optional) Name prefix for the Azure Function App. Defaults to `CommvaultCloud` |
 | **Workspace Name** | Name of your Microsoft Sentinel Log Analytics workspace |
 | **Key Vault Name** | Name of the existing Key Vault containing Commvault credentials |
+| **Hosting Plan Type** | (Optional) `Consumption` (default) for serverless pay-per-execution, or `FlexConsumption` for faster cold starts and configurable instance memory |
 
 ---
 
@@ -37,6 +39,12 @@ This guide provides instructions to configure the **Commvault Cloud Data Connect
 1. Review the deployment details to ensure all parameters are correct.
 2. Click **Review + Create** to validate the configuration.
 3. Once validation is complete, click **Create** to deploy the connector.
+
+---
+
+#### 5. Monitor the Deployment
+1. Wait for the deployment to complete. This may take a few minutes.
+2. Once the deployment is complete, you will see a **Deployment succeeded** notification in the Azure Portal.
 
 ---
 

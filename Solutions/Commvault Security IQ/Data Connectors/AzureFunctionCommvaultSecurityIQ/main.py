@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -28,10 +27,6 @@ cs = os.environ.get("AzureWebJobsStorage")
 if cs is None:
     raise ValueError("AzureWebJobsStorage environment variable is not set.")
 
-backfill_days = int(
-    os.environ.get("NumberOfDaysToBackfill", "7")
-)  # Default to 7 days if not specified
-
 # Azure Monitor Logs Ingestion API configuration
 data_collection_endpoint = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
 if data_collection_endpoint is None:
@@ -47,8 +42,6 @@ stream_name = f"Custom-{sentinel_table_name}"
 key_vault_name = os.environ.get("KeyVaultName")
 if key_vault_name is None:
     raise ValueError("KeyVaultName environment variable is not set.")
-
-showAllEvents = os.environ.get("ShowAllEvents", "false").lower()
 
 url = None
 access_token = None
@@ -146,7 +139,6 @@ def upload_to_sentinel(
     Args:
         logs_client: LogsIngestionClient instance
         logs: List of log dictionaries to upload
-        chunk_count: Number of events being uploaded (for logging)
     """
     try:
         events_count = len(logs)
@@ -178,37 +170,9 @@ def upload_to_sentinel(
 
 
 def gen_chunks(data: list[dict[str, Any]], logs_client: LogsIngestionClient):
-    """Filter and upload data to Microsoft Sentinel"""
-    target_event_codes = {
-        "7:211",
-        "7:212",
-        "7:293",
-        "7:269",
-        "14:337",
-        "14:338",
-        "69:59",
-        "7:333",
-        "69:60",
-        "35:5575",
-        "35:5636",
-        "7:349",
-        "17:193",
-        "17:195",
-        "69:65",
-        "69:66",
-    }
-
-    if showAllEvents == "true":
-        filtered = [row for row in data if row]
-    else:
-        filtered = [
-            row for row in data if row and row.get("EventCode") in target_event_codes
-        ]
-
-    logging.info(
-        f"Total events after filtering: {len(filtered)}. showAllEvents={showAllEvents}"
-    )
-
+    """Upload normalized anomaly data to Microsoft Sentinel."""
+    filtered = [row for row in data if row]
+    logging.info(f"Total anomaly events to upload: {len(filtered)}")
     if filtered:
         upload_to_sentinel(logs_client, filtered)
 
@@ -233,7 +197,7 @@ def upload_timestamp_blob(connection_string, container_name, blob_name, timestam
         blob_client.upload_blob(timestamp_str, overwrite=True)
         logging.info(f"Timestamp data uploaded to blob: {blob_name}")
     except Exception as e:
-        logging.info(f"An error occurred: {str(e)}")
+        logging.error(f"An error occurred writing checkpoint blob: {str(e)}")
 
 
 def read_blob(connection_string, container_name, blob_name):
@@ -264,67 +228,96 @@ def read_blob(connection_string, container_name, blob_name):
         raise
 
 
-def extract_client_from_description(description: str) -> str | None:
-    """Extract computer/client name from description using regex patterns."""
-    patterns = [
-        r"on the machine \[([^\]]+)\]",
-        r"on client \[([^\]]+)\]",
-        r"for client \[([^\]]+)\]",
-        r"client \[([^\]]+)\]",
-        r"machine \[([^\]]+)\]",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, description)
-        if match:
-            return match.group(1)
-    return None
+def to_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
-def extract_hidden_info_from_description(description: str) -> dict[str, str | None]:
-    """Extract hidden information from description within <span style="display: none"> tags."""
-    hidden_info: dict[str, str | None] = {}
+def decode_anomaly_type(anomaly_type: int) -> list[str]:
+    """Decode bitmask anomaly type into human-readable flags.
 
-    # Find content inside <span style="display: none">...</span>
-    span_pattern = r'<span\s+style\s*=\s*["\']display:\s*none["\']>\s*([^<]+)\s*</span>'
-    span_match = re.search(span_pattern, description, re.IGNORECASE)
-
-    if not span_match:
-        return hidden_info
-
-    span_content = span_match.group(1)
-
-    # Extract clientId and clientName from within the hidden span
-    patterns = {
-        "clientId": r"ClientId:\[([^\]]+)\]",
-        "hostName": r"ClientName:\[([^\]]+)\]",
+    ANOMALY_FILE_ACTIVITY (15) is a composite of the four individual file-op
+    flags (1|2|4|8). When all four are set we emit only the composite name to
+    avoid redundant entries in the description.
+    """
+    FILE_OP_MASKS = {
+        "ANOMALY_CREATED": 1,
+        "ANOMALY_RENAMED": 2,
+        "ANOMALY_MODIFIED": 4,
+        "ANOMALY_DELETED": 8,
     }
-    for key, pattern in patterns.items():
-        match = re.search(pattern, span_content)
-        if match:
-            hidden_info[key] = str(match.group(1))
+    COMPOSITE_MASKS = {
+        "ANOMALY_FILE_ACTIVITY": 15,
+        "ANOMALY_APPLICATION_SIZE": 16,
+        "ANOMALY_MIME_CLASSIFICATION": 32,
+        "ANOMALY_RANSOMWARE": 64,
+        "ANOMALY_FILE_DATA": 128,
+        "ANOMALY_FILE_EXTENSION": 512,
+        "ANOMALY_BACKUP_SIZE": 1024,
+        "ANOMALY_DATA_WRITTEN": 4096,
+        "ANOMALY_VSA_DATA": 8192,
+        "ANOMALY_THIRD_PARTY_SOFTWARES": 65536,
+    }
+    decoded: list[str] = []
 
-    return hidden_info
+    # Composite flags first
+    for key, mask in COMPOSITE_MASKS.items():
+        if anomaly_type & mask == mask:
+            decoded.append(key)
+
+    # Only add individual file-op flags when the full composite (15) is NOT set
+    if anomaly_type & 15 != 15:
+        for key, mask in FILE_OP_MASKS.items():
+            if anomaly_type & mask == mask:
+                decoded.append(key)
+
+    return decoded
 
 
-def normalize_event(event: dict[str, Any]) -> dict[str, Any]:
-    client_entity = event.get("clientEntity") or {}
-    client_name = extract_client_from_description(
-        event.get("description", "")
-    ) or client_entity.get("clientName", "")
-    hidden_info = extract_hidden_info_from_description(event.get("description", ""))
+
+
+def normalize_anomaly(anomaly: dict[str, Any]) -> dict[str, Any]:
+    """Normalize threat indicator anomalies into the existing Sentinel event shape."""
+    client = anomaly.get("client") or {}
+    client_id = str(client.get("clientId") or "")
+    client_name = str(client.get("clientName") or client.get("displayName") or "")
+    ref_time = to_int(anomaly.get("refTime"), 0)
+    anomaly_type = to_int(anomaly.get("anomalyType"), 0)
+    decoded_types = decode_anomaly_type(anomaly_type)
+    occurrence_dt = datetime.fromtimestamp(ref_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    severity = "Low"
+    if anomaly_type & 64 == 64 or anomaly_type & 8192 == 8192:
+        severity = "High"
+    elif anomaly_type & 32 == 32 or anomaly_type & 512 == 512:
+        severity = "Medium"
+
+    description = (
+        f"Threat indicator anomaly detected for client {client_name}. "
+        f"anomalyType={anomaly_type}; flags={','.join(decoded_types) if decoded_types else 'UNKNOWN'}; "
+        f"jobId={to_int(anomaly.get('jobId'), 0)}; createCount={to_int(anomaly.get('createCount'), 0)}; "
+        f"deleteCount={to_int(anomaly.get('deleteCount'), 0)}; modCount={to_int(anomaly.get('modCount'), 0)}; "
+        f"renameCount={to_int(anomaly.get('renameCount'), 0)}"
+    )
+
+    event_id = f"{client_id}-{to_int(anomaly.get('jobId'), 0)}-{ref_time}-{anomaly_type}"
 
     return {
-        "EventId": str(event.get("id", "")),
-        "OccurrenceTime": str(event.get("timeSource", "")),
-        "Severity": str(event.get("severity", "")),
-        "ClientId": hidden_info.get("clientId", ""),
+        "EventId": event_id,
+        "OccurrenceTime": occurrence_dt,
+        "Severity": severity,
+        "ClientId": client_id,
         "ClientName": client_name,
-        "HostName": hidden_info.get("hostName", client_name),
-        "Program": event.get("subsystem") or "",
-        "EventCode": event.get("eventCodeString") or "",
-        "Description": event.get("description") or "",
-        "CommcellName": client_entity.get("displayName") or "",
-        "UTCTimestamp": str(event.get("timeSource", "")),
+        "HostName": str(client.get("hostName") or client_name),
+        "Program": "ThreatIndicators",
+        "EventCode": str(anomaly_type),
+        "Description": description,
+        "CommcellName": str(client.get("displayName") or client_name),
+        "UTCTimestamp": occurrence_dt,
     }
 
 
@@ -478,76 +471,87 @@ def main(mytimer: func.TimerRequest) -> None:
         # Fetch fromtime from blob storage
         current_date = datetime.now(timezone.utc)
         to_time = int(current_date.timestamp())
-        fromtime = read_blob(cs, container_name, blob_name)
-        logging.debug(f"Read from time from blob: {fromtime}")
 
-        if fromtime is None:
-            fromtime = int((current_date - timedelta(days=backfill_days)).timestamp())
+        override_from_time_str = os.environ.get("OVERRIDE_FROM_TIME")
+        if override_from_time_str:
+            fromtime = int(override_from_time_str)
             logging.info(
-                f"From Time: [{fromtime}], blob doesn't exist, using {backfill_days} days backfill."
+                f"From Time: [{fromtime}], using OVERRIDE_FROM_TIME env var (blob checkpoint ignored)."
             )
         else:
-            fromtime_dt = datetime.fromtimestamp(fromtime, tz=timezone.utc)
-            time_diff = current_date - fromtime_dt
-            if time_diff > timedelta(days=backfill_days):
-                updatedfromtime = int(
-                    (current_date - timedelta(days=backfill_days)).timestamp()
-                )
-                logging.info(
-                    f"From Time: [{updatedfromtime}], since the time read from blob: [{fromtime}] is older than {backfill_days} days."
-                )
-                fromtime = updatedfromtime
-            elif time_diff < timedelta(minutes=5):
-                updatedfromtime = int((current_date - timedelta(minutes=5)).timestamp())
-                logging.info(
-                    f"From Time: [{updatedfromtime}], since the time read from blob: [{fromtime}] is less than 5 minutes."
-                )
-                fromtime = updatedfromtime
+            fromtime = read_blob(cs, container_name, blob_name)
+            logging.debug(f"Read from time from blob: {fromtime}")
 
-        # Call events API
-        ustring = ""
-        if showAllEvents == "false":
-            ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
-        else:
-            ustring = "/events?level=10&showInfo=true&showMinor=true&showMajor=true&showCritical=true&showAnomalous=true"
-        f_url = url + ustring
-
-        max_fetch = 1000
-        headers["pagingInfo"] = f"0,{max_fetch}"
-        logging.debug(f"Set paging info in headers: {headers['pagingInfo']}")
+            if fromtime is None:
+                fromtime = int((current_date - timedelta(days=7)).timestamp())
+                logging.info(
+                    f"From Time: [{fromtime}], blob doesn't exist, using 7 days backfill."
+                )
+            else:
+                max_lookback = int((current_date - timedelta(days=7)).timestamp())
+                if fromtime < max_lookback:
+                    logging.warning(
+                        f"Checkpoint [{fromtime}] is older than 7 days. Capping fromtime to [{max_lookback}]."
+                    )
+                    fromtime = max_lookback
 
         logging.info(
             f"Starts at: [{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}]"
         )
-        event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
-        logging.info(f"Event endpoint: {event_endpoint}")
 
-        response = requests.get(event_endpoint, headers=headers)
+        anomaly_endpoint = f"{url}/Client/Anomaly"
+        logging.info(f"Threat Indicators endpoint: {anomaly_endpoint}")
+
+        response = requests.get(anomaly_endpoint, headers=headers)
         logging.info(f"Response Status Code: {response.status_code}")
 
         if response.status_code == 200:
-            events = response.json()
-            logging.info(
-                "Events Data count : {}".format(len(events.get("commservEvents", [])))
-            )
-            data: list[dict[str, Any]] = events.get("commservEvents")
-            # Push all commservEvents to log analytics workspace
-            if data:
-                logging.info("Uploading data to Microsoft Sentinel")
-                data = [normalize_event(event) for event in data]
-                gen_chunks(data, logs_client)
-                logging.info("Job Succeeded")
-                print("***Job Succeeded*****")
-                logging.info("Function App Executed")
+            anomaly_resp = response.json()
+            error_resp = anomaly_resp.get("ErrorResponse") or {}
+            error_code = to_int(error_resp.get("errorCode"), 0)
+            if error_code != 0:
+                logging.error(
+                    f"Threat Indicators API returned error. errorCode={error_code}, errorMessage={error_resp.get('errorMessage', '')}"
+                )
             else:
-                print("No new events found.")
-            upload_timestamp_blob(cs, container_name, blob_name, to_time + 1)
+                anomaly_clients: list[dict[str, Any]] = anomaly_resp.get(
+                    "anomalyClients", []
+                )
+                logging.info(
+                    f"Anomaly clients returned by API: {len(anomaly_clients)}"
+                )
+
+                filtered_anomalies = [
+                    a for a in anomaly_clients if to_int(a.get("refTime"), 0) >= fromtime
+                ]
+                logging.info(
+                    f"Anomaly clients after refTime filtering (fromtime={fromtime}): {len(filtered_anomalies)}"
+                )
+
+                if filtered_anomalies:
+                    logging.info("Uploading anomaly data to Microsoft Sentinel")
+                    normalized_data = [
+                        normalize_anomaly(anomaly) for anomaly in filtered_anomalies
+                    ]
+                    gen_chunks(normalized_data, logs_client)
+                    logging.info("Job Succeeded")
+                    logging.info("Function App Executed")
+                else:
+                    logging.info("No new anomalies found to ingest.")
+
+                # Advance the checkpoint so the next run filters from now.
+                # Skip when OVERRIDE_FROM_TIME is active — test runs must not
+                # corrupt the production checkpoint.
+                if not override_from_time_str:
+                    upload_timestamp_blob(cs, container_name, blob_name, to_time + 1)
         elif response.status_code == 403:
             logging.error(
-                f"Failed to get events. Status code: 403. Reason: {response.text}"
+                f"Failed to get anomalies. Status code: 403. Reason: {response.text}"
             )
         else:
-            logging.error(f"Failed to get events. Status code: {response.status_code}")
+            logging.error(
+                f"Failed to get anomalies. Status code: {response.status_code}"
+            )
     except Exception as e:
         logging.error(f"HTTP request error: {e}")
         raise
