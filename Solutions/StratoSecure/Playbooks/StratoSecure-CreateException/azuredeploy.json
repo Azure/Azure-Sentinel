@@ -1,0 +1,197 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "StratoSecure - Create Exception / Accept Risk",
+    "description": "When a Microsoft Sentinel incident is triaged as accepted risk, this playbook calls the StratoSecure API to create a 30-day exception for the finding and writes an audit record to StratoSecure_PlaybookRuns_CL. Human approval is always required before the action executes.",
+    "author": "Soluciones Etech Corp",
+    "support": {
+      "name": "Soluciones Etech Corp",
+      "email": "support@stratocode.io",
+      "tier": "Developer",
+      "link": "https://stratocode.io/support"
+    },
+    "lastUpdateTime": "2026-06-01T00:00:00Z",
+    "entities": ["Account", "Host"],
+    "tags": ["StratoSecure", "Exception", "AcceptRisk", "ASPM"],
+    "categories": {
+      "domains": ["Security"],
+      "verticals": ["Banking", "Financial Services"]
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "StratoSecure-CreateException",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel Log Analytics workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the Logic App. Defaults to the resource group location."
+      }
+    },
+    "StratoApiBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://api.stratocode.io",
+      "metadata": {
+        "description": "Base URL of the StratoSecure platform API."
+      }
+    },
+    "StratoApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "StratoSecure API key. Generate at client.stratocode.io/settings/integrations. Store in Key Vault."
+      }
+    },
+    "LogAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace ID for audit log ingestion."
+      }
+    },
+    "LogAnalyticsWorkspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Log Analytics workspace primary or secondary key for HTTP Data Collector API."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "WorkspaceName": {
+              "type": "string",
+              "defaultValue": "[parameters('WorkspaceName')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Condition_RequireHumanApproval": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@true",
+                      "@true"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Action_CreateException": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[concat(parameters('StratoApiBaseUrl'), '/api/v1/exception-risks')]",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "X-API-Key": "[parameters('StratoApiKey')]"
+                    },
+                    "body": {
+                      "finding_id": "@{triggerBody()?['object']?['name']}",
+                      "reason": "Accepted via Sentinel playbook",
+                      "expires_days": 30,
+                      "accepted_by": "sentinel-playbook",
+                      "incident_id": "@{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                      "incident_title": "@{triggerBody()?['object']?['properties']?['title']}"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Action_AuditLog": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[concat('https://', parameters('LogAnalyticsWorkspaceId'), '.ods.opinsights.azure.com/api/logs?api-version=2016-04-01')]",
+                    "headers": {
+                      "Log-Type": "StratoSecure_PlaybookRuns_CL",
+                      "Content-Type": "application/json",
+                      "Authorization": "[concat('SharedKey ', parameters('LogAnalyticsWorkspaceId'), ':', parameters('LogAnalyticsWorkspaceKey'))]"
+                    },
+                    "body": [
+                      {
+                        "PlaybookName": "[parameters('PlaybookName')]",
+                        "IncidentId": "@{triggerBody()?['object']?['name']}",
+                        "IncidentTitle": "@{triggerBody()?['object']?['properties']?['title']}",
+                        "Action": "CreateException",
+                        "Status": "@{outputs('Action_CreateException')['statusCode']}",
+                        "WorkspaceName": "[parameters('WorkspaceName')]",
+                        "TimeGenerated": "@{utcNow()}"
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Action_CreateException": ["Succeeded", "Failed"]
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
+    }
+  }
+}

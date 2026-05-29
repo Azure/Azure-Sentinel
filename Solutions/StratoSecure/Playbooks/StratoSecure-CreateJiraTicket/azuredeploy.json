@@ -1,0 +1,235 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "StratoSecure - Create Jira Ticket",
+    "description": "When a Microsoft Sentinel incident is created from a StratoSecure finding, this playbook opens a Jira bug ticket and writes an audit record to StratoSecure_PlaybookRuns_CL. Human approval is always required before the action executes.",
+    "author": "Soluciones Etech Corp",
+    "support": {
+      "name": "Soluciones Etech Corp",
+      "email": "support@stratocode.io",
+      "tier": "Developer",
+      "link": "https://stratocode.io/support"
+    },
+    "lastUpdateTime": "2026-06-01T00:00:00Z",
+    "entities": ["Account", "Host"],
+    "tags": ["StratoSecure", "Jira", "ASPM"],
+    "categories": {
+      "domains": ["Security"],
+      "verticals": ["Banking", "Financial Services"]
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "StratoSecure-CreateJiraTicket",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel Log Analytics workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the Logic App. Defaults to the resource group location."
+      }
+    },
+    "JiraBaseUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Base URL of the Jira instance, e.g. https://your-org.atlassian.net"
+      }
+    },
+    "JiraProject": {
+      "type": "string",
+      "defaultValue": "SEC",
+      "metadata": {
+        "description": "Jira project key where tickets will be created."
+      }
+    },
+    "JiraApiToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Jira API token for authentication. Store in Key Vault and reference via Key Vault reference."
+      }
+    },
+    "JiraUserEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address of the Jira user associated with the API token."
+      }
+    },
+    "LogAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace ID for audit log ingestion."
+      }
+    },
+    "LogAnalyticsWorkspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Log Analytics workspace primary or secondary key for HTTP Data Collector API."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "WorkspaceName": {
+              "type": "string",
+              "defaultValue": "[parameters('WorkspaceName')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Condition_RequireHumanApproval": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@true",
+                      "@true"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Action_CreateJiraTicket": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[concat(parameters('JiraBaseUrl'), '/rest/api/3/issue')]",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "[concat('Basic ', base64(concat(parameters('JiraUserEmail'), ':', parameters('JiraApiToken'))))]"
+                    },
+                    "body": {
+                      "fields": {
+                        "project": {
+                          "key": "[parameters('JiraProject')]"
+                        },
+                        "summary": "@{triggerBody()?['object']?['properties']?['title']}",
+                        "description": {
+                          "type": "doc",
+                          "version": 1,
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "content": [
+                                {
+                                  "type": "text",
+                                  "text": "@{triggerBody()?['object']?['properties']?['description']}"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "issuetype": {
+                          "name": "Bug"
+                        },
+                        "priority": {
+                          "name": "High"
+                        },
+                        "labels": [
+                          "sentinel",
+                          "stratosecure",
+                          "appsec"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Action_AuditLog": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[concat('https://', parameters('LogAnalyticsWorkspaceId'), '.ods.opinsights.azure.com/api/logs?api-version=2016-04-01')]",
+                    "headers": {
+                      "Log-Type": "StratoSecure_PlaybookRuns_CL",
+                      "Content-Type": "application/json",
+                      "Authorization": "[concat('SharedKey ', parameters('LogAnalyticsWorkspaceId'), ':', parameters('LogAnalyticsWorkspaceKey'))]"
+                    },
+                    "body": [
+                      {
+                        "PlaybookName": "[parameters('PlaybookName')]",
+                        "IncidentId": "@{triggerBody()?['object']?['name']}",
+                        "IncidentTitle": "@{triggerBody()?['object']?['properties']?['title']}",
+                        "Action": "CreateJiraTicket",
+                        "Status": "@{body('Action_CreateJiraTicket')?['id']}",
+                        "WorkspaceName": "[parameters('WorkspaceName')]",
+                        "TimeGenerated": "@{utcNow()}"
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Action_CreateJiraTicket": ["Succeeded", "Failed"]
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
+    }
+  }
+}
