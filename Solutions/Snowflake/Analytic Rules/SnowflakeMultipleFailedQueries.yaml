@@ -1,7 +1,9 @@
 id: 5f8a81d9-7d27-4ff5-a0ce-4285ee02c2c8
 name: Snowflake - Multiple failed queries
 description: |
-  'Detects multiple failed queries in short timeframe.'
+  'Detects multiple failed queries in a short timeframe. Alerts when failed Snowflake query executions for the same
+  TargetUsername exceed the threshold within a 5-minute bin. Create the Sentinel alert formatting only if desired with alertDetailsOverride,
+  customDetails, and eventGroupingSettings in the rule; keep the query logic focused on failed query volume.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -18,28 +20,29 @@ relevantTechniques:
   - T1518
   - T1082
   - T1059.001
-query: |
-    let threshold = 50;
-    Snowflake
-    | where QueryExecutionStatus !~ 'SUCCESS'
-    | summarize FailedQueryCount = count() by TargetUsername, bin(TimeGenerated, 5m)
-    | where FailedQueryCount > threshold
-    | extend AccountCustomEntity = TargetUsername
-    | extend StartTime = bin_TimeGenerated, EndTime = bin_TimeGenerated + 5m
-    | project StartTime, EndTime, TargetUsername, FailedQueryCount, threshold, AccountCustomEntity
+query: |-
+  let threshold = 50;
+  Snowflake
+  | where isnotempty(QueryExecutionStatus)
+  | where QueryExecutionStatus !~ 'SUCCESS'
+  | summarize Count=count() by TargetUsername, TimeBin=bin(TimeGenerated, 5m)
+  | where Count > threshold
+  | extend AccountCustomEntity = TargetUsername
+  | project TimeGenerated=TimeBin, TargetUsername, Count, Threshold=threshold, AccountCustomEntity
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: Name
-        columnName: AccountCustomEntity
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: AccountCustomEntity
 alertDetailsOverride:
-  alertDisplayNameFormat: Snowflake failed queries detected for {{TargetUsername}}
-  alertDescriptionFormat: Detected {{FailedQueryCount}} failed Snowflake queries for {{TargetUsername}} in the last 5 minutes,
-    exceeding the threshold of {{threshold}}.
+  alertDisplayNameFormat: 'Snowflake failed query burst: {{TargetUsername}}'
+  alertDescriptionFormat: 'Detected {{Count}} failed Snowflake queries for {{TargetUsername}} in {{TimeBin}}. Threshold: {{Threshold}}.'
 customDetails:
-  FailedQueryCount: FailedQueryCount
-  Threshold: threshold
-  TargetUsername: TargetUsername
+  FailedQueryCount: Count
+  TimeBin: TimeBin
+  Threshold: Threshold
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
 version: 1.0.3
 kind: Scheduled
 
