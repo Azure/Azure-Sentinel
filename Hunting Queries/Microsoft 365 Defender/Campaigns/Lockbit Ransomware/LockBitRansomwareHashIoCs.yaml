@@ -1,0 +1,126 @@
+id: 076b86d3-eaff-4cd9-af47-118e79e31e7c
+name: LockBit and related tool hash IoCs
+description: Identifies file creation or modification events matching SHA256 hashes associated with an Apache ActiveMQ exploit, defense evasion scripts, and LockBit ransomware deployment.
+
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+tactics:
+  - Execution
+  - Impact
+relevantTechniques:
+  - T1486
+  - T1204
+query: |
+  // DETECTION STRATEGY: 
+  // Hash-based identification of known threat actor payloads (LockBit, Advanced IP Scanner) deployed via Apache ActiveMQ exploitation.
+  //
+  // THE MECHANIC:
+  // Following successful RCE (CVE-2023-46604) on an internet-facing ActiveMQ server, the adversary drops batch scripts to modify RDP settings,
+  // utilizes Advanced IP Scanner for internal reconnaissance, and executes LockBit ransomware binaries interactively via RDP sessions.
+  //
+  // THE RESILIENCE:
+  // While hash-based detections are brittle to recompilation, these specific indicators represent unmodified, statically compiled builder 
+  // artifacts and renamed legitimate RMM/Scanner tools that threat actors frequently reuse across intrusions without modification.
+  // Reference: https://thedfirreport.com/2026/02/23/apache-activemq-exploit-leads-to-lockbit-ransomware
+  
+  // Define exact SHA256 indicators mapped to the intrusion phases.
+  let iocSha256 = dynamic([
+      // Tier 1: LockBit Ransomware Payloads (Leaked Builder Artifacts)
+      "c8646cfb574ff2c6f183c3c3951bf6b2c6cf16ff8a5e949a118be27f15962fae", // lb3_pass.exe (Executed with path/password flags)
+      "8ceee89550c521ba43f59d24ba53a22a3b69ead0fce118508d0a87a383d6a7b6", // lb3.exe (PsExec spreader variant)
+      
+      // Tier 2: Reconnaissance & Defense Evasion Tools
+      "87bfb05057f215659cc801750118900145f8a22fa93ac4c6e1bfd81aa98b0a55", // netscan.exe
+      "722fff8f38197d1449df500ae31a95bb34a6ddaba56834b13eaaff2b0f9f1c8b", // advanced_ip_scanner.exe (Dropped as SoftPerfect Network Scanner disguise)
+      
+      // Tier 3: Configuration Modification Scripts
+      "d9c888bde81f19f3dc4f050d184ffa6470f1a93a2b3b10b3cc2d246574f56841"  // rdp.bat (Used to open port 3389 and alter firewall rules)
+  ]);
+  //
+  // STEP 1: Base Query - Filter early on the target table to save compute memory
+  DeviceFileEvents
+  | where isnotempty(SHA256)
+  | where SHA256 in~ (iocSha256)
+  //
+  // STEP 2: Schema Alignment & Explicit Casting for Sentinel Entity Extraction
+  // explicitly cast fields to strings to satisfy the Logic App/SOAR entity schema requirements.
+  | extend 
+      HostCustomEntity = tostring(DeviceName),
+      AccountCustomEntity = tostring(InitiatingProcessAccountUpn),
+      FileHashCustomEntity = tostring(SHA256),
+      HashAlgorithm = "SHA256", // Hardcoded to satisfy the mandatory 'Algorithm' enum in the FileHash entity schema
+      ProcessIdString = tostring(InitiatingProcessId) // ProcessIds must be cast to strings for entity mapping
+  //
+  // STEP 3: Format the output for triage (Analyst Hand-off)
+  // ANALYST ACTION: Review the 'PayloadPath' and 'ActorProcess'. If the payload was dropped 
+  // into an interactive RDP directory (e.g., \Downloads\) or the C:\Intel\ staging folder, 
+  // assume active interactive ransomware deployment and isolate the host immediately.
+  | project 
+      Timestamp,
+      DeviceName = HostCustomEntity,
+      AccountUpn = AccountCustomEntity,
+      ActorProcess = InitiatingProcessFileName,
+      ActorCommandLine = InitiatingProcessCommandLine,
+      ActorProcessId = ProcessIdString,
+      PayloadName = FileName,
+      PayloadPath = FolderPath,
+      PayloadHash = FileHashCustomEntity,
+      HashAlgorithm,
+      ActionType,
+      PayloadSize = FileSize
+
+  // STEP 4: Visual Hierarchy (The Left-to-Right Narrative)
+  | project-reorder 
+      Timestamp,         // When
+      DeviceName,        // Where
+      AccountUpn,        // Who
+      ActorProcess,      // What (The Actor)
+      ActorCommandLine,  // How (The Actor)
+      PayloadName,       // The Evidence (Target File)
+      PayloadPath,       // The Evidence (Target Location)
+      PayloadHash,       // The Evidence (Indicator)
+      ActionType,        // Metadata
+      PayloadSize,       // Metadata
+      ActorProcessId,    // Metadata
+      HashAlgorithm      // Metadata
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+      - identifier: Value
+        columnName: PayloadHash
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: PayloadName
+      - identifier: Directory
+        columnName: PayloadPath
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ActorProcessId
+      - identifier: CommandLine
+        columnName: ActorCommandLine
+version: 1.0.0
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]
