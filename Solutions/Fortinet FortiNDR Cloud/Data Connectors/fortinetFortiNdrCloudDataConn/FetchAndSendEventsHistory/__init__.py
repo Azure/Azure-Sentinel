@@ -4,8 +4,7 @@ from datetime import timedelta
 
 from fnc.fnc_client import FncClient
 from fnc.metastream.s3_client import MetastreamContext
-from globalVariables import (DEFAULT_BUCKET_NAME, INTEGRATION_NAME,
-                             SUPPORTED_EVENT_TYPES)
+from globalVariables import DEFAULT_BUCKET_NAME, INTEGRATION_NAME, SUPPORTED_EVENT_TYPES
 from sentinel.sentinel import post_data
 
 AWS_ACCESS_KEY = os.environ.get("AwsAccessKeyId")
@@ -72,10 +71,18 @@ def post_events_inc(events, event_type):
     limit = POSTING_LIMIT
     count = len(events)
     start = 0
+    i = 1
+    logging.info(
+        f"SentinelClient: [new] - Preparing to post a total of {len(events)} events")
     while start < count:
         end = count if count - start <= limit else start + limit
+        piece = events[start:end]
+        logging.info(
+            f"SentinelClient: [new] - Posting slice #{i} containing {len(events[start:end])} events")
+
         post_data(events[start:end], event_type)
         start = start + limit
+        i += 1
 
 
 def fetch_and_post_events(
