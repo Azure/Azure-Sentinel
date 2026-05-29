@@ -2,16 +2,17 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "title": "Check Point EM - Importer (Alerts \u2192 Sentinel Incidents)",
-    "description": "Queries the argsentdc_CL custom table (populated by the CCP data connector) for recent alerts and creates corresponding Microsoft Sentinel incidents.",
+    "title": "Check Point EM - Importer (Alerts \u2192 SecurityAlert \u2192 Sentinel Incidents)",
+    "description": "Queries the argsentdc_CL custom table (populated by the CCP data connector) for recent alerts and writes each one to the built-in SecurityAlert table via the Log Ingestion API. A bundled scheduled analytic rule then promotes those SecurityAlert rows into Sentinel incidents with ref_id surfaced as a Custom Detail so the CPEM Exporter playbook can read it.",
     "prerequisites": [
       "The CCP data connector must be deployed and ingesting alerts into the argsentdc_CL table.",
       "After deployment, open the playbook and authorize the Azure Monitor Logs and Microsoft Sentinel connections."
     ],
     "postDeployment": [
-      "Open the playbook in the Logic App designer, authorize both API connections (Azure Monitor Logs and Microsoft Sentinel), and press Save."
+      "Open the playbook in the Logic App designer, authorize both API connections (Azure Monitor Logs and Microsoft Sentinel), and press Save.",
+      "The template auto-deploys a Data Collection Endpoint, a SecurityAlert-targeted DCR, a Monitoring Metrics Publisher role assignment for the Logic App Managed Identity, and a Scheduled analytic rule named '<PlaybookName> - Promote CPEM SecurityAlerts to incidents' that converts SecurityAlert rows into Sentinel incidents."
     ],
-    "lastUpdateTime": "2026-03-03T00:00:00.000Z",
+    "lastUpdateTime": "2026-05-25T00:00:00.000Z",
     "entities": [],
     "tags": [
       "Sync"
@@ -41,6 +42,15 @@
         "title": "Check Point EM - Importer",
         "notes": [
           "Rewritten to query argsentdc_CL table and create Sentinel incidents (RecordedFuture AlertImporter pattern)"
+        ]
+      },
+      {
+        "version": "3.0",
+        "title": "Check Point EM - Importer",
+        "notes": [
+          "Replaced direct incident creation with Log Ingestion API writes into the built-in SecurityAlert table.",
+          "Adds a Data Collection Endpoint, a SecurityAlert-targeted DCR, a Monitoring Metrics Publisher role assignment for the Logic App MI, and a Scheduled bridge analytic rule that promotes ingested SecurityAlerts to incidents.",
+          "Outcome: incidents now carry the alert object the CPEM Exporter expects, with ref_id available at properties.alerts[*].properties.additionalData['Custom Details']."
         ]
       }
     ]
@@ -78,7 +88,19 @@
   "variables": {
     "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
     "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-    "workspace-location-inline": "[resourceGroup().location]"
+    "workspace-location-inline": "[resourceGroup().location]",
+    "DceName": "[concat('cpem-importer-dce-', uniqueString(parameters('PlaybookName')))]",
+    "DcrName": "[concat('cpem-importer-secalert-dcr-', uniqueString(parameters('PlaybookName')))]",
+    "BridgeRuleName": "[guid(parameters('PlaybookName'), 'securityalert-bridge')]",
+    "SecurityAlertStreamName": "Custom-CPEMSecurityAlert",
+    "SecurityAlertProviderName": "Check Point Exposure Management",
+    "SecurityAlertProductName": "Check Point EM",
+    "SecurityAlertVendorName": "Check Point",
+    "_MonitoringMetricsPublisherRoleGuid": "3913510d-42f4-4e42-8a64-420c390055eb",
+    "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_MonitoringMetricsPublisherRoleGuid'))]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('Workspace_Name'))]",
+    "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+    "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]"
   },
   "resources": [
     {
@@ -108,6 +130,114 @@
       }
     },
     {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('DceName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "properties": {
+        "description": "Data Collection Endpoint used by the CPEM Importer playbook to write SecurityAlert rows via the Log Ingestion API.",
+        "networkAcls": { "publicNetworkAccess": "Enabled" }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('DcrName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "dependsOn": [ "[variables('dceResourceId')]" ],
+      "properties": {
+        "description": "Routes ingested CPEM alerts into the built-in SecurityAlert table so a bridge analytic rule can promote them to Sentinel incidents.",
+        "dataCollectionEndpointId": "[variables('dceResourceId')]",
+        "streamDeclarations": {
+          "Custom-CPEMSecurityAlert": {
+            "columns": [
+              { "name": "TimeGenerated", "type": "datetime" },
+              { "name": "DisplayName", "type": "string" },
+              { "name": "AlertName", "type": "string" },
+              { "name": "AlertSeverity", "type": "string" },
+              { "name": "Description", "type": "string" },
+              { "name": "ProviderName", "type": "string" },
+              { "name": "VendorName", "type": "string" },
+              { "name": "VendorOriginalId", "type": "string" },
+              { "name": "SystemAlertId", "type": "string" },
+              { "name": "AlertType", "type": "string" },
+              { "name": "ProductName", "type": "string" },
+              { "name": "ConfidenceLevel", "type": "string" },
+              { "name": "Status", "type": "string" },
+              { "name": "StartTime", "type": "datetime" },
+              { "name": "EndTime", "type": "datetime" },
+              { "name": "ProcessingEndTime", "type": "datetime" },
+              { "name": "ExtendedProperties", "type": "string" },
+              { "name": "Entities", "type": "string" },
+              { "name": "Tactics", "type": "string" },
+              { "name": "Techniques", "type": "string" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "sentinel-workspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-CPEMSecurityAlert" ],
+            "destinations": [ "sentinel-workspace" ],
+            "transformKql": "source",
+            "outputStream": "Microsoft-SecurityAlert"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('Workspace_Name'), '/Microsoft.SecurityInsights/', variables('BridgeRuleName'))]",
+      "kind": "Scheduled",
+      "properties": {
+        "displayName": "[concat(parameters('PlaybookName'), ' - Promote CPEM SecurityAlerts to incidents')]",
+        "description": "Bridges SecurityAlert rows ingested by the CPEM Importer into Sentinel incidents. Surfaces ref_id as a Custom Detail so the CPEM Exporter playbook can read it via properties.alerts[*].properties.additionalData['Custom Details'].",
+        "enabled": true,
+        "severity": "Medium",
+        "query": "SecurityAlert\n| where ProviderName == 'Check Point Exposure Management'\n| extend Parsed = parse_json(ExtendedProperties)\n| extend RefId = tostring(Parsed.ref_id)\n| extend EventType = tostring(Parsed.event_type)\n| extend Category = tostring(Parsed.category)\n| extend OriginalSeverity = tostring(Parsed.severity)\n| extend Confidence = tostring(Parsed.confidence)\n| extend Recommendation = tostring(Parsed.recommendation)\n| project TimeGenerated, SystemAlertId, DisplayName, AlertSeverity, Description, RefId, EventType, Category, OriginalSeverity, Confidence, Recommendation",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT15M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionEnabled": false,
+        "suppressionDuration": "PT5H",
+        "tactics": [],
+        "techniques": [],
+        "entityMappings": [],
+        "customDetails": {
+          "ref_id": "RefId",
+          "event_type": "EventType",
+          "category": "Category",
+          "argos_severity": "OriginalSeverity",
+          "confidence": "Confidence",
+          "recommendation": "Recommendation"
+        },
+        "eventGroupingSettings": { "aggregationKind": "AlertPerResult" },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT1H",
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": [ "ref_id" ]
+          }
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{DisplayName}}",
+          "alertDescriptionFormat": "{{Description}}"
+        }
+      }
+    },
+    {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
@@ -117,11 +247,12 @@
       },
       "tags": {
         "hidden-SentinelTemplateName": "Check_Point_EM_Importer",
-        "hidden-SentinelTemplateVersion": "2.0"
+        "hidden-SentinelTemplateVersion": "3.0"
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
-        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[variables('dcrResourceId')]"
       ],
       "properties": {
         "state": "Enabled",
@@ -142,6 +273,30 @@
             },
             "Create_Incident": {
               "defaultValue": "true",
+              "type": "String"
+            },
+            "DCE_Endpoint": {
+              "defaultValue": "",
+              "type": "String"
+            },
+            "DCR_Immutable_Id": {
+              "defaultValue": "",
+              "type": "String"
+            },
+            "Stream_Name": {
+              "defaultValue": "Custom-CPEMSecurityAlert",
+              "type": "String"
+            },
+            "Alert_Provider_Name": {
+              "defaultValue": "Check Point Exposure Management",
+              "type": "String"
+            },
+            "Alert_Product_Name": {
+              "defaultValue": "Check Point EM",
+              "type": "String"
+            },
+            "Alert_Vendor_Name": {
+              "defaultValue": "Check Point",
               "type": "String"
             }
           },
@@ -174,7 +329,7 @@
               },
               "runAfter": {}
             },
-            "Create_incidents_if_enabled": {
+            "Ingest_security_alerts_if_enabled": {
               "type": "If",
               "expression": {
                 "and": [
@@ -191,58 +346,50 @@
                   "type": "Foreach",
                   "foreach": "@body('Run_KQL_Query')?['value']",
                   "actions": {
-                    "Create_incident": {
-                      "type": "ApiConnection",
+                    "Ingest_security_alert": {
+                      "type": "Http",
                       "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
+                        "method": "POST",
+                        "uri": "@{concat(parameters('DCE_Endpoint'), '/dataCollectionRules/', parameters('DCR_Immutable_Id'), '/streams/', parameters('Stream_Name'), '?api-version=2023-01-01')}",
+                        "headers": {
+                          "Content-Type": "application/json"
                         },
-                        "method": "put",
-                        "body": {
-                          "title": "@{items('For_each_alert')?['event_title']}",
-                          "severity": "@{items('For_each_alert')?['sentinel_severity']}",
-                          "status": "New",
-                          "description": "**Check Point Exposure Management Alert**\n\n**Alert:** @{items('For_each_alert')?['event_title']}\n\n**Ref ID:** @{items('For_each_alert')?['ref_id']}\n\n**Category:** @{items('For_each_alert')?['category']}\n\n**Type:** @{items('For_each_alert')?['event_type']}\n\n**Severity:** @{items('For_each_alert')?['severity']}\n\n**Confidence:** @{items('For_each_alert')?['confidence']}\n\n**Description:** @{items('For_each_alert')?['description']}\n\n**Recommendation:** @{items('For_each_alert')?['recommendation']}",
-                          "tagsToAdd": {
-                            "TagsToAdd": [
-                              {
-                                "Tag": "Check Point EM"
-                              },
-                              {
-                                "Tag": "ref_id:@{items('For_each_alert')?['ref_id']}"
-                              },
-                              {
-                                "Tag": "@{items('For_each_alert')?['event_type']}"
-                              }
-                            ]
-                          }
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com"
                         },
-                        "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/workspaces/', parameters('Workspace_Name'))]"
+                        "body": [
+                          {
+                            "TimeGenerated": "@{utcNow()}",
+                            "DisplayName": "@{items('For_each_alert')?['event_title']}",
+                            "AlertName": "@{items('For_each_alert')?['event_title']}",
+                            "AlertSeverity": "@{items('For_each_alert')?['sentinel_severity']}",
+                            "Description": "@{items('For_each_alert')?['description']}",
+                            "ProviderName": "@{parameters('Alert_Provider_Name')}",
+                            "VendorName": "@{parameters('Alert_Vendor_Name')}",
+                            "VendorOriginalId": "@{items('For_each_alert')?['ref_id']}",
+                            "SystemAlertId": "@{guid()}",
+                            "AlertType": "@{coalesce(items('For_each_alert')?['event_type'], 'CPEM Alert')}",
+                            "ProductName": "@{parameters('Alert_Product_Name')}",
+                            "ConfidenceLevel": "@{coalesce(items('For_each_alert')?['confidence'], '')}",
+                            "Status": "New",
+                            "StartTime": "@{coalesce(items('For_each_alert')?['created_date'], utcNow())}",
+                            "EndTime": "@{coalesce(items('For_each_alert')?['modification_date'], utcNow())}",
+                            "ProcessingEndTime": "@{utcNow()}",
+                            "ExtendedProperties": "@{string(createObject('ref_id', items('For_each_alert')?['ref_id'], 'event_type', coalesce(items('For_each_alert')?['event_type'], ''), 'category', coalesce(items('For_each_alert')?['category'], ''), 'severity', coalesce(items('For_each_alert')?['severity'], ''), 'confidence', coalesce(items('For_each_alert')?['confidence'], ''), 'recommendation', coalesce(items('For_each_alert')?['recommendation'], '')))}",
+                            "Entities": "[[]",
+                            "Tactics": "",
+                            "Techniques": ""
+                          }
+                        ],
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 3,
+                          "interval": "PT10S",
+                          "maximumInterval": "PT1M"
+                        }
                       },
                       "runAfter": {}
-                    },
-                    "Add_comment_to_incident": {
-                      "type": "ApiConnection",
-                      "inputs": {
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "body": {
-                          "incidentArmId": "@body('Create_incident')?['id']",
-                          "message": "<p><strong>Check Point Exposure Management Alert Details</strong></p><p><strong>Ref ID:</strong> @{items('For_each_alert')?['ref_id']}</p><p><strong>Title:</strong> @{items('For_each_alert')?['event_title']}</p><p><strong>Category:</strong> @{items('For_each_alert')?['category']}</p><p><strong>Type:</strong> @{items('For_each_alert')?['event_type']}</p><p><strong>Severity:</strong> @{items('For_each_alert')?['severity']}</p><p><strong>Confidence:</strong> @{items('For_each_alert')?['confidence']}</p><p><strong>Threat Actor:</strong> @{items('For_each_alert')?['threat_actor']}</p><p><strong>Status:</strong> @{items('For_each_alert')?['status']}</p><hr/><p><strong>Description:</strong> @{items('For_each_alert')?['description']}</p><p><strong>Recommendation:</strong> @{items('For_each_alert')?['recommendation']}</p><hr/><p><strong>Created:</strong> @{items('For_each_alert')?['created_date']}</p><p><strong>Last Modified:</strong> @{items('For_each_alert')?['modification_date']}</p>"
-                        },
-                        "path": "/Incidents/Comment"
-                      },
-                      "runAfter": {
-                        "Create_incident": [
-                          "Succeeded"
-                        ]
-                      }
                     }
                   },
                   "runAfter": {}
@@ -287,8 +434,41 @@
           },
           "Create_Incident": {
             "value": "[parameters('Create_Incident')]"
+          },
+          "DCE_Endpoint": {
+            "value": "[reference(variables('dceResourceId'), '2023-03-11').logsIngestion.endpoint]"
+          },
+          "DCR_Immutable_Id": {
+            "value": "[reference(variables('dcrResourceId'), '2023-03-11').immutableId]"
+          },
+          "Stream_Name": {
+            "value": "[variables('SecurityAlertStreamName')]"
+          },
+          "Alert_Provider_Name": {
+            "value": "[variables('SecurityAlertProviderName')]"
+          },
+          "Alert_Product_Name": {
+            "value": "[variables('SecurityAlertProductName')]"
+          },
+          "Alert_Vendor_Name": {
+            "value": "[variables('SecurityAlertVendorName')]"
           }
         }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+      "scope": "[variables('dcrResourceId')]",
+      "dependsOn": [
+        "[variables('dcrResourceId')]",
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
       }
     }
   ]
