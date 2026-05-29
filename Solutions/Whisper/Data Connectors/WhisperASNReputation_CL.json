@@ -1,0 +1,223 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Whisper Security - ASN Reputation Table",
+    "description": "Deploys the WhisperASNReputation_CL custom table, Data Collection Endpoint, and Data Collection Rule for ingesting Autonomous System Number reputation data from the Whisper Security knowledge graph.",
+    "prerequisites": [
+      "Azure Sentinel workspace",
+      "Whisper API key in Key Vault"
+    ],
+    "version": "1.0.0",
+    "author": {
+      "name": "Whisper Security"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {
+    "tableName": "WhisperASNReputation_CL",
+    "dceName": "dce-whisper-asn-reputation",
+    "dcrName": "dcr-whisper-asn-reputation",
+    "customStreamName": "Custom-WhisperASNReputation_CL",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "asn",
+              "type": "string",
+              "description": "Autonomous System Number (e.g., AS13335)"
+            },
+            {
+              "name": "asnName",
+              "type": "string",
+              "description": "AS organization name"
+            },
+            {
+              "name": "reputationScore",
+              "type": "real",
+              "description": "Numeric reputation score from Whisper"
+            },
+            {
+              "name": "reputationLevel",
+              "type": "string",
+              "description": "Categorical reputation level (good, neutral, poor, bad)"
+            },
+            {
+              "name": "maxThreatScore",
+              "type": "real",
+              "description": "Highest threat score among prefixes in this ASN"
+            },
+            {
+              "name": "avgThreatScore",
+              "type": "real",
+              "description": "Average threat score across prefixes in this ASN"
+            },
+            {
+              "name": "hasThreateningPrefixes",
+              "type": "boolean",
+              "description": "Whether the ASN contains prefixes with high threat scores"
+            },
+            {
+              "name": "country",
+              "type": "string",
+              "description": "Country where the ASN is registered"
+            },
+            {
+              "name": "prefixCount",
+              "type": "int",
+              "description": "Number of BGP prefixes originated by this ASN"
+            },
+            {
+              "name": "peerCount",
+              "type": "int",
+              "description": "Number of BGP peers for this ASN"
+            },
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime",
+              "description": "Event generation timestamp"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "[variables('customStreamName')]": {
+            "columns": [
+              {
+                "name": "asn",
+                "type": "string"
+              },
+              {
+                "name": "asnName",
+                "type": "string"
+              },
+              {
+                "name": "reputationScore",
+                "type": "real"
+              },
+              {
+                "name": "reputationLevel",
+                "type": "string"
+              },
+              {
+                "name": "maxThreatScore",
+                "type": "real"
+              },
+              {
+                "name": "avgThreatScore",
+                "type": "real"
+              },
+              {
+                "name": "hasThreateningPrefixes",
+                "type": "boolean"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "prefixCount",
+                "type": "int"
+              },
+              {
+                "name": "peerCount",
+                "type": "int"
+              },
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "whisperWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('customStreamName')]"
+            ],
+            "destinations": [
+              "whisperWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "[variables('customStreamName')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "tableResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+    },
+    "dceResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+    },
+    "dcrResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))).logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]"
+    }
+  }
+}

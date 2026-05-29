@@ -1,0 +1,560 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Whisper Security - Get Infrastructure Chain",
+    "description": "Sentinel playbook that extracts IP and domain entities from an incident and queries the Whisper Security knowledge graph to traverse the full infrastructure chain (IP, prefix, ASN, geolocation). Results are posted as an incident comment.",
+    "prerequisites": [
+      "Azure Sentinel workspace",
+      "Whisper API key stored in Azure Key Vault",
+      "Key Vault secret URI for the Whisper API key",
+      "Whisper Security custom connector deployed (WhisperSecurityConnector)"
+    ],
+    "version": "1.0.0",
+    "author": {
+      "name": "Whisper Security"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "keyVaultSecretUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Full secret URI for the Whisper API key in Key Vault (e.g., https://myvault.vault.azure.net/secrets/whisper-api-key)"
+      }
+    },
+    "connectorName": {
+      "type": "string",
+      "defaultValue": "WhisperSecurity",
+      "metadata": {
+        "description": "Name of the Whisper Security custom API connector"
+      }
+    },
+    "playbook-name": {
+      "type": "string",
+      "defaultValue": "Whisper-GetInfraChain",
+      "metadata": {
+        "description": "Name of the Logic App playbook"
+      }
+    }
+  },
+  "variables": {
+    "azureSentinelConnectionName": "[concat('azuresentinel-', parameters('playbook-name'))]",
+    "whisperConnectionName": "[concat('whispersecurity-', parameters('playbook-name'))]",
+    "keyVaultApiKeyReference": "[concat('@Microsoft.KeyVault(SecretUri=', parameters('keyVaultSecretUri'), ')')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('azureSentinelConnectionName')]",
+      "location": "[parameters('location')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('azureSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('whisperConnectionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[variables('whisperConnectionName')]",
+        "customParameterValues": {
+          "api_key": "[variables('keyVaultApiKeyReference')]"
+        },
+        "api": {
+          "id": "[resourceId('Microsoft.Web/customApis', parameters('connectorName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('playbook-name')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelTemplateName": "Whisper-GetInfraChain",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[parameters('workspace')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('azureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('whisperConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_IPs": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/ip"
+              },
+              "runAfter": {}
+            },
+            "Entities_-_Get_DNS": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/dnsresolution"
+              },
+              "runAfter": {}
+            },
+            "Initialize_Comment_Body": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "commentBody",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "For_Each_IP": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "actions": {
+                "Validate_IP_Input": {
+                  "type": "Compose",
+                  "inputs": "@if(or(contains(toUpper(items('For_Each_IP')?['Address']), 'MATCH'), contains(toUpper(items('For_Each_IP')?['Address']), 'RETURN'), contains(toUpper(items('For_Each_IP')?['Address']), 'DELETE'), contains(toUpper(items('For_Each_IP')?['Address']), 'MERGE'), contains(toUpper(items('For_Each_IP')?['Address']), 'CREATE'), contains(toUpper(items('For_Each_IP')?['Address']), 'SET'), contains(toUpper(items('For_Each_IP')?['Address']), 'REMOVE'), contains(toUpper(items('For_Each_IP')?['Address']), 'DETACH')), 'BLOCKED', 'SAFE')",
+                  "runAfter": {}
+                },
+                "Check_IP_Input_Safe": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('Validate_IP_Input')",
+                          "SAFE"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Enrich_IP_Scope": {
+                      "type": "Scope",
+                      "actions": {
+                        "Call_Whisper_InfraChain_IP": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "https://graph.whisper.security/api/query",
+                            "headers": {
+                              "Content-Type": "application/json",
+                              "X-API-Key": "@{parameters('$connections')['whispersecurity']['connectionId']}"
+                            },
+                            "body": {
+                              "query": "MATCH (ip:IPV4 {name: \"@{items('For_Each_IP')?['Address']}\"})-[:BELONGS_TO]->(p:PREFIX)-[:ANNOUNCED_BY]->(a:ASN) OPTIONAL MATCH (ip)-[:LOCATED_IN]->(c:CITY)-[:HAS_COUNTRY]->(co:COUNTRY) RETURN ip.name AS ip, p.name AS prefix, a.name AS asn, c.name AS city, co.name AS country"
+                            },
+                            "retryPolicy": {
+                              "type": "exponential",
+                              "count": 3,
+                              "interval": "PT10S",
+                              "maximumInterval": "PT1M"
+                            }
+                          },
+                          "runAfter": {}
+                        },
+                        "Parse_InfraChain_IP_Response": {
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('Call_Whisper_InfraChain_IP')",
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "rows": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Call_Whisper_InfraChain_IP": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Format_InfraChain_IP_Comment": {
+                          "type": "Compose",
+                          "inputs": "@concat('## Whisper Security - Infrastructure Chain (IP)\n\n**IP Address:** ', items('For_Each_IP')?['Address'], '\n**Results Found:** ', string(length(body('Parse_InfraChain_IP_Response')?['rows'])), '\n\n| IP | Prefix | ASN | City | Country |\n|---|---|---|---|---|\n', if(equals(length(body('Parse_InfraChain_IP_Response')?['rows']), 0), '| _No results_ | | | | |', join(body('Parse_InfraChain_IP_Response')?['rows'], '\n')))",
+                          "runAfter": {
+                            "Parse_InfraChain_IP_Response": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Append_IP_Comment": {
+                          "type": "AppendToStringVariable",
+                          "inputs": {
+                            "name": "commentBody",
+                            "value": "@{outputs('Format_InfraChain_IP_Comment')}\n\n---\n\n"
+                          },
+                          "runAfter": {
+                            "Format_InfraChain_IP_Comment": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Log_Blocked_IP_Input": {
+                        "type": "Compose",
+                        "inputs": "Cypher injection attempt blocked for IP: @{items('For_Each_IP')?['Address']}"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Validate_IP_Input": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Handle_IP_Error": {
+                  "type": "Scope",
+                  "actions": {
+                    "Compose_IP_Error": {
+                      "type": "Compose",
+                      "inputs": {
+                        "message": "Whisper API call failed for infrastructure chain (IP)",
+                        "ip": "@items('For_Each_IP')?['Address']",
+                        "error": "@result('Enrich_IP_Scope')"
+                      }
+                    },
+                    "Append_IP_Error_Comment": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "commentBody",
+                        "value": "## Whisper Security - Infrastructure Chain Error\n\n**IP Address:** @{items('For_Each_IP')?['Address']}\n**Status:** API call failed. Check playbook run history for details.\n\n---\n\n"
+                      },
+                      "runAfter": {
+                        "Compose_IP_Error": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Check_IP_Input_Safe": [
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ],
+                "Initialize_Comment_Body": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "For_Each_Domain": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_DNS')?['DNSResolutions']",
+              "actions": {
+                "Validate_Domain_Input": {
+                  "type": "Compose",
+                  "inputs": "@if(or(contains(toUpper(items('For_Each_Domain')?['DomainName']), 'MATCH'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'RETURN'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'DELETE'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'MERGE'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'CREATE'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'SET'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'REMOVE'), contains(toUpper(items('For_Each_Domain')?['DomainName']), 'DETACH')), 'BLOCKED', 'SAFE')",
+                  "runAfter": {}
+                },
+                "Check_Domain_Input_Safe": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('Validate_Domain_Input')",
+                          "SAFE"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Enrich_Domain_Scope": {
+                      "type": "Scope",
+                      "actions": {
+                        "Call_Whisper_InfraChain_Domain": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "https://graph.whisper.security/api/query",
+                            "headers": {
+                              "Content-Type": "application/json",
+                              "X-API-Key": "@{parameters('$connections')['whispersecurity']['connectionId']}"
+                            },
+                            "body": {
+                              "query": "MATCH (h:HOSTNAME {name: \"@{items('For_Each_Domain')?['DomainName']}\"})-[:RESOLVES_TO]->(ip:IPV4)-[:BELONGS_TO]->(p:PREFIX)-[:ANNOUNCED_BY]->(a:ASN) OPTIONAL MATCH (ip)-[:LOCATED_IN]->(c:CITY)-[:HAS_COUNTRY]->(co:COUNTRY) RETURN ip.name AS ip, p.name AS prefix, a.name AS asn, c.name AS city, co.name AS country"
+                            },
+                            "retryPolicy": {
+                              "type": "exponential",
+                              "count": 3,
+                              "interval": "PT10S",
+                              "maximumInterval": "PT1M"
+                            }
+                          },
+                          "runAfter": {}
+                        },
+                        "Parse_InfraChain_Domain_Response": {
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('Call_Whisper_InfraChain_Domain')",
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "columns": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "rows": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Call_Whisper_InfraChain_Domain": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Format_InfraChain_Domain_Comment": {
+                          "type": "Compose",
+                          "inputs": "@concat('## Whisper Security - Infrastructure Chain (Domain)\n\n**Domain:** ', items('For_Each_Domain')?['DomainName'], '\n**Results Found:** ', string(length(body('Parse_InfraChain_Domain_Response')?['rows'])), '\n\n| IP | Prefix | ASN | City | Country |\n|---|---|---|---|---|\n', if(equals(length(body('Parse_InfraChain_Domain_Response')?['rows']), 0), '| _No results_ | | | | |', join(body('Parse_InfraChain_Domain_Response')?['rows'], '\n')))",
+                          "runAfter": {
+                            "Parse_InfraChain_Domain_Response": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Append_Domain_Comment": {
+                          "type": "AppendToStringVariable",
+                          "inputs": {
+                            "name": "commentBody",
+                            "value": "@{outputs('Format_InfraChain_Domain_Comment')}\n\n---\n\n"
+                          },
+                          "runAfter": {
+                            "Format_InfraChain_Domain_Comment": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Log_Blocked_Domain_Input": {
+                        "type": "Compose",
+                        "inputs": "Cypher injection attempt blocked for domain: @{items('For_Each_Domain')?['DomainName']}"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Validate_Domain_Input": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Handle_Domain_Error": {
+                  "type": "Scope",
+                  "actions": {
+                    "Compose_Domain_Error": {
+                      "type": "Compose",
+                      "inputs": {
+                        "message": "Whisper API call failed for infrastructure chain (Domain)",
+                        "domain": "@items('For_Each_Domain')?['DomainName']",
+                        "error": "@result('Enrich_Domain_Scope')"
+                      }
+                    },
+                    "Append_Domain_Error_Comment": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "commentBody",
+                        "value": "## Whisper Security - Infrastructure Chain Error\n\n**Domain:** @{items('For_Each_Domain')?['DomainName']}\n**Status:** API call failed. Check playbook run history for details.\n\n---\n\n"
+                      },
+                      "runAfter": {
+                        "Compose_Domain_Error": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Check_Domain_Input_Safe": [
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Entities_-_Get_DNS": [
+                  "Succeeded"
+                ],
+                "For_Each_IP": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Add_Incident_Comment": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p>@{variables('commentBody')}</p>"
+                },
+                "path": "/Incidents/Comment"
+              },
+              "runAfter": {
+                "For_Each_Domain": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureSentinelConnectionName'))]",
+                "connectionName": "[variables('azureSentinelConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "whispersecurity": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('whisperConnectionName'))]",
+                "connectionName": "[variables('whisperConnectionName')]",
+                "id": "[resourceId('Microsoft.Web/customApis', parameters('connectorName'))]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('playbook-name'))]"
+    },
+    "logicAppName": {
+      "type": "string",
+      "value": "[parameters('playbook-name')]"
+    },
+    "logicAppManagedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('playbook-name')), '2019-05-01', 'full').identity.principalId]"
+    }
+  }
+}
