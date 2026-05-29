@@ -3091,7 +3091,7 @@
                 "description": "This rule identifies Web Sessions for which the target URL hostname is a known IoC. This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.",
                 "displayName": "TI Map Domain entity to Web Session Events (ASIM Web Session schema)",
                 "enabled": false,
-                "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Create a list of TLDs in our threat feed for later validation\nlet DOMAIN_TI=ThreatIntelIndicators\n// Picking up only IOC's that contain the entities we want\n| extend IndicatorType = tostring(split(replace(@\"[\\[\\]\\\"\"]\", \"\", tostring(ObservableKey)), \":\")[0])\n| where IndicatorType == \"domain-name\"\n| extend DomainName = tolower(ObservableValue)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil));\nlet DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) \n  | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));\nDOMAIN_TI\n| project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )\n    //Extract domain patterns from syslog message\n    | extend domain = tostring(parse_url(Url)[\"Host\"])\n    | where isnotempty(domain)\n    | extend tld = tostring(split(domain, '.')[-1])\n    | extend Event_TimeGenerated = TimeGenerated\n) on tostring($left.DomainName)==tostring($right.domain)\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| extend ThreatType = tostring(Data.indicator_types[0])\n| project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, domain, SrcIpAddr, Url, ThreatType\n",
+                "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Create a list of TLDs in our threat feed for later validation\nlet DOMAIN_TI=ThreatIntelIndicators\n// Picking up only IOC's that contain the entities we want\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"domain-name\"\n| extend DomainName = tolower(ObservableValue)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil));\nlet DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) \n  | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));\nDOMAIN_TI\n| project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )\n    //Extract domain patterns from syslog message\n    | extend domain = tostring(parse_url(Url)[\"Host\"])\n    | where isnotempty(domain)\n    | extend tld = tostring(split(domain, '.')[-1])\n    | extend Event_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.domain\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| extend ThreatType = tostring(Data.indicator_types[0])\n| project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, domain, SrcIpAddr, Url, ThreatType\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -3159,13 +3159,13 @@
                   }
                 ],
                 "customDetails": {
-                  "IoCExpirationTime": "ValidUntil",
-                  "IndicatorId": "IndicatorId",
                   "EventTime": "Event_TimeGenerated",
                   "IoCDescription": "Description",
                   "IoCConfidenceScore": "Confidence",
                   "ThreatType": "ThreatType",
-                  "ActivityGroupNames": "ActivityGroupNames"
+                  "IoCExpirationTime": "ValidUntil",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "IndicatorId": "IndicatorId"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.",
@@ -7474,15 +7474,15 @@
                   }
                 ],
                 "customDetails": {
-                  "IoCIPDirection": "IoCDirection",
-                  "IoCExpirationTime": "ValidUntil",
-                  "IndicatorId": "Id",
-                  "EventStartTime": "imNWS_mintime",
-                  "EventEndTime": "imNWS_maxtime",
                   "IoCDescription": "Description",
                   "IoCConfidenceScore": "Confidence",
                   "ThreatType": "Type",
-                  "ActivityGroupNames": "ActivityGroupNames"
+                  "IoCExpirationTime": "ValidUntil",
+                  "EventStartTime": "imNWS_mintime",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "IoCIPDirection": "IoCDirection",
+                  "EventEndTime": "imNWS_maxtime",
+                  "IndicatorId": "Id"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{Type}}. Consult the threat intelligence blead for more information on the indicator.",
@@ -7626,13 +7626,13 @@
                   }
                 ],
                 "customDetails": {
-                  "IoCExpirationTime": "ValidUntil",
-                  "IndicatorId": "IndicatorId",
                   "EventTime": "imNWS_TimeGenerated",
                   "IoCDescription": "Description",
                   "IoCConfidenceScore": "Confidence",
                   "ThreatType": "ThreatType",
-                  "ActivityGroupNames": "ActivityGroupNames"
+                  "IoCExpirationTime": "ValidUntil",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "IndicatorId": "IndicatorId"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "The source address {{SrcIpAddr}} of the web request for the URL {{Url}} matches a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence feed for more information about the indicator.",
@@ -9116,16 +9116,16 @@
                   }
                 ],
                 "customDetails": {
-                  "ExpirationDateTime": "ValidUntil",
-                  "ConfidenceScore": "Confidence",
-                  "ActivityGroupNames": "ActivityGroupNames",
-                  "IndicatorId": "IndicatorId",
-                  "QueryType": "DnsQueryType",
-                  "SourceIPAddress": "SrcIpAddr",
-                  "DnsQuery": "DnsQuery",
                   "DNSRequestTime": "DNS_TimeGenerated",
-                  "LatestIndicatorTime": "LatestIndicatorTime",
-                  "Description": "Description"
+                  "ConfidenceScore": "Confidence",
+                  "DnsQuery": "DnsQuery",
+                  "ExpirationDateTime": "ValidUntil",
+                  "Description": "Description",
+                  "QueryType": "DnsQueryType",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "SourceIPAddress": "SrcIpAddr",
+                  "IndicatorId": "IndicatorId",
+                  "LatestIndicatorTime": "LatestIndicatorTime"
                 }
               }
             },
@@ -9310,16 +9310,16 @@
                   }
                 ],
                 "customDetails": {
-                  "ExpirationDateTime": "ValidUntil",
-                  "ConfidenceScore": "Confidence",
-                  "ActivityGroupNames": "ActivityGroupNames",
-                  "IndicatorId": "IndicatorId",
-                  "SourceIPAddress": "SrcIpAddr",
-                  "DnsQuery": "DnsQuery",
                   "DNSRequestTime": "imDns_mintime",
-                  "LatestIndicatorTime": "LatestIndicatorTime",
+                  "ConfidenceScore": "Confidence",
+                  "DnsQuery": "DnsQuery",
+                  "Description": "Description",
                   "ThreatType": "ThreatType",
-                  "Description": "Description"
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "ExpirationDateTime": "ValidUntil",
+                  "SourceIPAddress": "SrcIpAddr",
+                  "IndicatorId": "IndicatorId",
+                  "LatestIndicatorTime": "LatestIndicatorTime"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.",
@@ -9464,13 +9464,13 @@
                   }
                 ],
                 "customDetails": {
-                  "IoCExpirationTime": "ValidUntil",
-                  "IndicatorId": "IndicatorId",
                   "EventTime": "Event_TimeGenerated",
                   "IoCDescription": "Description",
                   "IoCConfidenceScore": "Confidence",
                   "ThreatType": "ThreatType",
-                  "ActivityGroupNames": "ActivityGroupNames"
+                  "IoCExpirationTime": "ValidUntil",
+                  "ActivityGroupNames": "ActivityGroupNames",
+                  "IndicatorId": "IndicatorId"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{RequestedUrl}}, which is a known malicious URL associated with {{ThreatType}}. Review threat intelligence blade for further context.",
