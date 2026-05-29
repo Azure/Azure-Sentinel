@@ -1,0 +1,77 @@
+id: 42dbabf8-0c47-4625-bba8-c548eb9b40e9
+name: Detect-unquoted-service-path-abuse
+description: |
+  Detects potential unquoted service path abuse by identifying vulnerable unquoted service paths
+  and correlating them with executions from possible abuse locations.
+description-detailed: |
+  This query looks for vulnerable unquoted service paths from TVM data and correlates them with 
+  process execution and file activity that matches possible abuse paths.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceFileEvents
+      - DeviceTvmSecureConfigurationAssessment
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1574.009
+query: |
+  // DefenderBoys - Mattias
+  // @mattiasborg82
+  let Lookback = 30d;
+  let UnquotedServicePathService =
+  DeviceTvmSecureConfigurationAssessment
+  | where ConfigurationId == "scid-3001"
+  | where Timestamp >= ago(Lookback)
+  | where IsApplicable == 1 and IsCompliant == 0
+  | extend ParsedContext = parse_json(Context)
+  | mv-expand ServiceEntry = ParsedContext
+  | extend ServiceName = tostring(ServiceEntry[0]), ServicePathRaw = tostring(ServiceEntry[1])
+  | extend ServicePathRawNorm = tolower(replace_string(ServicePathRaw, "/", "\\"))
+  | where ServicePathRawNorm contains " "
+  | where not(ServicePathRawNorm startswith "\"")
+  | extend ServicePath = trim(@" """, ServicePathRawNorm)
+  | where ServicePath matches regex @"^[a-zA-Z]:\\.*\.exe$"
+  | extend CandidateIndexes = range(0, strlen(ServicePath) - 1, 1)
+  | mv-apply CandidateIndex = CandidateIndexes on (
+      extend SpaceIndex = toint(CandidateIndex)
+      | where substring(ServicePath, SpaceIndex, 1) == " "
+      | extend CandidatePrefix = substring(ServicePath, 0, SpaceIndex)
+      | extend HijackFolderPath = strcat(CandidatePrefix, ".exe")
+      | where HijackFolderPath matches regex @"^[a-zA-Z]:\\.*\.exe$"
+      | where HijackFolderPath != ServicePath
+      | project DeviceId, DeviceName, ServiceName, ServicePath, HijackFolderPath
+  )
+  | summarize by DeviceId, DeviceName, ServiceName, ServicePath, HijackFolderPath;
+  let ServiceHijackExecutions =
+  DeviceProcessEvents
+  | where Timestamp >= ago(Lookback)
+  | where InitiatingProcessFileName =~ "services.exe"
+  | extend ExecutedPath = tolower(FolderPath)
+  | project ExecutionTime = Timestamp, DeviceId, DeviceName, ExecutedPath, FileName, FolderPath, ProcessCommandLine, SHA1, SHA256, MD5, FileSize, ProcessVersionInfoCompanyName, ProcessVersionInfoProductName, ProcessVersionInfoOriginalFileName, AccountDomain, AccountName, AccountUpn, ProcessIntegrityLevel, ProcessTokenElevation, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessIntegrityLevel, InitiatingProcessTokenElevation, ReportId;
+  let FileActivityOnHijackFolderPath =
+  // Adding File activities to provide more data into an eventual incident
+  DeviceFileEvents
+  | where Timestamp >= ago(Lookback)
+  | where FolderPath matches regex @"^[a-zA-Z]:\\.*\.exe$"
+  | extend CurrentFolderPath = tolower(FolderPath)
+  | extend PreviousPath = tolower(iff(ActionType =~ "FileRenamed" and isnotempty(PreviousFolderPath) and isnotempty(PreviousFileName), strcat(PreviousFolderPath, "\\", PreviousFileName), ""))
+  | project Timestamp, DeviceId, DeviceName, FileActionType=ActionType, CurrentFolderPath, PreviousPath, FileName, SHA1, SHA256, MD5, FileSize, FileOriginUrl, FileOriginReferrerUrl, FileOriginIP, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessFolderPath, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessIntegrityLevel, InitiatingProcessTokenElevation, InitiatingProcessParentFileName, RequestProtocol, RequestSourceIP, RequestSourcePort, RequestAccountName, RequestAccountDomain, ShareName, ReportId;
+  UnquotedServicePathService
+  | join kind=inner ServiceHijackExecutions on DeviceId
+  | where ExecutedPath == HijackFolderPath
+  | join kind=leftouter FileActivityOnHijackFolderPath on DeviceId // File events is just extra not mandatory
+  | where CurrentFolderPath == HijackFolderPath or isempty(CurrentFolderPath)
+  | extend FileActivityBeforeExecution = iff(isnotempty(Timestamp) and Timestamp <= ExecutionTime, true, false)
+  | extend FileActivityType = case(
+      CurrentFolderPath == HijackFolderPath and FileActionType =~ "FileCreated", "Hijack file created",
+      CurrentFolderPath == HijackFolderPath and FileActionType =~ "FileModified", "Hijack file modified",
+      CurrentFolderPath == HijackFolderPath and FileActionType =~ "FileDeleted", "Hijack file deleted",
+      CurrentFolderPath == HijackFolderPath and FileActionType =~ "FileRenamed", "Hijack file renamed into path",
+      isempty(FileActionType), "No matching file event",
+      "N/A"
+  )
+  | project ExecutionTime, DeviceName, ServiceName, VulnerableServicePath = ServicePath, ExpectedHijackFolderPath = HijackFolderPath, ExecutedPath, FileActivityTimestamp = Timestamp, FileActivityBeforeExecution, FileActivityType, CurrentFolderPath, PreviousPath, FileName, FolderPath, ProcessCommandLine, SHA1, SHA256, MD5, FileSize, ProcessVersionInfoCompanyName, ProcessVersionInfoProductName, ProcessVersionInfoOriginalFileName, AccountDomain, AccountName, AccountUpn, ProcessIntegrityLevel, ProcessTokenElevation, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessIntegrityLevel, InitiatingProcessTokenElevation, InitiatingProcessParentFileName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessFolderPath, FileOriginUrl, FileOriginReferrerUrl, FileOriginIP, RequestProtocol, RequestSourceIP, RequestSourcePort, RequestAccountName, RequestAccountDomain, ShareName, ReportId
+  | order by ExecutionTime desc
+version: 1.0.0
