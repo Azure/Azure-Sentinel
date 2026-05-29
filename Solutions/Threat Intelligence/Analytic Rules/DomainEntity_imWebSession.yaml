@@ -28,31 +28,31 @@ tactics:
 relevantTechniques:
   - T1071
 query: |
-    let HAS_ANY_MAX = 10000;
-    let dt_lookBack = 1h;
-    let ioc_lookBack = 14d;
-    //Create a list of TLDs in our threat feed for later validation
-    let DOMAIN_TI=ThreatIntelligenceIndicator
-    // Picking up only IOC's that contain the entities we want
-    | where isnotempty(DomainName)
-    | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now();
-    let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) 
-      | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));
-    DOMAIN_TI
-    // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-    | join kind=innerunique (
-        _Im_WebSession(starttime=ago(dt_lookBack), url_has_any=DOMAIN_TI_list)
-        //Extract domain patterns from syslog message
-        | extend domain = tostring(parse_url(Url)["Host"])
-        | where isnotempty(domain)
-        | extend tld = tostring(split(domain, '.')[-1])
-        | extend Event_TimeGenerated = TimeGenerated
-    ) on $left.DomainName==$right.domain
-    | where Event_TimeGenerated < ExpirationDateTime
-    | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
-    | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url   
+  let HAS_ANY_MAX = 10000;
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  //Create a list of TLDs in our threat feed for later validation
+  let DOMAIN_TI=ThreatIntelligenceIndicator
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(DomainName)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now();
+  let DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) 
+    | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));
+  DOMAIN_TI
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+      _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )
+      //Extract domain patterns from syslog message
+      | extend domain = tostring(parse_url(Url)["Host"])
+      | where isnotempty(domain)
+      | extend tld = tostring(split(domain, '.')[-1])
+      | extend Event_TimeGenerated = TimeGenerated
+  ) on $left.DomainName==$right.domain
+  | where Event_TimeGenerated < ExpirationDateTime
+  | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
+  | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url
 entityMappings:
   - entityType: IP
     fieldMappings:
