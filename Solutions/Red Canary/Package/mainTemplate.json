@@ -28,169 +28,574 @@
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
-    "analytic1-id": {
+    "resourceGroupName": {
       "type": "string",
-      "defaultValue": "[newGuid()]",
-      "minLength": 1,
+      "defaultValue": "[resourceGroup().name]",
       "metadata": {
-        "description": "Unique id for the scheduled alert rule"
+        "description": "resource group name where Microsoft Sentinel is setup"
       }
     },
-    "connector1-name": {
+    "subscription": {
       "type": "string",
-      "defaultValue": "35fed01d-9872-479b-a14a-270022e7f87a"
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
-    "RedCanaryThreatDetection_AnalyticalRules": "RedCanaryThreatDetection_AnalyticalRules",
-    "_RedCanaryThreatDetection_AnalyticalRules": "[variables('RedCanaryThreatDetection_AnalyticalRules')]",
-    "connector1-source": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',parameters('connector1-name'))]",
-    "_connector1-source": "[variables('connector1-source')]",
-    "RedCanaryDataConnectorConnector": "RedCanaryDataConnectorConnector",
-    "_RedCanaryDataConnectorConnector": "[variables('RedCanaryDataConnectorConnector')]",
-    "sourceId": "redcanary1586203186957.red-canary-azure-connector",
-    "_sourceId": "[variables('sourceId')]",
-	"detection_id": "detection_id_s",
-    "_detection_id": "[variables('detection_id')]"
+    "email": "microsoft@redcanary.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Red Canary",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "redcanary.microsoft-sentinel-solution-redcanary",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "RedCanaryDetectionsCCF",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "RedCanaryDetectionsCCFConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.2",
+      "_analyticRulecontentId1": "6d263abb-6445-45cc-93e9-c593d3d77b89",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '6d263abb-6445-45cc-93e9-c593d3d77b89')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('6d263abb-6445-45cc-93e9-c593d3d77b89')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','6d263abb-6445-45cc-93e9-c593d3d77b89','-', '1.0.2')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
-      "apiVersion": "2021-03-01-preview",
-      "kind": "Scheduled",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
       "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
       "properties": {
-        "description": "Triggers Incidents using detection data assembled by Red Canary.",
-        "displayName": "Red Canary Threat Detection",
-        "enabled": false,
-        "query": "RedCanaryDetections_CL\n| extend    process_ioc_array = todynamic(process_iocs_s),\n            child_process_ioc_array = todynamic(child_process_iocs_s),\n            cross_process_ioc_array = todynamic(cross_process_iocs_s),\n            file_mod_ioc_array = todynamic(file_modification_iocs_s),\n            identities_array = todynamic(identities_s)\n| extend    entities = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array, identities_array)\n| mv-expand entities\n| evaluate  bag_unpack(entities)\n| extend    file_hash_array = todynamic(column_ifexists('file_hashes', '[]'))\n| mv-expand file_hash_array\n| evaluate  bag_unpack(file_hash_array, 'file_hash_')\n| project   detection_id_s = column_ifexists('detection_id_s', ''),\n            detection_url_s = column_ifexists('detection_url_s', ''),\n            detection_headline_s = column_ifexists('detection_headline_s', ''),\n            detection_details_s = column_ifexists('detection_details_s', ''),\n            detection_severity_s = column_ifexists('detection_severity_s', ''),\n            host_name_s = column_ifexists('host_name_s', ''),\n            host_full_name_s = column_ifexists('host_full_name_s', ''),\n            host_os_family_s = column_ifexists('host_os_family_s', ''),\n            host_os_version_s = column_ifexists('host_os_version_s', ''),\n            tactics_s = column_ifexists('tactics_s', ''),\n            process_id = column_ifexists('process_id', ''),\n            process_command_line = column_ifexists('process_command_line', ''),\n            process_creation_time_utc = column_ifexists('process_creation_time_utc', ''),\n            file_hash_algorithm = column_ifexists('file_hash_algorithm', ''),\n            file_hash_value = column_ifexists('file_hash_value', ''),\n            file_directory = column_ifexists('file_directory', ''),\n            file_name = column_ifexists('file_name', ''),\n            user_name = column_ifexists('user_name', ''),\n            user_uid = column_ifexists('user_uid', '')\n",
-        "queryFrequency": "PT5M",
-        "queryPeriod": "PT5M",
-        "severity": "High",
-        "suppressionDuration": "PT1H",
-        "suppressionEnabled": false,
-        "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Collection",
-          "CommandAndControl",
-          "CredentialAccess",
-          "DefenseEvasion",
-          "Discovery",
-          "Execution",
-          "Exfiltration",
-          "Impact",
-          "InitialAccess",
-          "LateralMovement",
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "ProcessId",
-                "columnName": "process_id"
-              },
-              {
-                "identifier": "CommandLine",
-                "columnName": "process_command_line"
-              },
-              {
-                "identifier": "CreationTimeUtc",
-                "columnName": "process_creation_time_utc"
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Red Canary Threat Detection (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "RedCanaryDetectionsCCF",
+                  "title": "Red Canary Threat Detection (via Codeless Connector Framework)",
+                  "publisher": "Red Canary",
+                  "descriptionMarkdown": "The [Red Canary](https://www.redcanary.com/) data connector enables Red Canary to publish detections into Microsoft Sentinel using the Codeless Connector Framework push pattern and the Azure Monitor Logs Ingestion API.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Red Canary Detections",
+                      "legend": "RedCanaryDetections_CL",
+                      "baseQuery": "RedCanaryDetections_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Red Canary Detections",
+                      "query": "RedCanaryDetections_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Red Canary Detections by severity",
+                      "query": "RedCanaryDetections_CL\n| summarize Detections = count() by detection_severity_s\n| sort by Detections desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "RedCanaryDetections_CL",
+                      "lastDataReceivedQuery": "RedCanaryDetections_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "RedCanaryDetections_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires the Application Developer role or higher."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign the Monitoring Metrics Publisher role on the data collection rule. Typically requires Azure RBAC Owner or User Access Administrator."
+                      },
+                      {
+                        "name": "Red Canary",
+                        "description": "Access to configure the Microsoft Sentinel response action in Red Canary."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Create connector resources",
+                      "description": "Deploy the CCF push resources required for Red Canary detection ingestion.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Automated configuration and secure data ingestion\nClicking **Deploy** creates the Log Analytics table, Data Collection Rule (DCR), Data Collection Endpoint (DCE), Microsoft Entra application, application secret, and role assignment required to ingest Red Canary detections through the Azure Monitor Logs Ingestion API."
+                          }
+                        },
+                        {
+                          "type": "DeployPushConnectorButton",
+                          "parameters": {
+                            "label": "Deploy Red Canary connector resources",
+                            "applicationDisplayName": "Red Canary Microsoft Sentinel Connector"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Configure Red Canary",
+                      "description": "Use the generated values to configure Red Canary to send detections to this Microsoft Sentinel workspace.",
+                      "instructions": [
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Tenant ID (Directory ID)",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Entra App Registration Application ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy the connector to get the Application ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Entra App Registration Secret",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy the connector to get the application secret"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Endpoint URI",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy the connector to get the Data Collection Endpoint URI"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Data Collection Rule Immutable ID",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy the connector to get the Data Collection Rule Immutable ID"
+                          }
+                        },
+                        {
+                          "type": "CopyableLabel",
+                          "parameters": {
+                            "label": "Detections Stream Name",
+                            "value": "Custom-RedCanaryDetections"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Configure the Red Canary Microsoft Sentinel response action with the values above. Red Canary should post detection records to the Logs Ingestion API endpoint using the stream name `Custom-RedCanaryDetections`."
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
               }
-            ],
-            "entityType": "Process"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "user_name"
-              },
-              {
-                "identifier": "Sid",
-                "columnName": "user_uid"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "user_name"
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Red Canary",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Red Canary",
+                  "email": "microsoft@redcanary.com",
+                  "tier": "Partner",
+                  "link": "https://www.redcanary.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
               }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Directory",
-                "columnName": "file_directory"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "file_name"
+            },
+            {
+              "name": "RedCanaryDetectionsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-RedCanaryDetections": {
+                    "columns": [
+                      {
+                        "name": "detection",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "host",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "child_process_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "child_process_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "cross_process_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "cross_process_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "host_os_family_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_os_family",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_os_version_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_os_version",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_name_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_full_name_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "host_full_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "identities_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "identities",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "tactics_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "tactics",
+                        "type": "string"
+                      },
+                      {
+                        "name": "process_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "process_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "file_modification_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "file_modification_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "network_connection_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "network_connection_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "registry_modification_iocs_s",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "registry_modification_iocs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "detection_id_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_url_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_url",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_headline_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_headline",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_details_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_details",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_severity_s",
+                        "type": "string"
+                      },
+                      {
+                        "name": "detection_severity",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-RedCanaryDetections"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\n| extend\n    detection_object = todynamic(iif(isempty(tostring(detection)), '{}', tostring(detection))),\n    host_object = todynamic(iif(isempty(tostring(host)), '{}', tostring(host)))\n| project\n    TimeGenerated = now(),\n    child_process_iocs_s = iif(isnotempty(tostring(child_process_iocs_s)), tostring(child_process_iocs_s), tostring(child_process_iocs)),\n    cross_process_iocs_s = iif(isnotempty(tostring(cross_process_iocs_s)), tostring(cross_process_iocs_s), tostring(cross_process_iocs)),\n    host_os_family_s = iif(isnotempty(tostring(host_os_family_s)), tostring(host_os_family_s), iif(isnotempty(tostring(host_os_family)), tostring(host_os_family), tostring(host_object.os_family))),\n    host_os_version_s = iif(isnotempty(tostring(host_os_version_s)), tostring(host_os_version_s), iif(isnotempty(tostring(host_os_version)), tostring(host_os_version), tostring(host_object.os_version))),\n    host_name_s = iif(isnotempty(tostring(host_name_s)), tostring(host_name_s), iif(isnotempty(tostring(host_name)), tostring(host_name), tostring(host_object.name))),\n    host_full_name_s = iif(isnotempty(tostring(host_full_name_s)), tostring(host_full_name_s), iif(isnotempty(tostring(host_full_name)), tostring(host_full_name), tostring(host_object.full_name))),\n    identities_s = iif(isnotempty(tostring(identities_s)), tostring(identities_s), tostring(identities)),\n    tactics_s = iif(isnotempty(tostring(tactics_s)), tostring(tactics_s), tostring(tactics)),\n    process_iocs_s = iif(isnotempty(tostring(process_iocs_s)), tostring(process_iocs_s), tostring(process_iocs)),\n    file_modification_iocs_s = iif(isnotempty(tostring(file_modification_iocs_s)), tostring(file_modification_iocs_s), tostring(file_modification_iocs)),\n    network_connection_iocs_s = iif(isnotempty(tostring(network_connection_iocs_s)), tostring(network_connection_iocs_s), tostring(network_connection_iocs)),\n    registry_modification_iocs_s = iif(isnotempty(tostring(registry_modification_iocs_s)), tostring(registry_modification_iocs_s), tostring(registry_modification_iocs)),\n    detection_id_s = iif(isnotempty(tostring(detection_id_s)), tostring(detection_id_s), iif(isnotempty(tostring(detection_id)), tostring(detection_id), tostring(detection_object.id))),\n    detection_url_s = iif(isnotempty(tostring(detection_url_s)), tostring(detection_url_s), iif(isnotempty(tostring(detection_url)), tostring(detection_url), tostring(detection_object.url))),\n    detection_headline_s = iif(isnotempty(tostring(detection_headline_s)), tostring(detection_headline_s), iif(isnotempty(tostring(detection_headline)), tostring(detection_headline), tostring(detection_object.headline))),\n    detection_details_s = iif(isnotempty(tostring(detection_details_s)), tostring(detection_details_s), iif(isnotempty(tostring(detection_details)), tostring(detection_details), tostring(detection_object.details))),\n    detection_severity_s = iif(isnotempty(tostring(detection_severity_s)), tostring(detection_severity_s), iif(isnotempty(tostring(detection_severity)), tostring(detection_severity), tostring(detection_object.severity)))",
+                    "outputStream": "Custom-RedCanaryDetections_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/', parameters('subscription'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Insights/dataCollectionEndpoints/', parameters('workspace'))]"
               }
-            ],
-            "entityType": "File"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "host_name_s"
-              },
-              {
-                "identifier": "FullName",
-                "columnName": "host_full_name_s"
-              },
-              {
-                "identifier": "OSFamily",
-                "columnName": "host_os_family_s"
+            },
+            {
+              "name": "RedCanaryDetections_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "RedCanaryDetections_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The timestamp when the detection was ingested into Microsoft Sentinel."
+                    },
+                    {
+                      "name": "child_process_iocs_s",
+                      "type": "string",
+                      "description": "Serialized child process indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "cross_process_iocs_s",
+                      "type": "string",
+                      "description": "Serialized cross-process indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "host_os_family_s",
+                      "type": "string",
+                      "description": "Operating system family for the affected host."
+                    },
+                    {
+                      "name": "host_os_version_s",
+                      "type": "string",
+                      "description": "Operating system version for the affected host."
+                    },
+                    {
+                      "name": "host_name_s",
+                      "type": "string",
+                      "description": "Host name for the affected endpoint."
+                    },
+                    {
+                      "name": "host_full_name_s",
+                      "type": "string",
+                      "description": "Fully qualified host name for the affected endpoint."
+                    },
+                    {
+                      "name": "identities_s",
+                      "type": "string",
+                      "description": "Serialized identities associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "tactics_s",
+                      "type": "string",
+                      "description": "MITRE ATT&CK tactics associated with the detection."
+                    },
+                    {
+                      "name": "process_iocs_s",
+                      "type": "string",
+                      "description": "Serialized process indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "file_modification_iocs_s",
+                      "type": "string",
+                      "description": "Serialized file modification indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "network_connection_iocs_s",
+                      "type": "string",
+                      "description": "Serialized network connection indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "registry_modification_iocs_s",
+                      "type": "string",
+                      "description": "Serialized registry modification indicators associated with the Red Canary detection."
+                    },
+                    {
+                      "name": "detection_id_s",
+                      "type": "string",
+                      "description": "Unique Red Canary detection identifier."
+                    },
+                    {
+                      "name": "detection_url_s",
+                      "type": "string",
+                      "description": "URL for the detection in Red Canary."
+                    },
+                    {
+                      "name": "detection_headline_s",
+                      "type": "string",
+                      "description": "Headline for the Red Canary detection."
+                    },
+                    {
+                      "name": "detection_details_s",
+                      "type": "string",
+                      "description": "Detection details provided by Red Canary."
+                    },
+                    {
+                      "name": "detection_severity_s",
+                      "type": "string",
+                      "description": "Severity assigned to the Red Canary detection."
+                    }
+                  ]
+                }
               }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Algorithm",
-                "columnName": "file_hash_algorithm"
-              },
-              {
-                "identifier": "Value",
-                "columnName": "file_hash_value"
-              }
-            ],
-            "entityType": "FileHash"
-          }
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+            }
+          ]
         },
-        "customDetails": {
-          "detection_id": "[variables('_detection_id')]"
-        },
-        "alertDetailsOverride": {
-          "alertSeverityColumnName": "detection_severity_s",
-          "alertDescriptionFormat": "Red Canary has published a {{detection_severity_s}} severity detection with details:\n\n{{detection_details_s}}\n\nView the Detection at: {{detection_url_s}}\n",
-          "alertDisplayNameFormat": "Red Canary has published Detection-{{detection_id_s}}",
-          "alertTacticsColumnName": "tactics_s"
-        }
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
-      "id": "[variables('_connector1-source')]",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('connector1-name'))]",
-      "apiVersion": "2021-03-01-preview",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
       "location": "[parameters('workspace-location')]",
-      "kind": "GenericUI",
+      "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "title": "Red Canary Threat Detection",
+          "id": "RedCanaryDetectionsCCF",
+          "title": "Red Canary Threat Detection (via Codeless Connector Framework)",
           "publisher": "Red Canary",
-          "descriptionMarkdown": "The Red Canary data connector provides the capability to ingest published Detections into Microsoft Sentinel using the Data Collector REST API.",
+          "descriptionMarkdown": "The [Red Canary](https://www.redcanary.com/) data connector enables Red Canary to publish detections into Microsoft Sentinel using the Codeless Connector Framework push pattern and the Azure Monitor Logs Ingestion API.",
           "graphQueries": [
             {
               "metricName": "Red Canary Detections",
@@ -202,31 +607,35 @@
             {
               "description": "All Red Canary Detections",
               "query": "RedCanaryDetections_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Red Canary Detections by severity",
+              "query": "RedCanaryDetections_CL\n| summarize Detections = count() by detection_severity_s\n| sort by Detections desc"
             }
           ],
           "dataTypes": [
             {
               "name": "RedCanaryDetections_CL",
-              "lastDataReceivedQuery": "RedCanaryDetections_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+              "lastDataReceivedQuery": "RedCanaryDetections_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
-          "connectivityCriterias": [
+          "connectivityCriteria": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "RedCanaryDetections_CL | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(90d)"
+                "RedCanaryDetections_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
               ]
             }
           ],
           "availability": {
             "status": 1,
-            "isPreview": true
+            "isPreview": false
           },
           "permissions": {
             "resourceProvider": [
               {
                 "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions are required.",
+                "permissionsDisplayText": "Read and Write permissions are required.",
                 "providerDisplayName": "Workspace",
                 "scope": "Workspace",
                 "requiredPermissions": {
@@ -234,39 +643,108 @@
                   "write": true,
                   "delete": true
                 }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra",
+                "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires the Application Developer role or higher."
               },
               {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
-                }
+                "name": "Microsoft Azure",
+                "description": "Permission to assign the Monitoring Metrics Publisher role on the data collection rule. Typically requires Azure RBAC Owner or User Access Administrator."
+              },
+              {
+                "name": "Red Canary",
+                "description": "Access to configure the Microsoft Sentinel response action in Red Canary."
               }
             ]
           },
           "instructionSteps": [
             {
-              "description": "Create an Automate Playbook and Trigger as detailed in [this article](https://help.redcanary.com/hc/en-us/articles/4410957523479-Azure-Sentinel). You can skip the **Add analysis rule to Microsoft Sentinel** section; this data connector allows you to import the analysis rule directly into your workspace.",
+              "title": "1. Create connector resources",
+              "description": "Deploy the CCF push resources required for Red Canary detection ingestion.",
               "instructions": [
                 {
+                  "type": "Markdown",
                   "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Workspace ID"
-                  },
-                  "type": "CopyableLabel"
+                    "content": "#### Automated configuration and secure data ingestion\nClicking **Deploy** creates the Log Analytics table, Data Collection Rule (DCR), Data Collection Endpoint (DCE), Microsoft Entra application, application secret, and role assignment required to ingest Red Canary detections through the Azure Monitor Logs Ingestion API."
+                  }
                 },
                 {
+                  "type": "DeployPushConnectorButton",
                   "parameters": {
+                    "label": "Deploy Red Canary connector resources",
+                    "applicationDisplayName": "Red Canary Microsoft Sentinel Connector"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Configure Red Canary",
+              "description": "Use the generated values to configure Red Canary to send detections to this Microsoft Sentinel workspace.",
+              "instructions": [
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Tenant ID (Directory ID)",
                     "fillWith": [
-                      "PrimaryKey"
+                      "TenantId"
+                    ]
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Entra App Registration Application ID",
+                    "fillWith": [
+                      "ApplicationId"
                     ],
-                    "label": "Primary Key"
-                  },
-                  "type": "CopyableLabel"
+                    "placeholder": "Deploy the connector to get the Application ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Entra App Registration Secret",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy the connector to get the application secret"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Endpoint URI",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy the connector to get the Data Collection Endpoint URI"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Data Collection Rule Immutable ID",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy the connector to get the Data Collection Rule Immutable ID"
+                  }
+                },
+                {
+                  "type": "CopyableLabel",
+                  "parameters": {
+                    "label": "Detections Stream Name",
+                    "value": "Custom-RedCanaryDetections"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Configure the Red Canary Microsoft Sentinel response action with the values above. Red Canary should post detection records to the Logs Ingestion API endpoint using the stream name `Custom-RedCanaryDetections`."
+                  }
                 }
               ]
             }
@@ -275,21 +753,403 @@
       }
     },
     {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2021-03-01-preview",
       "properties": {
-        "version": "1.0.0",
-        "kind": "Solution",
-        "contentId": "[variables('_sourceId')]",
-        "parentId": "[variables('_sourceId')]",
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
         "source": {
-          "kind": "Solution",
-          "name": "Red Canary",
-          "sourceId": "[variables('_sourceId')]"
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
         },
         "author": {
           "name": "Red Canary",
-          "email": "microsoft@redcanary.com"
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Red Canary",
+          "email": "microsoft@redcanary.com",
+          "tier": "Partner",
+          "link": "https://www.redcanary.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Red Canary Threat Detection (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Red Canary Threat Detection (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Red Canary",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Red Canary",
+                  "email": "microsoft@redcanary.com",
+                  "tier": "Partner",
+                  "link": "https://www.redcanary.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'RedCanaryDetectionsPushConnector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "RedCanaryDetectionsCCF",
+                "dcrConfig": {
+                  "dataCollectionRuleId": "{{dataCollectionRuleId}}",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-RedCanaryDetections"
+                },
+                "auth": {
+                  "type": "Push",
+                  "appId": "[[parameters('auth').appId]",
+                  "servicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$[*]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "RedCanaryThreatDetection_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Triggers Incidents using detection data assembled by Red Canary.",
+                "displayName": "Red Canary Threat Detection",
+                "enabled": false,
+                "query": "let detectionLookback = 1d;\nlet newDetectionWindow = 5m;\nRedCanaryDetections_CL\n| where TimeGenerated >= ago(detectionLookback)\n| where isnotempty(detection_id_s)\n| summarize FirstSeen = min(TimeGenerated), arg_max(TimeGenerated, *) by detection_id_s\n| where FirstSeen >= ago(newDetectionWindow)\n| extend    process_iocs_raw = column_ifexists('process_iocs_s', '[]'),\n            child_process_iocs_raw = column_ifexists('child_process_iocs_s', '[]'),\n            cross_process_iocs_raw = column_ifexists('cross_process_iocs_s', '[]'),\n            file_modification_iocs_raw = column_ifexists('file_modification_iocs_s', '[]'),\n            identities_raw = column_ifexists('identities_s', '[]')\n| extend    process_ioc_array = todynamic(iff(isempty(process_iocs_raw), '[]', process_iocs_raw)),\n            child_process_ioc_array = todynamic(iff(isempty(child_process_iocs_raw), '[]', child_process_iocs_raw)),\n            cross_process_ioc_array = todynamic(iff(isempty(cross_process_iocs_raw), '[]', cross_process_iocs_raw)),\n            file_mod_ioc_array = todynamic(iff(isempty(file_modification_iocs_raw), '[]', file_modification_iocs_raw)),\n            identities_array = todynamic(iff(isempty(identities_raw), '[]', identities_raw))\n| extend    evidence_array = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array)\n| extend    evidence = todynamic(evidence_array[0]),\n            identity = todynamic(identities_array[0])\n| extend    file_hash_array = todynamic(evidence.file_hashes)\n| extend    file_hash = todynamic(file_hash_array[0])\n| project   detection_id_s,\n            detection_url_s = column_ifexists('detection_url_s', ''),\n            detection_headline_s = column_ifexists('detection_headline_s', ''),\n            detection_details_s = column_ifexists('detection_details_s', ''),\n            detection_severity_s = column_ifexists('detection_severity_s', ''),\n            host_name_s = column_ifexists('host_name_s', ''),\n            host_full_name_s = column_ifexists('host_full_name_s', ''),\n            host_os_family_s = column_ifexists('host_os_family_s', ''),\n            host_os_version_s = column_ifexists('host_os_version_s', ''),\n            tactics_s = column_ifexists('tactics_s', ''),\n            process_id = tostring(evidence.process_id),\n            process_command_line = tostring(evidence.process_command_line),\n            process_creation_time_utc = tostring(evidence.process_creation_time_utc),\n            file_hash_algorithm = tostring(file_hash.algorithm),\n            file_hash_value = tostring(file_hash.value),\n            file_directory = tostring(evidence.file_directory),\n            file_name = tostring(evidence.file_name),\n            user_name = tostring(identity.user_name),\n            user_uid = tostring(identity.user_uid)\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "P1D",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "RedCanaryDetections_CL"
+                    ],
+                    "connectorId": "RedCanaryDetectionsCCF"
+                  }
+                ],
+                "tactics": [
+                  "Collection",
+                  "CommandAndControl",
+                  "CredentialAccess",
+                  "DefenseEvasion",
+                  "Discovery",
+                  "Execution",
+                  "Exfiltration",
+                  "Impact",
+                  "InitialAccess",
+                  "LateralMovement",
+                  "Persistence",
+                  "PrivilegeEscalation"
+                ],
+                "techniques": [
+                  "T1566",
+                  "T1059",
+                  "T1547",
+                  "T1548",
+                  "T1562",
+                  "T1003",
+                  "T1087",
+                  "T1021",
+                  "T1119",
+                  "T1071",
+                  "T1041",
+                  "T1499"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Process",
+                    "fieldMappings": [
+                      {
+                        "columnName": "process_id",
+                        "identifier": "ProcessId"
+                      },
+                      {
+                        "columnName": "process_command_line",
+                        "identifier": "CommandLine"
+                      },
+                      {
+                        "columnName": "process_creation_time_utc",
+                        "identifier": "CreationTimeUtc"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "columnName": "user_name",
+                        "identifier": "FullName"
+                      },
+                      {
+                        "columnName": "user_uid",
+                        "identifier": "Sid"
+                      },
+                      {
+                        "columnName": "user_name",
+                        "identifier": "Name"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "File",
+                    "fieldMappings": [
+                      {
+                        "columnName": "file_directory",
+                        "identifier": "Directory"
+                      },
+                      {
+                        "columnName": "file_name",
+                        "identifier": "Name"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "columnName": "host_name_s",
+                        "identifier": "HostName"
+                      },
+                      {
+                        "columnName": "host_full_name_s",
+                        "identifier": "FullName"
+                      },
+                      {
+                        "columnName": "host_os_family_s",
+                        "identifier": "OSFamily"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "FileHash",
+                    "fieldMappings": [
+                      {
+                        "columnName": "file_hash_algorithm",
+                        "identifier": "Algorithm"
+                      },
+                      {
+                        "columnName": "file_hash_value",
+                        "identifier": "Value"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                  "detection_id": "detection_id_s"
+                },
+                "alertDetailsOverride": {
+                  "alertSeverityColumnName": "detection_severity_s",
+                  "alertTacticsColumnName": "tactics_s",
+                  "alertDescriptionFormat": "Red Canary has published a {{detection_severity_s}} severity detection with details:\n\n{{detection_details_s}}\n\nView the Detection at: {{detection_url_s}}\n",
+                  "alertDisplayNameFormat": "Red Canary has published Detection-{{detection_id_s}}"
+                },
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": true,
+                    "matchingMethod": "Selected",
+                    "groupByCustomDetails": [
+                      "detection_id"
+                    ],
+                    "groupByEntities": [],
+                    "groupByAlertDetails": [],
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "7d"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Red Canary Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Red Canary",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Red Canary",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Red Canary",
+                  "email": "microsoft@redcanary.com",
+                  "tier": "Partner",
+                  "link": "https://www.redcanary.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Red Canary Threat Detection",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Red Canary",
+        "publisherDisplayName": "Red Canary",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Red%20Canary/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.redcanary.com/\">Red Canary</a> solution for Microsoft Sentinel enables Red Canary to publish threat detections into a Microsoft Sentinel custom table for alerting and incident creation.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Microsoft Sentinel Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data collection rules</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/red_canary_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Red Canary",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Red Canary",
+          "email": "[variables('_email')]"
         },
         "support": {
           "name": "Red Canary",
@@ -301,29 +1161,29 @@
           "operator": "AND",
           "criteria": [
             {
-              "kind": "AnalyticsRule",
-              "contentId": "[variables('_RedCanaryThreatDetection_AnalyticalRules')]",
-              "version": "1.0.0"
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             },
             {
-              "kind": "DataConnector",
-              "contentId": "[variables('_RedCanaryDataConnectorConnector')]",
-              "version": "1.0.0"
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
             }
           ]
         },
         "firstPublishDate": "2022-03-04",
-        "lastPublishDate": "2022-03-04",
+        "lastPublishDate": "2026-05-29",
         "providers": [
           "Red Canary"
         ],
         "categories": {
           "domains": [
-            "Application"
+            "Security - Threat Protection"
           ]
         }
       },
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
     }
   ],
   "outputs": {}

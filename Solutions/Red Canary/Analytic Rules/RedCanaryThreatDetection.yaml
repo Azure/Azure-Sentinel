@@ -4,10 +4,10 @@ name: Red Canary Threat Detection
 description: Triggers Incidents using detection data assembled by Red Canary.
 severity: High
 requiredDataConnectors:
-  - connectorId: RedCanaryDataConnector
+  - connectorId: RedCanaryDetectionsCCF
     dataTypes:
       - RedCanaryDetections_CL
-queryPeriod: 5m
+queryPeriod: 1d
 queryFrequency: 5m
 triggerOperator: gt
 triggerThreshold: 0
@@ -38,19 +38,29 @@ relevantTechniques:
   - T1041
   - T1499
 query: |
+  let detectionLookback = 1d;
+  let newDetectionWindow = 5m;
   RedCanaryDetections_CL
-  | extend    process_ioc_array = todynamic(process_iocs_s),
-              child_process_ioc_array = todynamic(child_process_iocs_s),
-              cross_process_ioc_array = todynamic(cross_process_iocs_s),
-              file_mod_ioc_array = todynamic(file_modification_iocs_s),
-              identities_array = todynamic(identities_s)
-  | extend    entities = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array, identities_array)
-  | mv-expand entities
-  | evaluate  bag_unpack(entities)
-  | extend    file_hash_array = todynamic(column_ifexists('file_hashes', '[]'))
-  | mv-expand file_hash_array
-  | evaluate  bag_unpack(file_hash_array, 'file_hash_')
-  | project   detection_id_s = column_ifexists('detection_id_s', ''),
+  | where TimeGenerated >= ago(detectionLookback)
+  | where isnotempty(detection_id_s)
+  | summarize FirstSeen = min(TimeGenerated), arg_max(TimeGenerated, *) by detection_id_s
+  | where FirstSeen >= ago(newDetectionWindow)
+  | extend    process_iocs_raw = column_ifexists('process_iocs_s', '[]'),
+              child_process_iocs_raw = column_ifexists('child_process_iocs_s', '[]'),
+              cross_process_iocs_raw = column_ifexists('cross_process_iocs_s', '[]'),
+              file_modification_iocs_raw = column_ifexists('file_modification_iocs_s', '[]'),
+              identities_raw = column_ifexists('identities_s', '[]')
+  | extend    process_ioc_array = todynamic(iff(isempty(process_iocs_raw), '[]', process_iocs_raw)),
+              child_process_ioc_array = todynamic(iff(isempty(child_process_iocs_raw), '[]', child_process_iocs_raw)),
+              cross_process_ioc_array = todynamic(iff(isempty(cross_process_iocs_raw), '[]', cross_process_iocs_raw)),
+              file_mod_ioc_array = todynamic(iff(isempty(file_modification_iocs_raw), '[]', file_modification_iocs_raw)),
+              identities_array = todynamic(iff(isempty(identities_raw), '[]', identities_raw))
+  | extend    evidence_array = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array)
+  | extend    evidence = todynamic(evidence_array[0]),
+              identity = todynamic(identities_array[0])
+  | extend    file_hash_array = todynamic(evidence.file_hashes)
+  | extend    file_hash = todynamic(file_hash_array[0])
+  | project   detection_id_s,
               detection_url_s = column_ifexists('detection_url_s', ''),
               detection_headline_s = column_ifexists('detection_headline_s', ''),
               detection_details_s = column_ifexists('detection_details_s', ''),
@@ -60,15 +70,15 @@ query: |
               host_os_family_s = column_ifexists('host_os_family_s', ''),
               host_os_version_s = column_ifexists('host_os_version_s', ''),
               tactics_s = column_ifexists('tactics_s', ''),
-              process_id = column_ifexists('process_id', ''),
-              process_command_line = column_ifexists('process_command_line', ''),
-              process_creation_time_utc = column_ifexists('process_creation_time_utc', ''),
-              file_hash_algorithm = column_ifexists('file_hash_algorithm', ''),
-              file_hash_value = column_ifexists('file_hash_value', ''),
-              file_directory = column_ifexists('file_directory', ''),
-              file_name = column_ifexists('file_name', ''),
-              user_name = column_ifexists('user_name', ''),
-              user_uid = column_ifexists('user_uid', '')
+              process_id = tostring(evidence.process_id),
+              process_command_line = tostring(evidence.process_command_line),
+              process_creation_time_utc = tostring(evidence.process_creation_time_utc),
+              file_hash_algorithm = tostring(file_hash.algorithm),
+              file_hash_value = tostring(file_hash.value),
+              file_directory = tostring(evidence.file_directory),
+              file_name = tostring(evidence.file_name),
+              user_name = tostring(identity.user_name),
+              user_uid = tostring(identity.user_uid)
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings:
@@ -120,13 +130,13 @@ alertDetailsOverride:
     View the Detection at: {{detection_url_s}}
   alertTacticsColumnName: tactics_s
   alertSeverityColumnName: detection_severity_s
-version: 1.0.1
+version: 1.0.2
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: true
     reopenClosedIncident: false
-    lookbackDuration: 5m
+    lookbackDuration: 7d
     matchingMethod: Selected
     groupByEntities: []
     groupByAlertDetails: []
