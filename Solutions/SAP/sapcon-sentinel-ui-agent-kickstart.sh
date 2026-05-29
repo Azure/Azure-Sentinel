@@ -146,7 +146,7 @@ while [[ $# -gt 0 ]]; do
 		shift 2
 		;;
 	--kvaultname)
-		kv="$2"
+		kv="${2,,}"
 		shift 2
 		;;
 	--noautorestart)
