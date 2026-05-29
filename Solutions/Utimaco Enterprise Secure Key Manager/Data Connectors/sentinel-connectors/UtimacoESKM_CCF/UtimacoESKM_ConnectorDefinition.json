@@ -1,0 +1,133 @@
+{
+    "name": "UtimacoESKMConnector",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "availability": {
+        "isPreview": true,
+        "status": 1
+    },
+    "properties": {
+        "connectorUiConfig": {
+            "id": "UtimacoESKMConnector",
+            "title": "Utimaco Enterprise Secure Key Manager (ESKM)",
+            "publisher": "Utimaco",
+            "descriptionMarkdown": "The Utimaco ESKM connector ingests KMIP server logs from Utimaco Enterprise Secure Key Manager (ESKM) into Microsoft Sentinel.\n\nSupports Basic authentication (username/password).\n\nFor more information, visit [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager).",
+            "graphQueriesTableName": "UtimacoESKMKmipServerLogs_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Total KMIP server events received",
+                    "legend": "{{graphQueriesTableName}}",
+                    "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(14d) | summarize count() by bin(TimeGenerated, 1d)"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(7d) | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "{{graphQueriesTableName}} | where TimeGenerated > ago(7d) | summarize LastDataReceived = max(TimeGenerated) | where isnotempty(LastDataReceived)"
+                    ]
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "All KMIP server events from the last 24 hours",
+                    "query": "{{graphQueriesTableName}} | where TimeGenerated > ago(24h) | take 100"
+                },
+                {
+                    "description": "Events grouped by event type",
+                    "query": "{{graphQueriesTableName}} | summarize count() by Event | order by count_ desc"
+                },
+                {
+                    "description": "Failed KMIP Client Operations with reason codes",
+                    "query": "{{graphQueriesTableName}} | where Result != 'SUCCESS' | summarize count() by Operation, Result, Reason | order by count_ desc"
+                },
+                {
+                    "description": "Authentication failures by client IP and user",
+                    "query": "{{graphQueriesTableName}} | where Event == 'Authentication Failure' | summarize FailureCount = count() by IP, User | order by FailureCount desc"
+                },
+                {
+                    "description": "KMIP operations by object type",
+                    "query": "{{graphQueriesTableName}} | where isnotempty(Operation) | summarize count() by Operation, ObjectType | order by count_ desc"
+                }
+            ],
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": false
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Utimaco ESKM Account Credentials",
+                        "description": "Utimaco ESKM account credentials (username and password) are required to authenticate to the ESKM management API. See [Utimaco ESKM Documentation](https://utimaco.com/key-management/enterprise-secure-key-manager)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "Step 1 - Prerequisites",
+                    "description": "Ensure you have a Utimaco ESKM management account with permissions to access the management API. Note the base URL of your ESKM appliance (typically `https://<eskm-host>:8443`)."
+                },
+                {
+                    "title": "Step 2 - Connect to Utimaco ESKM",
+                    "description": "Provide your Utimaco ESKM management API base URL and account credentials below, then click Connect.",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "API Base URL",
+                                "placeholder": "https://<eskm-host>:8443",
+                                "type": "text",
+                                "name": "BaseUrl",
+                                "validations": { "required": true }
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Username",
+                                "placeholder": "Enter username",
+                                "type": "text",
+                                "name": "username",
+                                "validations": { "required": true }
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Password",
+                                "placeholder": "Enter password",
+                                "type": "password",
+                                "name": "password",
+                                "validations": { "required": true }
+                            }
+                        },
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "connectLabel": "connect",
+                                "name": "connect"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
