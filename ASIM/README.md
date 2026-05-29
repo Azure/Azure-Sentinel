@@ -8,7 +8,7 @@ For more information, see [Normalization and the Advanced Security Information M
 
 GitHub Copilot agent skills are available to help you create, validate, deploy, and package ASIM parsers locally. The skills guide you through the full workflow — from gathering requirements and generating KQL parsers to deploying to Log Analytics and opening a PR.
 
-See [ASIM/skills/README.md](skills/README.md) to get started.
+See [ASIM Parser Creation - Agentic](tools/ASIMParserCreation-Agentic/README.md) to get started.
 
 ## Deploy ASIM
 

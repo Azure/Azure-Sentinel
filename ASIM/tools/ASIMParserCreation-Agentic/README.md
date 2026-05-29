@@ -37,11 +37,12 @@ Copilot skills for creating, validating, deploying, and packaging ASIM parsers l
    ```powershell
    copilot
    ```
-4. Load the relevant ASIM skills (or any individual skill) with `/skills`:
+4. If not already loaded, load the relevant ASIM skills (or any individual skill) with `/skills`:
    ```
-   /skills add ASIM/skills/
+   /skills add .github/skills/
    ```
 5. Prompt Copilot within the session:
+   Note: It is best that you use `Claude Sonnet 4.6` or `Claude Opus 4.6` for the most accurate KQL parser.
    ```
    Create a new ASIM parser for my source table.
    ```
