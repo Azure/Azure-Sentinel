@@ -1,3 +1,6 @@
+## 2.2.1
+- Adds info-level logging line when batches are successfully sent.
+
 ## 2.2.0
 - Adds ability to use either new or old configuration values.
 
