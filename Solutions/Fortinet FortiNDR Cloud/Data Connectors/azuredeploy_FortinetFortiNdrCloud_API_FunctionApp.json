@@ -9,6 +9,12 @@
                 "description": "The name of the Azure Function app."
             }
         },
+        "workspace": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of your Log Analytics / Microsoft Sentinel Workspace."
+            }
+        },
         "storageAccountType": {
             "defaultValue": "Standard_LRS",
             "allowedValues": [
@@ -48,13 +54,26 @@
             ],
             "type": "Int"
         },
-        "WorkspaceId": {
+        "AzureClientID": {
             "type": "string",
-            "defaultValue": "<WorkspaceId>"
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client ID that you have created during app registration"
+            }
         },
-        "WorkspaceKey": {
+        "AzureClientSecret": {
             "type": "securestring",
-            "defaultValue": "<workspaceKey>"
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client Secret for your app registration"
+            }
+        },
+        "AzureTenantID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant ID"
+            }
         },
         "AwsAccessKeyId": {
             "type": "string",
@@ -134,10 +153,77 @@
         "applicationInsightsName": "[parameters('functionAppName')]",
         "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
         "resourceToken": "[toLower(uniqueString(subscription().id, resourceGroup().name, parameters('location')))]",
-        "deploymentStorageContainerName": "[concat('app-package-', take(parameters('functionAppName'), 32),'-', take(variables('resourceToken'), 7))]",
-        "LogAnalyticsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
+        "deploymentStorageContainerName": "[concat('app-package-', take(parameters('functionAppName'), 32),'-', take(variables('resourceToken'), 7))]"
     },
     "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[format('{0}/{1}', parameters('workspace'), 'FortinetFortiNdrCloudRaw_CL')]",
+            "properties": {
+                "retentionInDays": 30,
+                "totalRetentionInDays": 30,
+                "schema": {
+                    "name": "FortinetFortiNdrCloudRaw_CL",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime" },
+                        { "name": "LogTypeSuffix", "type": "string" },
+                        { "name": "RawData", "type": "string" }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "dce-fortinet-fortindr-cloud",
+            "location": "[parameters('location')]",
+            "properties": {
+                "description": "Data Collection Endpoint for Fortinet FortiNDR Cloud log ingestion fabric."
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "dcr-FortinetFortiNdrCloud",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'FortinetFortiNdrCloudRaw_CL')]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'dce-fortinet-fortindr-cloud')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'dce-fortinet-fortindr-cloud')]",
+                "streamDeclarations": {
+                    "Custom-FortinetFortiNdrCloudRaw_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "LogTypeSuffix", "type": "string" },
+                            { "name": "RawData", "type": "string" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+                            "name": "la-destination"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-FortinetFortiNdrCloudRaw_CL"
+                        ],
+                        "destinations": [
+                            "la-destination"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-FortinetFortiNdrCloudRaw_CL"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2023-01-01",
@@ -206,7 +292,9 @@
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', 'dcr-FortinetFortiNdrCloud')]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'dce-fortinet-fortindr-cloud')]"
             ],
             "kind": "functionapp,linux",
             "identity": {
@@ -234,6 +322,7 @@
                     }
                 },
                 "siteConfig": {
+                    "packageUri": "https://github.com/FortiNDR-Integration/FNC-Azure-Sentinel/raw/refs/heads/FortiNDR-Cloud-Sentinel-data-collection-api-retirement/Solutions/Fortinet%20FortiNDR%20Cloud/Data%20Connectors/fortinetFortiNdrCloudDataConn_v2.zip",
                     "appSettings": [
                         {
                             "name": "AzureWebJobsStorage__accountName",
@@ -272,12 +361,24 @@
                             "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02').ConnectionString]"
                         },
                         {
-                            "name": "WorkspaceId",
-                            "value": "[parameters('WorkspaceID')]"
+                            "name": "TENANT_ID",
+                            "value": "[parameters('AzureTenantID')]"
                         },
                         {
-                            "name": "WorkspaceKey",
-                            "value": "[parameters('WorkspaceKey')]"
+                            "name": "CLIENT_ID",
+                            "value": "[parameters('AzureClientID')]"
+                        },
+                        {
+                            "name": "CLIENT_SECRET",
+                            "value": "[parameters('AzureClientSecret')]"
+                        },
+                        {
+                            "name": "DceUri",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'dce-fortinet-fortindr-cloud'), '2022-06-01').logsIngestion.endpoint]"
+                        },
+                        {
+                            "name": "DcrImmutableId",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'dcr-FortinetFortiNdrCloud'), '2022-06-01').immutableId]"
                         },
                         {
                             "name": "AwsAccessKeyId",
@@ -358,10 +459,6 @@
                         {
                             "name": "PostingLimit",
                             "value": "[parameters('PostingLimit')]"
-                        },
-                        {
-                            "name": "logAnalyticsUri",
-                            "value": "[variables('LogAnalyticsUri')]"
                         }
                     ]
                 }
@@ -407,34 +504,6 @@
             "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
                 "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
-            }
-        },
-        { 
-            "type": "Microsoft.Resources/deploymentScripts",
-            "apiVersion": "2020-10-01",
-            "name": "WaitSection",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
-            ],
-            "kind": "AzurePowerShell",
-            "properties": {
-                "azPowerShellVersion": "7.0",
-                "scriptContent": "start-sleep -Seconds 180",
-                "cleanupPreference": "Always",
-                "retentionInterval": "PT1H"
-            }
-        },
-        {
-            "type": "Microsoft.Web/sites/extensions",
-            "apiVersion": "2022-09-01",
-            "name": "[format('{0}/{1}', parameters('functionAppName'), 'onedeploy')]",
-            "dependsOn": [
-                "WaitSection"
-            ],
-            "properties": {
-                "packageUri": "https://aka.ms/sentinel-FortinetFortiNDR-functionapp",
-                "remoteBuild": true
             }
         }
     ]
