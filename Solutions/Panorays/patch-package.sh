@@ -87,6 +87,13 @@ t['parameters']['panoraysAPIBaseUrl'] = {
     'defaultValue': 'https://api.panoraysapp.com',
     'metadata': {'description': 'Base URL for the Panorays API'}
 }
+t['parameters']['dcrConfig'] = {
+    'type': 'object',
+    'defaultValue': {
+            'dataCollectionEndpoint': '',
+            'dataCollectionRuleImmutableId': ''
+    }
+}
 with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Patched mainTemplate.json parameters successfully')
@@ -115,7 +122,30 @@ with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Removed TemplateEmptyArray variable')
 "
+# Step 3d: Fix DCR dataCollectionEndpointId to use built-in functions instead of missing parameters
+python3 -c "
+import json
+path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
+with open(path) as f:
+    t = json.load(f)
 
+def fix_dce_id(obj):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == 'dataCollectionEndpointId' and isinstance(v, str) and \"parameters('subscription')\" in v:
+                obj[k] = \"[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'),'-DCE')]\"
+                print(f'Fixed dataCollectionEndpointId')
+            else:
+                fix_dce_id(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            fix_dce_id(item)
+
+fix_dce_id(t)
+with open(path, 'w') as f:
+    json.dump(t, f, indent=4)
+print('Fixed DCR dataCollectionEndpointId')
+"
 # Step 4: Regenerate the zip from the patched files
 
 python3 -c "
