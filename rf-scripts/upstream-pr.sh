@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# open-upstream-pr.sh
+# upstream-pr.sh
 # Takes the current feature branch (based on master-rf) and prepares a clean
 # upstream branch based on master, then pushes and opens the PR creation URL.
 

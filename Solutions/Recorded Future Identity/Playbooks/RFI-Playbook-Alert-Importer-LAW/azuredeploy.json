@@ -1,6 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.1.0.0",
+    "contentVersion": "1.3.0.0",
     "metadata": {
         "title": "RFI-Playbook-Alert-Importer-LAW",
         "description": "This playbook fetches identity compromises from Recorded Future, places users in a security group and confirms them as 'risky users' in Entra ID.",
@@ -14,7 +14,9 @@
         "prerequisitesDeployTemplateFile": "../Connectors/RFI-CustomConnector-0-2-0/azuredeploy.json",
         "lastUpdateTime": "2025-04-29T00:00:00.000Z",
         "entities": [],
-        "tags": ["Identity protection"],
+        "tags": [
+            "Identity protection"
+        ],
         "support": {
             "tier": "Partner"
         },
@@ -25,12 +27,16 @@
             {
                 "version": "1.0",
                 "title": "Initial version",
-                "notes": [ "Initial version" ]
+                "notes": [
+                    "Initial version"
+                ]
             },
             {
                 "version": "1.1",
                 "title": "Improved stability",
-                "notes": [ "Removed Get Risky User action due to instability" ]
+                "notes": [
+                    "Removed Get Risky User action due to instability"
+                ]
             }
         ]
     },
@@ -54,11 +60,11 @@
             "type": "String"
         },
         "confirm_user_as_risky": {
-            "metadata":{
+            "metadata": {
                 "description": "Optional. If specified, will confirm user as risky. Requires Microsoft Entra ID P1 or P2 license"
             },
-                "defaultValue": false,
-                "type": "Bool"
+            "defaultValue": false,
+            "type": "Bool"
         },
         "entra_id_domain": {
             "defaultValue": "",
@@ -75,7 +81,7 @@
             "type": "Bool"
         },
         "playbook_alert_log_analytics_custom_log_name": {
-            "defaultValue": "RecordedFutureIdentity_PlaybookAlertResults_CL",
+            "defaultValue": "RFI_PlaybookAlertResults_V2_CL",
             "metadata": {
                 "description": "Required. The name of the Log Analytics Workspace table where Playbook Alerts should be saved."
             },
@@ -86,17 +92,495 @@
                 "description": "Required. The name of the Log Analytics Workspace to query for existing tables."
             },
             "type": "String"
+        },
+        "workspaceResourceId": {
+            "metadata": {
+                "description": "Required. The full resource ID of the Log Analytics Workspace (used for the DCR destination)."
+            },
+            "type": "String"
         }
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', parameters('playbook_alert_log_analytics_custom_log_name'))]",
+            "properties": {
+                "schema": {
+                    "name": "[parameters('playbook_alert_log_analytics_custom_log_name')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "playbook_alert_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_priority",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_created",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "panel_status_updated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "panel_status_case_rule_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_case_rule_label",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_assignee_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_assignee_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_creator_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_creator_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_owner_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_owner_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_organisation_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_organisation_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_owner_organisation_details_enterprise_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_owner_organisation_details_enterprise_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_entity_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_entity_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_reopen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_alert_rule",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_status_targets",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_status_actions_taken",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_status_owner_organisation_details_organisations",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary_subject",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_authorization_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_exposed_secret_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_exposed_secret_effectively_clear",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "panel_evidence_summary_exposed_secret_hint",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_dump_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_dump_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_exfiltration_date",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_os",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_os_username",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_malware_file",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_timezone",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_computer_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_uac",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_malware_family_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_malware_family_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_infrastructure_ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_evidence_summary_assessments",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary_exposed_secret_hashes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary_exposed_secret_details_properties",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary_technologies",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary_compromised_host_antivirus",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "alert_description",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "Custom-RFI_PlaybookAlertResults_V2_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "playbook_alert_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_priority",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_created",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "panel_status_updated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "panel_status_case_rule_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_case_rule_label",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_assignee_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_assignee_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_creator_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_creator_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_owner_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_owner_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_organisation_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_organisation_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_owner_organisation_details_enterprise_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_owner_organisation_details_enterprise_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_entity_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_entity_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_reopen",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_alert_rule",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_status_targets",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_status_actions_taken",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_status_owner_organisation_details_organisations",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary_subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_authorization_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_exposed_secret_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_exposed_secret_effectively_clear",
+                                "type": "boolean"
+                            },
+                            {
+                                "name": "panel_evidence_summary_exposed_secret_hint",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_dump_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_dump_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_exfiltration_date",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_os",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_os_username",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_malware_file",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_timezone",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_computer_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_uac",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_malware_family_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_malware_family_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_infrastructure_ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_evidence_summary_assessments",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary_exposed_secret_hashes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary_exposed_secret_details_properties",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary_technologies",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary_compromised_host_antivirus",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alert_description",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "Custom-RFI_PlaybookAlertRaw_V2": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "playbook_alert_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alert_description",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-RFI_PlaybookAlertRaw_V2"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = now(), playbook_alert_id = tostring(playbook_alert_id), panel_status_status = tostring(panel_status.status), panel_status_priority = tostring(panel_status.priority), panel_status_created = todatetime(panel_status.created), panel_status_updated = todatetime(panel_status.updated), panel_status_case_rule_id = tostring(panel_status.case_rule_id), panel_status_case_rule_label = tostring(panel_status.case_rule_label), panel_status_assignee_id = tostring(panel_status.assignee_id), panel_status_assignee_name = tostring(panel_status.assignee_name), panel_status_creator_id = tostring(panel_status.creator_id), panel_status_creator_name = tostring(panel_status.creator_name), panel_status_owner_id = tostring(panel_status.owner_id), panel_status_owner_name = tostring(panel_status.owner_name), panel_status_organisation_id = tostring(panel_status.organisation_id), panel_status_organisation_name = tostring(panel_status.organisation_name), panel_status_owner_organisation_details_enterprise_id = tostring(panel_status.owner_organisation_details.enterprise_id), panel_status_owner_organisation_details_enterprise_name = tostring(panel_status.owner_organisation_details.enterprise_name), panel_status_entity_id = tostring(panel_status.entity_id), panel_status_entity_name = tostring(panel_status.entity_name), panel_status_reopen = tostring(panel_status.reopen), panel_status_alert_rule = panel_status.alert_rule, panel_status_targets = panel_status.targets, panel_status_actions_taken = panel_status.actions_taken, panel_status_owner_organisation_details_organisations = panel_status.owner_organisation_details.organisations, panel_evidence_summary_subject = tostring(panel_evidence_summary.subject), panel_evidence_summary_authorization_url = tostring(panel_evidence_summary.authorization_url), panel_evidence_summary_exposed_secret_type = tostring(panel_evidence_summary.exposed_secret.type), panel_evidence_summary_exposed_secret_effectively_clear = tobool(panel_evidence_summary.exposed_secret.effectively_clear), panel_evidence_summary_exposed_secret_hint = tostring(panel_evidence_summary.exposed_secret.details.clear_text_hint), panel_evidence_summary_dump_name = tostring(panel_evidence_summary.dump.name), panel_evidence_summary_dump_description = tostring(panel_evidence_summary.dump.description), panel_evidence_summary_compromised_host_exfiltration_date = todatetime(panel_evidence_summary.compromised_host.exfiltration_date), panel_evidence_summary_compromised_host_os = tostring(panel_evidence_summary.compromised_host.os), panel_evidence_summary_compromised_host_os_username = tostring(panel_evidence_summary.compromised_host.os_username), panel_evidence_summary_compromised_host_malware_file = tostring(panel_evidence_summary.compromised_host.malware_file), panel_evidence_summary_compromised_host_timezone = tostring(panel_evidence_summary.compromised_host.timezone), panel_evidence_summary_compromised_host_computer_name = tostring(panel_evidence_summary.compromised_host.computer_name), panel_evidence_summary_compromised_host_uac = tostring(panel_evidence_summary.compromised_host.uac), panel_evidence_summary_malware_family_id = tostring(panel_evidence_summary.malware_family.id), panel_evidence_summary_malware_family_name = tostring(panel_evidence_summary.malware_family.name), panel_evidence_summary_infrastructure_ip = tostring(panel_evidence_summary.infrastructure.ip), panel_evidence_summary_assessments = panel_evidence_summary.assessments, panel_evidence_summary_exposed_secret_hashes = panel_evidence_summary.exposed_secret.hashes, panel_evidence_summary_exposed_secret_details_properties = panel_evidence_summary.exposed_secret.details.properties, panel_evidence_summary_technologies = panel_evidence_summary.technologies, panel_evidence_summary_compromised_host_antivirus = panel_evidence_summary.compromised_host.antivirus, alert_description = tostring(alert_description)",
+                        "outputStream": "Custom-RFI_PlaybookAlertResults_V2_CL"
+                    }
+                ]
+            }
+        },
         {
             "apiVersion": "2017-07-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[variables('dcrResourceId')]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -269,19 +753,18 @@
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "ApiConnection",
+                                            "type": "Http",
                                             "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@string(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
+                                                "method": "POST",
+                                                "uri": "@{parameters('DceEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
                                                 "headers": {
-                                                    "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
+                                                    "Content-Type": "application/json"
                                                 },
-                                                "path": "/api/logs"
+                                                "body": "@createArray(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
                                             }
                                         }
                                     },
@@ -396,63 +879,7 @@
                                 "method": "post",
                                 "path": "/playbook-alerts/search"
                             },
-                            "runAfter": {
-                                "Create_table_if_missing": [
-                                    "Succeeded",
-                                    "Skipped"
-                                ],
-                                "Check_if_table_exists": [
-                                    "Succeeded",
-                                    "Failed"
-                                ]
-                            }
-                        },
-                        "Check_if_table_exists": {
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "body": {
-                                    "query": "RecordedFutureIdentity_PlaybookAlertResults_CL | take 1",
-                                    "timerangetype": "2",
-                                    "timerange": {
-                                        "relativeTimeRange": "Last 7 days"
-                                    }
-                                },
-                                "path": "/queryDataV2",
-                                "queries": {
-                                    "subscriptions": "[subscription().subscriptionId]",
-                                    "resourcegroups": "[resourceGroup().name]",
-                                    "resourcetype": "Log Analytics Workspace",
-                                    "resourcename": "[parameters('log_analytics_workspace_name')]"
-                                }
-                            },
                             "runAfter": {}
-                        },
-                        "Create_table_if_missing": {
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "body": "[\n    {\n       \"panel_evidence_summary_assessments\": \"TEST_ASSESSMENTS\",\n        \"panel_evidence_summary_authorization_url\": \"https://test.example.com/test\",\n        \"panel_evidence_summary_compromised_host_antivirus\": \"TEST_ANTIVIRUS\",\n        \"panel_evidence_summary_compromised_host_computer_name\": \"TEST_COMPUTER\",\n        \"panel_evidence_summary_compromised_host_exfiltration_date\": \"2020-01-01T00:00:00.000Z\",\n        \"panel_evidence_summary_compromised_host_malware_file\": \"TEST_MALWARE_FILE\",\n        \"panel_evidence_summary_compromised_host_os\": \"TEST_OS\",\n        \"panel_evidence_summary_compromised_host_os_username\": \"TEST_USERNAME\",\n        \"panel_evidence_summary_compromised_host_timezone\": \"TEST_TIMEZONE\",\n        \"panel_evidence_summary_compromised_host_uac\": \"TEST_UAC\",\n        \"panel_evidence_summary_dump_description\": \"TEST_DUMP_DESCRIPTION\",\n        \"panel_evidence_summary_dump_name\": \"TEST_DUMP_NAME\",\n        \"panel_evidence_summary_exposed_secret_details_clear_text_hint\": \"TEST_HINT\",\n        \"panel_evidence_summary_exposed_secret_details_properties\": \"TEST_PROPERTIES\",\n        \"panel_evidence_summary_exposed_secret_effectively_clear\": false,\n        \"panel_evidence_summary_exposed_secret_hashes\": \"TEST_HASHES\",\n        \"panel_evidence_summary_exposed_secret_type\": \"TEST_SECRET_TYPE\",\n        \"panel_evidence_summary_infrastructure_ip\": \"0.0.0.0\",\n        \"panel_evidence_summary_malware_family_id\": \"TEST_MALWARE_ID\",\n        \"panel_evidence_summary_malware_family_name\": \"TEST_MALWARE_NAME\",\n        \"panel_evidence_summary_subject\": \"TEST_SUBJECT\",\n        \"panel_evidence_summary_technologies\": \"TEST_TECHNOLOGIES\",\n        \"panel_status_actions_taken\": \"TEST_ACTIONS\",\n        \"panel_status_alert_rule_id\": \"TEST_ALERT_RULE_ID\",\n        \"panel_status_alert_rule_label\": \"TEST_ALERT_RULE_LABEL\",\n        \"panel_status_alert_rule_name\": \"TEST_ALERT_RULE_NAME\",\n        \"panel_status_assignee_id\": \"TEST_ASSIGNEE_ID\",\n        \"panel_status_assignee_name\": \"TEST_ASSIGNEE_NAME\",\n        \"panel_status_case_rule_id\": \"TEST_CASE_RULE_ID\",\n        \"panel_status_case_rule_label\": \"TEST_CASE_RULE_LABEL\",\n        \"panel_status_created\": \"2020-01-01T00:00:00.000Z\",\n        \"panel_status_entity_id\": \"TEST_ENTITY_ID\",\n        \"panel_status_entity_name\": \"TEST_ENTITY_NAME\",\n        \"panel_status_organisation_id\": \"TEST_ORG_ID\",\n        \"panel_status_organisation_name\": \"TEST_ORG_NAME\",\n        \"panel_status_owner_id\": \"TEST_OWNER_ID\",\n        \"panel_status_owner_name\": \"TEST_OWNER_NAME\",\n        \"panel_status_owner_organisation_details_enterprise_id\": \"TEST_ENTERPRISE_ID\",\n        \"panel_status_owner_organisation_details_enterprise_name\": \"TEST_ENTERPRISE_NAME\",\n        \"panel_status_owner_organisation_details_organisations\": \"TEST_ORGANISATIONS\",\n        \"panel_status_priority\": \"TEST_PRIORITY\",\n        \"panel_status_reopen\": \"TEST_REOPEN\",\n        \"panel_status_status\": \"TEST_STATUS\",\n        \"panel_status_targets\": \"TEST_TARGETS\",\n        \"panel_status_updated\": \"2020-01-01T00:00:00.000Z\",\n        \"playbook_alert_id\": \"TEST_PLAYBOOK_ALERT_ID\",\n        \"alert_description\": \"TEST_ALERT_DESCRIPTION\"\n    }\n]\n",
-                                "headers": {
-                                    "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
-                                },
-                                "path": "/api/logs"
-                            },
-                            "runAfter": {
-                                "Check_if_table_exists": [
-                                    "Failed"
-                                ]
-                            }
                         }
                     },
                     "contentVersion": "1.0.0.0",
@@ -474,13 +901,18 @@
                             "defaultValue": "[parameters('confirm_user_as_risky')]",
                             "type": "Bool"
                         },
-                        "playbook_alert_log_analytics_custom_log_name": {
-                            "defaultValue": "[parameters('playbook_alert_log_analytics_custom_log_name')]",
-                            "type": "String"
-                        },
                         "save_to_log_analytics_workspace": {
                             "defaultValue": "[parameters('save_to_log_analytics_workspace')]",
                             "type": "Bool"
+                        },
+                        "DceEndpoint": {
+                            "type": "String"
+                        },
+                        "DcrImmutableId": {
+                            "type": "String"
+                        },
+                        "StreamName": {
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -510,11 +942,6 @@
                                 "connectionName": "[variables('AzureadipConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
                             },
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "rfi-customconnector-0-2-0": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                                 "connectionName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
@@ -526,12 +953,36 @@
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                             }
                         }
+                    },
+                    "DceEndpoint": {
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+                    },
+                    "DcrImmutableId": {
+                        "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
+                    },
+                    "StreamName": {
+                        "value": "[variables('StreamName')]"
                     }
                 },
                 "provisioningState": "Succeeded",
                 "state": "Disabled"
             },
             "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('dcrResourceId')]",
+            "dependsOn": [
+                "[variables('dcrResourceId')]",
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
         },
         {
             "apiVersion": "2016-06-01",
@@ -579,20 +1030,6 @@
             "apiVersion": "2016-06-01",
             "kind": "V1",
             "location": "[resourceGroup().location]",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-            "properties": {
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                },
-                "customParameterValues": {},
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
-            },
-            "type": "Microsoft.Web/connections"
-        },
-        {
-            "apiVersion": "2016-06-01",
-            "kind": "V1",
-            "location": "[resourceGroup().location]",
             "name": "[variables('AzuremonitorlogsConnectionName')]",
             "properties": {
                 "api": {
@@ -607,8 +1044,14 @@
     "variables": {
         "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
         "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
         "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
-        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
+        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0",
+        "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "DceName": "[concat(parameters('PlaybookName'), '-dce')]",
+        "DcrName": "[concat(parameters('PlaybookName'), '-dcr')]",
+        "StreamName": "Custom-RFI_PlaybookAlertRaw_V2",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+        "tableResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), parameters('playbook_alert_log_analytics_custom_log_name'))]"
     }
 }

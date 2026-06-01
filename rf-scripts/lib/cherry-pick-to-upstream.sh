@@ -42,6 +42,6 @@ if ! git cherry-pick $COMMIT_SHAS; then
   git cherry-pick --abort 2>/dev/null || true
   git checkout master-rf 2>/dev/null || true
   git branch -D "$UPSTREAM_BRANCH" 2>/dev/null || true
-  echo "Cherry-pick failed due to conflicts. Run ./rf-scripts/open-upstream-pr.sh locally to resolve." >&2
+  echo "Cherry-pick failed due to conflicts. Run ./rf-scripts/upstream-pr.sh locally to resolve." >&2
   exit 1
 fi
