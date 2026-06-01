@@ -33,12 +33,12 @@ echo "$COMMIT_ONELINES"
 
 # ── create upstream branch from master ───────────────────────────────────────
 
-git fetch origin "$MASTER_BRANCH" --quiet
-git checkout -b "$UPSTREAM_BRANCH" "origin/$MASTER_BRANCH"
+git fetch origin "$MASTER_BRANCH" --quiet >&2
+git checkout -b "$UPSTREAM_BRANCH" "origin/$MASTER_BRANCH" >&2
 
 # ── cherry-pick ───────────────────────────────────────────────────────────────
 
-if ! git cherry-pick $COMMIT_SHAS; then
+if ! git cherry-pick $COMMIT_SHAS >&2; then
   git cherry-pick --abort 2>/dev/null || true
   git checkout master-rf 2>/dev/null || true
   git branch -D "$UPSTREAM_BRANCH" 2>/dev/null || true
