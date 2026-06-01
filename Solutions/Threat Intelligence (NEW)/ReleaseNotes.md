@@ -1,6 +1,6 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                               |
-| ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 3.0.19      | 25-05-2026                     | Deprecation of Premium Microsoft Defender Threat Intelligence **connector**.                                                                     |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.19      | 25-05-2026                     | Removed Premium Microsoft Defender Threat Intelligence **Data Connector** from solution package due to deprecation as part of MDTI convergence.  |
 | 3.0.18      | 04-05-2026                     | Export to TAXII **connector** proceeds to GA.                                                                                                    |
 | 3.0.17      | 02-04-2026                     | Updated **TI map Domain entity to SecurityAlert** analytic rule with deduplication and filters                                                   |
 | 3.0.16      | 25-03-2026                     | Optimized **TI map Domain entity to EmailUrlInfo** analytic rule with deduplication and filters                                                  |
