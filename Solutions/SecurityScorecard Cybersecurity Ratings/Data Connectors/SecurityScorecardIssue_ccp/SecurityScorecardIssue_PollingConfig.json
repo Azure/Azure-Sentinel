@@ -1,0 +1,119 @@
+[
+    {
+        "name": "SecurityScorecardIssuesPoller",
+        "apiVersion": "2024-09-01",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "SecurityScorecardIssueCCPDefinition",
+            "dataType": "SecurityScorecardIssuesHistory_CL",
+            "dcrConfig": {
+                "streamName": "Custom-SecurityScorecardIssuesHistory_CL",
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+            },
+            "auth": {
+                "type": "APIKey",
+                "ApiKey": "{{ApiToken}}",
+                "ApiKeyName": "Authorization",
+                "ApiKeyIdentifier": "Token"
+            },
+            "request": {
+                "apiEndpoint": "{{BaseUrl}}/portfolios",
+                "httpMethod": "GET",
+                "queryWindowInMin": 10080,
+                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                "rateLimitQPS": 1,
+                "retryCount": 3,
+                "timeoutInSeconds": 60,
+                "logResponseContent": true,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json; charset=utf-8",
+                    "X-SSC-Application-Name": "Microsoft Sentinel",
+                    "X-SSC-Application-Version": "1.0"
+                }
+            },
+            "response": {
+                "format": "json",
+                "eventsJsonPaths": [
+                    "$.entries"
+                ]
+            },
+            "stepInfo": {
+                "stepType": "Nested",
+                "nextSteps": [
+                    {
+                        "stepId": "portfolioCompanies",
+                        "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project portfolio_id = tostring(res['id']), portfolio_name = tostring(res['name'])"
+                    }
+                ]
+            },
+            "stepCollectorConfigs": {
+                "portfolioCompanies": {
+                    "shouldJoinNestedData": false,
+                    "stepInfo": {
+                        "stepType": "Nested",
+                        "nextSteps": [
+                            {
+                                "stepId": "issueDetails",
+                                "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project company_domain = tostring(res['domain']), industry = tostring(res['industry'])"
+                            }
+                        ]
+                    },
+                    "request": {
+                        "apiEndpoint": "{{BaseUrl}}/portfolios/$portfolio_id$/companies",
+                        "httpMethod": "GET",
+                        "rateLimitQPS": 1,
+                        "retryCount": 3,
+                        "timeoutInSeconds": 60,
+                        "logResponseContent": true,
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json; charset=utf-8",
+                            "X-SSC-Application-Name": "Microsoft Sentinel",
+                            "X-SSC-Application-Version": "1.0"
+                        }
+                    },
+                    "response": {
+                        "format": "json",
+                        "eventsJsonPaths": [
+                            "$.entries"
+                        ]
+                    }
+                },
+                "issueDetails": {
+                    "shouldJoinNestedData": true,
+                    "request": {
+                        "apiEndpoint": "{{BaseUrl}}/companies/$company_domain$/history/events",
+                        "httpMethod": "GET",
+                        "queryWindowInMin": 10080,
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "rateLimitQPS": 1,
+                        "retryCount": 3,
+                        "timeoutInSeconds": 60,
+                        "logResponseContent": true,
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json; charset=utf-8",
+                            "X-SSC-Application-Name": "Microsoft Sentinel",
+                            "X-SSC-Application-Version": "1.0"
+                        },
+                        "queryParameters": {
+                            "date_from": "{_QueryWindowStartTime}",
+                            "date_to": "{_QueryWindowEndTime}",
+                            "timing": "daily"
+                        }
+                    },
+                    "response": {
+                        "format": "json",
+                        "eventsJsonPaths": [
+                            "$.entries"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+]
