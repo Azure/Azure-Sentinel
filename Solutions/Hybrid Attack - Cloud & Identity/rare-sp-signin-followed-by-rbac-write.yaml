@@ -1,0 +1,105 @@
+id: d4deaf24-f2cf-4ed8-b869-a057f865f08f
+name: Rare service principal sign-in followed by RBAC write
+description: |
+  This query hunts for uncommon service principal sign-ins that are quickly followed by Azure role assignment write operations.
+description-detailed: |
+  This hunt prioritizes identity-driven privilege escalation after compromise of workload identities used by Azure VM workloads. It baselines service principal sign-in tuples from the prior 14 days and detects new sign-in patterns in the hunt window that are followed by role assignment writes in AzureActivity.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - CredentialAccess
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1528
+  - T1078.004
+  - T1098
+tags:
+  - Identity abuse
+  - Azure RBAC
+  - Service principal
+  - Azure VM
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = StartTime;
+  // Baseline successful service principal sign-in tuples over the prior 14 days.
+  let BaselineSP =
+    ASimAuthenticationEventLogs
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | where EventResult =~ "Success"
+    | extend ServicePrincipalId = tolower(tostring(coalesce(
+               iff(tostring(ActorUserIdType) has "ServicePrincipal", ActorUserId, ""),
+               iff(tostring(TargetUserIdType) has "ServicePrincipal", TargetUserId, ""),
+               ActorUserId,
+               TargetUserId
+             ))),
+             AppId = tolower(tostring(coalesce(ActingAppId, TargetAppId))),
+             IPAddress = tostring(SrcIpAddr),
+             UserAgent = tostring(HttpUserAgent)
+    | where isnotempty(ServicePrincipalId)
+    | summarize by ServicePrincipalId, AppId, IPAddress, UserAgent;
+  // Current-window successful sign-ins for service principals.
+  let RareSP =
+    ASimAuthenticationEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where EventResult =~ "Success"
+    | extend ServicePrincipalId = tolower(tostring(coalesce(
+               iff(tostring(ActorUserIdType) has "ServicePrincipal", ActorUserId, ""),
+               iff(tostring(TargetUserIdType) has "ServicePrincipal", TargetUserId, ""),
+               ActorUserId,
+               TargetUserId
+             ))),
+             AppId = tolower(tostring(coalesce(ActingAppId, TargetAppId))),
+             Identity = tostring(ActorUsername),
+             IPAddress = tostring(SrcIpAddr),
+             UserAgent = tostring(HttpUserAgent),
+             ResourceDisplayName = tostring(TargetUsername)
+    | where isnotempty(ServicePrincipalId)
+    | project SigninTime = TimeGenerated, ServicePrincipalId, AppId, Identity, IPAddress, UserAgent, ResourceDisplayName
+    // Keep only patterns not seen in baseline (rare/new tuple behavior).
+    | join kind=leftanti BaselineSP on ServicePrincipalId, AppId, IPAddress, UserAgent;
+  // Collect successful RBAC write operations in the hunt window.
+  let RBACWrites =
+    ASimAuditEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where EventResult =~ "Success"
+    | where Operation has "roleAssignments/write"
+      or EventType has "roleAssignments/write"
+      or ObjectType has "roleassignment"
+    | extend CallerNormalized = tolower(tostring(coalesce(ActorUserId, ActorUsername)))
+    | project WriteTime = TimeGenerated,
+              CallerNormalized,
+              Caller = tostring(coalesce(ActorUserId, ActorUsername)),
+              CallerIpAddress = tostring(SrcIpAddr),
+              OperationNameValue = tostring(coalesce(Operation, EventType)),
+              ResourceId = tostring(coalesce(ObjectId, Object)),
+              SubscriptionId = tostring(coalesce(DvcScopeId, DvcScope));
+  // Expand potential join keys (SP object id, app id, identity) for resilient correlation.
+  RareSP
+  | extend JoinCandidates = pack_array(tolower(tostring(ServicePrincipalId)), tolower(tostring(AppId)), tolower(tostring(Identity)))
+  | mv-expand JoinKey = JoinCandidates
+  | extend JoinKey = tostring(JoinKey)
+  | where isnotempty(JoinKey)
+  // Join rare SP sign-ins to RBAC writes shortly afterward.
+  | join kind=inner RBACWrites on $left.JoinKey == $right.CallerNormalized
+  | where WriteTime between (SigninTime .. (SigninTime + 60m))
+  // Summarize scope and volume of potential privilege escalation.
+  | summarize FirstSignin=min(SigninTime), LastWrite=max(WriteTime), WriteCount=count(),
+              ResourcesTouched=dcount(ResourceId), ResourceSample=make_set(ResourceId, 10),
+              SigninIps=make_set(IPAddress, 10), CallerIps=make_set(CallerIpAddress, 10)
+            by ServicePrincipalId, AppId, Identity, UserAgent, ResourceDisplayName, SubscriptionId
+  | extend TimeGenerated = FirstSignin
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0

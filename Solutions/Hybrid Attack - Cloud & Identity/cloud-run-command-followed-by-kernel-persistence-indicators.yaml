@@ -1,0 +1,102 @@
+id: b441f4ca-9de2-4dd4-b0de-7c8f869f20a1
+name: Cloud Run Command followed by kernel persistence indicators on target servers
+description: |
+  This query hunts for Azure VM Run Command activity followed by kernel-persistence indicators on the same targeted servers within a short window.
+description-detailed: |
+  The hunt correlates successful Azure control-plane Run Command actions with endpoint-level kernel persistence signals such as first-seen driver-load events and service or driver creation command patterns. It targets cloud-to-on-prem style persistence establishment on server endpoints.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceImageLoadEvents
+      - DeviceProcessEvents
+tactics:
+  - LateralMovement
+  - Persistence
+  - Execution
+relevantTechniques:
+  - T1578
+  - T1547.006
+  - T1021
+tags:
+  - Hybrid attack
+  - Azure Run Command
+  - Kernel persistence
+  - Cloud to on-prem
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let DriverPathToken = "\\windows\\system32\\drivers\\";
+  let RunCmdOps = dynamic([
+    "Microsoft.Compute/virtualMachines/runCommand/action",
+    "Microsoft.Compute/virtualMachineScaleSets/virtualMachines/runCommand/action"
+  ]);
+  let BaselineKernelLoad =
+    DeviceImageLoadEvents
+    | where TimeGenerated between (BaselineStart .. StartTime)
+    | project TimeGenerated, DeviceName, FileName, FolderPath
+    | where tolower(FileName) endswith ".sys" or tolower(FolderPath) has DriverPathToken
+    | summarize by Device=tostring(DeviceName), FileNameNorm=tolower(FileName), FolderPathNorm=tolower(FolderPath);
+  let RunCommandOps =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue in~ (RunCmdOps)
+    | where ActivityStatusValue =~ "Success"
+    | extend VmName = toupper(tostring(extract(@"virtualMachines/([^/]+)", 1, tostring(ResourceId)))),
+             CallerNorm = tolower(tostring(Caller)),
+             CallerIP = tostring(CallerIpAddress)
+    | where isnotempty(VmName)
+    | project RunCmdTime=TimeGenerated, VmName, CallerNorm, CallerIP, OperationNameValue, ResourceId, SubscriptionId, CorrelationId;
+  let KernelSignals =
+    union isfuzzy=true
+      (
+        DeviceImageLoadEvents
+        | where TimeGenerated between (StartTime .. EndTime)
+        | project TimeGenerated, DeviceName, FileName, FolderPath, SHA1,
+                  InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessAccountUpn
+        | where tolower(FileName) endswith ".sys" or tolower(FolderPath) has DriverPathToken
+        | extend Device=tostring(DeviceName), DeviceShort=toupper(tostring(split(DeviceName, ".")[0])),
+                 FileNameNorm=tolower(FileName), FolderPathNorm=tolower(FolderPath),
+                 Evidence=strcat("DriverLoad:", FileName, " SHA1:", tostring(coalesce(SHA1, "unknown")))
+        | join kind=leftanti BaselineKernelLoad on Device, FileNameNorm, FolderPathNorm
+        | project IndicatorTime=TimeGenerated, Device, DeviceShort, Evidence,
+                  InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessAccountUpn
+      ),
+      (
+        DeviceProcessEvents
+        | where TimeGenerated between (StartTime .. EndTime)
+        | project TimeGenerated, DeviceName, ProcessCommandLine, InitiatingProcessFileName, AccountUpn
+        | extend Cmd = tolower(tostring(ProcessCommandLine)),
+                 Device=tostring(DeviceName), DeviceShort=toupper(tostring(split(DeviceName, ".")[0]))
+        | where Cmd has_any ("sc create", "sc start", "type= kernel", "\\system32\\drivers\\", "reg add hk\\lm\\system\\currentcontrolset\\services")
+        | project IndicatorTime=TimeGenerated, Device, DeviceShort,
+                  Evidence=tostring(ProcessCommandLine),
+                  InitiatingProcessFileName, InitiatingProcessCommandLine=ProcessCommandLine,
+                  InitiatingProcessAccountUpn=AccountUpn
+      );
+  RunCommandOps
+  | join kind=inner KernelSignals on $left.VmName == $right.DeviceShort
+  | where IndicatorTime between (RunCmdTime .. (RunCmdTime + 2h))
+  | summarize FirstRunCmd=min(RunCmdTime), FirstIndicator=min(IndicatorTime), LastIndicator=max(IndicatorTime),
+              IndicatorCount=count(), EvidenceSet=make_set(Evidence, 10),
+          CallerNorm=any(CallerNorm), CallerIP=any(CallerIP)
+      by VmName, Device, SubscriptionId, ResourceId, CorrelationId
+  | extend TimeGenerated = FirstRunCmd
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Device
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: CallerNorm
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIP
+version: 1.0.0

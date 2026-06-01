@@ -1,0 +1,144 @@
+id: 638446a2-8342-43dd-ae70-3308a3319f6f
+name: Entra hybrid user sign-in followed by on-prem lateral movement
+description: |
+  This query hunts for successful Entra sign-in activity by a hybrid identity that is followed by RDP or remote execution against hybrid or Entra-joined devices.
+description-detailed: |
+  This hunt covers the cloud to on-prem direction. It looks for successful Entra non-interactive sign-in activity by a hybrid identity and then correlates the same identity to near-term RDP or WMI, WinRM, or PsExec-style execution on hybrid or Entra-joined endpoints.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
+      - DeviceLogonEvents
+      - DeviceProcessEvents
+      - IdentityInfo
+tactics:
+  - LateralMovement
+  - ValidAccounts
+relevantTechniques:
+  - T1078.004
+  - T1021.001
+  - T1047
+tags:
+  - Hybrid identity
+  - Cloud to on-prem
+  - RDP
+  - Remote execution
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 30d;
+  let BaselineEnd = EndTime + 1d;
+  // Parent/child process lists used to identify remote execution behavior.
+  let RemoteParents = dynamic(["wmiprvse.exe", "wsmprovhost.exe", "psexesvc.exe", "winrs.exe"]);
+  let SuspiciousChildren = dynamic(["cmd.exe", "powershell.exe", "pwsh.exe", "net.exe", "net1.exe", "whoami.exe", "nltest.exe", "reg.exe", "certutil.exe", "rundll32.exe", "mshta.exe"]);
+  // Build latest hybrid identity keys to unify cloud and endpoint telemetry.
+  let HybridUsersRaw =
+    IdentityInfo
+    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where IdentityEnvironment =~ "Hybrid"
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | extend UPNKey = tolower(AccountUpn),
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName)),
+             NameKey = tolower(AccountName);
+  // Normalize user key variants into one joinable identity key.
+  let HybridUsers =
+    union isfuzzy=true
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
+      (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+  // Keep latest hybrid or Entra-joined devices as on-prem movement targets.
+  let HybridDevicesRaw =
+    DeviceInfo
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | project TimeGenerated, DeviceId, DeviceName, JoinType, IsAzureADJoined
+    | summarize arg_max(TimeGenerated, *) by DeviceId
+    | where IsAzureADJoined == true or tostring(JoinType) has_any ("Hybrid", "Azure AD", "Entra")
+    | project DeviceId, HybridDeviceName = DeviceName, JoinType;
+  let HybridDevices =
+    union isfuzzy=true
+      (HybridDevicesRaw | where isnotempty(DeviceId) | project DeviceJoinKey = tolower(DeviceId), HybridDeviceName, JoinType),
+      (HybridDevicesRaw | where isnotempty(HybridDeviceName) | project DeviceJoinKey = tolower(HybridDeviceName), HybridDeviceName, JoinType);
+  // Capture successful cloud sign-ins by hybrid identities.
+  let CloudUserSignins =
+    ASimAuthenticationEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where EventResult in~ ("Success", "Partial")
+    | where ActorScope has "Azure" or TargetUserScope has "Azure" or EventProduct has_any ("Azure AD", "Entra", "AAD")
+    | where EventSubType has_any ("Service", "RemoteService", "AssumeRole")
+      or LogonMethod has_any ("OAuth", "Token", "NonInteractive")
+      or LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+    | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             CloudIP = tostring(SrcIpAddr),
+             AppName = tostring(TargetAppName),
+             ClientApp = tostring(ActingAppName)
+    | where isnotempty(UserKey)
+    | project SigninTime = TimeGenerated, UserKey, CloudIP, AppName, ClientApp, CorrelationId = EventOriginalUid;
+  // Capture on-prem lateral movement candidates (RDP and remote execution).
+  let OnPremMovement =
+    union isfuzzy=true
+      (
+        ASimAuthenticationEventLogs
+        | where TimeGenerated between (StartTime .. (EndTime + 1d))
+        | where EventResult in~ ("Success", "Partial")
+        | where EventSubType =~ "RemoteInteractive" or LogonMethod has "RDP" or LogonProtocol has "RDP"
+        | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+                 DeviceJoinKey = tolower(coalesce(TargetDvcId, DvcId, TargetFQDN, DvcHostname)),
+                 SourceIP = tostring(SrcIpAddr),
+                 Evidence = tostring(coalesce(EventSubType, LogonMethod, LogonProtocol)),
+                 MovementType = "RDP"
+        | where isnotempty(UserKey)
+        | where isnotempty(DeviceJoinKey)
+        | project MovementTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, MovementType, Evidence
+      ),
+      (
+        ASimProcessEventLogs
+        | where TimeGenerated between (StartTime .. (EndTime + 1d))
+        | extend ParentProcess = tolower(coalesce(ActingProcessName, ActingProcessFilename, ActingProcessFileOriginalName)),
+                 ParentOriginal = tolower(ActingProcessFileOriginalName),
+                 ChildProcess = tolower(TargetProcessName),
+                 ChildCommandLine = tostring(TargetProcessCommandLine),
+                 UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+                 DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname)),
+                 SourceIP = tostring(coalesce(tostring(AdditionalFields["RemoteIP"]), DvcIpAddr)),
+                 Evidence = strcat(ChildProcess, " ", ChildCommandLine),
+                 MovementType = "RemoteExec"
+        | where ParentProcess in~ (RemoteParents) or ParentOriginal in~ (RemoteParents)
+        | where ChildProcess in~ (SuspiciousChildren)
+            or ChildCommandLine has_any (" -enc ", " /node:", " -computername ", "invoke-command", "win32_process", "create ")
+        | where isnotempty(UserKey)
+        | where isnotempty(DeviceJoinKey)
+        | project MovementTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, MovementType, Evidence
+      );
+  // Correlate cloud sign-in to near-term on-prem movement by the same identity.
+  CloudUserSignins
+  | join kind=innerunique HybridUsers on UserKey
+  | join kind=inner OnPremMovement on UserKey
+  | join kind=inner HybridDevices on DeviceJoinKey
+  | where MovementTime between (SigninTime .. (SigninTime + 4h))
+  | summarize FirstMovement = min(MovementTime),
+              LastMovement = max(MovementTime),
+              MovementCount = count(),
+              Devices = make_set(HybridDeviceName, 10),
+              SourceIPs = make_set(SourceIP, 10),
+              EvidenceSet = make_set(Evidence, 15),
+              Apps = make_set(AppName, 10),
+              ClientApps = make_set(ClientApp, 10)
+    by SigninTime, CloudIP, HybridUPN, HybridSam, BlastRadius,
+       CriticalityLevel, MovementType
+  | extend Confidence = iff(BlastRadius == "High" or CriticalityLevel >= 3 or MovementCount >= 2, "High", "Medium")
+  | extend TimeGenerated = SigninTime
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: HybridUPN
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CloudIP
+version: 1.0.0

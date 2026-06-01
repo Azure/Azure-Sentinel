@@ -1,0 +1,68 @@
+id: 80752d7f-8b48-4a80-8eea-0f9f3024f75f
+name: Hybrid appliance admin followed by RBAC write
+description: |
+  This query hunts for unmanaged device management sessions that are followed by high-impact Azure RBAC write operations from the same source IP.
+description-detailed: |
+  The hunt correlates ASIM network telemetry for appliance management activity with AzureActivity control-plane writes. This pattern supports detection of on-prem to cloud pivoting through unmanaged persistence layers.
+requiredDataConnectors:
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - LateralMovement
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1078.004
+  - T1098
+tags:
+  - Hybrid attack
+  - Azure RBAC
+  - Unmanaged device
+  - ASIM
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let MgmtPorts = dynamic([22, 443, 8443, 9443, 5985, 5986]);
+  let ApplianceHints = dynamic(["palo", "forti", "checkpoint", "f5", "citrix", "netscaler", "esxi", "vmware", "juniper", "cisco"]);
+  let ApplianceMgmt =
+    ASimNetworkSessionLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(SrcIpAddr)
+    | where DstPortNumber in (MgmtPorts) or EventProduct has_any (ApplianceHints)
+    | where DvcAction has_any ("allow", "accept", "success") or EventResult == "Success"
+    | extend Device = tostring(coalesce(DvcHostname, DvcFQDN, Dvc, DvcId)),
+             SrcIp = tostring(SrcIpAddr),
+             DstPort = toint(DstPortNumber),
+             Product = tostring(EventProduct)
+    | where isnotempty(Device) and isnotempty(SrcIp)
+    | project MgmtTime=TimeGenerated, Device, SrcIp, DstPort, Product;
+  let CloudWrites =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has_any (
+        "Microsoft.Authorization/roleAssignments/write",
+        "Microsoft.Authorization/roleAssignments/delete",
+        "Microsoft.Authorization/policyAssignments/write",
+        "Microsoft.KeyVault/vaults/accessPolicies/write"
+      )
+    | where isnotempty(CallerIpAddress)
+    | project WriteTime=TimeGenerated, Caller, CallerIpAddress, OperationNameValue, ActivityStatusValue, CorrelationId, ResourceId, SubscriptionId;
+  CloudWrites
+  | join kind=inner ApplianceMgmt on $left.CallerIpAddress == $right.SrcIp
+  | where WriteTime between (MgmtTime .. (MgmtTime + 30m))
+  | project TimeGenerated=MgmtTime, Device, SrcIp, DstPort, Product, WriteTime, Caller, OperationNameValue, ActivityStatusValue, CorrelationId, ResourceId, SubscriptionId
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Device
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+version: 1.0.0

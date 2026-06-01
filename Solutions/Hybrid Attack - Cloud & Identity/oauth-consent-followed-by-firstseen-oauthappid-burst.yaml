@@ -1,0 +1,74 @@
+id: 10faf58e-d006-482f-87f0-a95b019cbf6f
+name: OAuth consent change followed by first-seen OAuthAppId burst
+description: |
+  Detects consent or application permission grant changes followed by first-seen CloudAppEvents bursts for OAuth apps.
+description-detailed: |
+  This hunt identifies likely delegated OAuth abuse by correlating consent-related Entra audit operations with new OAuthAppId activity surges in CloudAppEvents.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+tactics:
+  - InitialAccess
+  - Discovery
+  - Collection
+relevantTechniques:
+  - T1550.001
+  - T1528
+  - T1087.004
+tags:
+  - OAuth abuse
+  - Consent phishing
+  - Delegated permissions
+  - Cloud app reconnaissance
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let ConsentChanges =
+    ASimAuditEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | extend ActivityDisplayName = tostring(coalesce(Operation, EventType, EventMessage)),
+             OperationText = ActivityDisplayName,
+             OperationName = tostring(Operation),
+             InitiatorUpn = tostring(ActorUsername),
+             InitiatorIp = tostring(SrcIpAddr),
+             InitiatorApp = tostring(ActingAppName),
+             CorrelationId = tostring(column_ifexists("CorrelationId", ""))
+    | where OperationText has_any ("consent", "permission grant", "app role", "application")
+    | project ChangeTime=TimeGenerated, ActivityDisplayName, OperationName, CorrelationId, InitiatorUpn, InitiatorIp, InitiatorApp;
+  let HistoricalOAuthApps =
+    CloudAppEvents
+    | where TimeGenerated between ((StartTime - 30d) .. StartTime)
+    | where isnotempty(OAuthAppId)
+    | project OAuthAppId
+    | summarize by OAuthAppId;
+  let FirstSeenOAuthBursts =
+    CloudAppEvents
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(OAuthAppId)
+    | project TimeGenerated, OAuthAppId, Application, IPAddress, AccountId
+    | join kind=leftanti HistoricalOAuthApps on OAuthAppId
+    | summarize FirstActivity=min(TimeGenerated), LastActivity=max(TimeGenerated), EventCount=count(),
+                DistinctUsers=dcount(AccountId), DistinctIPs=dcount(IPAddress),
+                Users=make_set(AccountId, 20), SrcIps=make_set(IPAddress, 20)
+      by OAuthAppId, Application, IPAddress
+    | where EventCount >= 5;
+  ConsentChanges
+  | join kind=inner FirstSeenOAuthBursts on $left.InitiatorIp == $right.IPAddress
+  | where FirstActivity between (ChangeTime .. (ChangeTime + 24h))
+  | project TimeGenerated=ChangeTime, FirstActivity, LastActivity, ActivityDisplayName, OperationName, CorrelationId,
+            InitiatorUpn, InitiatorIp, InitiatorApp, OAuthAppId, Application, EventCount, DistinctUsers, DistinctIPs, Users, SrcIps
+  | order by FirstActivity desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Upn
+        columnName: InitiatorUpn
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatorIp
+version: 1.0.0

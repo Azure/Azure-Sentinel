@@ -1,0 +1,106 @@
+id: b8c5b7f8-6c3c-4c34-8d12-3f2f5f0dc184
+name: Azure VM web process to IMDS token theft chain
+description: |
+  This query hunts for likely Azure VM post-RCE identity abuse by correlating suspicious web or management service child process execution with IMDS (Azure Instance Metadata Service) access and optional near-term public egress.
+description-detailed: |
+  This hunt is designed for Azure VM servers where attackers first gain code execution through network-exposed services, then attempt managed identity token theft from IMDS. It correlates suspicious service-child process behavior with access to 169.254.169.254 and boosts confidence when the same process also performs outbound public network activity shortly after.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+tactics:
+  - InitialAccess
+  - Execution
+  - CredentialAccess
+relevantTechniques:
+  - T1190
+  - T1059
+  - T1528
+tags:
+  - Server RCE
+  - Azure VM
+  - Managed identity
+  - Token theft
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  // Parent processes commonly associated with web or app services.
+  let ServiceParents = dynamic([
+    "w3wp.exe", "httpd.exe", "nginx.exe", "apache2", "tomcat9.exe", "tomcat",
+    "java.exe", "java", "node.exe", "dotnet.exe", "php-cgi.exe", "php.exe"
+  ]);
+  // Child processes and utilities often used after code execution.
+  let SuspiciousChildren = dynamic([
+    "cmd.exe", "powershell.exe", "pwsh.exe", "sh", "bash", "curl", "wget",
+    "certutil.exe", "bitsadmin.exe", "mshta.exe", "rundll32.exe", "python.exe", "python3"
+  ]);
+  // Command-line tokens that suggest staging, download, or shell execution.
+  let StagingTokens = dynamic(["http://", "https://", " -enc ", " /c ", " /bin/sh", "wget ", "curl "]);
+  // Suspicious execution chain: service parent spawning risky child process/command.
+  let SuspiciousExec =
+    ASimProcessEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | extend ParentProcess = tolower(coalesce(ParentProcessName, ActingProcessName)),
+             ChildProcess = tolower(TargetProcessName),
+             ChildCommandLine = coalesce(TargetProcessCommandLine, "")
+    | where ParentProcess in~ (ServiceParents)
+    | where ChildProcess in~ (SuspiciousChildren) or ChildCommandLine has_any (StagingTokens)
+    | project ExecTime = TimeGenerated,
+              DeviceId = tostring(coalesce(DvcId, DvcHostname)),
+              DeviceName = coalesce(DvcHostname, DvcFQDN),
+              FileName = ChildProcess,
+              ProcessCommandLine = ChildCommandLine,
+              InitiatingProcessFileName = ParentProcess,
+              InitiatingProcessCommandLine = tostring(ActingProcessCommandLine);
+  // Access to Azure IMDS endpoint, commonly used to request managed identity tokens.
+  let ImdsAccess =
+    ASimNetworkSessionLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where DstIpAddr == "169.254.169.254"
+    | where EventResult !~ "Failure"
+    | project DeviceId = tostring(coalesce(DvcId, DvcHostname)),
+              ImdsTime = TimeGenerated,
+              ImdsRemotePort = DstPortNumber,
+              ImdsRemoteUrl = tostring(EventReportUrl);
+  // Optional confidence booster: near-term outbound public egress from same host.
+  let PublicEgress =
+    ASimNetworkSessionLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(DstIpAddr)
+    | where not(
+        ipv4_is_in_range(DstIpAddr, "10.0.0.0/8")
+        or ipv4_is_in_range(DstIpAddr, "172.16.0.0/12")
+        or ipv4_is_in_range(DstIpAddr, "192.168.0.0/16")
+        or ipv4_is_in_range(DstIpAddr, "127.0.0.0/8")
+        or ipv4_is_in_range(DstIpAddr, "169.254.0.0/16")
+      )
+    | where EventResult !~ "Failure"
+    | project DeviceId = tostring(coalesce(DvcId, DvcHostname)),
+              EgressTime = TimeGenerated,
+              RemoteIP = DstIpAddr,
+              RemotePort = DstPortNumber,
+              RemoteUrl = tostring(EventReportUrl);
+  // Correlate suspicious process execution to IMDS access in a short time window.
+  SuspiciousExec
+  | join kind=innerunique ImdsAccess on DeviceId
+  | where ImdsTime between (ExecTime .. (ExecTime + 10m))
+  // Attach optional public egress shortly after execution.
+  | join kind=leftouter PublicEgress on DeviceId
+  | where isempty(EgressTime) or EgressTime between (ExecTime .. (ExecTime + 15m))
+  // Escalate confidence if both IMDS and public egress are observed.
+  | extend Confidence = iff(isempty(EgressTime), "High", "VeryHigh")
+  | extend TimeGenerated = ExecTime
+  | project TimeGenerated, Confidence, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine,
+            FileName, ProcessCommandLine, ImdsTime, ImdsRemotePort, ImdsRemoteUrl, EgressTime, RemoteIP, RemotePort, RemoteUrl
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+version: 1.0.0

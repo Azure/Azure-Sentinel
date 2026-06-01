@@ -1,0 +1,104 @@
+id: 7f7c6e58-8f74-4c0c-913a-b2dfc96f7e21
+name: Hybrid Kerberoast burst followed by cloud sign-in
+description: |
+  This query hunts for bursty Kerberos service ticket requests against multiple services by a hybrid identity, followed by successful Entra non-interactive sign-ins.
+description-detailed: |
+  This hunt focuses on on-prem to cloud identity pivoting. It looks for ASIM authentication bursts over Kerberos that are consistent with Kerberoasting from a hybrid identity, then correlates the same identity to near-term successful cloud-oriented ASIM sign-in activity. The sequence reduces noise compared to standalone Kerberos or cloud sign-in detections.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
+      - DeviceLogonEvents
+      - IdentityInfo
+tactics:
+  - CredentialAccess
+  - LateralMovement
+  - ValidAccounts
+relevantTechniques:
+  - T1558.003
+  - T1078.004
+tags:
+  - Hybrid identity
+  - Kerberoasting
+  - On-prem to cloud
+  - Lateral movement
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+    let BaselineStart = StartTime - 30d;
+    let BaselineEnd = EndTime + 1d;
+  // Build latest hybrid identity keys for reliable cross-source correlation.
+  let HybridUsersRaw =
+    IdentityInfo
+    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where IdentityEnvironment =~ "Hybrid"
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | extend UPNKey = tolower(AccountUpn),
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName)),
+             NameKey = tolower(AccountName);
+  // Normalize multiple account key formats into one joinable user key.
+  let HybridUsers =
+    union isfuzzy=true
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId),
+      (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId);
+  // Detect potential Kerberoast behavior as a burst of Kerberos service ticket-like auth events.
+  let KerberoastBurst =
+    ASimAuthenticationEventLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where LogonProtocol =~ "Kerberos"
+    | where EventResult in~ ("Success", "Partial")
+    | where EventSubType has_any ("Service", "RemoteService") or EventType has "Kerberos"
+    | extend Requestor = tolower(coalesce(ActorUsername, TargetUsername)),
+             Service = tolower(coalesce(TargetAppName, TargetUsername)),
+             ClientIP = tostring(SrcIpAddr)
+    | where isnotempty(Requestor) and isnotempty(Service)
+    | where Requestor !endswith "$" and Service !endswith "$"
+    | summarize FirstKerberoast = min(TimeGenerated),
+                LastKerberoast = max(TimeGenerated),
+                DistinctServices = dcount(Service),
+                KerberoastEvents = count(),
+                ServiceSet = make_set(Service, 25),
+                SourceIPs = make_set(ClientIP, 10)
+      by Requestor
+    | where DistinctServices >= 8;
+  // Collect successful cloud sign-ins for the same identities.
+  let CloudUserSignins =
+    ASimAuthenticationEventLogs
+    | where TimeGenerated between (StartTime .. (EndTime + 1d))
+    | where EventResult in~ ("Success", "Partial")
+    | where ActorScope has "Azure" or TargetUserScope has "Azure" or EventProduct has_any ("Azure AD", "Entra", "AAD")
+    | where EventSubType has_any ("Service", "RemoteService", "AssumeRole")
+      or LogonMethod has_any ("OAuth", "Token", "NonInteractive")
+      or LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+    | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             CloudIP = tostring(SrcIpAddr),
+             AppName = tostring(TargetAppName),
+             ClientApp = tostring(ActingAppName)
+    | where isnotempty(UserKey)
+    | project SigninTime = TimeGenerated, UserKey, CloudIP, AppName, ClientApp, CorrelationId = EventOriginalUid;
+  // Correlate on-prem Kerberoast burst to near-term cloud sign-in activity.
+  KerberoastBurst
+  | join kind=innerunique HybridUsers on $left.Requestor == $right.UserKey
+  | join kind=inner CloudUserSignins on UserKey
+  | where SigninTime between (LastKerberoast .. (LastKerberoast + 6h))
+  | summarize FirstCloudSignin = min(SigninTime),
+              LastCloudSignin = max(SigninTime),
+              CloudSigninCount = count(),
+              DistinctCloudIPs = dcount(CloudIP),
+              CloudIPs = make_set(CloudIP, 15),
+              Apps = make_set(AppName, 10),
+              ClientApps = make_set(ClientApp, 10),
+              CorrelationIds = make_set(CorrelationId, 10)
+    by FirstKerberoast, LastKerberoast, KerberoastEvents, DistinctServices,
+       ServiceSet, SourceIPs, HybridUPN, HybridSam, BlastRadius,
+       CriticalityLevel, AccountObjectId
+  | extend TimeGenerated = FirstKerberoast
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: HybridUPN
+version: 1.0.0
