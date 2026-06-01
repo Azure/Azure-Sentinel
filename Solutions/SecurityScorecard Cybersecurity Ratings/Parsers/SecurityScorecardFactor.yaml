@@ -72,6 +72,12 @@ FunctionQuery: |
             prev_score = prev(factor_score, 1)
         | extend has_prev = (domain == prev_domain and factor_name == prev_factor)
         | lookup kind=leftouter FactorMetadata on $left.factor_name == $right.key
+        | lookup kind=leftouter (
+            SecurityScorecardRatingsHistory_CL
+            | where TimeGenerated > ago(365d)
+            | summarize arg_max(TimeGenerated, *) by domain
+            | project domain, rt_industry = industry, rt_portfolio_id = portfolio_id, rt_portfolio_name = portfolio_name
+          ) on domain
         | extend
             body_s = "Factor",
             Factor_s = factor_name,
@@ -85,9 +91,9 @@ FunctionQuery: |
             diff_d = iff(has_prev, todouble(factor_score - prev_score), real(null)),
             factorDescription_s = coalesce(description, "data is not there"),
             ss_time_t = score_date,
-            industry_s = tostring(industry),
-            portfolioId_g = toguid(portfolio_id),
-            portfolioName_s = tostring(portfolio_name)
+            industry_s = tostring(rt_industry),
+            portfolioId_g = toguid(rt_portfolio_id),
+            portfolioName_s = tostring(rt_portfolio_name)
         | project
             TimeGenerated,
             body_s,
