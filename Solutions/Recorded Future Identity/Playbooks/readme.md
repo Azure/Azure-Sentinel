@@ -89,9 +89,12 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 - Configure `Recorded Future Identity Exposure Playbook Alerts` for your use case within the Recorded Future portal. For detailed instructions, see <a href="https://support.recordedfuture.com/hc/en-us/articles/21314816259859-Identity-Exposure-Playbook-Alert-Configuration" target="_blank">this guide</a> (requires Recorded Future login).
 
 #### Optional prerequisites
-These prerequisites is required for the **RFI-playbook-alert-importer-law** playbooks:
-- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these Logic Apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
+These prerequisites are required for the **RFI-playbook-alert-importer-law** playbooks:
+- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these Logic Apps will be created automatically if they don't already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
 - The user who installs the Logic Apps require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level.
+- Deploying the Data Connectors infrastructure (Step 1) requires <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#monitoring-contributor" target="_blank">_**Monitoring Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#log-analytics-contributor" target="_blank">_**Log Analytics Contributor**_</a> on the **Resource Group** level.
+- Deploying the playbook (Step 2) requires **Owner** or **Role Based Access Control Administrator** on the **Resource Group** level, as the template creates a role assignment granting the Logic App's managed identity the _**Monitoring Metrics Publisher**_ role on the Data Collection Rule.
+  - If your organization does not permit this, set `create_role_assignment` to `false` in the deployment parameters and ask an Azure administrator to manually assign the _**Monitoring Metrics Publisher**_ role on the `recorded-future-identity-dcr-playbook-alerts` Data Collection Rule to the Logic App's managed identity after deployment.
 
 
 <a id="playbooks"></a>
@@ -172,11 +175,35 @@ Depending on your use case, deploy **one** of the following playbooks:
 </details>
 <hr/>
 
-<a id="RFI-playbook-alert-importer-law"></a>
+ <a id="RFI-playbook-alert-importer-law"></a>
 ### Deployment RFI-playbook-alert-importer-law
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+> [!IMPORTANT]
+> **Deploy the Data Connectors infrastructure first.** This playbook requires a shared Data Collection Endpoint (DCE), Data Collection Rule (DCR), Log Analytics table, and connector definition tile to be deployed before the playbook itself.
+
+#### Step 1 — Deploy Data Connectors infrastructure
+
+Deploys the DCE, DCR, Log Analytics table (`RFI_PlaybookAlertResults_V2_CL`), and the Data Connector tile in the Microsoft Sentinel Data Connectors blade.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-alert-importer.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-alert-importer.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+
+<details>
+<summary>Expand deployment parameters:</summary>
+
+| Parameter                                | Description                                                                                                                                                            |
+|------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Subscription**                         | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
+| **Resource group**                       | Resource group in your Subscription to deploy the Solution in. Must be the same resource group as your Log Analytics Workspace.                                        |
+| **Region**                               | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
+| **log_analytics_workspace_name**         | Name of the Log Analytics Workspace where the table will be created.                                                                                                   |
+| **log_analytics_workspace_location**     | Location of the Log Analytics Workspace. Defaults to the resource group location.                                                                                      |
+</details>
+
+#### Step 2 — Deploy the playbook
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -188,11 +215,13 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Region**                                       | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
 | **Playbook Name**                                | Playbook name to use for this playbook (ex. "RFI-Playbook-Alert-Importer-LAW").                                                                                        |
 | **Save_to_log_analytics_workspace**              | Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW).                                   |
-| **Entra_id_security_group_id** | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                                                                                                                   |
-|**Confirm_user_as_risky**| Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.  |
+| **Entra_id_security_group_id**                   | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                               |
+| **Confirm_user_as_risky**                        | Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.                                                   |
 | **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
-| **Playbook_alert_log_analytics_custom_log_name** | Name of the custom log in Log Analytics Workspace, defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`.                                                       |
-| **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`                                   |
+| **Playbook_alert_log_analytics_custom_log_name** | Name of the custom log in Log Analytics Workspace, defaults to `RFI_PlaybookAlertResults_V2_CL`.                                                                       |
+| **log_analytics_workspace_name**                 | Name of the Log Analytics Workspace (used for querying existing alerts for deduplication).                                                                             |
+| **create_role_assignment**                       | If `true`, automatically assigns the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. Requires Owner or Role Based Access Control Administrator on the resource group. Set to `false` to assign manually after deployment. Defaults to `true`. |
+| **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`.                                  |
 </details>
 <hr/>
 

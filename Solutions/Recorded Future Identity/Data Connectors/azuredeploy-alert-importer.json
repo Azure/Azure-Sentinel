@@ -1,0 +1,305 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Recorded Future Identity - Alert Importer Data Connectors",
+        "description": "Deploys shared infrastructure (DCE, DCR, LA table, connector definition) used by the RFI-Playbook-Alert-Importer-LAW playbook to write Playbook Alert data to Log Analytics via the Azure Monitor Logs Ingestion API.",
+        "lastUpdateTime": "2026-06-02T00:00:00.000Z",
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [
+                    "DCE, DCR, and LA table for RFI-Playbook-Alert-Importer-LAW.",
+                    "Single-stream DCR with 11 columns and todynamic transformKql."
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "log_analytics_workspace_name": {
+            "type": "string",
+            "metadata": {
+                "description": "Required. Name of the Log Analytics Workspace where the table will be created. Must be in the same resource group as this deployment."
+            }
+        },
+        "log_analytics_workspace_location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location of the Log Analytics Workspace. Defaults to the resource group location."
+            }
+        }
+    },
+    "variables": {
+        "DceName": "recorded-future-identity-dce",
+        "DcrName": "recorded-future-identity-dcr-playbook-alerts",
+        "TableName": "RFI_PlaybookAlertResults_V2_CL",
+        "StreamName": "Custom-RFI_PlaybookAlertResults_V2_CL",
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('log_analytics_workspace_name'))]",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+        "tableResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "playbook_alert_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_priority",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_created",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "panel_status_entity_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_alert_rule_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status_alert_rule_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alert_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "panel_status",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "panel_evidence_summary",
+                            "type": "dynamic"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "Custom-RFI_PlaybookAlertResults_V2_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "playbook_alert_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_priority",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_created",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "panel_status_entity_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_alert_rule_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status_alert_rule_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alert_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "panel_status",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "panel_evidence_summary",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-RFI_PlaybookAlertResults_V2_CL"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = now(), playbook_alert_id = tostring(playbook_alert_id), panel_status_status = tostring(todynamic(panel_status).status), panel_status_priority = tostring(todynamic(panel_status).priority), panel_status_created = todatetime(todynamic(panel_status).created), panel_status_entity_name = tostring(todynamic(panel_status).entity_name), panel_status_alert_rule_name = tostring(todynamic(panel_status).alert_rule.name), panel_status_alert_rule_id = tostring(todynamic(panel_status).alert_rule.id), alert_description = tostring(alert_description), panel_status = todynamic(panel_status), panel_evidence_summary = todynamic(panel_evidence_summary)",
+                        "outputStream": "Custom-RFI_PlaybookAlertResults_V2_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/Microsoft.SecurityInsights/RecordedFutureIdentityAlertImporter')]",
+            "location": "[parameters('log_analytics_workspace_location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "RecordedFutureIdentityAlertImporter",
+                    "title": "Recorded Future Identity - Playbook Alert Importer",
+                    "publisher": "Recorded Future",
+                    "descriptionMarkdown": "Imports Recorded Future Identity Playbook Alerts into Microsoft Sentinel via the Azure Monitor Logs Ingestion API. Enables incident creation via Analytic Rules on the `RFI_PlaybookAlertResults_V2_CL` table.",
+                    "graphQueries": [
+                        {
+                            "metricName": "Playbook Alert Results",
+                            "legend": "RFI_PlaybookAlertResults_V2_CL",
+                            "baseQuery": "RFI_PlaybookAlertResults_V2_CL"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All playbook alert results",
+                            "query": "RFI_PlaybookAlertResults_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "High priority exposures",
+                            "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_priority == 'High'\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "New alerts only",
+                            "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_status == 'New'\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "RFI_PlaybookAlertResults_V2_CL",
+                            "lastDataReceivedQuery": "RFI_PlaybookAlertResults_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "IsConnectedQuery",
+                            "value": [
+                                "RFI_PlaybookAlertResults_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| where LastLog >= ago(24h)"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Azure Subscription",
+                                "description": "Contributor permissions required to deploy ARM templates (Data Connectors infrastructure and playbook)."
+                            },
+                            {
+                                "name": "Recorded Future API Token",
+                                "description": "A Recorded Future Identity API token is required to authorize the RFI Custom Connector used by the playbook."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Step 1 \u2014 Deploy Data Connectors infrastructure",
+                            "description": "Deploys the shared Data Collection Endpoint (DCE), Data Collection Rule (DCR), Log Analytics table (`RFI_PlaybookAlertResults_V2_CL`), and this connector definition tile.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-alert-importer.json)"
+                        },
+                        {
+                            "title": "Step 2 \u2014 Deploy the RFI-Playbook-Alert-Importer-LAW playbook",
+                            "description": "Deploys the Logic App that imports Recorded Future Identity Playbook Alerts and writes them to the Log Analytics table via the Logs Ingestion API using Managed Identity.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json)\n\nAfter deployment, open the Logic App and authorize the different connectors, then enable the Logic App."
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+        },
+        "dcrImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
+        },
+        "streamName": {
+            "type": "string",
+            "value": "[variables('StreamName')]"
+        }
+    }
+}
