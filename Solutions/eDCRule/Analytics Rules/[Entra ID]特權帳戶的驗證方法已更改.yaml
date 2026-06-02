@@ -1,0 +1,134 @@
+id: a7d30795-bb02-4e45-8c11-a7d219ed22ce
+name: "[Entra ID] 特權帳戶的驗證方法已更改"
+version: 1.0.0
+kind: Scheduled
+description: |
+  識別特權帳戶正在變更的身份驗證方法。這可能表明攻擊者向帳戶添加了身份驗證方法，以便他們可以繼續存取。
+  1.遏制措施：在 Entra ID ▸ Users ▸ 暫時停用目標管理員帳號；若為緊急帳號（Break-glass），先改密碼並保留最小權限。
+  2.於使用者頁面 Revoke sessions 此動作會強制失效所有 Refresh Token
+  3.Entra ID ▸ Authentication methods → 移除新增的 FIDO2、電話、Email 等；並審核 AuditLogs 內的細節確認異常來源。
+  4.為受害帳號設定隨機高強度密碼、要求下次登入必須 MFA；同時檢查 Security info 只有公司批准的方法。
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let queryperiod = 1d;
+  let queryfrequency = 1d;
+  let security_info_actions = dynamic(["User registered security info", "User changed default security info", "User deleted security info", "Admin updated security info", "Admin deleted security info", "Admin registered security info"]);
+  let VIPUsers = (
+      IdentityInfo
+      | where TimeGenerated > ago(queryperiod)
+      | mv-expand AssignedRoles
+      | where AssignedRoles contains 'Admin'
+      | summarize by AccountUPN);
+  AuditLogs
+  | where TimeGenerated > ago(queryperiod)
+  | where Category =~ "UserManagement"
+  | where ActivityDisplayName in (security_info_actions)
+  | extend Initiator = tostring(InitiatedBy.user.userPrincipalName)
+  | extend IP = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+  | mv-apply TargetResource = TargetResources on 
+      (
+      where TargetResource.type =~ "User"
+      | extend Target = tostring(TargetResource.userPrincipalName)
+      )
+  | where Target in~ (VIPUsers)
+  // Uncomment the line below if you are experiencing high volumes of Target entities. If this is uncommented, the Target column will not be mapped to an entity.
+  //| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256) by Initiator, IP, Result
+  // Comment out this line below, if line above is used.
+  | summarize
+      Start=min(TimeGenerated),
+      End=max(TimeGenerated),
+      Actions = make_set(ResultReason, MaxSize=8),
+      Target_ResourceName = make_set(TargetResources)
+      by
+      Initiator,
+      IP,
+      Result,
+      Targets = Target,
+      InitiatingAppServicePrincipalId,
+      InitiatingAppServicePrincipalName,
+      bin(TimeGenerated, 1h)
+  | mv-expand Actions
+  | extend
+      Action = tostring(Actions),
+      InitiatorName = tostring(split(Initiator, '@', 0)[0]), 
+      InitiatorUPNSuffix = tostring(split(Initiator, '@', 1)[0]),
+      //TargetName = iff(tostring(Targets) has "[", "", tostring(split(Targets, '@', 0)[0])), 
+      TargetUPNSuffix = iff(tostring(Targets) has "[", "", tostring(split(Targets, '@', 1)[0]))
+  | extend GeoInfo = geo_info_from_ip_address(IP) // <-- Added this line to get Geo Info
+  | extend Source_Network_IPLocation = tostring(GeoInfo.country)  
+  | project
+          Alert_Category_zh = "Entra ID",
+      Alert_SubCategory_zh = "異常身分權限修改",
+      Alert_Name_zh = "特權帳戶的驗證方法已更改",
+      Alert_Description_zh =  strcat(
+                              "於台灣時間:",
+                              format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                              ",在Entra ID : <TenantId>"
+      ",使用者 : ",
+                              iff(isnotempty(Initiator), Initiator, ""),
+                              "在IP:",
+                              IP,
+                              ",進行身分驗證方法的異動"
+                          ),
+      Alert_TriageStep_zh = strcat(
+                            "1.驗證方法是否有成功的紀錄出現。"
+      "2.與使用者:",
+                            iff(isnotempty(Initiator), Initiator, ""),
+                            "確認是否有進行變更的動作。"
+                        ),
+      Alert_Containment_zh = strcat(
+                             "1.立即撤銷該帳號所有現有登入權杖與工作階段(Sign-in session / refresh token) 並強制重設密碼與 MFA。 ",
+                             "2.立即停用該帳號。"
+                         ),
+      Alert_Remediation_zh = strcat(
+                             "1.針對 Admin / VIP 帳號強化安全性資訊治理,要求安全性資訊異動必須經過額外驗證或人工審核。",
+                             "2.強制高權限帳號套用進階條件式存取策略:包含 MFA/合規裝置,風險型登入政策,並阻擋來自未知地點或新裝置的異動行為。 ",
+                             "3.建立並優化安全性資訊異動的即時告警與自動化回應SOAR 例如自動封鎖帳號/通知 SOC 要求使用者確認。 "
+                         ),
+              Alert_Time_TW = datetime_utc_to_local(TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = TimeGenerated,
+      Event_Action = Actions,
+      Event_Status = Result,
+      //Event_Description = ActivityDisplayName,
+      Source_Identity_FullName = Initiator,
+      //Source_Identity_ID = ActorID,
+      Source_Identity_Type = iff(isnotempty(Initiator), "User", "Service"),
+      Source_Network_IPAddress = GeoInfo,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Source_Resource_Name = InitiatingAppServicePrincipalName,
+      Target_Identity_FullName = Targets,
+      Target_Identity_Type = "User",
+      Target_Resource_ID = tostring(coalesce(AADTenantId, TenantId)),
+      Target_Resource_Type = "Entra ID"
+  //CreateTime:2025/1/5
+  //EditTime:
+  //Editor:Lancy
+  //Version v1.0
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Source_Identity_FullName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Target_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress

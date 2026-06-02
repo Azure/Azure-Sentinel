@@ -1,0 +1,173 @@
+﻿id: 90bacdf4-e35b-47cb-92d1-29d8397eb4a0
+name: "[Entra ID] Application Assigned Administrator Permissions Immediately After Obtaining Role Management Permissions"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects an application receiving administrator permissions and then using them to assign a role. This pattern can indicate rapid privilege escalation through app consent abuse.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+  - T1098.003
+query: |
+  let query_frequency = 1h;
+  let query_period = 2h;
+  AuditLogs
+  | where TimeGenerated > ago(query_period)
+  | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory"
+  | where OperationName =~ "Add app role assignment to service principal"
+  | mv-expand TargetResource = TargetResources
+  | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+  | where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
+  | extend PermissionGrant = tostring(modifiedProperty["newValue"])
+  | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+  | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+      summarize modifiedProperties = make_bag(
+                                     bag_pack(
+      tostring(modifiedProperty["displayName"]),
+      bag_pack(
+      "oldValue",
+      trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+      "newValue",
+      trim(@'[\"\s]+', tostring(modifiedProperty["newValue"]))
+  )
+  ),
+                                     100
+                                 )
+      )
+  | project
+      PermissionGrant_TimeGenerated = TimeGenerated,
+      PermissionGrant_OperationName = OperationName,
+      PermissionGrant_Result = Result,
+      PermissionGrant,
+      AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
+      AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
+      PermissionGrant_InitiatedBy = InitiatedBy,
+      PermissionGrant_TargetResources = TargetResources,
+      PermissionGrant_AdditionalDetails = AdditionalDetails,
+      PermissionGrant_CorrelationId = CorrelationId
+  | join kind=inner (
+      AuditLogs
+      | where TimeGenerated > ago(query_frequency)
+      | where Category =~ "RoleManagement"
+          and LoggedByService =~ "Core Directory"
+          and AADOperationType =~ "Assign"
+      | where isnotempty(InitiatedBy["app"])
+      | mv-expand TargetResource = TargetResources
+      | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+      | where tostring(modifiedProperty["displayName"]) in ("Role.DisplayName", "RoleDefinition.DisplayName")
+      | extend RoleAssignment = tostring(modifiedProperty["newValue"])
+      | where RoleAssignment contains "Admin"
+      | project
+          RoleAssignment_TimeGenerated = TimeGenerated,
+          RoleAssignment_OperationName = OperationName,
+          RoleAssignment_Result = Result,
+          RoleAssignment,
+          TargetType = tostring(TargetResources[0]["type"]),
+          Target = iff(isnotempty(TargetResources[0]["displayName"]), tostring(TargetResources[0]["displayName"]), tolower(TargetResources[0]["userPrincipalName"])),
+          TargetId = tostring(TargetResources[0]["id"]),
+          RoleAssignment_InitiatedBy = InitiatedBy,
+          RoleAssignment_TargetResources = TargetResources,
+          RoleAssignment_AdditionalDetails = AdditionalDetails,
+          RoleAssignment_CorrelationId = CorrelationId,
+          AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
+      )
+      on AppServicePrincipalId
+  | where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated
+  | extend
+      TargetName = tostring(split(Target, "@")[0]),
+      TargetUPNSuffix = tostring(split(Target, "@")[1])
+  | project
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Identity Privilege Modification",
+      Alert_Name_en = "Application Assigned Administrator Permissions Immediately After Obtaining Role Management Permissions",
+      Alert_Description_en = strcat(
+                             "At Taiwan time",
+                             format_datetime(datetime_utc_to_local(RoleAssignment_TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                             ". ",
+                             "EntraID:",
+                             tostring(coalesce(AADTenantId, TenantId)),
+                             ". ",
+                             "detected initiator: ",
+                             tostring(PermissionGrant_InitiatedBy.user.userPrincipalName),
+                             " granted application: ",
+                             AppDisplayName,
+                             " permission: ",
+                             PermissionGrant,
+                             "afterward, the application immediately assigned a role to target: ",
+                             Target,
+                             "role assignment: ",
+                             RoleAssignment
+                         ),
+      Alert_TriageStep_en = strcat(
+                            "1. Confirm initiator: ",
+                            tostring(PermissionGrant_InitiatedBy.user.userPrincipalName),
+                            "IP:",
+                            tostring(PermissionGrant_InitiatedBy.ipAddress),
+                            ", and review the authorized application: ",
+                            AppDisplayName,
+                            ", obtained permission: ",
+                            PermissionGrant,
+                            ", to determine whether it is expected behavior/automation. ",
+                            "2. Review application: ",
+                            AppDisplayName,
+                            " for target: ",
+                            Target,
+                            " role assignment content: ",
+                            RoleAssignment,
+                            ", to determine whether it is expected behavior/automation. "
+                        ),
+      Alert_Containment_en = strcat(
+                             "1. If determined to be unauthorized behavior, immediately disable initiator: ",
+                             tostring(PermissionGrant_InitiatedBy.user.userPrincipalName),
+                             " and application: ",
+                             AppDisplayName,
+                             ", and revoke its Directory/RoleManagement-related permissions. ",
+                             "2. Immediately revert/remove the improper administrator role assignment: ",
+                             Target,
+                             ", and review whether other role/group/application assignments were changed."
+                         ),
+      Alert_Remediation_en =
+      "1. Strengthen Conditional Access and account governance: enforce MFA/managed device and named location restrictions for administrator accounts, and block abnormal IPs. "
+      "2. Implement least privilege and PIM: use Just-In-Time (JIT) activation with approval for administrator roles to reduce the risk of immediate abuse after account compromise. "
+      "3. Strengthen detection and automation: establish automated response SOAR (notification/revoke authorization/disable application/revert role/block source).",
+              Alert_Time_TW = datetime_utc_to_local(RoleAssignment_TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = RoleAssignment_TimeGenerated,
+      Event_Action = RoleAssignment_OperationName,
+      Event_Status = RoleAssignment_Result,
+      Event_Description = strcat("initiator: ", tostring(PermissionGrant_InitiatedBy.user.userPrincipalName), " to application: ", AppDisplayName, ", ", PermissionGrant_OperationName, ". Subsequently, application: ", AppDisplayName, " for target ", Target, ", ", RoleAssignment_OperationName),
+      Source_Identity_FullName = AppDisplayName,
+      Source_Identity_ID = AppServicePrincipalId,
+      Source_Identity_Type = "Service",
+      Target_Identity_FullName = Target,
+      Target_Identity_ID = TargetId,
+      Target_Identity_Name = TargetName,
+      Target_Identity_Type = iff(TargetType has "User", "User", "Service"),
+      Target_Resource_ID = tostring(coalesce(AADTenantId, TenantId)),
+      Target_Resource_Name = "Microsoft Entra ID",
+      Target_Resource_Type = "Microsoft Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: Target_Identity_FullName
+alertDetailsOverride:
+  alertDynamicProperties: []
+

@@ -1,0 +1,162 @@
+﻿id: b64ac0e2-a241-4b9a-ad3e-ae572630b295
+name: "[Entra ID] Privileged Role Assigned to a New User"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects when a privileged role is assigned to a new user account. This can indicate unauthorized elevation of privileges.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  // Define the start and end times based on input values
+  let starttime = now() - 1h;
+  let endtime = now();
+  // Set a lookback period of 14 days
+  let lookback = starttime - 14d;
+  // Define a reusable function to query audit logs
+  let awsFunc = (start: datetime, end: datetime) {
+      AuditLogs
+      | where TimeGenerated between (start .. end)
+      | where Category =~ "RoleManagement"
+      | where AADOperationType in ("Assign", "AssignEligibleRole")
+      | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+      | mv-apply TargetResource = TargetResources on
+          (
+          where TargetResource.type in~ ("User", "ServicePrincipal")
+          | extend
+              Target = iff(TargetResource.type =~ "ServicePrincipal", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),
+              props = TargetResource.modifiedProperties
+          )
+      | mv-apply Property = props on
+          (
+          where Property.displayName =~ "Role.DisplayName"
+          | extend RoleName = trim('"', tostring(Property.newValue))
+          )
+      | where RoleName contains "Admin" and Result == "success"
+  };
+  // Query for audit events in the current day
+  let EventInfo_CurrentDay = awsFunc(starttime, endtime);
+  // Query for audit events in the historical period (lookback)
+  let EventInfo_historical = awsFunc(lookback, starttime);
+  // Find unseen events by performing a left anti-join
+  let EventInfo_Unseen = (EventInfo_CurrentDay
+      | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName
+      );
+  // Extend and clean up the results
+  EventInfo_Unseen
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+  // You can uncomment the lines below to filter out PIM activations
+  | where Initiator != "MS-PIM"
+  //| summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result
+  // Project specific columns and split them for further analysis
+  | project
+      TimeGenerated,
+      OperationName,
+      RoleName,
+      Target,
+      Initiator,
+      InitiatingUserPrincipalName,
+      InitiatingAadUserId,
+      InitiatingAppName,
+      InitiatingAppServicePrincipalId,
+      InitiatingIpAddress,
+      Result,
+      AADTenantId
+  | extend
+      TargetName = tostring(split(Target, '@', 0)[0]),
+      TargetUPNSuffix = tostring(split(Target, '@', 1)[0]),
+      InitiatorName = tostring(split(InitiatingUserPrincipalName, '@', 0)[0]),
+      InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName, '@', 1)[0])
+  | extend
+      Source_Network_IPLocation= geo_info_from_ip_address(InitiatingIpAddress),
+      ActivityType=OperationName
+  | project
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Identity Privilege Modification",
+      Alert_Name_en = "Privileged Role Assigned to a New User",
+      Alert_Description_en = strcat(
+                             "At Taiwan time: ",
+                             format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                             "in the Microsoft Entra ID tenant",
+                             "operator: ",
+                             iff(isnotempty(Initiator), Initiator, InitiatingAppName),
+                             ", from IP: ",
+                             InitiatingIpAddress,
+                             ", assigned privileged role  ",
+                             tostring(RoleName),
+                             "  to  ",
+                             iff(isnotempty(Target), Target, "<NoTargetUser>"),
+                             ". This permission change behavior has not appeared for this user recently (within 14 days)."
+                         ),
+      Alert_TriageStep_en = strcat(
+                            "1. Confirm whether the privileged role assignment was performed through an Entra ID PIM-approved change process.",
+                            "2. Confirm with the operator: ",
+                            iff(isnotempty(Initiator), Initiator, "<UnknownInitiator>"),
+                            "  whether this was performed by the account owner.",
+                            "3. Check whether the source IP and geolocation are abnormal or not a company public IP."
+                        ),
+      Alert_Containment_en = strcat(
+                             "1. If determined to be an unauthorized role assignment, immediately revoke the target  ",
+                             iff(isnotempty(Target), Target, "<NoTargetUser>"),
+                             " 's privileged role (",
+                             tostring(RoleName),
+                             "), and restore the state to before the change.",
+                             "2. Immediately restrict the source identity (user or application) that performed the role assignment, revoke sign-in tokens, and force password and MFA reset if necessary.  ",
+                             "3. If the source is an application (",
+                             iff(isnotempty(InitiatingAppName), InitiatingAppName, "<NoServicePrincipal>"),
+                             "), immediately disable the Service Principal and revoke high-privilege API consent and credentials/secrets.  "
+                         ),
+      Alert_Remediation_en = strcat(
+                             "1. Allow privileged role access only through Entra ID PIM.",
+                             "2. Enforce Conditional Access and MFA for role management and PIM operations, allowing them only from managed devices and named locations.",
+                             "3. Establish real-time alerts and automated response (SOAR) for privileged role changes to detect abnormal role assignments immediately. "
+                         ),
+              Alert_Time_TW = datetime_utc_to_local(TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = TimeGenerated,
+      Event_Action = ActivityType,
+      Event_Status = Result,
+      //Event_Description = ActivityDisplayName,
+      Source_Identity_FullName = iff(isnotempty(Initiator), Initiator, InitiatingAppName),
+      //Source_Identity_ID = ActorID,
+      Source_Identity_Type = iff(isnotempty(Initiator), "User", "Service"),
+      Source_Network_IPAddress = InitiatingIpAddress,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      //Source_Resource_Name = InitiatingAppName,
+      Target_Identity_FullName = Target,
+      Target_Identity_DomainType = iff(Target contains "EXT", 'External', 'Internal'),
+      Target_Identity_Type = "User",
+      Target_Resource_ID = tostring(coalesce(AADTenantId, TenantId)),
+      Target_Resource_Type = "Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Target_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+

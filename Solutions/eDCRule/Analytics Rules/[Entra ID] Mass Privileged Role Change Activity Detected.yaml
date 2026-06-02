@@ -1,0 +1,125 @@
+﻿id: d6cd3c6f-1d2a-4c42-a048-dbe91cf35b18
+name: "[Entra ID] Mass Privileged Role Change Activity Detected"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects multiple privileged role changes occurring around the same time. This may signal bulk abuse or administrative misconfiguration.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  AuditLogs
+  | where Category =~ "RoleManagement"
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+  | mv-expand TargetResources
+  | mv-expand TargetResources.modifiedProperties
+  | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)
+  | extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+  | where RoleName contains "Admin"
+  | extend Target = tostring(TargetResources.userPrincipalName)
+  | summarize dcount(Target) by bin(TimeGenerated, 1h)
+  | where dcount_Target >= 9
+  | join kind=rightsemi  (AuditLogs
+      | where Category =~ "RoleManagement"
+      | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+      | mv-expand TargetResources
+      | mv-expand TargetResources.modifiedProperties
+      | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)
+      | where displayName_ =~ "Role.DisplayName"
+      | extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend Source_UserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | where RoleName contains "Admin"
+      | extend Target = tostring(TargetResources.userPrincipalName)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend GeoInfo = geo_info_from_ip_address(InitiatingIpAddress) // <-- Added this line to get Geo Info
+      | extend Source_Network_IPLocation = tostring(GeoInfo.country)    // <-- Added this line to extract Country
+      | extend TimeWindow = bin(TimeGenerated, 1h))
+      on $left.TimeGenerated == $right.TimeWindow
+  | extend AccountCustomEntity = Target
+  | project
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Identity Privilege Modification",
+      Alert_Name_en = "Mass Privileged Role Change Activity Detected",
+      Alert_Description_en =  strcat(
+                              "At Taiwan time: ",
+                              format_datetime(datetime_utc_to_local(TimeGenerated, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                              "in the Microsoft Entra ID tenant"
+      ", user:  ",
+                              iff(isnotempty(Source_UserPrincipalName), Source_UserPrincipalName, InitiatingAppName),
+                              " at IP: ",
+                              InitiatingIpAddress,
+                              ", performed mass permission changes. Newly added role permission: ",
+                              RoleName
+                          ),
+      Alert_TriageStep_en=
+      strcat(
+      "1. Confirm whether the high-privilege role assignment  ",
+      iff(isnotempty(RoleName), RoleName, "<NoRole>"),
+      "  has a corresponding change request or approval record.",
+      "2. Verify whether target account  ",
+      iff(isnotempty(Target), Target, "<NoTargetUser>"),
+      "  is a user who actually needs this administrative permission.",
+      "3. Check whether source IP  ",
+      iff(isnotempty(InitiatingIpAddress), InitiatingIpAddress, "<NoIP>"),
+      "  and sign-in location  ",
+      iff(isnotempty(Source_Network_IPLocation), Source_Network_IPLocation, "<NoLocation>"),
+      "  are company IPs and commonly used locations."
+  ),
+      Alert_Containment_en = strcat(
+                             "1. Immediately review and suspend all Admin role members added during the event time window, confirm whether they are approved permission changes, and immediately remove unauthorized roles.",
+                             "2. Immediately restrict or disable the source account or application that performed the role assignment (",
+                             iff(isnotempty(InitiatingAppName), InitiatingAppName, "<NoInitiator>"),
+                             "), and revoke its existing sign-in tokens and sessions. ",
+                             "3. If the source is a Service Principal, immediately disable the application, revoke credentials/secrets and Graph API permissions, and prevent continued automation abuse. "
+                         ),
+      Alert_Remediation_en = strcat(
+                             "1. Strengthen Admin role assignment governance: allow Just-In-Time access only through PIM, require approval and access justification, and prohibit permanent assignments. ",
+                             "2. Establish real-time alerts and automated response (SOAR) for role changes, including mass assignments, off-hours activity, or abnormal geolocation behavior.",
+                             "3. Regularly audit Admin role members/Service Principal permissions and API consent, and remove unnecessary or long-unused high-privilege access. "
+                         ),
+              Alert_Time_TW = datetime_utc_to_local(TimeGenerated, "Asia/Taipei"),
+      Alert_Time_UTC0 = TimeGenerated,
+      Event_Action = ActivityDisplayName,
+      Event_Status = Result,
+      //Event_Description = ActivityDisplayName,
+      Source_Identity_FullName = iff(isnotempty(Source_UserPrincipalName), Source_UserPrincipalName, InitiatingAppName),
+      //Source_Identity_ID = ActorID,
+      Source_Identity_Type = iff(isnotempty(Source_UserPrincipalName), "User", "Service"),
+      Source_Network_IPAddress = InitiatingIpAddress,
+      Source_Network_IPLocation = GeoInfo,
+      //Source_Resource_Name = InitiatingAppName,
+      Target_Identity_FullName = Target,
+      Target_Identity_DomainType = iff(Target contains "EXT", 'External', 'Internal'),
+      Target_Identity_Type = "User",
+      Target_Resource_ID =  AADTenantId,
+      Target_Resource_Type = "Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Source_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Target_Identity_FullName
+alertDetailsOverride:
+  alertDynamicProperties: []
+
