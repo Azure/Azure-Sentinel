@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.10      | 03-06-2026                     | Repackaged SentinelOne solution and regenerated deployment artifacts for multi-instance CCP **Data Connector** support |
 | 3.0.9       | 03-06-2026                     | Updated CCP **Data Connector** to support multiple instances (multi-connection) for MSSP scenarios |
 | 3.0.8       | 24-03-2026                     | Rename CCF solution to SentinelOne (via Codeless Connector Framework) |
 | 3.0.7       | 09-01-2026                     | Updated broken URL and bumped the SentinelOne solution version |
