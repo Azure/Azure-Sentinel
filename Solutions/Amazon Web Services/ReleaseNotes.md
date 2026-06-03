@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.10      | 19-05-2026                     | Added non-analytics tier queries to Amazon Web Services S3 **Data Connector** to support Basic/Auxiliary plan tables. |
 | 3.0.9       | 18-05-2026                     | Update AWS **Hunting Queries** and **Workbooks** for Quality     |
 | 3.0.8       | 13-01-2026                     | Updated non-functional links from **Analytic rules** and **Hunting query** |
 | 3.0.7       | 28-07-2025                     | Fix ChangeToVPC **Analytic Rule** to ensure it excludes changes to API Gateway |
