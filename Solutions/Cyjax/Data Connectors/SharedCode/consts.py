@@ -15,7 +15,10 @@ AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
 WORKSPACE_ID = os.environ.get("WORKSPACE_ID", "")
 AZURE_AUTHENTICATION_URL = "https://login.microsoftonline.com/{}/oauth2/v2.0/token"
 AUTH_SCOPE = "https://management.azure.com/.default"
-UPLOAD_INDICATOR_URL = "https://api.ti.sentinel.azure.com/workspaces/{}/threat-intelligence-stix-objects:upload?api-version=2024-02-01-preview"
+UPLOAD_INDICATOR_URL = (
+    "https://api.ti.sentinel.azure.com/workspaces/{}/"
+    "threat-intelligence-stix-objects:upload?api-version=2024-02-01-preview"
+)
 
 # *Cyjax API related constants
 CYJAX_BASE_URL = os.environ.get("CYJAX_BASE_URL", "https://api.cymon.co/v2")
@@ -62,6 +65,14 @@ REQUEST_TIMEOUT = 30
 # *STIX Indicator
 SIGHTINGS_LIMIT = 35
 ALLOWED_INDICATOR_TYPES = [
-    "URL", "Domain", "IPv4", "IPv6", "Hostname",
-    "Email", "FileHash-SHA1", "FileHash-SHA256", "FileHash-MD5", "FileHash-SSDEEP",
+    "URL",
+    "Domain",
+    "IPv4",
+    "IPv6",
+    "Hostname",
+    "Email",
+    "FileHash-SHA1",
+    "FileHash-SHA256",
+    "FileHash-MD5",
+    "FileHash-SSDEEP",
 ]
