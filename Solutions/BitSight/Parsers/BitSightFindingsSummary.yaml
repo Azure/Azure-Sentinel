@@ -1,17 +1,18 @@
-id: 39844fcb-d451-4050-ae41-23c8f27b611c
+﻿id: 39844fcb-d451-4050-ae41-23c8f27b611c
 Function:
   Title: Parser for BitSightFindingsSummary
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2026-05-25'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightFindingsSummary
 FunctionAlias: BitSightFindingsSummary
 FunctionQuery: |
-    let FindingsSummary_view  = view () {
-        BitsightFindings_summary_CL
-        | extend
-                    EventVendor ="BitSight",
-                    EventProduct ="FindingsSummary",
+    union isfuzzy=true
+        (
+            BitsightFindings_summary_CL
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "FindingsSummary",
                     Company = column_ifexists('Company', ''),
                     Confidence = column_ifexists('confidence', ''),
                     EndDate = column_ifexists('end_date', ''),
@@ -23,7 +24,7 @@ FunctionQuery: |
                     Severity = column_ifexists('severity', ''),
                     StartDate = column_ifexists('start_date', ''),
                     Description = column_ifexists('description', '')
-        | project
+            | project
                     TimeGenerated,
                     EventVendor,
                     EventProduct,
@@ -38,5 +39,40 @@ FunctionQuery: |
                     Severity,
                     StartDate,
                     Description
-    };
-    FindingsSummary_view
+        ),
+        (
+            BitSightFindingsSummary_CL
+            | summarize arg_max(TimeGenerated, *) by CompanyGuid, StartDate, EndDate
+            | mv-expand StatEntry = Stats
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "FindingsSummary",
+                    StatName = tostring(StatEntry["name"]),
+                    StatId = tostring(StatEntry["id"]),
+                    Confidence = tostring(StatEntry["confidence"]),
+                    EventCount = toint(StatEntry["event_count"]),
+                    HostCount = toint(StatEntry["host_count"]),
+                    FirstSeen = tostring(StatEntry["first_seen"])
+            | join kind=leftouter (
+                BitsightVulnerabilitiesFindingsSummary_CL
+                | summarize arg_max(TimeGenerated, *) by DisplayName
+                | project DisplayName, VulnSeverity = Severity, VulnDescription = Description
+            ) on $left.StatName == $right.DisplayName
+            | project
+                    TimeGenerated,
+                    EventVendor,
+                    EventProduct,
+                    CompanyName,
+                    CompanyGuid,
+                    StartDate,
+                    EndDate,
+                    StatName,
+                    StatId,
+                    Confidence,
+                    EventCount,
+                    HostCount,
+                    FirstSeen,
+                    VulnSeverity,
+                    VulnDescription,
+                    ConnectorName
+        )

@@ -1,0 +1,80 @@
+id: c3d4e5f6-a7b8-9012-cdef-123456789012
+name: Red Sift - Login from previously unseen IP address
+description: |
+  'Detects a successful login from an IP address that has not been seen in the previous 14 days for that user, which may indicate compromised credentials or unauthorized access.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: RedSiftPush
+    dataTypes:
+      - RedSiftAuth_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lookback = 14d;
+  let recentWindow = 1h;
+  let historicalLogins = RedSiftAuth_CL
+  | extend
+      ActivityName = tostring(column_ifexists("ActivityName", "")),
+      UserEmail = tostring(column_ifexists("UserEmail", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", ""))
+  | where TimeGenerated between (ago(lookback) .. ago(recentWindow))
+  | where ActivityName has "Logon"
+  | where isnotempty(UserEmail) and isnotempty(SrcIp)
+  | summarize by UserEmail, SrcIp;
+  RedSiftAuth_CL
+  | extend
+      ActivityName = tostring(column_ifexists("ActivityName", "")),
+      UserEmail = tostring(column_ifexists("UserEmail", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", "")),
+      HttpUserAgent = tostring(column_ifexists("HttpUserAgent", "")),
+      ServiceName = tostring(column_ifexists("ServiceName", "")),
+      Severity = tostring(column_ifexists("Severity", ""))
+  | where TimeGenerated >= ago(recentWindow)
+  | where ActivityName has "Logon"
+  | where isnotempty(UserEmail) and isnotempty(SrcIp)
+  | join kind=leftanti (historicalLogins) on UserEmail, SrcIp
+  | project
+      TimeGenerated,
+      UserEmail,
+      SrcIp,
+      HttpUserAgent,
+      ServiceName,
+      ActivityName,
+      Severity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+customDetails:
+  UserAgent: HttpUserAgent
+  ServiceName: ServiceName
+alertDetailsOverride:
+  alertDisplayNameFormat: "RedSift - New IP Login for {{UserEmail}}"
+  alertDescriptionFormat: "User {{UserEmail}} logged in from a previously unseen IP address {{SrcIp}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionEnabled: false
+suppressionDuration: PT1H
+version: 1.0.1
+kind: Scheduled

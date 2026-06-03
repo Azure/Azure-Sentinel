@@ -39,6 +39,38 @@ When reviewing pull requests, follow these rules strictly.
 3. Verify all required fields are present and properly formatted
 4. Do NOT use general instructions for these files - only use the huntingqueries custom instructions
 
+### For Playbooks Files (`Playbooks/**/*.json`, `Playbooks/**/README.md`, `Solutions/**/Playbooks/**/*.json`, `Solutions/**/Playbooks/**/README.md`)
+1. **LOAD and USE:** `.github/instructions/playbooks.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate ARM template structure, metadata fields, parameters, and README requirements from that custom instruction file
+4. Check all required sections in README.md and ARM template metadata
+5. Do NOT use general instructions for these files - only use the playbooks custom instructions
+
+### For Workbooks Files (`Workbooks/*.json`, `Solutions/**/Workbooks/*.json`)
+1. **LOAD and USE:** `.github/instructions/workbook.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate workbook JSON structure, required fields, items array, and metadata requirements from that custom instruction file
+4. Check all required top-level fields and item structure validation
+5. Do NOT use general instructions for these files - only use the workbook custom instructions
+
+### For Parser Files (`Parsers/**/*.yaml`, `Parsers/**/*.yml`, `Solutions/**/Parsers/**/*.yaml`, `Solutions/**/Parsers/**/*.yml`)
+1. **LOAD and USE:** `.github/instructions/parsers.instructions.md`
+2. Apply ALL guidelines from that file
+3. Validate parser syntax, KQL accuracy, YAML structure, and all required fields from that custom instruction file
+4. Do NOT use general instructions for these files - only use the parsers custom instructions
+
+### For Building, Packaging, or Validating Solutions
+When the user asks to **build**, **package**, **validate**, or **run validations** on a solution:
+1. **LOAD and USE:** `.github/instructions/packaging.instructions.md`
+2. Apply ALL guidelines from that file — it contains the script path, parameters, fuzzy matching behavior, and report display rules
+3. **Always use the build script** at `.script/local-validation/build-and-validate.ps1` — do NOT run validators manually or write your own validation logic
+4. **BEFORE running the script, tell the user:** "🔄 Running full build & validation suite for {SolutionName}. This typically takes 3-5 minutes — I'll present the complete report when it finishes." This message MUST appear in chat before the script executes so the user knows work is happening.
+5. **The script takes 3-10 minutes.** NEVER tell the user to "check the terminal."
+6. Present the full report — the text between `[REPORT_START]` and `[REPORT_END]` — in your chat response
+7. This applies to ALL solutions, including newly created ones that may not have a Package/ folder yet
+
+**Trigger phrases:** "build solution", "package solution", "validate solution", "run validations", "run CI checks", "check if solution passes", "create V3 package"
+
 ---
 
 ## Files and folders to ignore
@@ -51,9 +83,12 @@ If files from these paths appear in the PR, completely skip them and do not gene
 
 ## Solutions Analyzer Tools
 
-When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`:
+When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`, follow the dedicated skills under `.github/skills/`:
 
-### Output Locations
+- **`run-solution-analyzer`** — running the mapper, doc generator, ASIM browser, and `upload_to_kusto`; output locations; force-refresh and caching.
+- **`update-solution-analyzer`** — modifying scripts, updating `script-docs/`, README changelog rules, CSV output sync with `upload_to_kusto.py`, and static/interactive index plus markdown/HTML entity page synchronization.
+
+**MANDATORY:** Before editing ANY file under `Tools/Solutions Analyzer/` — including small fixes such as renames, regex/pattern tweaks, escaping changes, override additions, or one-line behavior changes — first load `.github/skills/update-solution-analyzer/SKILL.md` and follow it. In particular, **every script change must add or extend an entry in the `## Version History` section of `Tools/Solutions Analyzer/README.md`** within the same commit. Small fixes are NOT exempt.
 
 There are THREE different output scenarios - **never confuse them**:
 
