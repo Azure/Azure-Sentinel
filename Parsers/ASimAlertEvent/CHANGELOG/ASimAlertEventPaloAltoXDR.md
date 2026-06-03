@@ -1,4 +1,4 @@
-# Changelog for ASimAlertPaloAltoXDR.yaml
+# Changelog for ASimAlertEventPaloAltoXDR.yaml
 
 ## Version 0.1.0
 
