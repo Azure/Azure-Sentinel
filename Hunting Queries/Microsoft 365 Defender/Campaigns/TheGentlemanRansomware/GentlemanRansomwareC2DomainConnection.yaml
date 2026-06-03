@@ -1,0 +1,129 @@
+id: 8dda012e-8628-41ca-b09f-31a2a849a40e
+name: Gentlemen Ransomware C2 domain connection
+description: |
+  This query identifies outbound connections to decentralized Web3 C2s, TryCloudflare tunnels, and abused SaaS platforms associated with the EtherRAT, TukTuk, and Gentlemen ransomware intrusion chains.
+description-detailed: |
+  References:
+  https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1568.002
+  - T1567.002
+query: |
+  // DETECTION STRATEGY: 
+  // Identify outbound connections to decentralized Web3 C2s, TryCloudflare tunnels, and abused SaaS platforms associated with Gentlemen ransomware operations.
+  // 
+  // THE MECHANIC: 
+  // The threat actor leverages legitimate (but highly anomalous for corporate endpoints) third-party infrastructure (like 1rpc.io, TryCloudflare, ClickHouse, and Supabase) for Command and Control and Data Exfiltration. This technique bypasses traditional reputation-based blocking and blends the C2 beacons into standard HTTPS traffic.
+  
+  // These domains represent the exact hardcoded SaaS endpoints and decentralized C2 gateways extracted from the EtherRAT and TukTuk configurations in recent DFIR reporting.
+  let domainIocs = dynamic([
+      // Tier 1: Decentralized Web3 & Blockchain Gateways
+      "1rpc.io",
+
+      // Tier 2: Public Tunneling Services (TryCloudflare)
+      "witch-skins-lip-coal.trycloudflare.com",
+      "fields-pct-easier-vancouver.trycloudflare.com",
+      "howto-tar-naturals-coordination.trycloudflare.com",
+      "workshop-lighting-protective-customs.trycloudflare.com",
+      "afford-effect-construct-tricks.trycloudflare.com",
+      "rapids-lil-lending-charleston.trycloudflare.com",
+      "when-architectural-cdna-faster.trycloudflare.com",
+      "mode-exit-legendary-trusted.trycloudflare.com",
+      "seasonal-estimation-heating-necessarily.trycloudflare.com",
+      "entered-medications-motherboard-advanced.trycloudflare.com",
+      "walt-messaging-affairs-occurring.trycloudflare.com",
+
+      // Tier 3: Abused SaaS Data Platforms (C2 / Exfiltration)
+      "vefbdzzuaadnascpeqcn.supabase.co",
+      "muurfzqprzmdkzoibxaz.supabase.co",
+      "k135neflez.westus3.azure.clickhouse.cloud",
+      "vngz3ntdrb.us-east1.gcp.clickhouse.cloud",
+      "ep-lively-cherry-a80bmwii.eastus2.azure.neon.tech",
+
+      // Tier 4: Fallback HTTP C2
+      "borjumaniya.store"
+  ]);
+  
+  // Look for network connection events from Defender for Endpoint telemetry
+  DeviceNetworkEvents
+    // STEP 1: Filter network traffic for the specific adversary infrastructure
+    // Fast, indexed pre-filter to find rows that *might* match
+    | where RemoteUrl has_any ("trycloudflare", "supabase", "1rpc", "clickhouse", "borjumaniya", "azure") 
+    // Now only parse the 1% of rows that passed the filter
+    | extend ExtractedHost = tostring(parse_url(RemoteUrl).Host)
+    | where ExtractedHost in~ (domainIocs)
+    
+    // STEP 2: Schema Alignment & Entity Preparation
+    // explicitly cast InitiatingProcessId to a string to satisfy the Process entity schema
+    | extend ProcessIdString = tostring(InitiatingProcessId) 
+    
+    // STEP 3: Format the output for triage
+    // ANALYST ACTION: Review 'CommandLine' and 'Process'. If the initiating process is a renamed LOLBin, a side-loaded DLL runner, or originates from a user's AppData/Downloads directory, assume immediate C2 communication and isolate the host. Check the 'DestinationUrl' to see if data exfiltration (SaaS) or C2 resolution (1rpc.io) is occurring.
+    | project Timestamp, 
+              DeviceName, 
+              Account = InitiatingProcessAccountName, 
+              Process = InitiatingProcessFileName, 
+              CommandLine = InitiatingProcessCommandLine, 
+              DestinationUrl = RemoteUrl, 
+              DestinationIp = RemoteIP, 
+              DestinationPort = RemotePort,
+              ProcessIdString
+              
+    // STEP 4: Visual Hierarchy
+    // Structure the output from context (Who/Where) to evidence (What/How) for maximum Tier 1 efficiency
+    | project-reorder Timestamp, 
+                      DeviceName, 
+                      Account, 
+                      Process, 
+                      CommandLine, 
+                      DestinationUrl, 
+                      DestinationIp, 
+                      DestinationPort
+    | sort by Timestamp desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdString
+      - identifier: CommandLine
+        columnName: CommandLine
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: DestinationUrl
+customDetails:
+  Suspicious_URL: DestinationUrl
+  Malicious_Process: Process
+  C2_IP_Address: DestinationIp
+
+version: 1.0.0
+
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]

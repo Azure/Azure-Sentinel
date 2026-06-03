@@ -1,5 +1,9 @@
 # Changelog for vimAuthenticationPaloAltoPanOS.yaml
 
+## Version 0.1.1
+
+- (2026-06-02) Fixed incorrect DvcIpAddr mapping: replaced `Computer` (which contains a hostname) with `DeviceAddress` (the standard CEF device IP field).
+
 ## Version 0.1.0
 
 - (2026-04-01) Initial version of ASIM Authentication parser for Palo Alto PAN-OS.
