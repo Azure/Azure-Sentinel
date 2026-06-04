@@ -48,12 +48,20 @@
       "metadata": {
         "description": "Name of the Logic App playbook"
       }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "[first(split(split(parameters('keyVaultSecretUri'), '/')[2], '.'))]",
+      "metadata": {
+        "description": "Key Vault name (extracted from keyVaultSecretUri)"
+      }
     }
   },
   "variables": {
     "azureSentinelConnectionName": "[concat('azuresentinel-', parameters('playbook-name'))]",
     "whisperConnectionName": "[concat('whispersecurity-', parameters('playbook-name'))]",
-    "keyVaultApiKeyReference": "[concat('@Microsoft.KeyVault(SecretUri=', parameters('keyVaultSecretUri'), ')')]"
+    "keyVaultApiKeyReference": "[concat('@Microsoft.KeyVault(SecretUri=', parameters('keyVaultSecretUri'), ')')]",
+    "keyvaultConnectionName": "[concat('keyvault-', parameters('playbook-name'))]"
   },
   "resources": [
     {
@@ -86,6 +94,25 @@
       }
     },
     {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('keyvaultConnectionName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelWorkspaceId": "[parameters('workspace')]"
+      },
+      "properties": {
+        "displayName": "Key Vault - Whisper API Key",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'keyvault')]"
+        },
+        "parameterValueType": "Alternative",
+        "alternativeParameterValues": {
+          "vaultName": "[parameters('keyVaultName')]"
+        }
+      }
+    },
+    {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2019-05-01",
       "name": "[parameters('playbook-name')]",
@@ -100,7 +127,8 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('azureSentinelConnectionName'))]",
-        "[resourceId('Microsoft.Web/connections', variables('whisperConnectionName'))]"
+        "[resourceId('Microsoft.Web/connections', variables('whisperConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]"
       ],
       "properties": {
         "state": "Enabled",
@@ -110,7 +138,13 @@
           "parameters": {
             "$connections": {
               "type": "Object",
-              "defaultValue": {}
+              "defaultValue": {
+                "keyvault": {}
+              }
+            },
+            "keyVaultSecretUri": {
+              "type": "SecureString",
+              "defaultValue": "[parameters('keyVaultSecretUri')]"
             }
           },
           "triggers": {
@@ -201,7 +235,7 @@
                             "uri": "https://graph.whisper.security/api/query",
                             "headers": {
                               "Content-Type": "application/json",
-                              "X-API-Key": "@{parameters('$connections')['whispersecurity']['connectionId']}"
+                              "X-API-Key": "@body('Get_API_Key')?['value']"
                             },
                             "body": {
                               "query": "MATCH (ip:IPV4 {name: \"@{items('For_Each_IP')?['Address']}\"})<-[:RESOLVES_TO]-(h:HOSTNAME) RETURN h.name AS hostname, count(h) AS total"
@@ -213,7 +247,18 @@
                               "maximumInterval": "PT1M"
                             }
                           },
-                          "runAfter": {}
+                          "runAfter": {
+                            "Get_API_Key": [
+                              "Succeeded"
+                            ]
+                          },
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "inputs"
+                              ]
+                            }
+                          }
                         },
                         "Parse_CoHosted_Response": {
                           "type": "ParseJson",
@@ -265,6 +310,26 @@
                             "Format_CoHosted_Comment": [
                               "Succeeded"
                             ]
+                          }
+                        },
+                        "Get_API_Key": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                              }
+                            },
+                            "method": "get",
+                            "path": "/secrets/@{encodeURIComponent(last(split(parameters('keyVaultSecretUri'), '/')))}/value"
+                          },
+                          "runAfter": {},
+                          "runtimeConfiguration": {
+                            "secureData": {
+                              "properties": [
+                                "outputs"
+                              ]
+                            }
                           }
                         }
                       }
@@ -372,6 +437,16 @@
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('whisperConnectionName'))]",
                 "connectionName": "[variables('whisperConnectionName')]",
                 "id": "[resourceId('Microsoft.Web/customApis', parameters('connectorName'))]"
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                "connectionName": "[variables('keyvaultConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
               }
             }
           }
