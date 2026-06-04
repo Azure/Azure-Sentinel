@@ -66,7 +66,8 @@ public class ClientEventsFunction
                     var currentLatestTimestamp = newEvents.Max(e => e.Event.Ingested);
                     var currentLatestEventId = newEvents
                         .Where(e => e.Event.Ingested == currentLatestTimestamp)
-                        .Max(e => e.Event.Id);
+                        .Select(e => e.Event.Id)
+                        .Aggregate((a, b) => string.Compare(a, b, StringComparison.OrdinalIgnoreCase) >= 0 ? a : b);
 
                     if (currentLatestTimestamp > latestTimestamp ||
                         (currentLatestTimestamp == latestTimestamp && string.Compare(currentLatestEventId, lastProcessedEventId, StringComparison.OrdinalIgnoreCase) > 0))
@@ -80,7 +81,7 @@ public class ClientEventsFunction
                     await _logAnalyticsService.SendToLogAnalyticsAsync(transformedEvents, "BeyondTrustPM_ClientEvents");
 
                     // Checkpoint after each page so progress survives a host timeout mid-loop.
-                    state.LastProcessedTimestamp = DateTime.SpecifyKind(latestTimestamp.AddMilliseconds(1), DateTimeKind.Utc);
+                    state.LastProcessedTimestamp = DateTime.SpecifyKind(latestTimestamp, DateTimeKind.Utc);
                     state.LastProcessedEventId = lastProcessedEventId;
                     state.RecordsProcessed += newEvents.Count;
                     state.Status = "Success";
@@ -132,7 +133,7 @@ public class ClientEventsFunction
         _logger.LogDebug("ClientEvents function completed at: {DateTime}", DateTime.Now);
     }
 
-    private static IEnumerable<object> TransformClientEvents(IEnumerable<ClientEvent> events) =>
+    private static IReadOnlyList<object> TransformClientEvents(IEnumerable<ClientEvent> events) =>
         events.Select(evt => (object)new
         {
             // Core timestamp fields
@@ -224,5 +225,5 @@ public class ClientEventsFunction
 
             // Transmission timestamp (set at time of sending to Log Analytics)
             timeTransmitted = DateTime.UtcNow
-        });
+        }).ToList();
 }

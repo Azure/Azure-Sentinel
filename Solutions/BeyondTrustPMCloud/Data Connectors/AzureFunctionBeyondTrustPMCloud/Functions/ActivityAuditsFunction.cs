@@ -75,7 +75,7 @@ public class ActivityAuditsFunction
                     await _logAnalyticsService.SendToLogAnalyticsAsync(transformedAudits, "BeyondTrustPM_ActivityAudits");
 
                     // Checkpoint after each page so progress survives a host timeout mid-loop.
-                    state.LastProcessedTimestamp = DateTime.SpecifyKind(latestTimestamp.AddMilliseconds(1), DateTimeKind.Utc);
+                    state.LastProcessedTimestamp = DateTime.SpecifyKind(latestTimestamp, DateTimeKind.Utc);
                     state.LastProcessedId = maxAuditId;
                     state.RecordsProcessed += newAudits.Count;
                     state.Status = "Success";
@@ -123,7 +123,7 @@ public class ActivityAuditsFunction
         _logger.LogDebug("ActivityAudits function completed at: {DateTime}", DateTime.Now);
     }
 
-    private static IEnumerable<object> TransformActivityAudits(IEnumerable<ActivityAudit> audits) =>
+    private static IReadOnlyList<object> TransformActivityAudits(IEnumerable<ActivityAudit> audits) =>
         audits.Select(audit => (object)new
         {
             TimeGenerated = audit.Created,
@@ -166,5 +166,5 @@ public class ActivityAuditsFunction
             autoUpdateGroupMacClientSettingsDataAuditing = audit.AutoUpdateGroupMacClientSettingsDataAuditing,
             identityProviderGroupDataAuditing = audit.IdentityProviderGroupDataAuditing,
             timeTransmitted = DateTime.UtcNow
-        });
+        }).ToList();
 }
