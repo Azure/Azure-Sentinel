@@ -244,4 +244,8 @@ The `argsentdc_CL` custom table contains these key columns:
 
 - **Provider:** Check Point
 - **Tier:** Partner
-- **Contact:** [Check Point Support](https://cyberint.com/customer-support/)
+- **Contact:** [Check Point Support](https://www.checkpoint.com/support-services/contact-support/)
+
+## Maintainers' notes
+
+- **`offerId`:** `checkpoint-cyberint-solutions-alerts`. This identifier does not include the `azure-sentinel-` prefix used by the sibling Cyberint solutions (`azure-sentinel-checkpoint-cyberint-ioc`, `azure-sentinel-checkpoint-em-ioc-intelligence`). The Alerts solution was first published on 2025-03-18 under the existing `offerId` and versions 3.0.0 / 3.0.1 / 3.1.0 are already live in the marketplace. Renaming would orphan the published offer and break the upgrade path for existing customers, so the historical identifier is preserved deliberately. New solutions in the Cyberint family should follow the `azure-sentinel-…` convention.
