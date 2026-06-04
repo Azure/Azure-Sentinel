@@ -78,7 +78,7 @@ def post_data(events: list[dict], log_type_suffix: str):
 
     except ClientAuthenticationError as exc:
         logging.error(
-            f"{log_type_suffix} : Authentication failed — verify CLIENT_ID, "
+            f"{log_type_suffix} : Authentication failed - verify CLIENT_ID, "
             f"CLIENT_SECRET, TENANT_ID, and that the App Registration has "
             f"'Monitoring Metrics Publisher' role assigned on the DCR. Error: {exc}"
         )
