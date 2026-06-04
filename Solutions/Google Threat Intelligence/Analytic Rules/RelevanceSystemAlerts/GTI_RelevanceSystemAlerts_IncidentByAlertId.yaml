@@ -1,0 +1,88 @@
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+name: GTI Relevance System Alert - Incident by Alert ID
+description: |
+  Creates a Microsoft Sentinel incident for each unique Google Threat Intelligence (GTI) Alert ID.
+  Multiple ingestion records sharing the same Alert ID (e.g. updated snapshots of the same alert) are
+  grouped into a single incident. The rule surfaces the most recent snapshot of each alert and maps
+  severity from the GTI severity analysis field.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleThreatIntelligenceRelevanceSystemAlertsAPI
+    dataTypes:
+      - RelevanceSystemAlerts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Reconnaissance
+  - Impact
+  - CredentialAccess
+relevantTechniques:
+  - T1566
+  - T1078
+  - T1552
+  - T1486
+  - T1595
+query: |
+  GTIRelevanceSystemAlerts
+  | extend
+      SentinelSeverity = case(
+          SeverityLevel == "CRITICAL", "High",
+          SeverityLevel == "HIGH",     "High",
+          SeverityLevel == "MEDIUM",   "Medium",
+          SeverityLevel == "LOW",      "Low",
+          "Informational"
+      ),
+      DetailSeverity = coalesce(DataLeakSeverity, InsiderThreatSeverity, InitialAccessBrokerSeverity, "")
+  | project
+      TimeGenerated,
+      AlertId,
+      AlertName        = DisplayName,
+      AlertState       = State,
+      DetailType,
+      DetailSeverity,
+      SeverityLevel,
+      SentinelSeverity,
+      SeverityConfidence,
+      SeverityReasoning,
+      PriorityLevel,
+      PriorityReasoning,
+      RelevanceLevel,
+      RelevanceConfidence,
+      RelevanceReasoning,
+      FindingCount,
+      AiSummary,
+      AuditCreateTime,
+      AuditUpdateTime
+alertDetailsOverride:
+  alertDisplayNameFormat: 'GTI Alert: {{AlertName}} [{{AlertState}}]'
+  alertDescriptionFormat: |
+    Alert ID: {{AlertId}}
+    Type: {{DetailType}}
+
+    Summary: {{AiSummary}}
+  alertSeverityColumnName: SentinelSeverity
+customDetails:
+  AlertId: AlertId
+  AlertState: AlertState
+  DetailType: DetailType
+  DetailSeverity: DetailSeverity
+  PriorityLevel: PriorityLevel
+  RelevanceLevel: RelevanceLevel
+  FindingCount: FindingCount
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P5D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - AlertId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled
