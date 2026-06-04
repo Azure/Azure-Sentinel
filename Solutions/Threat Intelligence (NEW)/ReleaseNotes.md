@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.19      | 01-06-2026                     | Standardized naming and corrected the incorrect mapping of `dataTypes: EmailEvents` and `dataTypes: EmailUrlInfo` with `connectorId: Office365` and `connectorId: AzureActiveDirectory` across multiple **Analytic Rules** |
+| 3.0.19      | 05-06-2026                     | Standardized naming and corrected the incorrect mapping of `dataTypes: EmailEvents` and `dataTypes: EmailUrlInfo` with `connectorId: Office365` and `connectorId: AzureActiveDirectory` across multiple **Analytic Rules** |
 | 3.0.18      | 04-05-2026                     | Export to TAXII **connector** proceeds to GA. |
 | 3.0.17      | 02-04-2026                     | Updated **TI map Domain entity to SecurityAlert** analytic rule with deduplication and filters   |
 | 3.0.16      | 25-03-2026                     | Optimized **TI map Domain entity to EmailUrlInfo** analytic rule with deduplication and filters |
