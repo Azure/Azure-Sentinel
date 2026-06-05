@@ -1,0 +1,238 @@
+Parser:
+  Title: Web Session ASIM parser for Salesforce Service Cloud
+  Version: '0.1.0'
+  LastUpdated: Jun 05, 2026
+Product:
+  Name: Salesforce Service Cloud
+Normalization:
+  Schema: WebSession
+  Version: '0.2.7'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Service Cloud REST API Documentation
+  Link: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
+Description: |
+  This ASIM parser supports normalizing Salesforce Service Cloud web session and API request logs from the SalesforceServiceCloudV2_CL table to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionSalesforceServiceCloudV2
+EquivalentBuiltInParser: _ASim_WebSession_SalesforceServiceCloudV2
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false, pack:bool=false) {
+    let EventTypeLookup = datatable (EventOriginalType: string, EventType: string) [
+        "ApiTotalUsage",    "ApiRequest",
+        "RestApi",          "ApiRequest",
+        "BulkApi2",         "ApiRequest",
+        "ApexCallout",      "ApiRequest",
+        "ExternalODataCallout", "ApiRequest",
+        "MetadataApiOperation", "ApiRequest",
+        "NamedCredential",  "ApiRequest",
+        "URI",              "WebServerSession",
+        "AuraRequest",      "WebServerSession",
+        "LightningPageView","WebServerSession",
+        "LightningPerformance", "WebServerSession",
+        "LightningInteraction", "WebServerSession",
+        "UiTelemetryResourceTiming", "WebServerSession",
+        "UiTelemetryNavigationTiming", "WebServerSession",
+        "CSPViolation",     "WebServerSession"
+    ];
+    let WebSessionEventTypes = dynamic([
+        "ApiTotalUsage", "RestApi", "BulkApi2", "ApexCallout",
+        "ExternalODataCallout", "MetadataApiOperation", "NamedCredential",
+        "URI", "AuraRequest", "LightningPageView", "LightningPerformance",
+        "LightningInteraction", "UiTelemetryResourceTiming",
+        "UiTelemetryNavigationTiming", "CSPViolation"
+    ]);
+    SalesforceServiceCloudV2_CL
+    | where not(disabled)
+    | where EventType in (WebSessionEventTypes)
+    | project-rename EventOriginalType = EventType
+    | lookup EventTypeLookup on EventOriginalType
+    | extend
+        // -- URL handling
+        Url = coalesce(Url, Uri),
+        _UrlHost = extract(@"https?://([^/:?#]+)", 1, Url)
+    | extend
+        DstFQDN = iff(_UrlHost has ".", _UrlHost, ""),
+        DstHostname = iff(isnotempty(_UrlHost), extract(@"^([^.]+)", 1, _UrlHost), ""),
+        DstDomain = extract(@"^[^.]+\.(.*)", 1, _UrlHost),
+        DstDomainType = iff(_UrlHost has ".", "FQDN", "")
+    | extend
+        // -- Event fields
+        EventCount              = int(1),
+        EventStartTime          = TimeGenerated,
+        EventEndTime            = TimeGenerated,
+        EventSchema             = "WebSession",
+        EventSchemaVersion      = "0.2.7",
+        EventVendor             = "Salesforce",
+        EventProduct            = "Salesforce Service Cloud",
+        EventProductVersion     = ApiVersion,
+        EventSeverity           = "Informational",
+        // -- Event result based on HTTP status code
+        EventResultDetails      = StatusCode,
+        EventResult             = case(
+                                    isempty(StatusCode),         "NA",
+                                    toint(StatusCode) between (100 .. 399), "Success",
+                                    toint(StatusCode) between (400 .. 599), "Failure",
+                                    "NA"
+                                  ),
+        EventOriginalResultDetails = StatusCode
+    | extend
+        // -- HTTP fields
+        HttpRequestMethod       = HttpMethod,
+        HttpStatusCode          = EventResultDetails,
+        HttpUserAgent           = coalesce(HttpUserAgentOriginal, HttpUserAgent, UserAgent),
+        HttpReferrer            = coalesce(HttpReferrerOriginal, ReferrerUri),
+        // -- Source fields
+        SrcIpAddr               = coalesce(ClientIp, SourceIp, SrcIpAddr),
+        SrcUserId               = UserId,
+        SrcUserIdType           = iff(isnotempty(UserId), "SalesforceId", ""),
+        SrcUsername              = coalesce(UserName, User),
+        SrcUsernameType         = case(
+                                    isnotempty(UserName) and UserName has "@", "UPN",
+                                    isnotempty(UserName), "Simple",
+                                    isnotempty(User) and User has "@", "UPN",
+                                    isnotempty(User), "Simple",
+                                    ""
+                                  ),
+        SrcUserType             = case(
+                                    UserType == "Standard" or UserType == "S", "Regular",
+                                    UserType == "X", "Admin",
+                                    ""
+                                  ),
+        SrcBytes                = tolong(RequestSize),
+        SrcDvcId                = coalesce(SrcDvcId, DeviceId),
+        SrcDvcModelName         = coalesce(SrcDvcModelName, DeviceModel),
+        SrcDvcOs                = coalesce(DvcOsName, OsName),
+        // -- Destination fields
+        DstBytes                = tolong(coalesce(DstBytes, ResponseSize)),
+        DstAppName              = "Salesforce Service Cloud",
+        DstAppType              = "SaaS application",
+        // -- Device fields
+        Dvc                     = "Salesforce Service Cloud",
+        DvcScopeId              = OrganizationId,
+        // -- Network fields
+        NetworkDuration         = toint(Duration),
+        NetworkSessionId        = SessionKey,
+        // -- TLS
+        TlsVersion              = TlsProtocol,
+        TlsCipher               = CipherSuite
+    | extend
+        // -- Conditional fields
+        SrcDvcIdType            = iff(isnotempty(SrcDvcId), "Other", ""),
+        // -- Dst alias: use the best available destination identifier
+        Dst                     = coalesce(DstFQDN, DstHostname, DstAppName),
+        // -- Src alias
+        Src                     = SrcIpAddr,
+        // -- Aliases
+        IpAddr                  = SrcIpAddr,
+        User                    = SrcUsername,
+        UserAgent               = HttpUserAgent,
+        Hostname                = DstHostname,
+        Duration                = NetworkDuration,
+        SessionId               = NetworkSessionId
+    | extend
+        // -- AdditionalFields
+        AdditionalFields = iff(
+            pack,
+            bag_pack(
+                "ApiVersion",       ApiVersion,
+                "ApiType",          ApiType,
+                "SessionType",      SessionType,
+                "BrowserName",      BrowserName,
+                "BrowserVersion",   BrowserVersion,
+                "OsVersion",        OsVersion,
+                "PlatformType",     PlatformType,
+                "DevicePlatform",   DevicePlatform,
+                "ConnectionType",   ConnectionType,
+                "RequestId",        RequestId,
+                "Quiddity",         Quiddity,
+                "ExecTime",         ExecTime,
+                "TotalTime",        TotalTime,
+                "CpuTime",          CpuTime,
+                "DbTotalTime",      DbTotalTime,
+                "DbCpuTime",        DbCpuTime,
+                "RowsProcessed",    RowsProcessed,
+                "IsLongRunningRequest", IsLongRunningRequest
+            ),
+            dynamic({})
+        )
+    | project
+        // -- Mandatory
+        TimeGenerated,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventResult,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        Dvc,
+        Url,
+        Dst,
+        // -- Recommended
+        EventResultDetails,
+        EventSeverity,
+        HttpRequestMethod,
+        HttpStatusCode,
+        DstHostname,
+        DstBytes,
+        SrcIpAddr,
+        SrcBytes,
+        ASimMatchingIpAddr = "SrcIpAddr",
+        ASimMatchingHostname = "DstHostname",
+        // -- Event optional
+        EventOriginalType,
+        EventOriginalResultDetails,
+        EventProductVersion,
+        // -- HTTP optional
+        HttpUserAgent,
+        HttpReferrer,
+        // -- Destination optional
+        DstFQDN,
+        DstDomain,
+        DstDomainType,
+        DstAppName,
+        DstAppType,
+        // -- Source fields
+        SrcUserId,
+        SrcUserIdType,
+        SrcUsername,
+        SrcUsernameType,
+        SrcUserType,
+        SrcDvcId,
+        SrcDvcIdType,
+        SrcDvcModelName,
+        SrcDvcOs,
+        // -- Device fields
+        DvcScopeId,
+        // -- Network fields
+        NetworkDuration,
+        NetworkSessionId,
+        // -- TLS
+        TlsVersion,
+        TlsCipher,
+        // -- Additional
+        AdditionalFields,
+        // -- Aliases
+        IpAddr,
+        User,
+        UserAgent,
+        Hostname,
+        Duration,
+        SessionId,
+        Src,
+        // -- Source table
+        Type
+  };
+  parser(disabled=disabled, pack=pack)
