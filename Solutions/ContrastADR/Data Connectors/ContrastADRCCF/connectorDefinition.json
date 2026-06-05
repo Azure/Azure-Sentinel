@@ -1,0 +1,210 @@
+{
+  "name": "ContrastADRCCF",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "[parameters('workspace-location')]",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ContrastADRCCF",
+      "title": "Contrast ADR Push Connector",
+      "publisher": "Contrast Security",
+      "descriptionMarkdown": "The [Contrast Security](https://www.contrastsecurity.com/) connector provides the capability to ingest attack events and incidents from Contrast Application Detection and Response (ADR) into Microsoft Sentinel. This connector receives data via webhook push mechanism using OAuth authentication.",
+      "graphQueries": [
+        {
+          "metricName": "Attack Events",
+          "legend": "ContrastADRAttackEvents_CL",
+          "baseQuery": "ContrastADRAttackEvents_CL"
+        },
+        {
+          "metricName": "Incidents",
+          "legend": "ContrastADRIncidents_CL",
+          "baseQuery": "ContrastADRIncidents_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Contrast ADR - All Attack Events",
+          "query": "ContrastADRAttackEvents_CL\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Contrast ADR - Critical Exploited Attacks",
+          "query": "ContrastADRAttackEvents_CL\n | where severity == 'CRITICAL' and result == 'EXPLOITED'\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Contrast ADR - All Incidents",
+          "query": "ContrastADRIncidents_CL\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Contrast ADR - Open Critical Incidents",
+          "query": "ContrastADRIncidents_CL\n | where severity == 'Critical' and status == 'Open'\n | sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "ContrastADRAttackEvents_CL",
+          "lastDataReceivedQuery": "ContrastADRAttackEvents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        },
+        {
+          "name": "ContrastADRIncidents_CL",
+          "lastDataReceivedQuery": "ContrastADRIncidents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "ContrastADRAttackEvents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+            "ContrastADRIncidents_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID (if using auto-created app). Typically requires Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to create and configure Azure resources (DCE, DCR, Tables) and assign RBAC roles. Typically requires Contributor and User Access Administrator roles."
+          },
+          {
+            "name": "Contrast ADR Webhook Access",
+            "description": "Access to Contrast ADR platform to configure webhook with OAuth authentication settings."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Deploy Connector Resources",
+          "description": "Deploy the required Azure resources for Contrast ADR data ingestion.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Choose Your Deployment Option\n\nSelect one of the following deployment options based on requirements:\n\n---\n\n### Option A: Auto-Create Microsoft Entra Application (Recommended)\n\nClicking **Deploy Contrast ADR CCF Connector** will automatically create:\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR) with streams for attack events and incidents\n- Log Analytics tables (ContrastADRAttackEvents_CL and ContrastADRIncidents_CL)\n- Microsoft Entra Application with OAuth credentials\n- Role assignment (Monitoring Metrics Publisher) on the DCR\n\n**After deployment:** All configuration values (Tenant ID, Client ID, Client Secret, DCE URI, DCR Immutable ID) will be auto-populated below for easy copy-paste into Contrast platform.\n\n---\n\n### Option B: Use Pre-Existing Microsoft Entra Application (BYOA)\n\nClicking **Deploy Contrast ADR CCF Connector** will create:\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR) with streams for attack events and incidents\n- Log Analytics tables (ContrastADRAttackEvents_CL and ContrastADRIncidents_CL)\n- Microsoft Entra Application (you can ignore this)\n\n**When to use:** If you have an existing Entra App that you want to reuse for security or compliance reasons.\n\n**Additional steps required:**\n1. After deployment, manually assign your pre-existing Entra App's Service Principal the **Monitoring Metrics Publisher** role on the created DCR\n2. Use your own Entra App's Client ID and Client Secret (ignore the auto-generated ones below)\n3. Use the DCE URI and DCR Immutable ID from below in your Contrast webhook configuration\n\n---\n\n**Click Deploy to begin:**"
+              }
+            },
+            {
+              "parameters": {
+                "label": "Deploy Contrast ADR CCF Connector",
+                "applicationDisplayName": "Contrast ADR Connector Application"
+              },
+              "type": "DeployPushConnectorButton"
+            }
+          ]
+        },
+        {
+          "title": "2. Configure Contrast ADR Webhook",
+          "description": "Copy the following values to configure the Microsoft Sentinel integration in Contrast ADR platform.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "**For Option A (Auto-Created Entra App):** Use all the auto-populated values below.\n\n**For Option B (Pre-Existing Entra App):** Use the DCE URI, DCR Immutable ID, and Stream Names from below, but use your own Entra App's Tenant ID, Client ID, and Client Secret.\n\n---\n\n#### Azure Configuration Values:\n"
+              }
+            },
+            {
+              "parameters": {
+                "label": "Tenant ID",
+                "fillWith": [
+                  "TenantId"
+                ]
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Application (Client) ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy connector to get the Application ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Client Secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy connector to get the Client Secret"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Data Collection Endpoint (DCE) URI",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy connector to get the DCE URI"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Data Collection Rule (DCR) Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy connector to get the DCR Immutable ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Attack Events Stream Name",
+                "value": "Custom-ContrastADRAttackEvents"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Incidents Stream Name",
+                "value": "Custom-ContrastADRIncidents"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "---\n\n#### Configure in Contrast ADR Platform\n\n1. Log in to your **Contrast ADR platform**\n2. Navigate to **Administration > Integrations > Microsoft Sentinel**\n3. Copy and paste all the configuration values from above:\n   - Tenant ID\n   - Application (Client) ID\n   - Client Secret\n   - Data Collection Endpoint (DCE) URI\n   - Data Collection Rule (DCR) Immutable ID\n   - Attack Events Stream Name\n   - Incidents Stream Name\n4. Click **Save** to complete the integration\n\nThe Contrast platform will automatically configure the OAuth authentication and data endpoints using these values."
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Verify Data Ingestion",
+          "description": "Verify that data is flowing from Contrast ADR to Microsoft Sentinel.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Verification Steps\n\n1. Trigger a test attack event in Contrast ADR\n2. Wait 5-10 minutes for data to appear in Microsoft Sentinel\n3. Run the following query to verify attack events:\n\n```kusto\nContrastADRAttackEvents_CL\n| take 10\n```\n\n4. Verify incidents data:\n\n```kusto\nContrastADRIncidents_CL\n| take 10\n```\n\n5. Check for connectivity:\n\n```kusto\nContrastADRAttackEvents_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)\n```\n\nIf data appears and IsConnected returns true, your connector is configured correctly!"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

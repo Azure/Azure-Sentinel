@@ -32,4 +32,4 @@ class DetectionsCollector(BaseCollector):
                 DETECTIONS_ENDPOINT, field, checkpoint, self.detections_table_name, fields=MODIFIED_FIELDS, query_params=params
             )
         except VectraException:
-            VectraException()
+            raise VectraException()

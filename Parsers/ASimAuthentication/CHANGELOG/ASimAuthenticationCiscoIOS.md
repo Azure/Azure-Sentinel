@@ -1,0 +1,12 @@
+# Changelog for ASimAuthenticationCiscoIOS.yaml
+
+## Version 0.1.1
+
+- (2026-04-14) Add mapping of HostName to TargetIpAddr if HostName is an IPv4 address - [PR #14077](https://github.com/Azure/Azure-Sentinel/pull/14077)
+- Add User alias
+- Remove TargetHostname mapping from HostName
+
+## Version 0.1.0
+
+- (2026-04-06) Create parser for Cisco IOS logs from Syslog - [PR #13966](https://github.com/Azure/Azure-Sentinel/pull/13966)
+
