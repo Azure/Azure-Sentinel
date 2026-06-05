@@ -99,16 +99,26 @@ All four are packaged as Sentinel content templates inside `Package/mainTemplate
 | `malware_types` | dynamic | `malware_types` | Array, e.g. `["Trojan", "Ransomware"]` |
 | `has_cve` | boolean | `has_cve` | Indicator has associated CVEs |
 | `has_campaign` | boolean | `has_campaign` | Indicator linked to a tracked campaign |
-| `TimeGenerated` | datetime | (derived) | `todatetime(added_to_feed)` via DCR transform |
+| `ingestion_used_fallback_time` | boolean | (derived) | `true` when `added_to_feed` was null/unparseable and the DCR fell back to `now()` for `TimeGenerated`. Useful for data-quality monitoring. |
+| `TimeGenerated` | datetime | (derived) | `coalesce(todatetime(added_to_feed), now())` via DCR transform |
 
 ### DCR transform
 
 ```kql
 source
-| extend TimeGenerated = todatetime(added_to_feed)
+| extend _parsed = todatetime(added_to_feed)
+| extend ingestion_used_fallback_time = isnull(_parsed)
+| extend TimeGenerated = coalesce(_parsed, now())
+| project-away _parsed
 ```
 
-The original `added_to_feed` is preserved as a column in addition to becoming the row's `TimeGenerated`.
+The original `added_to_feed` is preserved as a column in addition to becoming the row's `TimeGenerated`. The `coalesce(..., now())` fallback ensures the row is still ingested with a valid timestamp even when `added_to_feed` is missing or malformed; in that rare case the ingestion time is used instead of the feed publish time, and the row's `ingestion_used_fallback_time` is set to `true` so customers can detect data-quality issues with a KQL query such as:
+
+```kql
+emiocintel_CL
+| where ingestion_used_fallback_time
+| summarize count() by bin(TimeGenerated, 1h)
+```
 
 ### Sample KQL
 
