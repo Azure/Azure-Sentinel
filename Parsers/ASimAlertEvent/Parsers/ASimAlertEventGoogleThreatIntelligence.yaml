@@ -1,0 +1,167 @@
+Parser:
+  Title: Alert Event ASIM parser for Google Threat Intelligence
+  Version: '0.1.0'
+  LastUpdated: Jun 02, 2026
+Product:
+  Name: Google Threat Intelligence
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Google Threat Intelligence logs ingested into the RelevanceSystemAlerts_CL table to the ASIM AlertEvent normalized schema.
+ParserName: ASimAlertEventGoogleThreatIntelligence
+EquivalentBuiltInParser: _ASim_AlertEvent_GoogleThreatIntelligence
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AlertStatusLookup = datatable(state:string, AlertStatus:string)
+    [
+    "STATE_UNSPECIFIED", "Active",
+    "NEW", "Active",
+    "READ", "Active",
+    "TRIAGED", "Active",
+    "ESCALATED", "Active",
+    "RESOLVED", "Closed",
+    "DUPLICATE", "Closed",
+    "FALSE_POSITIVE", "Closed",
+    "NOT_ACTIONABLE", "Closed",
+    "BENIGN", "Closed",
+    "TRACKED_EXTERNALLY", "Closed"
+    ];
+  let AlertVerdictLookup = datatable(state:string, AlertVerdict:string)
+    [
+    "FALSE_POSITIVE", "False Positive",
+    "BENIGN", "Benign Positive",
+    "RESOLVED", "True Positive"
+    ];
+  let parser = (disabled: bool=false) {
+      RelevanceSystemAlerts_CL
+      | where not(disabled)
+      | lookup AlertStatusLookup on state
+      | lookup AlertVerdictLookup on state
+      | extend AlertVerdict = coalesce(AlertVerdict, "Unknown")
+      | extend
+          EventSeverity = case(
+              severityAnalysis_severityLevel == "SEVERITY_LEVEL_CRITICAL", "High",
+              severityAnalysis_severityLevel == "SEVERITY_LEVEL_HIGH", "High",
+              severityAnalysis_severityLevel == "SEVERITY_LEVEL_MEDIUM", "Medium",
+              severityAnalysis_severityLevel == "SEVERITY_LEVEL_LOW", "Low",
+              "Informational"
+          )
+      | extend
+          ThreatCategory = case(
+              detail_detailType == "data_leak", "Security Policy Violation",
+              detail_detailType == "initial_access_broker", "Phishing",
+              detail_detailType == "insider_threat", "Security Policy Violation",
+              "Unknown"
+          )
+      | project-rename
+          AlertName = displayName
+      | extend
+          EventVendor = 'Google',
+          EventProduct = 'Google Threat Intelligence',
+          EventSchema = 'AlertEvent',
+          EventSchemaVersion = '0.1',
+          EventType = 'Alert',
+          EventCount = coalesce(toint(findingCount), int(1)),
+          EventStartTime = todatetime(audit_createTime),
+          EventEndTime = todatetime(audit_updateTime),
+          EventUid = tostring(split(name, "/")[-1]),
+          EventOriginalSeverity = severityAnalysis_severityLevel,
+          EventOriginalType = detail_detailType,
+          EventOriginalUid = name,
+          EventMessage = aiSummary,
+          AlertOriginalStatus = state,
+          EventSubType = case(
+              detail_detailType == "data_leak", "Threat",
+              detail_detailType == "initial_access_broker", "Threat",
+              detail_detailType == "insider_threat", "Threat",
+              "Suspicious Activity"
+          ),
+          DetectionMethod = 'Threat Intelligence',
+          RuleDescription = priorityAnalysis_reasoning
+      | extend
+          ThreatOriginalCategory = detail_detailType,
+          ThreatOriginalRiskLevel = priorityAnalysis_priorityLevel,
+          ThreatOriginalConfidence = relevanceAnalysis_confidence,
+          ThreatConfidence = case(
+              relevanceAnalysis_confidence == "CONFIDENCE_LEVEL_HIGH", int(90),
+              relevanceAnalysis_confidence == "CONFIDENCE_LEVEL_MEDIUM", int(60),
+              relevanceAnalysis_confidence == "CONFIDENCE_LEVEL_LOW", int(30),
+              int(50)
+          ),
+          ThreatRiskLevel = case(
+              priorityAnalysis_priorityLevel == "PRIORITY_LEVEL_CRITICAL", int(100),
+              priorityAnalysis_priorityLevel == "PRIORITY_LEVEL_HIGH", int(75),
+              priorityAnalysis_priorityLevel == "PRIORITY_LEVEL_MEDIUM", int(50),
+              priorityAnalysis_priorityLevel == "PRIORITY_LEVEL_LOW", int(25),
+              int(0)
+          ),
+          ThreatFirstReportedTime = todatetime(audit_createTime),
+          ThreatLastReportedTime = todatetime(audit_updateTime),
+          ThreatIsActive = iff(state in ("NEW", "READ", "TRIAGED", "ESCALATED"), true, false)
+      | extend AdditionalFields = bag_pack(
+          "etag", etag,
+          "findings", findings,
+          "discoveryDocumentIds", coalesce(
+              tostring(detail_dataLeak_discoveryDocumentIds),
+              tostring(detail_initialAccessBroker_discoveryDocumentIds),
+              tostring(detail_insiderThreat_discoveryDocumentIds)
+          ),
+          "relevanceLevel", relevanceAnalysis_relevanceLevel,
+          "relevanceRelevant", relevanceAnalysis_relevant,
+          "relevanceReasoning", relevanceAnalysis_reasoning,
+          "commonThemes", relevanceAnalysis_evidence_commonThemes,
+          "distinctThemes", relevanceAnalysis_evidence_distinctThemes,
+          "severityReasoning", severityAnalysis_reasoning,
+          "severityConfidence", severityAnalysis_confidence,
+          "priorityReasoning", priorityAnalysis_reasoning
+      )
+      | extend
+          AlertId = tostring(split(name, "/")[-1]),
+          AlertDescription = EventMessage
+      | project
+          TimeGenerated,
+          Type,
+          AdditionalFields,
+          AlertDescription,
+          AlertId,
+          AlertName,
+          AlertOriginalStatus,
+          AlertStatus,
+          AlertVerdict,
+          DetectionMethod,
+          EventCount,
+          EventEndTime,
+          EventMessage,
+          EventOriginalSeverity,
+          EventOriginalType,
+          EventOriginalUid,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventSeverity,
+          EventStartTime,
+          EventSubType,
+          EventType,
+          EventUid,
+          EventVendor,
+          RuleDescription,
+          ThreatCategory,
+          ThreatConfidence,
+          ThreatFirstReportedTime,
+          ThreatIsActive,
+          ThreatLastReportedTime,
+          ThreatOriginalCategory,
+          ThreatOriginalConfidence,
+          ThreatOriginalRiskLevel,
+          ThreatRiskLevel
+  };
+  parser(disabled = disabled)
