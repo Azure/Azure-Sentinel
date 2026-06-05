@@ -1,0 +1,215 @@
+Parser:
+  Title: Authentication ASIM parser for Salesforce Service Cloud
+  Version: '0.1.0'
+  LastUpdated: Jun 05, 2026
+Product:
+  Name: Salesforce Service Cloud
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Service Cloud Documentation
+  Link: https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm
+Description: |
+  This ASIM parser supports normalizing Salesforce Service Cloud authentication logs stored in the 'SalesforceServiceCloudV2_CL' table to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationSalesforceServiceCloudV2
+EquivalentBuiltInParser: _ASim_Authentication_SalesforceServiceCloudV2
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SalesforceUserType = datatable (UserType: string, TargetUserType: string)
+  [
+      "Standard",              "Regular",
+      "CloudIntegrationUser",  "Service",
+      "SfdcAdmin",             "Admin",
+      "S",                     "Regular",
+      "X",                     "Other"
+  ];
+  let SalesforceLoginStatus = datatable (
+      LoginStatus: string,
+      EventResult_lookup: string,
+      EventResultDetails_lookup: string
+  )
+  [
+      "LOGIN_NO_ERROR",                    "Success",  "",
+      "LOGIN_TWOFACTOR_REQ",               "Failure",  "Logon violates policy",
+      "OAUTH_UN_PW_FLOW_DISABLED",         "Failure",  "Logon violates policy",
+      "LOGIN_ERROR_PASSWORD_LOCKOUT",      "Failure",  "User locked",
+      "LOGIN_ERROR_INVALID_PASSWORD",      "Failure",  "Incorrect password",
+      "OAUTH_CODE_CRED_SCOPE_TOO_LONG",   "Failure",  "Logon violates policy"
+  ];
+  let SalesforceEventType = datatable (EventOriginalType: string, EventType: string)
+  [
+      "Login",  "Logon",
+      "LoginAs", "Logon",
+      "Logout", "Logoff"
+  ];
+  let parser = (
+      disabled: bool = false,
+      pack: bool = false
+  )
+  {
+      SalesforceServiceCloudV2_CL
+      | where not(disabled)
+      // -- Pre-filter on native columns for performance
+      | where EventType in ("Login", "LoginAs", "Logout")
+      // -- Preserve original EventType and map
+      | project-rename EventOriginalType = EventType
+      | lookup SalesforceEventType on EventOriginalType
+      // -- Map LoginStatus to EventResult and EventResultDetails
+      | lookup SalesforceLoginStatus on LoginStatus
+      | extend
+          EventResult = iff(isnotempty(EventResult_lookup), EventResult_lookup, iff(EventType == "Logoff", "Success", "Failure")),
+          EventResultDetails = iff(isnotempty(EventResultDetails_lookup), EventResultDetails_lookup, "")
+      | project-away EventResult_lookup, EventResultDetails_lookup
+      // -- Map UserType
+      | lookup SalesforceUserType on UserType
+      // -- Build ASIM fields
+      | extend
+          // -- Event fields (Mandatory)
+          EventCount            = int(1),
+          EventStartTime        = coalesce(TimestampDerived, TimeGenerated),
+          EventEndTime          = coalesce(TimestampDerived, TimeGenerated),
+          EventSchema           = "Authentication",
+          EventSchemaVersion    = "0.1.4",
+          EventProduct          = "Salesforce Service Cloud",
+          EventVendor           = "Salesforce",
+          EventSeverity         = iff(EventResult == "Success", "Informational", "Low"),
+          // -- Event fields (Optional)
+          EventOriginalResultDetails = LoginStatus,
+          EventUid              = RequestId,
+          // -- Target User fields
+          TargetUserId          = UserIdDerived,
+          TargetUserIdType      = "SalesforceId",
+          TargetUsername        = coalesce(UserName, UserEmail, User),
+          TargetUsernameType    = case(
+                                      UserName has "@", "UPN",
+                                      isnotempty(UserName), "Simple",
+                                      ""),
+          TargetOriginalUserType = UserType,
+          TargetSessionId       = SessionKey,
+          // -- Source fields
+          SrcIpAddr             = case(
+                                      isnotempty(SourceIp) and SourceIp !has "Salesforce", SourceIp,
+                                      isnotempty(ClientIp) and ClientIp !has "Salesforce", ClientIp,
+                                      ""),
+          // -- Dvc fields
+          Dvc                   = "Salesforce Service Cloud",
+          DvcOs                 = OsName,
+          DvcOsVersion          = OsVersion,
+          // -- Acting App fields
+          ActingAppName         = coalesce(BrowserType, BrowserName),
+          ActingAppType         = "Browser",
+          // -- HTTP fields
+          HttpUserAgent         = coalesce(UserAgent, HttpUserAgentOriginal, BrowserType),
+          // -- Logon fields
+          LogonMethod           = case(
+                                      LoginStatus == "LOGIN_TWOFACTOR_REQ", "Multi factor authentication",
+                                      Uri has "oauth2", "Service Principal",
+                                      "Other"
+                                  ),
+          LogonProtocol         = iff(isnotempty(TlsProtocol), strcat("HTTPS (", TlsProtocol, ")"), "HTTPS"),
+          // -- Actor fields
+          ActorUserId           = UserIdDerived,
+          ActorUserIdType       = "SalesforceId",
+          ActorUsername          = coalesce(UserName, UserEmail, User),
+          ActorUsernameType     = case(
+                                      UserName has "@", "UPN",
+                                      isnotempty(UserName), "Simple",
+                                      ""),
+          ActorSessionId        = LoginKey,
+          ActorScope            = OrganizationId,
+          ActorUserType         = TargetUserType
+      // -- Aliases
+      | extend
+          User    = TargetUsername,
+          IpAddr  = SrcIpAddr,
+          Src     = SrcIpAddr,
+          Dvc     = "Salesforce Service Cloud"
+      // -- AdditionalFields
+      | extend
+          AdditionalFields = iff(
+              pack,
+              bag_pack(
+                  "ApiVersion",     ApiVersion,
+                  "CipherSuite",   CipherSuite,
+                  "TlsProtocol",   TlsProtocol,
+                  "SessionType",   SessionType,
+                  "PlatformType",  PlatformType,
+                  "DeviceId",      DeviceId,
+                  "DeviceModel",   DeviceModel,
+                  "DevicePlatform", DevicePlatform,
+                  "RequestId",     RequestId
+              ),
+              dynamic({})
+          )
+      // -- Project only ASIM fields
+      | project
+          TimeGenerated,
+          // -- Event fields
+          EventCount,
+          EventStartTime,
+          EventEndTime,
+          EventType,
+          EventResult,
+          EventResultDetails,
+          EventOriginalType,
+          EventOriginalResultDetails,
+          EventProduct,
+          EventVendor,
+          EventSchema,
+          EventSchemaVersion,
+          EventSeverity,
+          EventUid,
+          // -- Target User fields
+          TargetUserId,
+          TargetUserIdType,
+          TargetUsername,
+          TargetUsernameType,
+          TargetUserType,
+          TargetOriginalUserType,
+          TargetSessionId,
+          // -- Actor fields
+          ActorUserId,
+          ActorUserIdType,
+          ActorUsername,
+          ActorUsernameType,
+          ActorUserType,
+          ActorSessionId,
+          ActorScope,
+          // -- Source fields
+          SrcIpAddr,
+          // -- Acting App fields
+          ActingAppName,
+          ActingAppType,
+          // -- HTTP fields
+          HttpUserAgent,
+          // -- Logon fields
+          LogonMethod,
+          LogonProtocol,
+          // -- Dvc fields
+          Dvc,
+          DvcOs,
+          DvcOsVersion,
+          // -- Aliases
+          User,
+          IpAddr,
+          Src,
+          // -- Additional
+          AdditionalFields,
+          // -- Source table type
+          Type
+  };
+  parser(
+      disabled = disabled,
+      pack = pack
+  )

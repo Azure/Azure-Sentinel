@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.16
+
+- (2026-06-05) Add ASIM Authentication parser for Salesforce Service Cloud V2
+
 ## Version 0.2.15
 
 - (2026-04-13) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
