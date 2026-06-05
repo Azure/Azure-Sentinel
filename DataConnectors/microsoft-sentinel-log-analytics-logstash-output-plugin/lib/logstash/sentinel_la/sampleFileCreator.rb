@@ -1,6 +1,7 @@
 # encoding: utf-8
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/eventsHandler"
+require "logstash/json"
 
 module LogStash
   module Outputs
@@ -46,7 +47,7 @@ module LogStash
             output_file_name = "sampleFile#{Time.now.to_i}.json"
             file = java.io.File.new(output_path,output_file_name)
             fw = java.io.FileWriter.new(file)
-            fw.write(@events_buffer.take(@maximum_events_to_sample).to_json)
+            fw.write(LogStash::Json.dump(@events_buffer.take(@maximum_events_to_sample)))
             fw.flush
             fw.close
 
