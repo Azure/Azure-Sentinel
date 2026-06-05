@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM filtering parser for Google SecOps Detection Alerts
   Version: '0.1.0'
-  LastUpdated: May 04, 2025
+  LastUpdated: June 05, 2026
 Product:
   Name: Google SecOps
 Normalization:
@@ -82,6 +82,16 @@ ParserQuery: |
     "GCTI_FINDING",   "Threat Intelligence",
     "JOB_DETECTION",  "Automated Investigation"
   ];
+  let IndicatorTypeLookup = datatable(entity_type_raw: string, IndicatorType: string)
+    [
+    "IP_ADDRESS",  "Ip",
+    "DOMAIN_NAME", "Url",
+    "USER",        "User",
+    "ASSET",       "Host",
+    "FILE",        "File",
+    "URL",         "Url",
+    "PROCESS",     "Process"
+  ];
   let parser = (
       starttime: datetime=datetime(null),
       endtime: datetime=datetime(null),
@@ -99,18 +109,18 @@ ParserQuery: |
     | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
     //  Expand detection array (one row per detection element) 
-    | extend detection_array = column_ifexists("detection", dynamic([]))
+    | extend detection_array = detection
     | where isnotnull(detection_array) and array_length(detection_array) > 0
     | mv-expand detection = detection_array
     //  Top-level columns 
     | extend
-        detection_id       = column_ifexists("id", ""),
-        detection_type     = column_ifexists("DetectionType", ""),
-        tw_start           = todatetime(column_ifexists("timeWindow_startTime", "")),
-        tw_end             = todatetime(column_ifexists("timeWindow_endTime", "")),
-        collection_arr     = column_ifexists("collectionElements", dynamic(null)),
-        detect_timing      = column_ifexists("detectionTimingDetails", dynamic(null)),
-        latency_metrics    = column_ifexists("latencyMetrics", dynamic(null))
+        detection_id       = id,
+        detection_type     = DetectionType,
+        tw_start           = todatetime(timeWindow_startTime),
+        tw_end             = todatetime(timeWindow_endTime),
+        collection_arr     = collectionElements,
+        detect_timing      = detectionTimingDetails,
+        latency_metrics    = latencyMetrics
     //  Fields from expanded detection element 
     | extend
         rule_name          = tostring(detection.ruleName),
@@ -198,16 +208,9 @@ ParserQuery: |
             isnotempty(threat_category_raw),         "Unknown",
                                                      "Unknown")
     | where (array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any))
-    //  IndicatorType 
-    | extend IndicatorType = case(
-        entity_type_raw == "IP_ADDRESS",  "Ip",
-        entity_type_raw == "DOMAIN_NAME", "Url",
-        entity_type_raw == "USER",        "User",
-        entity_type_raw == "ASSET",       "Host",
-        entity_type_raw == "FILE",        "File",
-        entity_type_raw == "URL",         "Url",
-        entity_type_raw == "PROCESS",     "Process",
-                                          "Ip")
+    //  IndicatorType
+    | lookup IndicatorTypeLookup on entity_type_raw
+    | extend IndicatorType = coalesce(IndicatorType, "Ip")
     //  User fields 
     | extend UsernameType = _ASIM_GetUsernameType(Username)
     //  AttackTactics / AttackTechniques 
@@ -219,12 +222,10 @@ ParserQuery: |
     )
     | where (array_length(attacktactics_has_any) == 0) or (AttackTactics has_any (attacktactics_has_any))
     | where (array_length(attacktechniques_has_any) == 0) or (AttackTechniques has_any (attacktechniques_has_any))
-    //  Mandatory / Recommended event fields 
+    //  Mandatory / Recommended event fields
     | extend
         EventType             = "Alert",
         EventCount            = int(1),
-        EventStartTime        = tw_start,
-        EventEndTime          = tw_end,
         EventUid              = detection_id,
         EventOriginalUid      = detection_id,
         EventProduct          = "GoogleSecOps",
@@ -234,17 +235,19 @@ ParserQuery: |
         EventMessage          = detect_desc,
         EventOriginalSeverity = orig_severity,
         EventOriginalSubType  = detection_type,
-        EventReportUrl        = url_back
-    //  Alert / Rule / Threat fields 
-    | extend
-        AlertName               = rule_name,
-        RuleName                = rule_name,
-        RuleDescription         = detect_desc,
+        AlertName             = rule_name,
+        RuleName              = rule_name,
+        RuleDescription       = detect_desc
+    //  Rename
+    | project-rename
+        EventStartTime          = tw_start,
+        EventEndTime            = tw_end,
+        EventReportUrl          = url_back,
         ThreatName              = threat_name_raw,
         ThreatFirstReportedTime = threat_first_ts,
         ThreatLastReportedTime  = threat_last_ts,
         Url                     = threat_url
-    //  AdditionalFields bag 
+    //  AdditionalFields bag
     | extend AdditionalFields = bag_pack(
         "ruleId",                 rule_id,
         "ruleVersion",            rule_version,
@@ -255,7 +258,7 @@ ParserQuery: |
         "variables",              variables,
         "detectionTimingDetails", detect_timing,
         "latencyMetrics",         latency_metrics)
-    //  Aliases 
+    //  Aliases
     | extend
         AlertId          = EventUid,
         AlertDescription = EventMessage,
@@ -263,14 +266,58 @@ ParserQuery: |
         Hostname         = DvcHostname,
         User             = Username,
         Rule             = RuleName
-    //  Drop intermediate working columns 
-    | project-away
-        detection_array, detection_type, tw_start, tw_end, detect_timing,
-        latency_metrics, rule_name, rule_id, rule_version, rule_type,
-        rule_labels, detect_desc, orig_severity, alert_state, risk_score_raw,
-        url_back, detect_fields, outcomes, variables, collection_arr, collectionElements,
-        threat_obj, entity_type_raw, threat_verdict_raw, threat_category_raw,
-        threat_name_raw, threat_first_ts, threat_last_ts, threat_url, threat_verdict
+    //  Project only final ASIM fields
+    | project
+        TimeGenerated,
+        Type,
+        EventType,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventUid,
+        EventOriginalUid,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        EventMessage,
+        EventOriginalSeverity,
+        EventSeverity,
+        EventSubType,
+        EventOriginalSubType,
+        EventReportUrl,
+        DetectionMethod,
+        AlertStatus,
+        AlertOriginalStatus,
+        AlertVerdict,
+        AlertName,
+        AlertId,
+        AlertDescription,
+        RuleName,
+        RuleDescription,
+        ThreatRiskLevel,
+        ThreatOriginalRiskLevel,
+        ThreatOriginalCategory,
+        ThreatCategory,
+        ThreatName,
+        ThreatFirstReportedTime,
+        ThreatLastReportedTime,
+        IndicatorType,
+        AttackTactics,
+        AttackTechniques,
+        DvcIpAddr,
+        DvcHostname,
+        DvcDomain,
+        DvcFQDN,
+        DvcDomainType,
+        Username,
+        UsernameType,
+        AdditionalFields,
+        Url,
+        IpAddr,
+        Hostname,
+        User,
+        Rule
   };
   parser(
       starttime             = starttime,

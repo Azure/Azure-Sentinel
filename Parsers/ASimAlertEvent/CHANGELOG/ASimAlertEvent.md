@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.1.3
+
+- (2026-06-05) Alert Schema Parsers - [PR #14221](https://github.com/Azure/Azure-Sentinel/pull/14221)
+
 ## Version 0.1.2
 
 - (2026-04-22) Included Bitdefender Gravity Zone alerts in results - [PR #13330](https://github.com/Azure/Azure-Sentinel/pull/13330)
