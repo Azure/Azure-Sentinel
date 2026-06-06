@@ -28,8 +28,10 @@ import csv
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
+from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 
@@ -37,6 +39,20 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 ANALYZER_DIR = SCRIPT_DIR.parent
 CACHE_DIR = ANALYZER_DIR / ".cache"
 REPORT_DIR = SCRIPT_DIR / "learn_docs_audit"
+
+# Published sentinelninja Solutions Docs base URL. Each analyzer connector
+# has a per-connector page at `<base>/<connector_id-lowercased>.html`.
+SENTINELNINJA_CONNECTORS_BASE = (
+    "https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors"
+)
+
+
+def sentinelninja_connector_url(connector_id: str) -> str:
+    """Return the published sentinelninja docs URL for an analyzer connector."""
+    if not connector_id:
+        return ""
+    slug = quote(connector_id.lower(), safe="")
+    return f"{SENTINELNINJA_CONNECTORS_BASE}/{slug}.html"
 
 # Reuse the mapper's HTML fetch/cache so the page is downloaded at most once
 # across the mapper and this audit. Keeps a single source of truth for cache
@@ -78,14 +94,70 @@ _QUAL_SUFFIXES = (
     "ccf",
     "ccp",
     "preview",
+    "standalone",
 )
 _QUAL_STRIP_RE = re.compile(
     r"-(?:" + "|".join(_QUAL_SUFFIXES) + r")(?=-|$)",
     re.IGNORECASE,
 )
-# Trailing `-v<digits>` on a slug — Learn occasionally splits one in-repo
-# connector into V1/V2 anchors with this suffix.
+# Trailing `-v<digits>` on a slug — V1/V2 analyzer connectors collapse onto a
+# single Learn anchor (Learn does not currently expose V-specific anchors).
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=-|$)", re.IGNORECASE)
+
+# Tokens that are used interchangeably across Learn and in-repo titles
+# (e.g. Learn says "Admin Audit", repo says "Admin Events"). For every slug we
+# register additional keys with each member of the group substituted in.
+# Collision-checked against both Learn anchors and connectors.csv — see
+# README v9.9 notes for FP analysis.
+_SYNONYM_GROUPS: List[Tuple[str, ...]] = [
+    ("audit", "activity", "events", "event", "activities"),
+]
+_SYNONYM_TOKEN_RE = re.compile(
+    r"(?<![a-z0-9])(" + "|".join(t for g in _SYNONYM_GROUPS for t in g) + r")(?![a-z0-9])",
+    re.IGNORECASE,
+)
+_TOKEN_TO_GROUP: Dict[str, Tuple[str, ...]] = {t: g for g in _SYNONYM_GROUPS for t in g}
+
+
+def _synonym_variants(slug: str) -> List[str]:
+    """Yield slug variants with each synonym token swapped for the others."""
+    out: List[str] = []
+    m = _SYNONYM_TOKEN_RE.search(slug)
+    if not m:
+        return out
+    tok = m.group(1).lower()
+    for alt in _TOKEN_TO_GROUP.get(tok, ()):
+        if alt != tok:
+            out.append(slug[:m.start(1)] + alt + slug[m.end(1):])
+    return out
+
+
+def _no_separator(slug: str) -> str:
+    """Slug with all hyphens removed — used for spacing-insensitive comparison
+    (e.g. Learn `dynamics365` vs analyzer `dynamics-365`, or Learn
+    `auth0-logsvia-codeless-...` vs analyzer `auth0-logs-via-codeless-...`)."""
+    return slug.replace("-", "")
+
+# ---- Explicit Learn-anchor ↔ analyzer-connector_id aliases ----
+# Some Learn entries carry marketing titles that are too different from the
+# in-repo connector title for normalisation to bridge. Pin them here
+# (keyed by Learn anchor slug) so they don't surface as false-positive gaps.
+# The right-hand side is the analyzer `connector_id` (stable id). The audit
+# treats the Learn anchor as covered when the target connector_id is found:
+# active connectors count toward `covered`, deprecated ones toward
+# `suppressed-deprecated`.
+LEARN_ANCHOR_ALIASES: Dict[str, str] = {
+    # Marketing rename in Learn vs. in-repo title.
+    "a365-observability": "A365",                          # Agent 365
+    # Learn renames the deprecated Auth0 Function connector from "Logs" to
+    # "Access Management"; both write to `Auth0AM_CL`.
+    "auth0-access-management-using-azure-functions": "Auth0",
+    # Learn uses a marketing tagline; repo uses "Onapsis Defend Integration".
+    "onapsis-defend-integrate-unmatched-sap-threat-detection--intel-with-microsoft-sentinel": "Onapsis",
+    # Deprecated counterpart that the qualifier-strip can't bridge
+    # (repo "Box Events" vs. Learn "Box").
+    "box-using-azure-functions": "BoxDataConnector",
+}
 
 
 def slugify(text: str) -> str:
@@ -127,11 +199,19 @@ def title_slug_variants(title: str) -> List[str]:
         add(prim)
         add(slugify_learn_anchor(text))
         if prim:
+            add(_no_separator(prim))
+            for syn in _synonym_variants(prim):
+                add(syn)
+                add(_no_separator(syn))
             base = _strip_qualifiers(prim)
             if base and base != prim:
                 for suf in _QUAL_SUFFIXES:
                     add(f"{base}-{suf}")
                 add(base)
+                add(_no_separator(base))
+                for syn in _synonym_variants(base):
+                    add(syn)
+                    add(_no_separator(syn))
             else:
                 for suf in _QUAL_SUFFIXES:
                     add(f"{prim}-{suf}")
@@ -159,20 +239,48 @@ def build_learn_lookup(learn: Dict[str, Dict]) -> Dict[str, str]:
       * dash-collapsed anchor (e.g. `mimecast-audit--authentication-…`
         → `mimecast-audit-authentication-…`);
       * anchor with leading `recommended-`/`preview-`/`deprecated-` stripped;
-      * both combined.
+      * anchor with a hyphen inserted at letter↔digit boundaries
+        (`dynamics365` → `dynamics-365`);
+      * anchor with a hyphen inserted before a glued method keyword
+        (`auth0-logsvia-…` → `auth0-logs-via-…`);
+      * slugs derived from the Learn *title* with marketing tails removed
+        (split at the first `:` for `Onapsis Defend: …`, or at ` & ` for
+        `Mimecast Audit & Authentication …`);
+      * all combinations of the above.
     Earlier (raw) keys win over later normalisations.
     """
     lookup: Dict[str, str] = {}
     def _add(key: str, anchor: str) -> None:
         if key and key not in lookup:
             lookup[key] = anchor
-    for slug in learn:
-        _add(slug, slug)
-    for slug in learn:
-        _add(_DASH_RUN_RE.sub("-", slug).strip("-"), slug)
+
+    def _add_normalised(slug: str, anchor: str) -> None:
+        if not slug:
+            return
+        _add(slug, anchor)
+        _add(_DASH_RUN_RE.sub("-", slug).strip("-"), anchor)
+        _add(_no_separator(slug), anchor)
         no_pref = _ANCHOR_PREFIX_RE.sub("", slug)
-        _add(no_pref, slug)
-        _add(_DASH_RUN_RE.sub("-", no_pref).strip("-"), slug)
+        _add(no_pref, anchor)
+        _add(_DASH_RUN_RE.sub("-", no_pref).strip("-"), anchor)
+        _add(_no_separator(no_pref), anchor)
+        for syn in _synonym_variants(slug):
+            _add(syn, anchor)
+            _add(_no_separator(syn), anchor)
+
+    for slug, meta in learn.items():
+        _add_normalised(slug, slug)
+        # Title-truncation variants: split at the first `:` (marketing
+        # taglines) and at ` & ` (compound titles), and register slugs of
+        # the prefix. We do this from the title rather than the anchor so
+        # that punctuation that was lost during slugification is recovered.
+        title = (meta or {}).get("title", "") or ""
+        for sep in (":", " & "):
+            if sep in title:
+                head = title.split(sep, 1)[0].strip()
+                if head:
+                    _add_normalised(slugify(head), slug)
+                    _add_normalised(slugify_learn_anchor(head), slug)
     return lookup
 
 
@@ -256,6 +364,25 @@ def load_published_solutions(solutions_csv: Path) -> Set[str]:
     return out
 
 
+def load_solution_publish_dates(solutions_csv: Path) -> Dict[str, str]:
+    """{solution_name: solution_last_publish_date} (Marketplace date).
+
+    Connectors don't have their own Marketplace publish date — they inherit it
+    from the solution they ship in. We surface the last-publish date so the
+    audit can show "how fresh is this connector".
+    """
+    out: Dict[str, str] = {}
+    for row in load_csv(solutions_csv):
+        name = row.get("solution_name", "")
+        if not name:
+            continue
+        out[name] = (row.get("solution_last_publish_date", "")
+                     or row.get("mp_last_modified_date", "")
+                     or row.get("solution_first_publish_date", "")
+                     or row.get("mp_creation_date", ""))
+    return out
+
+
 def load_analyzer_connectors(connectors_csv: Path,
                              published_solutions: Set[str]) -> List[Dict]:
     """Active connectors that belong to published solutions."""
@@ -267,6 +394,17 @@ def load_analyzer_connectors(connectors_csv: Path,
             continue
         out.append(row)
     return out
+
+
+def load_deprecated_connectors(connectors_csv: Path) -> List[Dict]:
+    """Deprecated connectors (any solution). Used solely to suppress Learn
+    entries from the "missing from analyzer" bucket when the only analyzer
+    counterpart is a deprecated connector — those Learn entries are typically
+    `[Deprecated] …` / `deprecated-…` anchors and are correctly covered, just
+    not by an *active* connector.
+    """
+    return [r for r in load_csv(connectors_csv)
+            if r.get("is_deprecated", "").lower() == "true"]
 
 
 def load_connector_tables(mapping_csv: Path) -> Dict[str, Set[str]]:
@@ -289,6 +427,7 @@ def main() -> None:
     args = ap.parse_args()
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     print("Loading Learn page …")
     html = fetch_learn_docs_html(CACHE_DIR, force_refresh=args.refresh)
@@ -302,18 +441,37 @@ def main() -> None:
     print("Loading analyzer CSVs …")
     published = load_published_solutions(ANALYZER_DIR / "solutions.csv")
     print(f"  {len(published)} published, non-deprecated solutions")
+    publish_dates = load_solution_publish_dates(ANALYZER_DIR / "solutions.csv")
     connectors = load_analyzer_connectors(ANALYZER_DIR / "connectors.csv", published)
     print(f"  {len(connectors)} active connectors in published solutions")
+    deprecated_connectors = load_deprecated_connectors(ANALYZER_DIR / "connectors.csv")
+    print(f"  {len(deprecated_connectors)} deprecated connectors (for suppression only)")
     conn_tables = load_connector_tables(
         ANALYZER_DIR / "solutions_connectors_tables_mapping_simplified.csv")
 
     # ---- 1. Connectors in analyzer but missing from Learn ----
+    # Pre-resolve the explicit aliases so we know which connector_ids are
+    # already covered (and which deprecated ones should suppress a Learn entry).
+    active_by_id = {c.get("connector_id", ""): c for c in connectors}
+    deprecated_by_id = {c.get("connector_id", ""): c for c in deprecated_connectors}
+    alias_active_anchor_by_cid: Dict[str, str] = {
+        cid: anchor for anchor, cid in LEARN_ANCHOR_ALIASES.items()
+        if cid in active_by_id and anchor in learn
+    }
+    alias_deprecated_anchor_by_cid: Dict[str, str] = {
+        cid: anchor for anchor, cid in LEARN_ANCHOR_ALIASES.items()
+        if cid in deprecated_by_id and cid not in active_by_id and anchor in learn
+    }
+
     missing_from_learn = []
     learn_used_slugs: Set[str] = set()
     for c in connectors:
         title = c.get("connector_title", "")
+        cid = c.get("connector_id", "")
         variants = title_slug_variants(title)
         match = next((learn_lookup[v] for v in variants if v in learn_lookup), "")
+        if not match and cid in alias_active_anchor_by_cid:
+            match = alias_active_anchor_by_cid[cid]
         if match:
             learn_used_slugs.add(match)
         else:
@@ -321,8 +479,11 @@ def main() -> None:
                 "connector_id": c.get("connector_id", ""),
                 "connector_title": title,
                 "solution_name": c.get("solution_name", ""),
+                "solution_publish_date": publish_dates.get(c.get("solution_name", ""), ""),
                 "collection_method": c.get("collection_method", ""),
                 "tried_slugs": " | ".join(variants),
+                "sentinelninja_url": sentinelninja_connector_url(
+                    c.get("connector_id", "")),
             })
 
     # ---- 2. Connectors in Learn but missing from analyzer (active-published only) ----
@@ -337,9 +498,43 @@ def main() -> None:
             anchor = learn_lookup.get(v)
             if anchor:
                 covered_learn_anchors.add(anchor)
+    # Anchors covered by an explicit alias to an active connector.
+    covered_learn_anchors.update(alias_active_anchor_by_cid.values())
     missing_from_analyzer = []
+    suppressed_deprecated = 0
+    # Learn anchors covered only by a *deprecated* analyzer connector — those
+    # are typically the `[Deprecated] …` / `deprecated-…` Learn entries and
+    # are correctly covered, just not by anything active. Suppress them from
+    # the gap report and just count them.
+    deprecated_covered_anchors: Set[str] = set()
+    for c in deprecated_connectors:
+        for v in title_slug_variants(c.get("connector_title", "")):
+            anchor = learn_lookup.get(v)
+            if anchor:
+                deprecated_covered_anchors.add(anchor)
+    # Also treat the qualifier-stripped form of each deprecated-covered
+    # anchor as covered, so Learn anchors that carry an extra qualifier
+    # suffix (e.g. `cloudflare-preview-using-azure-functions` vs. the
+    # in-repo bare `cloudflare`) get suppressed too. We compute the base
+    # set from the deprecated connectors' slug variants directly (not just
+    # from anchors that already match), so deprecated connectors with no
+    # current Learn anchor still contribute their base.
+    deprecated_covered_bases: Set[str] = set()
+    for c in deprecated_connectors:
+        for v in title_slug_variants(c.get("connector_title", "")):
+            base = _strip_qualifiers(v)
+            if base:
+                deprecated_covered_bases.add(base)
+    # Anchors covered by an explicit alias to a deprecated connector.
+    deprecated_covered_anchors.update(alias_deprecated_anchor_by_cid.values())
     for slug, meta in learn.items():
         if slug in covered_learn_anchors:
+            continue
+        if slug in deprecated_covered_anchors:
+            suppressed_deprecated += 1
+            continue
+        if _strip_qualifiers(slug) in deprecated_covered_bases:
+            suppressed_deprecated += 1
             continue
         missing_from_analyzer.append({
             "learn_slug": slug,
@@ -353,11 +548,13 @@ def main() -> None:
     table_mismatches = []
     for c in connectors:
         title = c.get("connector_title", "")
+        cid = c.get("connector_id", "")
         variants = title_slug_variants(title)
         match = next((learn_lookup[v] for v in variants if v in learn_lookup), "")
+        if not match and cid in alias_active_anchor_by_cid:
+            match = alias_active_anchor_by_cid[cid]
         if not match:
             continue
-        cid = c.get("connector_id", "")
         analyzer_tables = conn_tables.get(cid, set())
         learn_tables = set(learn[match]["tables"])
         if analyzer_tables == learn_tables:
@@ -385,12 +582,14 @@ def main() -> None:
             "connector_title": r["connector_title"],
             "connector_id": r["connector_id"],
             "solution_name": r["solution_name"],
+            "solution_publish_date": r["solution_publish_date"],
             "collection_method": r["collection_method"],
             "learn_slug": "",
             "learn_url": "",
             "learn_table_count": "",
             "learn_tables": "",
             "tried_slugs": r["tried_slugs"],
+            "sentinelninja_url": r["sentinelninja_url"],
         })
     for r in missing_from_analyzer:
         coverage_gaps.append({
@@ -398,21 +597,28 @@ def main() -> None:
             "connector_title": r["learn_title"],
             "connector_id": "",
             "solution_name": "",
+            "solution_publish_date": "",
             "collection_method": "",
             "learn_slug": r["learn_slug"],
             "learn_url": r["learn_url"],
             "learn_table_count": r["learn_table_count"],
             "learn_tables": r["learn_tables"],
             "tried_slugs": "",
+            "sentinelninja_url": "",
         })
 
     # ---- Write CSVs ----
     def write_csv(name: str, rows: List[Dict], fieldnames: List[str]) -> Path:
+        # Stamp every row with the generation timestamp so each CSV is
+        # self-describing without needing a sidecar file.
+        fieldnames = [*fieldnames, "generated_at"]
         p = REPORT_DIR / name
         with p.open("w", encoding="utf-8", newline="") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
-            w.writerows(rows)
+            for r in rows:
+                r["generated_at"] = generated_at
+                w.writerow(r)
         return p
 
     # Remove the old split CSVs if present (the audit now publishes one
@@ -428,8 +634,10 @@ def main() -> None:
         sorted(coverage_gaps,
                key=lambda r: (r["missing_from"], r["connector_title"].lower())),
         ["missing_from", "connector_title", "connector_id", "solution_name",
-         "collection_method", "learn_slug", "learn_url",
-         "learn_table_count", "learn_tables", "tried_slugs"],
+         "solution_publish_date", "collection_method",
+         "learn_slug", "learn_url",
+         "learn_table_count", "learn_tables", "tried_slugs",
+         "sentinelninja_url"],
     )
     p2 = write_csv("connector_table_mismatches.csv",
                    sorted(table_mismatches, key=lambda r: r["connector_title"].lower()),
@@ -487,7 +695,7 @@ def main() -> None:
     summary = REPORT_DIR / "README.md"
     with summary.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Learn data-connectors-reference audit\n\n")
-        f.write(f"Generated against `{LEARN_URL}`\n\n")
+        f.write(f"Generated **{generated_at}** against `{LEARN_URL}`\n\n")
         f.write(f"- Learn sections parsed: **{len(learn)}**\n")
         f.write(f"- Published, non-deprecated solutions: **{len(published)}**\n")
         f.write(f"- Active connectors in those solutions: **{len(connectors)}**\n\n")
@@ -495,14 +703,17 @@ def main() -> None:
         f.write(
             f"**{len(coverage_gaps)}** total gaps — "
             f"**{len(missing_from_learn)}** active connectors not on Learn, "
-            f"**{len(missing_from_analyzer)}** Learn entries not covered by any active connector. "
+            f"**{len(missing_from_analyzer)}** Learn entries not covered by any active connector "
+            f"(an additional **{suppressed_deprecated}** Learn entries are covered only by a deprecated connector and are suppressed). "
             f"See [`connector_coverage_gaps.csv`](connector_coverage_gaps.csv).\n\n"
         )
         if missing_from_learn:
             f.write("### 1a. Active connectors missing from Learn\n\n")
-            f.write("| Title | Solution | Collection method |\n|---|---|---|\n")
+            f.write("| Title | Solution | Published | Collection method | Docs |\n|---|---|---|---|---|\n")
             for r in sorted(missing_from_learn, key=lambda r: r["connector_title"].lower()):
-                f.write(f"| {r['connector_title']} | {r['solution_name']} | {r['collection_method']} |\n")
+                docs = f"[link]({r['sentinelninja_url']})" if r['sentinelninja_url'] else "—"
+                pub = (r['solution_publish_date'] or "—")[:10]
+                f.write(f"| {r['connector_title']} | {r['solution_name']} | {pub} | {r['collection_method']} | {docs} |\n")
             f.write("\n")
         if missing_from_analyzer:
             f.write("### 1b. Learn entries with no active analyzer connector\n\n")
@@ -537,7 +748,7 @@ def main() -> None:
 
     print()
     print(f"  1. Connector coverage gaps:                 {len(coverage_gaps):4d}  → {p1.relative_to(ANALYZER_DIR)}")
-    print(f"       (missing from Learn: {len(missing_from_learn)}, missing from analyzer: {len(missing_from_analyzer)})")
+    print(f"       (missing from Learn: {len(missing_from_learn)}, missing from analyzer: {len(missing_from_analyzer)}, suppressed-deprecated: {suppressed_deprecated})")
     print(f"  2. Table-list mismatches:                   {len(table_mismatches):4d}  → {p2.relative_to(ANALYZER_DIR)}")
     print(f"  3. Potential matches (manual review):       {len(potential_matches):4d}  → {p3.relative_to(ANALYZER_DIR)}")
     print(f"  Summary: {summary.relative_to(ANALYZER_DIR)}")

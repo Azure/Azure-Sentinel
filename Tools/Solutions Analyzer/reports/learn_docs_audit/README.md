@@ -1,6 +1,6 @@
 # Microsoft Learn data-connectors-reference audit
 
-Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-reference`
+Generated **2026-05-22 06:59 UTC** against `https://learn.microsoft.com/azure/sentinel/data-connectors-reference`
 
 - Learn sections parsed: **342**
 - Published, non-deprecated solutions: **469**
@@ -8,120 +8,97 @@ Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-re
 
 ## 1. Connector coverage gaps
 
-**99** total gaps — **82** active connectors not on Learn, **17** Learn entries not covered by any active connector. See [`connector_coverage_gaps.csv`](connector_coverage_gaps.csv).
+**76** total gaps — **74** active connectors not on Learn, **2** Learn entries not covered by any active connector (an additional **8** Learn entries are covered only by a deprecated connector and are suppressed). See [`connector_coverage_gaps.csv`](connector_coverage_gaps.csv).
 
 ### 1a. Active connectors missing from Learn
 
-| Title | Solution | Collection method |
-|---|---|---|
-| [Recommended] Vectra AI Stream via AMA | Vectra AI Stream | AMA |
-| Abnormal Security (Push) | AbnormalSecurity | CCF Push |
-| Agent 365 | Agent 365 | Unknown |
-| AI Vectra Stream via Legacy Agent | Vectra AI Stream | AMA |
-| API Protection | 42Crunch API Protection | REST Pull API |
-| Armis Activities | Armis | Azure Function |
-| Armis Alerts | Armis | Azure Function |
-| Armorblox | Armorblox | Azure Function |
-| Atlassian Confluence | AtlassianConfluenceAudit | CCF |
-| Auth0 Logs (via Codeless Connector Framework) | Auth0 | CCF |
-| Azure Data Lake Storage Gen1 | Azure Data Lake Storage Gen1 | Azure Diagnostics |
-| Bitsight data connector | BitSight | Azure Function |
-| blacklens.io | Blacklens | REST Pull API |
-| BloodHound Enterprise Data Connector (using Azure Functions) | BloodHound Enterprise | Azure Function |
-| Cisco ASA via Legacy Agent | CiscoASA | AMA |
-| CITRIX SECURITY ANALYTICS | Citrix Analytics for Security | REST Pull API |
-| Common Event Format (CEF) | Common Event Format | AMA |
-| Common Event Format (CEF) via AMA | Common Event Format | AMA |
-| Contrast ADR Push Connector | ContrastADR | CCF Push |
-| Cyber Blind Spot Integration | CTM360 | Azure Function |
-| CyberArkEPM | CyberArkEPM | Azure Function |
-| Dynamics 365 | Dynamics 365 | Native |
-| Egress Iris Connector | Egress Iris | CCF |
-| Elastic Agent | ElasticAgent | AMA |
-| Elastic Agent (via Codeless Connector Framework) | ElasticAgent | CCF |
-| ESET Inspect | ESET Inspect | Azure Function |
-| Fortinet FortiWeb Web Application Firewall via AMA | Fortinet FortiWeb Cloud WAF-as-a-Service connector for Microsoft Sentinel | AMA |
-| GCP Pub/Sub Firewall Logs | Google Cloud Platform Firewall Logs | CCF |
-| HackerView Intergration | CTM360 | Azure Function |
-| HYAS Protect | HYAS Protect | Azure Function |
-| iboss via AMA | iboss | AMA |
-| Illumio Insights Graph | Illumio Insight | CCF |
-| Island Enterprise Browser Admin Events (Legacy) | Island | CCF |
-| Island Enterprise Browser User Events (Legacy) | Island | CCF |
-| Island Enterprise Browser V2 | Island | CCF |
-| Lookout Cloud Security for Microsoft Sentinel | Lookout Cloud Security Platform for Microsoft Sentinel | Azure Function |
-| Lumen Defender Threat Feed Data Connector V2 | Lumen Defender Threat Feed | Azure Function (TI Upload API) |
-| Lumen Defender Threat Feed Data Connector V2 (using Azure Functions Flex Consumption Plan with Private Networking) | Lumen Defender Threat Feed | Azure Function (TI Upload API) |
-| meshStack Event Logs | meshStack | CCF |
-| Microsoft 365 Assets (formerly, Office 365) | Microsoft 365 Assets | Native |
-| Miro Audit Logs (Enterprise Plan) | Miro | CCF |
-| Miro Content Logs (Enterprise Plan + Enterprise Guard) | Miro | CCF |
-| Morphisec API Data Connector (via Codeless Connector Framework) | Morphisec | CCF |
-| Netclean ProActive Incidents | NetClean ProActive | REST Pull API |
-| Netskope | Netskope | Azure Function |
-| Noname Security for Microsoft Sentinel | Noname API Security Solution for Microsoft Sentinel | REST Pull API |
-| Onapsis Defend Integration | Onapsis Defend | CCF Push |
-| One Identity Safeguard | OneIdentity | AMA |
-| Oracle Cloud Infrastructure (via CCP) – Preview | Oracle Cloud Infrastructure | CCF |
-| Red Canary Threat Detection | Red Canary | REST Pull API |
-| Rubrik Security Cloud Protection Status (using Codeless Connector Framework) | RubrikSecurityCloud | CCF |
-| Salesforce Audit Logs (via Codeless Connector Framework) | Salesforce Service Cloud | CCF |
-| SecurityBridge Threat Detection for SAP | SecurityBridge App | AMA |
-| SecurityScorecard Cybersecurity Ratings | SecurityScorecard Cybersecurity Ratings | Azure Function |
-| SecurityScorecard Factor | SecurityScorecard Cybersecurity Ratings | Azure Function |
-| SecurityScorecard Issue | SecurityScorecard Cybersecurity Ratings | Azure Function |
-| Semperis Directory Services Protector | Semperis Directory Services Protector | AMA |
-| SenservaPro (Preview) | SenservaPro | REST Pull API |
-| SINEC Security Guard | SINEC Security Guard | REST Pull API |
-| Slack | SlackAudit | CCF |
-| Sophos Cloud Optix | Sophos Cloud Optix | REST Pull API |
-| Squadra Technologies secRMM | Squadra Technologies SecRmm | REST Pull API |
-| Tanium's CCF Push Connector | Tanium | CCF Push |
-| Tenable.io Vulnerability Management | TenableIO | Azure Function |
-| TheHive Project - TheHive | TheHive | Azure Function |
-| Threat intelligence - TAXII Export | Threat Intelligence (NEW) | Native |
-| Trend Micro Cloud App Security | Trend Micro Cloud App Security | Azure Function |
-| Zscaler Internet Access Cloud NSS Audit Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB Activity Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB Cloud Storage Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB Collaboration Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB CRM Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB Email Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB File Sharing Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB ITSM Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS CASB Repo Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS DNS Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS Email DLP Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS Endpoint DLP Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS Firewall Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS Tunnel Log Push Connector | Zscaler Internet Access | CCF Push |
-| Zscaler Internet Access Cloud NSS Web Log Push Connector | Zscaler Internet Access | CCF Push |
+| Title | Solution | Published | Collection method | Docs |
+|---|---|---|---|---|
+| [Recommended] Vectra AI Stream via AMA | Vectra AI Stream | 2024-05-02 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/vectrastreamama.html) |
+| Abnormal Security (Push) | AbnormalSecurity | 2026-02-17 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/abnormalsecuritypush.html) |
+| AI Vectra Stream via Legacy Agent | Vectra AI Stream | 2024-05-02 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/aivectrastream.html) |
+| API Protection | 42Crunch API Protection | 2022-09-21 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/42crunchapiprotection.html) |
+| Armis Activities | Armis | 2024-08-23 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/armisactivities.html) |
+| Armis Alerts | Armis | 2024-08-23 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/armisalerts.html) |
+| Armorblox | Armorblox | 2021-10-18 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/armorblox.html) |
+| Atlassian Confluence | AtlassianConfluenceAudit | 2025-12-13 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/atlassianconfluence.html) |
+| Azure Data Lake Storage Gen1 | Azure Data Lake Storage Gen1 | 2025-12-13 | Azure Diagnostics | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/azuredatalakestoragegen1_ccp.html) |
+| Bitsight data connector | BitSight | 2024-02-20 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/bitsight.html) |
+| blacklens.io | Blacklens | 2026-04-13 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/blacklens_io.html) |
+| BloodHound Enterprise Data Connector (using Azure Functions) | BloodHound Enterprise | 2021-05-04 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/bloodhoundenterprise.html) |
+| Cisco ASA via Legacy Agent | CiscoASA | 2025-12-12 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/ciscoasa.html) |
+| CITRIX SECURITY ANALYTICS | Citrix Analytics for Security | 2022-05-06 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/citrix.html) |
+| Common Event Format (CEF) | Common Event Format | 2025-12-13 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cef.html) |
+| Common Event Format (CEF) via AMA | Common Event Format | 2025-12-13 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cefama.html) |
+| Contrast ADR Push Connector | ContrastADR | 2025-01-18 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/contrastadrccf.html) |
+| Cyber Blind Spot Integration | CTM360 | 2026-03-09 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cbspollingidazurefunctions.html) |
+| CyberArkEPM | CyberArkEPM | 2022-04-10 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cyberarkepm.html) |
+| Egress Iris Connector | Egress Iris | 2024-03-11 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/egresssiempolling.html) |
+| ESET Inspect | ESET Inspect | 2022-06-01 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/esetinspect.html) |
+| Fortinet FortiWeb Web Application Firewall via AMA | Fortinet FortiWeb Cloud WAF-as-a-Service connector for Microsoft Sentinel | 2025-12-13 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/fortinetfortiwebama.html) |
+| GCP Pub/Sub Firewall Logs | Google Cloud Platform Firewall Logs | 2025-12-12 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/gcpfirewalllogsccpdefinition.html) |
+| HackerView Intergration | CTM360 | 2026-03-09 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/hvpollingidazurefunctions.html) |
+| HYAS Protect | HYAS Protect | 2023-09-26 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/hyasprotect.html) |
+| iboss via AMA | iboss | 2026-02-09 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/ibossama.html) |
+| Illumio Insights Graph | Illumio Insight | 2025-12-14 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/sentinelillumioinsightsgraphccp.html) |
+| Island Enterprise Browser V2 | Island | 2026-04-05 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/islandv2.html) |
+| Lookout Cloud Security for Microsoft Sentinel | Lookout Cloud Security Platform for Microsoft Sentinel | 2023-02-17 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/lookoutcloudsecuritydataconnector.html) |
+| Lumen Defender Threat Feed Data Connector V2 | Lumen Defender Threat Feed | 2026-02-04 | Azure Function (TI Upload API) | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/lumenthreatfeedconnectorv2.html) |
+| Lumen Defender Threat Feed Data Connector V2 (using Azure Functions Flex Consumption Plan with Private Networking) | Lumen Defender Threat Feed | 2026-02-04 | Azure Function (TI Upload API) | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/lumenthreatfeedconnectorv2privatenetworking.html) |
+| meshStack Event Logs | meshStack | 2026-04-16 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/meshstackeventlogsdefinition.html) |
+| Microsoft 365 Assets (formerly, Office 365) | Microsoft 365 Assets | 2025-06-20 | Native | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/m365assets.html) |
+| Miro Audit Logs (Enterprise Plan) | Miro | 2026-01-08 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/miroauditlogsdataconnector.html) |
+| Miro Content Logs (Enterprise Plan + Enterprise Guard) | Miro | 2026-01-08 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/mirocontentlogsdataconnector.html) |
+| Morphisec API Data Connector (via Codeless Connector Framework) | Morphisec | 2025-12-13 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/morphisecccf.html) |
+| Netclean ProActive Incidents | NetClean ProActive | 2022-06-30 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/netclean_proactive_incidents.html) |
+| Netskope | Netskope | 2025-12-13 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/netskope.html) |
+| Noname Security for Microsoft Sentinel | Noname API Security Solution for Microsoft Sentinel | 2022-12-01 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/nonamesecuritymicrosoftsentinel.html) |
+| One Identity Safeguard | OneIdentity | 2022-05-02 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/oneidentity.html) |
+| Oracle Cloud Infrastructure (via CCP) – Preview | Oracle Cloud Infrastructure | 2026-02-11 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/oci-connector-ccp-definition.html) |
+| Red Canary Threat Detection | Red Canary | 2022-03-04 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/redcanarydataconnector.html) |
+| Rubrik Security Cloud Protection Status (using Codeless Connector Framework) | RubrikSecurityCloud | 2026-02-19 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/rubrikprotectionstatus.html) |
+| Salesforce Audit Logs (via Codeless Connector Framework) | Salesforce Service Cloud | 2026-01-27 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/salesforceauditlogsconnector.html) |
+| SecurityBridge Threat Detection for SAP | SecurityBridge App | 2025-12-13 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/securitybridgesap.html) |
+| SecurityScorecard Cybersecurity Ratings | SecurityScorecard Cybersecurity Ratings | 2022-10-01 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/securityscorecardratingsazurefunctions.html) |
+| SecurityScorecard Factor | SecurityScorecard Cybersecurity Ratings | 2022-10-01 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/securityscorecardfactorazurefunctions.html) |
+| SecurityScorecard Issue | SecurityScorecard Cybersecurity Ratings | 2022-10-01 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/securityscorecardissueazurefunctions.html) |
+| Semperis Directory Services Protector | Semperis Directory Services Protector | 2021-10-18 | AMA | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/semperisdsp.html) |
+| SenservaPro (Preview) | SenservaPro | 2022-06-01 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/senservapro.html) |
+| SINEC Security Guard | SINEC Security Guard | 2024-07-15 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/ssg.html) |
+| Slack | SlackAudit | 2025-12-17 | CCF | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/slackaudit.html) |
+| Sophos Cloud Optix | Sophos Cloud Optix | 2022-05-02 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/sophoscloudoptix.html) |
+| Squadra Technologies secRMM | Squadra Technologies SecRmm | 2022-05-09 | REST Pull API | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/squadratechnologiessecrmm.html) |
+| Tanium's CCF Push Connector | Tanium | 2026-03-27 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/taniumconnector.html) |
+| Tenable.io Vulnerability Management | TenableIO | 2026-04-16 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/tenableioapi.html) |
+| TheHive Project - TheHive | TheHive | 2026-03-13 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/thehiveprojectthehive.html) |
+| Threat intelligence - TAXII Export | Threat Intelligence (NEW) | 2026-04-15 | Native | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/threatintelligencetaxiiexport.html) |
+| Trend Micro Cloud App Security | Trend Micro Cloud App Security | 2021-09-28 | Azure Function | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/trendmicrocas.html) |
+| Zscaler Internet Access Cloud NSS Audit Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssauditlogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB Activity Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbactivitylogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB Cloud Storage Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbcloudstoragelogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB Collaboration Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbcollablogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB CRM Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbcrmlogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB Email Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbemaillogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB File Sharing Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbfilesharinglogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB ITSM Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbitsmlogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS CASB Repo Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsscasbrepologs_ccp.html) |
+| Zscaler Internet Access Cloud NSS DNS Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssdnslogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS Email DLP Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssemaildlplogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS Endpoint DLP Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssendpointdlplogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS Firewall Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssfwlogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS Tunnel Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnsstunnellogs_ccp.html) |
+| Zscaler Internet Access Cloud NSS Web Log Push Connector | Zscaler Internet Access | 2025-09-02 | CCF Push | [link](https://oshezaf.github.io/sentinelninja/Solutions%20Docs/connectors/cloudnssweblogs_ccp.html) |
 
 ### 1b. Learn entries with no active analyzer connector
 
 | Learn title | Tables | URL |
 |---|---|---|
-| [Deprecated] IONIX Security Logs (Push) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#deprecated-ionix-security-logs-push) |
-| [Deprecated] Lookout | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#deprecated-lookout) |
-| [Deprecated] Microsoft Exchange Logs and Events | 5 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#deprecated-microsoft-exchange-logs-and-events) |
-| A365 Observability | 0 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#a365-observability) |
-| Auth0 Access Management (using Azure Functions) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#auth0-access-management-using-azure-functions) |
-| Auth0 Logs(via Codeless Connector Framework) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#auth0-logsvia-codeless-connector-framework) |
-| Box (using Azure Functions) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#box-using-azure-functions) |
-| Cloudflare (Preview) (using Azure Functions) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#cloudflare-preview-using-azure-functions) |
-| Dynamics365 | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#dynamics365) |
-| Elastic Agent (Standalone) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#elastic-agent-standalone) |
 | ESET Protect Platform (using Azure Functions) | 2 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#eset-protect-platform-using-azure-functions) |
-| Island Enterprise Browser Admin Audit (Polling CCF) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-admin-audit-polling-ccp) |
-| Island Enterprise Browser User Activity (Polling CCF) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-user-activity-polling-ccp) |
 | Mimecast Audit & Authentication (using Azure Functions) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#mimecast-audit--authentication-using-azure-functions) |
-| Mimecast Intelligence for Microsoft - Microsoft Sentinel (using Azure Functions) | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#mimecast-intelligence-for-microsoft---microsoft-sentinel-using-azure-functions) |
-| Onapsis Defend: Integrate Unmatched SAP Threat Detection & Intel with Microsoft Sentinel | 1 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#onapsis-defend-integrate-unmatched-sap-threat-detection--intel-with-microsoft-sentinel) |
-| VMware Carbon Black Cloud (using Azure Functions) | 3 | [link](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#vmware-carbon-black-cloud-using-azure-functions) |
 
 ## 2. Table-list mismatches
 
-**80** connectors match by title but have a different set of Log Analytics tables. See [`connector_table_mismatches.csv`](connector_table_mismatches.csv).
+**83** connectors match by title but have a different set of Log Analytics tables. See [`connector_table_mismatches.csv`](connector_table_mismatches.csv).
 
 | Title | Solution | Only in analyzer | Only on Learn |
 |---|---|---|---|
@@ -155,6 +132,8 @@ Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-re
 | Dynatrace Problems V2 | Dynatrace | DynatraceProblemsV2_CL | — |
 | Dynatrace Runtime Vulnerabilities V1 | Dynatrace | DynatraceSecurityProblemsV2_CL | — |
 | Dynatrace Runtime Vulnerabilities V2 | Dynatrace | DynatraceSecurityProblemsV2_CL | — |
+| Elastic Agent | ElasticAgent | ElasticAgentLogs_CL | ElasticAgentEvent |
+| Elastic Agent (via Codeless Connector Framework) | ElasticAgent | ElasticAgentLogsV2_CL | ElasticAgentEvent |
 | Forescout | Forescout (Legacy) | Syslog | ForescoutEvent |
 | Forescout Host Property Monitor | ForescoutHostPropertyMonitor | ForescoutComplianceStatus_CL, ForescoutPolicyStatus_CL | — |
 | GitHub (using Webhooks) V2 | GitHub | GitHubAdvancedSecurityAlerts_CL | — |
@@ -174,6 +153,7 @@ Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-re
 | MISP2Sentinel | MISP2Sentinel | ThreatIntelIndicators, ThreatIntelObjects | ThreatIntelligenceIndicator |
 | Netskope Alerts and Events (via Codeless Connector Framework) | Netskopev2 | NetskopeEventsApplication_CL, NetskopeEventsAudit_CL, NetskopeEventsConnection_CL, NetskopeEventsDLP_CL, NetskopeEventsEndpoint_CL, NetskopeEventsInfrastructure_CL, NetskopeEventsNetwork_CL, NetskopeEventsPage_CL | — |
 | Okta Single Sign-On (Polling CCP) | Okta Single Sign-On | OktaNativePoller_CL | OktaV2_CL, Okta_CL |
+| Onapsis Defend Integration | Onapsis Defend | ABAPAuditLog | — |
 | Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework) | PaloAltoPrismaCloud | PaloAltoPrismaCloudAuditV2_CL | — |
 | Pathlock Inc.: Threat Detection and Response for SAP | Pathlock_TDnR | Pathlock_TDnR_CL | — |
 | Premium Microsoft Defender Threat Intelligence | Threat Intelligence (NEW) | ThreatIntelIndicators, ThreatIntelObjects | ThreatIntelligenceIndicator |
@@ -189,7 +169,7 @@ Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-re
 | SentinelOne (via Codeless Connector Framework) | SentinelOne | SentinelOneActivities_CL, SentinelOneAgents_CL, SentinelOneAlerts_CL, SentinelOneGroups_CL, SentinelOneThreats_CL | SentinelOne_CL |
 | Sophos Endpoint Protection (via Codeless Connector Platform) | Sophos Endpoint Protection | SophosEPAlerts_CL | — |
 | Synqly Integration Connector | SynqlyIntegrationConnector | ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs | union ASimAuditEventLogs, ASimAuthenticationEventLogs, ASimDhcpEventLogs, ASimDnsActivityLogs, ASimFileEventLogs, ASimNetworkSessionLogs, ASimProcessEventLogs, ASimRegistryEventLogs, ASimUserManagementActivityLogs, ASimWebSessionLogs |
-| Tenable Identity Exposure | Tenable App | Tenable_IE_CL, Tenable_ad_CL | — |
+| Tenable Identity Exposure | Tenable App | AlsidForADLog_CL, Tenable_IE_CL | — |
 | TheHive (via Codeless Connector Framework) | TheHive | — | TheHiveData |
 | Threat intelligence - TAXII | Threat Intelligence (NEW) | ThreatIntelIndicators, ThreatIntelObjects | ThreatIntelligenceIndicator |
 | Threat Intelligence Platforms | Threat Intelligence (NEW) | CommonSecurityLog, ThreatIntelIndicators, ThreatIntelObjects | ThreatIntelligenceIndicator |
@@ -208,14 +188,5 @@ Generated against `https://learn.microsoft.com/azure/sentinel/data-connectors-re
 
 ## 3. Potential matches (for manual review)
 
-**7** pair(s) of gap rows share ≥ 50% of their content tokens after stripping stopwords. These are likely V1/V2 splits, minor word differences (`Audit` vs `Events`), or renames — surfaced here so they can be confirmed or dismissed without auto-matching. See [`connector_potential_matches.csv`](connector_potential_matches.csv).
+**0** pair(s) of gap rows share ≥ 50% of their content tokens after stripping stopwords. These are likely V1/V2 splits, minor word differences (`Audit` vs `Events`), or renames — surfaced here so they can be confirmed or dismissed without auto-matching. See [`connector_potential_matches.csv`](connector_potential_matches.csv).
 
-| Sim | Analyzer title | Learn title | Only in analyzer | Only on Learn |
-|---|---|---|---|---|
-| 1.00 | Auth0 Logs (via Codeless Connector Framework) | [Auth0 Logs(via Codeless Connector Framework)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#auth0-logsvia-codeless-connector-framework) | — | — |
-| 0.67 | Island Enterprise Browser Admin Events (Legacy) | [Island Enterprise Browser Admin Audit (Polling CCF)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-admin-audit-polling-ccp) | events | audit |
-| 0.67 | Island Enterprise Browser User Events (Legacy) | [Island Enterprise Browser User Activity (Polling CCF)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-user-activity-polling-ccp) | events | activity |
-| 0.60 | Island Enterprise Browser V2 | [Island Enterprise Browser Admin Audit (Polling CCF)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-admin-audit-polling-ccp) | — | admin, audit |
-| 0.60 | Island Enterprise Browser V2 | [Island Enterprise Browser User Activity (Polling CCF)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#island-enterprise-browser-user-activity-polling-ccp) | — | activity, user |
-| 0.50 | Elastic Agent | [Elastic Agent (Standalone)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#elastic-agent-standalone) | — | standalone |
-| 0.50 | Elastic Agent (via Codeless Connector Framework) | [Elastic Agent (Standalone)](https://learn.microsoft.com/azure/sentinel/data-connectors-reference#elastic-agent-standalone) | — | standalone |
