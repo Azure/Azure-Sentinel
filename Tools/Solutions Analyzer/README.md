@@ -215,7 +215,6 @@ See the script documentation for details:
 
 **Microsoft Learn deep-links on connector pages:**
 - The mapper fetches the canonical [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) page once per run (cached), extracts its anchors, and matches each connector by display-name slug, adding a `learn_doc_url` column to `connectors.csv` rendered as a "Microsoft Learn" row on connector pages. Expanded slug/anchor heuristics (Learn-anchor slugify flavour, qualifier-suffix iteration, `[Deprecated]`/`[Recommended]`/`[Preview]` stripping, trailing `-v\d+` handling) lift the match rate from 266/615 (43%) to 360/615 (59%).
-- New audit at `reports/learn_docs_audit.py` writes coverage-gap, mismatch, and "potential matches" CSVs plus a markdown summary into `reports/learn_docs_audit/`.
 
 **Connector detail pages show companion DCR files:**
 - New `dcr_definition_files` column on `connectors.csv` (from `*_DCR.json` / `dcr.json` companions) renders a dedicated **DCR Definition Files** row. DCR URL association now also accepts entries exposing the id as `id` (fixes missing DCR links for CCF connectors such as Dragos).
