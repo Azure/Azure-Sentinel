@@ -1,0 +1,88 @@
+id: b1413b43-9410-46f4-94d9-da507105d834
+kind: Scheduled
+name: SAP ETD - SAP system stopped reporting data
+description: |
+  Detects when an individual SAP system (identified by its SID) that has recently been reporting to SAP Enterprise Threat Detection (ETD) stops producing new records in the SAPETDAlerts_CL table within the configured per-system grace period (default 2 hours).
+  A targeted silence of a single SID should be treated as a potential tampering / defense-evasion event: an adversary with access to the SAP system, the SAP ETD collector for that SID, or the data connector may be selectively blocking security telemetry for that system in order to hide follow-on activity, while leaving the rest of the SAP ETD feed intact to avoid drawing attention. Benign causes such as connectivity issues, collector misconfiguration, or planned maintenance for that SID are also possible and should be ruled out during triage.
+
+  The set of "expected" SIDs is derived from any system that has reported within the `BaselineLookback` period (default 7 days); systems silent for longer are considered decommissioned and are not alerted on.
+
+  Tunable parameters (top of query):
+    * `LookbackPeriod`    - silence threshold per SID. Defaults to 2h to allow some grace and avoid noise from short transient gaps.
+    * `BaselineLookback`  - how far back to look to discover known SIDs (default 7d).
+  When changing `LookbackPeriod` align `queryFrequency` accordingly, and when changing `BaselineLookback` align `queryPeriod` accordingly.
+
+  This rule is complementary to the overall-feed rule "SAP ETD - No new data received".
+
+  *Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPETDAlerts
+    dataTypes:
+      - SAPETDAlerts_CL
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1562
+  - T1562.006
+query: |
+  // ---- Configurable thresholds ----
+  let LookbackPeriod = 2h;
+  let BaselineLookback = 7d;
+  // ---------------------------------
+  let regex_sid = @"^([A-Z0-9]{3})/";
+  let regex_client = @'\/(.{3})$';
+  SAPETDAlerts_CL
+  | where TimeGenerated > ago(BaselineLookback)
+  | mv-expand NormalizedTriggeringEvents
+  | extend
+      SystemId = extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),
+      ClientId = extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),
+      Host     = tostring(NormalizedTriggeringEvents.NetworkHostnameInitiator),
+      Instance = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)
+  | where isnotempty(SystemId)
+  | summarize
+      LastIngestionTime = max(TimeGenerated),
+      Host     = take_any(Host),
+      Instance = take_any(Instance),
+      ClientId = take_any(ClientId)
+      by SystemId
+  | extend TimeSinceLastIngestion = now() - LastIngestionTime
+  | where TimeSinceLastIngestion > LookbackPeriod
+  | extend
+      LookbackPeriod = LookbackPeriod,
+      Reason = strcat("SAP system ", SystemId, " has not reported any data to SAP ETD in the last ", tostring(LookbackPeriod), " (last seen: ", tostring(LastIngestionTime), ").")
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SystemId
+      - identifier: AppId
+        columnName: ClientId
+      - identifier: InstanceName
+        columnName: Instance
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP ETD - SAP system {{SystemId}} stopped reporting data'
+  alertDescriptionFormat: |
+    {{Reason}}
+
+    A selective silence of a single SAP SID may indicate that an adversary is tampering with the security telemetry pipeline for this specific system (for example by stopping the SAP ETD collector for that SID, disabling the relevant data connector path, or blocking network egress from that host) in order to hide malicious activity while leaving the rest of the SAP ETD feed intact. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP system, the SAP ETD collector configuration for this SID, and the data connector between SAP ETD and Microsoft Sentinel, and review recent change / admin activity on those components before concluding the cause is a benign outage.
+customDetails:
+  SAP_SID: SystemId
+  SAP_Client: ClientId
+  LookbackPeriod: LookbackPeriod
+  LastIngestion: LastIngestionTime
+  TimeSinceLastIngestion: TimeSinceLastIngestion
+version: 1.0.0
