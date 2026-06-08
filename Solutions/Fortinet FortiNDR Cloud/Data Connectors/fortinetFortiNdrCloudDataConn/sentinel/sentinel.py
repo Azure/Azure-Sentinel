@@ -7,6 +7,31 @@ from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.identity import ClientSecretCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
+try:
+    AZURE_TENANT_ID = (os.environ.get("TENANT_ID") or "").strip()
+    AZURE_CLIENT_ID = (os.environ.get("CLIENT_ID") or "").strip()
+    AZURE_CLIENT_SECRET = (os.environ.get("CLIENT_SECRET") or "").strip()
+    AZURE_ENDPOINT = (os.environ.get("DceUri") or "").strip()
+
+    logging.info("Initializing Azure Global Clients at startup.")
+
+    # (Assuming AZURE_CLIENT_ID, etc. are defined above or pulled from os.environ)
+    GLOBAL_CREDS = ClientSecretCredential(
+        client_id=AZURE_CLIENT_ID,
+        client_secret=AZURE_CLIENT_SECRET,
+        tenant_id=AZURE_TENANT_ID,
+    )
+
+    GLOBAL_CLIENT = LogsIngestionClient(
+        endpoint=AZURE_ENDPOINT,
+        credential=GLOBAL_CREDS,
+        api_version="2023-01-01"
+    )
+except Exception as e:
+    logging.critical(
+        f"Failed to initialize Azure Ingestion clients at startup: {e}")
+    raise
+
 
 def post_data(events: list[dict], log_type_suffix: str):
     """
@@ -15,34 +40,9 @@ def post_data(events: list[dict], log_type_suffix: str):
     if not events:
         return
 
-    AZURE_TENANT_ID = (os.environ.get("TENANT_ID") or "").strip()
-    AZURE_CLIENT_ID = (os.environ.get("CLIENT_ID") or "").strip()
-    AZURE_CLIENT_SECRET = (os.environ.get("CLIENT_SECRET") or "").strip()
-    AZURE_ENDPOINT = (os.environ.get("DceUri") or "").strip()
     DCR_ID = (os.environ.get("DcrImmutableId") or "").strip()
 
-    try:
-        logging.info("Creating the Client Secret Credential object.")
-        creds = ClientSecretCredential(
-            client_id=AZURE_CLIENT_ID,
-            client_secret=AZURE_CLIENT_SECRET,
-            tenant_id=AZURE_TENANT_ID,
-        )
-
-        logging.info("Creating the Log Ingestion Client object.")
-        client = LogsIngestionClient(
-            endpoint=AZURE_ENDPOINT,
-            credential=creds,
-            api_version="2023-01-01"
-        )
-
-    except Exception as e:
-        logging.error(
-            f"{log_type_suffix.title()}: Failed to create Azure credential/client. "
-            f"Check TENANT_ID, CLIENT_ID, CLIENT_SECRET, DceUri. Error: {e}"
-        )
-        raise
-
+    client = GLOBAL_CLIENT
     stream_name = "Custom-FortinetFortiNdrCloudRaw_CL"
 
     logging.info("Wrapping events to be uploaded:")
