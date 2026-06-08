@@ -1,4 +1,3 @@
-Markdown
 # Fortinet FortiNDR Cloud KQL Log Parser Installation
 
 This parser normalizes and unpacks dynamic log entries sent via Data Collection Rules into structured, queryable data columns matching your Microsoft Sentinel dashboards.
