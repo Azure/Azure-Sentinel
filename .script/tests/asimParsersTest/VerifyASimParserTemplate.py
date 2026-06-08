@@ -297,22 +297,6 @@ def get_modified_files(current_directory):
         return []
 
 def get_current_commit_number():
-    # After the workflow merges origin/master, HEAD is a local merge commit
-    # that doesn't exist on GitHub's remote. Use GITHUB_PR_HEAD_SHA if set,
-    # otherwise detect a merge commit and resolve to its first parent (the PR head).
-    env_sha = os.environ.get('GITHUB_PR_HEAD_SHA')
-    if env_sha:
-        return env_sha.strip()
-    try:
-        # Check if HEAD is a merge commit (has more than one parent)
-        parents = subprocess.check_output(
-            "git rev-parse HEAD^1 HEAD^2", shell=True, text=True, stderr=subprocess.DEVNULL
-        ).strip().split()
-        if len(parents) == 2:
-            # HEAD is a merge commit; first parent is the PR head SHA
-            return parents[0]
-    except subprocess.CalledProcessError:
-        pass
     cmd = "git rev-parse HEAD"
     try:
         return subprocess.check_output(cmd, shell=True, text=True).strip()
