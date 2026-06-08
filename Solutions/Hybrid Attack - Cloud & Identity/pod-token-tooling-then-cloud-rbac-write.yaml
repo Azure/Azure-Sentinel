@@ -1,0 +1,115 @@
+id: 7f5d5715-8326-4865-b039-f9968f48de95
+name: Pod token tooling then cloud RBAC write
+description: |
+  Detects suspicious token and cloud-auth tooling in Kubernetes pods followed by Kubernetes audit activity and Azure RBAC write operations.
+description-detailed: |
+  This query chains pod process telemetry to Kubernetes audit records and then to Azure control-plane RBAC writes from the same source IP.
+  It is designed to catch service account token abuse pivoting from Kubernetes workloads to cloud privilege escalation.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudProcessEvents
+      - CloudAuditEvents
+tactics:
+  - CredentialAccess
+  - PrivilegeEscalation
+  - DefenseEvasion
+relevantTechniques:
+  - T1552
+  - T1528
+  - T1098.003
+  - T1078.004
+tags:
+  - Kubernetes
+  - Service account token
+  - Federated identity
+  - Azure RBAC
+  - Pivot
+query: |
+  // Time and tuning parameters.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let ProcToK8sWindow = 20m;
+  let K8sToCloudWindow = 45m;
+  // Stage A: process-level signs of token access or cloud token exchange tooling in pods.
+  let PodTokenTooling =
+    CloudProcessEvents
+    | where Timestamp between (StartTime .. EndTime)
+    | where isnotempty(KubernetesNamespace) and isnotempty(KubernetesPodName)
+    | extend NamespaceNorm = tolower(tostring(KubernetesNamespace)),
+             PodNorm = tolower(tostring(KubernetesPodName)),
+             Cmd = tolower(tostring(ProcessCommandLine)),
+             Proc = tolower(tostring(ProcessName)),
+             ParentProc = tolower(tostring(ParentProcessName))
+    | where Cmd has_any (
+        '/var/run/secrets/kubernetes.io/serviceaccount/token',
+        'azure_federated_token_file',
+        'oauth2/v2.0/token',
+        'login.microsoftonline.com',
+        'sts.windows.net',
+        'az login',
+        'get-azaccesstoken'
+      )
+      or (Proc has_any ('az', 'curl', 'wget', 'kubectl', 'pwsh', 'python')
+          and Cmd has_any ('token', 'federated', 'oauth2', 'login.microsoftonline', 'sts.windows.net', 'serviceaccount'))
+    | project ProcTime=Timestamp, NamespaceNorm, PodNorm, KubernetesResource, ContainerName, ContainerImageName,
+              ProcessName, ParentProcessName, ProcessCommandLine, AzureResourceId, ContainerId;
+  // Stage B: Kubernetes audit events that can expose token-abuse precursor context, including source IP.
+  let K8sAuditBridge =
+    CloudAuditEvents
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Kubernetes'
+    | extend AF = todynamic(AdditionalFields)
+    | extend NamespaceNorm = tolower(coalesce(tostring(AF.KubernetesNamespace), tostring(extractjson('$.objectRef.namespace', tostring(RawEventData))))),
+             PodNorm = tolower(coalesce(tostring(AF.KubernetesPodName), tostring(extractjson('$.objectRef.name', tostring(RawEventData))))),
+             OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent)
+    | where isnotempty(NamespaceNorm) and isnotempty(PodNorm) and isnotempty(IpNorm)
+    | where OpNorm has_any (
+        'pods/exec',
+        'pods/attach',
+        'serviceaccounts/token',
+        'tokenreviews',
+        'secrets/get',
+        'serviceaccounts/get'
+      )
+    | project K8sAuditTime=Timestamp, NamespaceNorm, PodNorm, IpNorm, UaNorm, K8sOperation=OperationName, K8sResourceId=AzureResourceId;
+  // Stage C: Azure RBAC write operations from CloudAuditEvents.
+  let CloudRbacWrites =
+    CloudAuditEvents
+    | where Timestamp between (StartTime .. EndTime)
+    | where DataSource has 'Azure'
+    | extend OpNorm = tolower(tostring(OperationName)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent)
+    | where isnotempty(IpNorm)
+    | where OpNorm contains 'microsoft.authorization/roleassignments/'
+       or OpNorm contains 'microsoft.authorization/roledefinitions/'
+    | project CloudTime=Timestamp, IpNorm, UaNorm, CloudOperation=OperationName, CloudResourceId=AzureResourceId, ActionType, CountryCode, IsAnonymousProxy;
+  // Correlate A->B by namespace/pod and near-time.
+  PodTokenTooling
+  | join kind=inner K8sAuditBridge on NamespaceNorm, PodNorm
+  | where K8sAuditTime between (ProcTime .. (ProcTime + ProcToK8sWindow))
+  // Correlate B->C by source IP and near-time to represent k8s-to-cloud pivot.
+  | join kind=inner CloudRbacWrites on IpNorm
+  | where CloudTime between (K8sAuditTime .. (K8sAuditTime + K8sToCloudWindow))
+  | summarize FirstProcess=min(ProcTime),
+              FirstK8sAudit=min(K8sAuditTime),
+              FirstCloudWrite=min(CloudTime),
+              LastCloudWrite=max(CloudTime),
+              CloudWriteCount=count(),
+              K8sOps=make_set(K8sOperation, 10),
+              CloudOps=make_set(CloudOperation, 10),
+              CloudResources=make_set(CloudResourceId, 20),
+              Countries=make_set(CountryCode, 5),
+              AnyAnonymousProxy=max(toint(IsAnonymousProxy))
+    by NamespaceNorm, PodNorm, IpNorm, ContainerName, ContainerImageName, ProcessName, ParentProcessName, ProcessCommandLine
+  | extend TimeGenerated = FirstProcess
+  | order by CloudWriteCount desc, FirstCloudWrite desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpNorm
+version: 1.0.0
