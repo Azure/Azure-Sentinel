@@ -1,7 +1,7 @@
 # Permissions Configuration
 
 This document provides detailed steps to configure the required permissions for the Logic Apps:  
-`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-saml-provider`.
+`logic-app-disable-data-aging`, `logic-app-disable-saml-provider`, and `logic-app-disable-user`.
 
 ---
 
@@ -31,7 +31,7 @@ This document provides detailed steps to configure the required permissions for 
 3. If **Access Policies** are enabled:
    - Go to the **Access Policies** section.
    - Click **Add Access Policy**.
-   - In the **Permissions** dropdown, select **Get**,**Set**,**List**,**Delete** and **Purge** for secrets.
+   - In the Permissions dropdown, select Get and List for secrets.
    - In the **Principal** field, search for the **Managed Identity** of each Logic App:
      - `logic-app-disable-data-aging`
      - `logic-app-disable-saml-provider`
@@ -40,7 +40,7 @@ This document provides detailed steps to configure the required permissions for 
 4. If **RBAC (Role-Based Access Control)** is enabled:
    - Go to the **Access Control (IAM)** section.
    - Click on **Add Role Assignment**.
-   - In the **Role** dropdown, select **Key Vault Secrets Officer**.
+   - In the **Role** dropdown, select **Key Vault Secrets User**.
    - In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
    - Search for the **Managed Identity** of each Logic App:
      - `logic-app-disable-data-aging`
