@@ -1,6 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| 4.0.0       | 12-05-2026                     | Migrate to Codeless Connector Framework (CCF). Remove Azure Function, Storage Account and Key Vault dependencies.            |
-| 3.0.2       | 13-02-2026                     | Add support of lacking event types. Migrate to Python 3.12.                  |
-| 3.0.1       | 28-03-2025                     | Memory overflow fix - process events via batches<br/>Fix wrong workspace name in sentinel connector installation instruction |
-| 3.0.0       | 22-02-2024                     | Initial commit - Data Connector based on Azure Function and "Top computers by infections" Workbook                           |                  
+| 3.0.0       | 08-06-2026                     | Initial release. WithSecure Elements data connector built on the Codeless Connector Framework (CCF) and the "Top computers by infections" workbook. |
