@@ -1,0 +1,112 @@
+{
+  "name": "ContosoIncidentsConnector",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "availability": {
+    "isPreview": true
+  },
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ContosoIncidentsConnector",
+      "title": "Contoso Incidents (CCF Nested API Accelerator)",
+      "publisher": "Contoso",
+      "descriptionMarkdown": "The **Contoso Incidents** connector demonstrates the CCF nested API polling pattern. It chains two REST API calls: a list endpoint that returns incident identifiers, followed by a detail endpoint called once per identifier. Deploy the included mock Contoso Incident API (Azure Function App) to observe the nested polling pattern end-to-end without a real data source.",
+      "graphQueriesTableName": "ContosoIncidents_CL",
+      "graphQueries": [
+        {
+          "metricName": "Incidents ingested",
+          "legend": "ContosoIncidents_CL",
+          "baseQuery": "{{graphQueriesTableName}}"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All ingested incidents",
+          "query": "ContosoIncidents_CL\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "High and Critical severity incidents",
+          "query": "ContosoIncidents_CL\n| where Severity in ('Critical', 'High')\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Active incidents",
+          "query": "ContosoIncidents_CL\n| where Status == 'Active'\n| project TimeGenerated, IncidentId, Title, Severity, AffectedUser, SourceIp"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "ContosoIncidents_CL",
+          "lastDataReceivedQuery": "ContosoIncidents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "ContosoIncidents_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1d)"
+          ]
+        }
+      ],
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and write permissions on the Log Analytics workspace are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Contoso Mock API",
+            "description": "The Contoso Mock API Function App must be deployed before configuring this connector. After deployment, retrieve the Function App API key to use in Step 2."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "STEP 1 — Deploy the Contoso Mock API",
+          "description": "Deploy the Azure Function App that serves as the mock Contoso Incident API:\n\n1. Deploy `MockApi/azuredeploy_MockApi.json` to a new resource group.\n2. Zip the `MockApi/` folder and run:\n```\naz functionapp deployment source config-zip --name <functionAppName> --resource-group <rg> --src contosoapi.zip\n```\n3. Retrieve the Function App API key:\n```\naz functionapp keys list --name <functionAppName> --resource-group <rg> --query functionKeys.default -o tsv\n```\n4. Note the `mockApiBaseUrl` deployment output (e.g. `https://contosomockapiXXXX.azurewebsites.net/api`).\n\nSee the [accelerator README](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/CCF-Pull-Connector-Nested-Accelerator) for detailed steps or use GitHub Copilot agent mode with `agent-instructions.md` for fully automated deployment."
+        },
+        {
+          "title": "STEP 2 — Connect to the Contoso Mock API",
+          "description": "Enter the Mock API base URL and Function App API key, then click **Connect**.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Mock API Base URL",
+                "placeholder": "https://contosomockapiXXXX.azurewebsites.net/api",
+                "type": "text",
+                "name": "mockApiBaseUrl"
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Function App API Key",
+                "placeholder": "Enter your Function App API key",
+                "type": "password",
+                "name": "ApiKey"
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "connect",
+                "name": "connect"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
