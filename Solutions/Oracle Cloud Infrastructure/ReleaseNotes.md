@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                          |
 |-------------|--------------------------------|-----------------------------------------------------------------------------|
+| 3.0.10      | 26-05-2026                     | Updated OCI connector UI to include IAM permissions guidance and removed the "Important -" label. |
 | 3.0.9       | 10-02-2026                     | Add support for group Cursor                                                |
 | 3.0.8       | 05-02-2026                     | fix name in package 3.0.7                                                   |
 | 3.0.7       | 26-01-2026                     | Improve Instructions part of the connector with more InfoMessage.           |
