@@ -1,3 +1,3 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
-|---|---|---|
-| 3.0.0 | 13-05-2026 | Initial public release with the StealthTalk data connector, 4 analytic rules, 3 hunting queries, ASIM Authentication parsers, workbook, and Teams notification playbook. |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                          |
+|-------------|--------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3.0.0       | 13-05-2026                     | Initial public release with the StealthTalk data connector, 4 analytic rules, 3 hunting queries, ASIM Authentication parsers, workbook, and Teams playbook. |
