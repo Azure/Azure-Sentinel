@@ -1,0 +1,100 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.1.0.0",
+    "metadata": {
+        "title": "Recorded Future Identity - Credential Exposure Analytic Rule",
+        "description": "Deploys the NRT Analytic Rule that creates Microsoft Sentinel incidents when Recorded Future Identity detects compromised credentials. Requires the RFI_PlaybookAlertResults_V2_CL table to exist (deploy azuredeploy-alert-importer.json first).",
+        "lastUpdateTime": "2026-06-02T00:00:00.000Z",
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [
+                    "NRT analytic rule querying RFI_PlaybookAlertResults_V2_CL.",
+                    "Groups incidents by Account entity.",
+                    "Alert title includes entity name and priority."
+                ]
+            },
+            {
+                "version": "1.1",
+                "title": "Updated table and field names",
+                "notes": [
+                    "Updated query to use RFI_PlaybookAlertResults_V2_CL table.",
+                    "Updated field references to remove _s suffix (new Log Ingestion API schema)."
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Required. Name of the Log Analytics Workspace where the analytic rule will be deployed."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/b1c2d3e4-5678-90ab-cdef-444444444444')]",
+            "apiVersion": "2023-12-01-preview",
+            "kind": "NRT",
+            "properties": {
+                "displayName": "Recorded Future Identity - Credential Exposure Detected",
+                "description": "Creates incidents when Recorded Future Identity detects compromised credentials for users in your organization.",
+                "severity": "High",
+                "enabled": true,
+                "query": "RFI_PlaybookAlertResults_V2_CL\n| where TimeGenerated >= now(-15m)",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [],
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Identity Exposure: {{panel_status_entity_name}} with priority: {{panel_status_priority}}",
+                    "alertDescriptionFormat": "_Recorded Future Identity Alert_\n\n**Rule Name:** {{panel_status_alert_rule_name}}\n\n**Alert ID:** {{playbook_alert_id}}\n\n**Evidence Summary:** {{alert_description}}\n\nInvestigate this identity by searching in log analytics workspace for the Alert ID.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "RFLabel": "Type",
+                    "AlertId": "playbook_alert_id"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "panel_status_entity_name"
+                            }
+                        ]
+                    }
+                ],
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT15M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                }
+            }
+        }
+    ]
+}
