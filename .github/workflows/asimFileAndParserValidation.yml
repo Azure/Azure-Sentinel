@@ -1,0 +1,141 @@
+name: New ASIM File and Parser Validation
+
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-asim-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for ASIM label
+        id: check-label
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (labels.includes('ASIM')) {
+              core.info('PR has the ASIM label.');
+              core.setOutput('has_label', 'true');
+            } else {
+              core.info('PR does not have the ASIM label. Skipping workflow.');
+              core.setOutput('has_label', 'false');
+            }
+
+      - name: Get changed files
+        if: steps.check-label.outputs.has_label == 'true'
+        id: changed-files
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const files = [];
+            let page = 1;
+            while (true) {
+              const response = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+                page: page
+              });
+              files.push(...response.data);
+              if (response.data.length < 100) break;
+              page++;
+            }
+            const allFiles = files.map(f => f.filename);
+            const newFiles = files.filter(f => f.status === 'added').map(f => f.filename);
+            const parserPattern = /^Parsers\/ASim\w+\/Parsers\/.+\.yaml$/;
+            const asimYamlFiles = allFiles.filter(f => parserPattern.test(f));
+            const newAsimYamlFiles = newFiles.filter(f => parserPattern.test(f));
+            core.info(`Changed files (${allFiles.length}):`);
+            allFiles.forEach(f => core.info(`  - ${f}`));
+            core.info(`ASIM YAML files (${asimYamlFiles.length}):`);
+            asimYamlFiles.forEach(f => core.info(`  - ${f}`));
+            core.info(`New files (${newFiles.length}):`);
+            newFiles.forEach(f => core.info(`  - ${f}`));
+            core.setOutput('files', JSON.stringify(allFiles));
+            core.setOutput('new_files', JSON.stringify(newFiles));
+            core.setOutput('asim_yaml_files', JSON.stringify(asimYamlFiles));
+            core.setOutput('has_new_files', newFiles.length > 0 ? 'true' : 'false');
+            core.setOutput('has_asim_yaml_files', asimYamlFiles.length > 0 ? 'true' : 'false');
+
+      - name: Validate new file paths
+        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_new_files == 'true'
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
+            const allFiles = JSON.parse('${{ steps.changed-files.outputs.files }}');
+            const errors = [];
+
+            // 1. Validate new YAML files are in Parsers/ASim<Schema>/Parsers/
+            const parserPattern = /^Parsers\/(ASim\w+)\/Parsers\/(.+\.yaml)$/;
+            const newYamlFiles = newFiles.filter(f => parserPattern.test(f));
+            const invalidNewFiles = newFiles.filter(f => f.endsWith('.yaml') && !parserPattern.test(f));
+
+            if (invalidNewFiles.length > 0) {
+              errors.push(`New YAML files not in expected directory (Parsers/ASim<Schema>/Parsers/):\n${invalidNewFiles.map(f => '  - ' + f).join('\n')}`);
+            }
+
+            if (newYamlFiles.length !== 2) {
+              errors.push(`Expected exactly 2 new YAML files in Parsers/ASim<Schema>/Parsers/, found ${newYamlFiles.length}.`);
+            }
+
+            // 2. Extract schema from the directory name
+            const schemas = new Set(newYamlFiles.map(f => {
+              const match = f.match(parserPattern);
+              return match ? match[1] : null;
+            }).filter(Boolean));
+
+            if (schemas.size > 1) {
+              errors.push(`New YAML files span multiple schemas: ${[...schemas].join(', ')}. Expected a single schema.`);
+            }
+
+            const schema = [...schemas][0];
+            if (schema) {
+              const schemaName = schema.replace(/^ASim/, '');
+              core.info(`Detected schema: ${schemaName} (directory: ${schema})`);
+
+              // 3. Check that ASim<Schema>.yaml and im<Schema>.yaml are modified
+              const expectedEdited = [
+                `Parsers/${schema}/Parsers/${schema}.yaml`,
+                `Parsers/${schema}/Parsers/im${schemaName}.yaml`
+              ];
+              const modifiedFiles = allFiles.filter(f => !newFiles.includes(f));
+              for (const expected of expectedEdited) {
+                if (!modifiedFiles.includes(expected)) {
+                  errors.push(`Expected modified file not found: ${expected}`);
+                }
+              }
+
+              // 4. Check that new CHANGELOG md files exist (same name as new yaml files)
+              const newYamlBasenames = newYamlFiles.map(f => f.match(parserPattern)[2].replace('.yaml', ''));
+              const expectedNewChangelogs = newYamlBasenames.map(name => `Parsers/${schema}/CHANGELOG/${name}.md`);
+              for (const expected of expectedNewChangelogs) {
+                if (!newFiles.includes(expected)) {
+                  errors.push(`Expected new CHANGELOG file not found: ${expected}`);
+                }
+              }
+
+              // 5. Check that ASim<Schema>.md and im<Schema>.md in CHANGELOG are modified
+              const expectedEditedChangelogs = [
+                `Parsers/${schema}/CHANGELOG/${schema}.md`,
+                `Parsers/${schema}/CHANGELOG/im${schemaName}.md`
+              ];
+              for (const expected of expectedEditedChangelogs) {
+                if (!modifiedFiles.includes(expected)) {
+                  errors.push(`Expected modified CHANGELOG file not found: ${expected}`);
+                }
+              }
+            }
+
+            if (errors.length > 0) {
+              errors.forEach(e => core.error(e));
+              core.setFailed('PR file validation failed. See errors above.');
+            } else {
+              core.info('All file validations passed.');
+            }
