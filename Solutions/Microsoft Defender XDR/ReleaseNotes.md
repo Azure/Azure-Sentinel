@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                    |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
-| 3.0.14      | 09-02-2026                     | Added new **Hunting Query** Punycode chars lookalike domains.yaml.		       |
+| 3.0.14      | 09-06-2026                     | Added new **Hunting Queries** Punycode chars lookalike domains, Hunt for RMM tool execution following Teams messages, Hunt for alerts correlated with Teams messages and Identify acting user for reported phish. Also corrected the incorrect mapping of `dataTypes: EmailEvents` with `connectorId: OfficeATP` across multiple **Hunting Queries**.	       |
 | 3.0.13      | 22-01-2026                     | Updated Defender XDR solution with new **Hunting Queries**.				   |
 | 3.0.12      | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.11      | 16-12-2024                     | Updated **Analytic Rule** LocalAdminGroupChanges.yaml.<br> Updated **Workbook**.				   |
