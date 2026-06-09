@@ -8688,7 +8688,7 @@ def main() -> None:
                         "connector_id": "",
                         "connector_title": "",
                         "connector_publisher": "",
-                        "connector_file": str(relative_path),
+                        "relevant_file": str(relative_path),
                         "reason": "json_parse_error",
                         "details": f"Failed to parse JSON file: {json_path.name}",
                     })
