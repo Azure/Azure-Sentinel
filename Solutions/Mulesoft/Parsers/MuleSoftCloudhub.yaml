@@ -7,34 +7,121 @@ Category: Microsoft Sentinel Parser
 FunctionName: MuleSoftCloudhub
 FunctionAlias: MuleSoftCloudhub
 FunctionQuery: |
-    union isfuzzy=true MuleSoft_Cloudhub_CL, MuleSoftCloudhubLogs_CL, MulesoftCloudhubAlerts_CL
-    | extend EventVendor = 'MuleSoft',
-             EventProduct = 'Cloudhub',
-             EventCount = 1,
-             LastModified = unixtime_milliseconds_todatetime(lastModified_d),
-             CreatedAt = unixtime_milliseconds_todatetime(createdAt_d),
-             EventEndTime = unixtime_milliseconds_todatetime(event_timestamp_d)
-    | project-rename AdditionalData=actions_s,
-                     ConditionResourceType=condition_resourceType_s,
-                     ConditionResources=condition_resources_s,
-                     EventResultDetails=condition_type_s,
-                     DeploymentId=deploymentId_s,
-                     Enabled=enabled_b,
-                     EnvironmentId=environmentId_g,
-                     EventLoggerName=event_loggerName_s,
-                     EventMessage=event_message_s,
-                     EventPriority=event_priority_s,
-                     EventThreadName=event_threadName_s,
-                     EventType=event_type_s,
-                     EventOriginalUid=id_g,
-                     InstanceId=instanceId_s,
-                     IsSystem=isSystem_b,
-                     Line=line_d,
-                     EventResult=name_s,
-                     OrganizationId=organizationId_g,
-                     RecordId=recordId_s,
-                     EventSeverity=severity_s
-    | project-away productName_s,
-                   lastModified_d,
-                   createdAt_d,
-                   event_timestamp_d
+    let oldTable_view = view() {
+        MuleSoft_Cloudhub_CL
+        | extend
+            EventVendor = 'MuleSoft',
+            EventProduct = 'Cloudhub',
+            EventCount = 1,
+            EventOriginalUid = tostring(column_ifexists('id_g', '')),
+            EventResult = tostring(column_ifexists('name_s', '')),
+            EventSeverity = tostring(column_ifexists('severity_s', '')),
+            ProductName = tostring(column_ifexists('productName_s', '')),
+            AdditionalData = column_ifexists('actions_s', ''),
+            ConditionResourceType = tostring(column_ifexists('condition_resourceType_s', '')),
+            ConditionResources = tostring(column_ifexists('condition_resources_s', '')),
+            EventResultDetails = tostring(column_ifexists('condition_type_s', '')),
+            OrganizationId = tostring(column_ifexists('organizationId_g', '')),
+            EnvironmentId = tostring(column_ifexists('environmentId_g', '')),
+            Enabled = column_ifexists('enabled_b', bool(null)),
+            IsSystem = column_ifexists('isSystem_b', bool(null)),
+            LastModified = unixtime_milliseconds_todatetime(column_ifexists('lastModified_d', real(null))),
+            CreatedAt = unixtime_milliseconds_todatetime(column_ifexists('createdAt_d', real(null))),
+            EventEndTime = unixtime_milliseconds_todatetime(column_ifexists('event_timestamp_d', real(null))),
+            EventLoggerName = tostring(column_ifexists('event_loggerName_s', '')),
+            EventMessage = tostring(column_ifexists('event_message_s', '')),
+            EventPriority = tostring(column_ifexists('event_priority_s', '')),
+            EventThreadName = tostring(column_ifexists('event_threadName_s', '')),
+            InstanceId = tostring(column_ifexists('instanceId_s', '')),
+            DeploymentId = tostring(column_ifexists('deploymentId_s', '')),
+            RecordId = tostring(column_ifexists('recordId_s', '')),
+            EventType = tostring(column_ifexists('event_type_s', '')),
+            Line = column_ifexists('line_d', real(null))
+        | project
+            TimeGenerated, EventVendor, EventProduct, EventCount,
+            EventOriginalUid, EventResult, EventSeverity, ProductName,
+            AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,
+            OrganizationId, EnvironmentId, Enabled, IsSystem,
+            LastModified, CreatedAt, EventEndTime,
+            EventLoggerName, EventMessage, EventPriority, EventThreadName,
+            InstanceId, DeploymentId, RecordId, EventType, Line
+    };
+    let alertsTable_view = view() {
+        MulesoftCloudhubAlerts_CL
+        | extend
+            EventVendor = 'MuleSoft',
+            EventProduct = 'Cloudhub',
+            EventCount = 1,
+            EventOriginalUid = tostring(column_ifexists('Id', '')),
+            EventResult = tostring(column_ifexists('Name', '')),
+            EventSeverity = tostring(column_ifexists('Severity', '')),
+            ProductName = tostring(column_ifexists('ProductName', '')),
+            AdditionalData = column_ifexists('Actions', dynamic(null)),
+            ConditionResourceType = tostring(column_ifexists('Condition', dynamic(null)).resourceType),
+            ConditionResources = tostring(column_ifexists('Condition', dynamic(null)).resources),
+            EventResultDetails = tostring(column_ifexists('Condition', dynamic(null)).type),
+            OrganizationId = tostring(column_ifexists('OrganizationId', '')),
+            EnvironmentId = tostring(column_ifexists('EnvironmentId', '')),
+            Enabled = column_ifexists('Enabled', bool(null)),
+            IsSystem = column_ifexists('IsSystem', bool(null)),
+            LastModified = column_ifexists('LastModified', datetime(null)),
+            CreatedAt = column_ifexists('CreatedAt', datetime(null)),
+            EventEndTime = datetime(null),
+            EventLoggerName = '',
+            EventMessage = '',
+            EventPriority = '',
+            EventThreadName = '',
+            InstanceId = '',
+            DeploymentId = '',
+            RecordId = '',
+            EventType = '',
+            Line = real(null)
+        | project
+            TimeGenerated, EventVendor, EventProduct, EventCount,
+            EventOriginalUid, EventResult, EventSeverity, ProductName,
+            AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,
+            OrganizationId, EnvironmentId, Enabled, IsSystem,
+            LastModified, CreatedAt, EventEndTime,
+            EventLoggerName, EventMessage, EventPriority, EventThreadName,
+            InstanceId, DeploymentId, RecordId, EventType, Line
+    };
+    let logsTable_view = view() {
+        MuleSoftCloudhubLogs_CL
+        | extend
+            EventVendor = 'MuleSoft',
+            EventProduct = 'Cloudhub',
+            EventCount = 1,
+            EventOriginalUid = '',
+            EventResult = '',
+            EventSeverity = '',
+            ProductName = '',
+            AdditionalData = dynamic(null),
+            ConditionResourceType = '',
+            ConditionResources = '',
+            EventResultDetails = '',
+            OrganizationId = '',
+            EnvironmentId = '',
+            Enabled = bool(null),
+            IsSystem = bool(null),
+            LastModified = datetime(null),
+            CreatedAt = datetime(null),
+            EventEndTime = column_ifexists('EventTime', datetime(null)),
+            EventLoggerName = tostring(column_ifexists('Logger', '')),
+            EventMessage = tostring(column_ifexists('Message', '')),
+            EventPriority = tostring(column_ifexists('Level', '')),
+            EventThreadName = tostring(column_ifexists('Thread', '')),
+            InstanceId = tostring(column_ifexists('InstanceId', '')),
+            DeploymentId = '',
+            RecordId = '',
+            EventType = '',
+            Line = real(null)
+        | project
+            TimeGenerated, EventVendor, EventProduct, EventCount,
+            EventOriginalUid, EventResult, EventSeverity, ProductName,
+            AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,
+            OrganizationId, EnvironmentId, Enabled, IsSystem,
+            LastModified, CreatedAt, EventEndTime,
+            EventLoggerName, EventMessage, EventPriority, EventThreadName,
+            InstanceId, DeploymentId, RecordId, EventType, Line
+    };
+    union isfuzzy=true (oldTable_view), (alertsTable_view), (logsTable_view)
