@@ -461,9 +461,11 @@ There is a general limitation of ***3*** fields in the alert description. More i
 
 |Use Case|Analytic Rule|Custom Log Name
 |-|-|-|
-|Identity|RecordedFutureIdentityExposure|RecordedFutureIdentity_PlaybookAlertResults_CL
+|Identity|RecordedFutureIdentityExposure|RFI_PlaybookAlertResults_V2_CL
 
-These analytic are be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frecordedfuture%2FAzure-Sentinel%2FRFPD-77178-log-ingestion-api%2FSolutions%2FRecorded%20Future%20Identity%2FAnalytic%20Rules%2FIncidentCreation%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+
+These analytic rules are also available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
 
 <a id="known_issues"></a>
 ## Known Issues
