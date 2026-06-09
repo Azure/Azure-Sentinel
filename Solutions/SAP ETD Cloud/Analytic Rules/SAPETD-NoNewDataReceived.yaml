@@ -2,13 +2,7 @@ id: a9206c5a-3e72-4c10-807f-313a56075b20
 kind: Scheduled
 name: SAP ETD - No new data received
 description: |
-  Detects when no SAP Enterprise Threat Detection (ETD) data has been ingested into the SAPETDAlerts_CL table within the configured time window (default 1 hour).
-  A complete gap in the SAP ETD feed should be treated as a potential tampering / defense-evasion event: an adversary who has compromised the SAP landscape, the SAP ETD service, the data connector, or the network path between them may be intentionally blocking security telemetry from reaching Microsoft Sentinel to hide follow-on activity. Benign causes such as a service outage, connector failure, or maintenance window are also possible and should be ruled out during triage.
-  This rule is complementary to the per-SAP-system rule "SAP ETD - SAP system stopped reporting data", which can help distinguish a targeted silencing of a single system from a full-feed blackout.
-
-  To change the freshness threshold, update the `LookbackPeriod` variable in the query and align `queryFrequency` / `queryPeriod` accordingly.
-
-  *Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*
+  Identifies a complete gap in the SAP Enterprise Threat Detection (ETD) feed when no records have been ingested into the SAPETDAlerts_CL table within the configured time window (default 1 hour). A full-feed blackout may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) to hide follow-on activity in the SAP landscape. Benign causes such as a service outage, connector failure, or maintenance window are also possible and should be ruled out during triage. This rule is complementary to the per-SAP-system rule "SAP ETD - SAP system stopped reporting data", which can help distinguish a targeted silencing of a single system from a full-feed blackout. To change the freshness threshold, update the `LookbackPeriod` variable in the query and align `queryFrequency` / `queryPeriod` accordingly.
 severity: High
 status: Available
 requiredDataConnectors:
@@ -21,7 +15,6 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - DefenseEvasion
-  - Impact
 relevantTechniques:
   - T1562
   - T1562.006
@@ -37,11 +30,17 @@ query: |
   | extend
       LookbackPeriod = LookbackPeriod,
       TimeSinceLastIngestion = now() - coalesce(LastIngestionTime, datetime(null)),
+      FeedName = "SAPETD",
       Reason = iff(isnull(LastIngestionTime),
           "No SAPETDAlerts_CL records have ever been ingested.",
           strcat("No SAPETDAlerts_CL records ingested in the last ", tostring(LookbackPeriod), " (last ingestion: ", tostring(LastIngestionTime), ")."))
 eventGroupingSettings:
   aggregationKind: SingleAlert
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: FeedName
 alertDetailsOverride:
   alertDisplayNameFormat: 'SAP ETD - No new data received in the last {{LookbackPeriod}}'
   alertDescriptionFormat: |
