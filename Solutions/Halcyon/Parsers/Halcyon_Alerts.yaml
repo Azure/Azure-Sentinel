@@ -1,0 +1,47 @@
+id: d422cec7-d693-4bd6-b20b-6551c6ba4056
+Function:
+  Title: Parser for Halcyon Alerts
+  Version: '1.0.0'
+  LastUpdated: '2026-06-02'
+Category: Microsoft Sentinel Parser
+FunctionName: Halcyon_Alerts
+FunctionAlias: Halcyon_Alerts
+FunctionQuery: |
+    // Returns the latest state of each Halcyon alert. The Halcyon platform sends a full
+    // webhook payload for each alert creation and update, so a single alert (identified by
+    // HalcyonAlertId) can have multiple full rows in HalcyonAlertUpdates_CL. This parser
+    // collapses them to one row per alert, keeping the payload with the most recent
+    // HalcyonSourceTime (the platform event time of that webhook).
+    HalcyonAlertUpdates_CL
+    // Keep the most recent payload per alert. HalcyonSourceTime is millisecond precision,
+    // so ties are effectively impossible; if two payloads share a timestamp, arg_max picks
+    // one arbitrarily.
+    | summarize arg_max(HalcyonSourceTime, *) by HalcyonAlertId
+    | project
+            TimeGenerated,
+            HalcyonSourceTime,
+            HalcyonAlertId,
+            // Classification
+            activity_id, activity_name,
+            category_uid, category_name,
+            class_uid, class_name,
+            type_uid, type_name,
+            // Severity / Status
+            severity_id, severity,
+            status_id, status,
+            // Action / Disposition
+            action_id, action,
+            disposition_id, disposition,
+            // Alert body
+            ['count'],
+            message,
+            comment,
+            // Dynamic / nested objects
+            finding_info,
+            metadata,
+            device,
+            resources,
+            actor,
+            observables,
+            evidences,
+            unmapped
