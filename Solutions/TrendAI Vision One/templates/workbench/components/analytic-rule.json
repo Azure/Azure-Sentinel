@@ -1,0 +1,141 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "metadata": {
+                "description": "Location of the workspace"
+            }
+        }
+    },
+    "variables": {
+        "analyticRuleId": "[guid('workbench-analytic-rule', parameters('workspace'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('analyticRuleId'))]",
+            "apiVersion": "2023-02-01-preview",
+            "kind": "Scheduled",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "This Query creates an incident based on Trend Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.",
+                "displayName": "Trend Vision One - Create Incident for Workbench Alerts",
+                "enabled": false,
+                "query": "TrendMicroWorkbench_Complete\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                        severity_s == \"medium\", \"Low\",\n                        severity_s == \"high\", \"Medium\",\n                        \"High\"\n                        )",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "tactics": [],
+                "techniques": [],
+                "entityMappings": [
+                    {
+                        "fieldMappings": [
+                            {
+                                "columnName": "UserAccountName_s",
+                                "identifier": "Name"
+                            },
+                            {
+                                "columnName": "UserAccountNTDomain_s",
+                                "identifier": "NTDomain"
+                            }
+                        ],
+                        "entityType": "Account"
+                    },
+                    {
+                        "fieldMappings": [
+                            {
+                                "columnName": "FileName_s",
+                                "identifier": "Name"
+                            },
+                            {
+                                "columnName": "FileDirectory_s",
+                                "identifier": "Directory"
+                            }
+                        ],
+                        "entityType": "File"
+                    },
+                    {
+                        "fieldMappings": [
+                            {
+                                "columnName": "ProcessCommandLine_s",
+                                "identifier": "CommandLine"
+                            }
+                        ],
+                        "entityType": "Process"
+                    },
+                    {
+                        "fieldMappings": [
+                            {
+                                "columnName": "RegistryKey_s",
+                                "identifier": "Key"
+                            }
+                        ],
+                        "entityType": "RegistryKey"
+                    },
+                    {
+                        "fieldMappings": [
+                            {
+                                "columnName": "RegistryValueName_s",
+                                "identifier": "Name"
+                            },
+                            {
+                                "columnName": "RegistryValue_s",
+                                "identifier": "Value"
+                            }
+                        ],
+                        "entityType": "RegistryValue"
+                    }
+                ],
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                    "Provider": "alertProvider_s",
+                    "PriorityScore": "priorityScore_d",
+                    "ImpactScopeSummary": "impactScope_Summary_s",
+                    "WorkbenchID": "workbenchId_s",
+                    "WorkbenchLink": "workbenchLink_s",
+                    "WorkbenchName": "workbenchName_s",
+                    "Severity": "severity_s",
+                    "XDRCustomerID": "xdrCustomerID_g",
+                    "CreatedAt": "createdTime_t"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{workbenchName_s}}",
+                    "alertSeverityColumnName": "Severity",
+                    "alertDescriptionFormat": "{{description_s}}"
+                },
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "matchingMethod": "Selected",
+                        "enabled": true,
+                        "lookbackDuration": "PT5M",
+                        "reopenClosedIncident": false,
+                        "groupByCustomDetails": [
+                            "WorkbenchID"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "analyticRuleId": {
+            "type": "string",
+            "value": "[variables('analyticRuleId')]"
+        }
+    }
+}

@@ -1,0 +1,534 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass the arm-ttk test, 'Location-Should-Not-Be-Hardcoded'. Instead the `workspace-location` derived from the log analytics workspace is used."
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "metadata": {
+                "description": "Azure region where your Log Analytics workspace is located (e.g., centralus, eastus, westeurope)"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "string",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is configured"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "string",
+            "metadata": {
+                "description": "Resource group name where Microsoft Sentinel is configured"
+            }
+        },
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace where Microsoft Sentinel is enabled"
+            }
+        },
+        "trendaiRegion": {
+            "type": "string",
+            "defaultValue": "UK",
+            "allowedValues": [
+                "UK",
+                "US",
+                "SG",
+                "CA",
+                "JP"
+            ],
+            "metadata": {
+                "description": "TrendAI API region where your account is hosted"
+            }
+        },
+        "oatFilter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional TMV1-Filter for OAT API. Example: (riskLevel eq 'high'). Leave empty for no filter."
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "TrendAI-OAT",
+        "_solutionVersion": "3.0.1",
+        "_solutionAuthor": "TrendAI",
+        "_packageIcon": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-TrendAI-OAT",
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_solutionTier": "Community",
+        "_dataConnectorContentIdConnectorDefinition": "TrendAIOATConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "TrendAIOATConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_logAnalyticsTableId1": "OAT_CL",
+        "apiHostnames": {
+            "UK": "api.uk.xdr.trendmicro.com",
+            "US": "api.xdr.trendmicro.com",
+            "SG": "api.sg.xdr.trendmicro.com",
+            "CA": "api.ca.xdr.trendmicro.com",
+            "JP": "api.jp.xdr.trendmicro.com"
+        },
+        "selectedApiHostname": "[variables('apiHostnames')[parameters('trendaiRegion')]]",
+        "dceResourceId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/TrendAI-OAT-DCE')]",
+        "dcrResourceId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionRules/TrendAI-OAT-DCR')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspace-location')]",
+            "apiVersion": "2023-04-01-preview",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2024-01-15",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "TrendAI OAT (Observed Attack Techniques) data connector for Microsoft Sentinel",
+                "icon": "[variables('_packageIcon')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "TrendAI-OAT-DCE",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionEndpoints",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                                "networkAcls": {
+                                    "publicNetworkAccess": "Enabled"
+                                }
+                            }
+                        },
+                        {
+                            "name": "TrendAI-OAT-DCR",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'TrendAI-OAT-DCE')]",
+                                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('_logAnalyticsTableId1'))]"
+                            ],
+                            "properties":
+							{
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/TrendAI-OAT-DCE')]",
+                                "streamDeclarations": {
+                                    "Custom-OAT_CL": {
+                                        "columns": [
+                                            {"name": "source", "type": "string"},
+                                            {"name": "uuid", "type": "string"},
+                                            {"name": "detectedDateTime", "type": "datetime"},
+                                            {"name": "filters", "type": "dynamic"},
+                                            {"name": "detail", "type": "dynamic"},
+                                            {"name": "ingestedDateTime", "type": "datetime"},
+                                            {"name": "entityType", "type": "string"},
+                                            {"name": "entityName", "type": "string"},
+                                            {"name": "endpoint", "type": "dynamic"}
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "oatDestination"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": ["Custom-OAT_CL"],
+                                        "destinations": ["oatDestination"],
+                                        "transformKql": "source | extend TimeGenerated = detectedDateTime, endpointHostName = tostring(detail.endpointHostName), endpointIp = detail.endpointIp, filterRiskLevel = tostring(detail.filterRiskLevel), mitreTacticIds = filters[0].mitreTacticIds, mitreTechniqueIds = filters[0].mitreTechniqueIds, endpointGuid = tostring(endpoint.agentGuid), endpointIps = endpoint.ips | project-away detectedDateTime",
+                                        "outputStream": "Custom-OAT_CL"
+                                    }
+                                ]
+							}
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "apiVersion": "2022-10-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties":
+							{
+                                "totalRetentionInDays": 30,
+                                "plan": "Analytics",
+                                "retentionInDays": 30,
+                                "schema": {
+                                    "name": "[variables('_logAnalyticsTableId1')]",
+                                    "tableSubType": "DataCollectionRuleBased",
+                                    "tableType": "CustomLog",
+                                    "columns": [
+                                        {"name": "source", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "uuid", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "filters", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "detail", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "ingestedDateTime", "type": "datetime", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "entityType", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "entityName", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "endpoint", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "endpointHostName", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "endpointIp", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "filterRiskLevel", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "mitreTacticIds", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "mitreTechniqueIds", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "endpointGuid", "type": "string", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "endpointIps", "type": "dynamic", "isDefaultDisplay": false, "isHidden": false},
+                                        {"name": "TimeGenerated", "type": "datetime", "isDefaultDisplay": false, "isHidden": false}
+                                    ]
+                                }
+							}
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties":
+			{
+                "connectorUiConfig": {
+                    "id": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                    "title": "TrendAI OAT Detections",
+                    "publisher": "TrendAI",
+                    "logo": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik01LjI1MDEzIDkuNzM3MjdDNi4yMjk1NCAxMC43MzY3IDcuMTgzNzEgMTEuOTc0IDcuNDA1NTMgMTMuMjgwM0M3LjgwNDc2IDExLjA0MTIgMTAuODE3MiA3Ljk5MzM4IDEzLjA2NTcgNy42MDczMUMxMC44MzE4IDcuMjQ1MjkgNy43NjA0OSA0LjE3MjUxIDcuNDA1NyAxLjkyOTY5QzcuMDAzNDcgNC4xNDI2MiAzLjk3MDAzIDcuMjE3ODIgMS43NDUzNyA3LjYwNDAzQzMuMDQxOTIgNy44Mjc1OSA0LjI1NDcyIDguNzY0NjggNS4yNTAxMyA5LjczNzI3WiIgZmlsbD0iI0Q3MTkyMCIvPgo8cGF0aCBkPSJNMjMuMDgyMyAzLjMyNzY0QzIwLjc3MDcgMC41NjYwOTMgMTYuNDczMyAxLjQwOTQ5IDEzLjE1NCAyLjc1OTNDMTguNDIxOCAxLjA5NDcyIDIzLjI1MjQgMy4yODUwMiAyMC43MzE3IDkuNTQ2MTFDMTkuNDgzIDEyLjYyNDMgMTYuMzQyMSAxNS43NzI4IDEzLjMzMjIgMTcuNTUyNkMxMS43NDI4IDE4LjU4MDEgMTAuMDQyNyAxOS40NDU1IDguMTkwMDYgMTkuNzA0NkM1LjMzOTggMjAuMDk1NyAzLjYzMTY1IDE4LjYyNDIgNC4zNTY2MyAxNS42ODM3QzQuNTM5NDUgMTQuOTY1NyA0Ljg3MjI2IDE0LjI0MDggNS4yMDI2OCAxMy41MzU2QzQuNjU4NzIgMTIuMjQ0NiAzLjQ4ODM3IDEwLjkyMzkgMi4yMzIzOCAxMC41NTY5QzEuNTU1MzMgMTEuNTc1NiAxLjA2MjcyIDEyLjQ5NzcgMC41NjE0OTUgMTMuOTIzNUMtMC41NzI4MTIgMTYuOTg3OCAtMC4yMDIzMDIgMjEuNDg3MyAzLjY3MzY1IDIyLjQ2MDlDMTAuNzY2OCAyMy44NzQxIDIwLjM2MiAxNi4zMzQ2IDIzLjA5MzEgMTAuMDUxNUMyNC4yNjIgNy40MDM0NSAyNC4zNDU2IDQuOTU1ODggMjMuMDgyMyAzLjMyNzY0WiIgZmlsbD0iI0Q3MTkyMCIvPgo8L3N2Zz4K",
+                    "descriptionMarkdown": "The TrendAI OAT connector allows you to ingest Observed Attack Techniques detections from TrendAI into Microsoft Sentinel.",
+                    "graphQueriesTableName": "[variables('_logAnalyticsTableId1')]",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "OAT_CL",
+                            "baseQuery": "[variables('_logAnalyticsTableId1')]"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All OAT Detections",
+                            "query": "[concat(variables('_logAnalyticsTableId1'), '\n| sort by TimeGenerated desc')]"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "lastDataReceivedQuery": "[concat(variables('_logAnalyticsTableId1'), '\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)')]"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "availability": {
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "TrendAI API Key",
+                                "description": "A TrendAI API key is required to connect to the TrendAI OAT API."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect TrendAI OAT to Microsoft Sentinel",
+                            "description": "Provide your TrendAI API credentials to establish the connection. Note: Filter is configured during ARM template deployment.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "API Key",
+                                        "placeholder": "Enter your TrendAI API Key",
+                                        "type": "text",
+                                        "name": "apikey"
+                                    }
+                                },
+                                {
+                                    "type": "ConnectionToggleButton",
+                                    "parameters": {
+                                        "connectButtonLabel": "Connect",
+                                        "disconnectButtonLabel": "Disconnect"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+			}
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+                "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'), '/providers/Microsoft.SecurityInsights/contentTemplates/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters":
+					{
+                        "connectorDefinitionName": {
+                            "defaultValue": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "type": "object"
+                        },
+                        "apikey": {
+                            "defaultValue": "",
+                            "type": "securestring"
+                        },
+                        "tmv1filter": {
+                            "defaultValue": "[parameters('oatFilter')]",
+                            "type": "string"
+                        },
+                        "selectedApiHostname": {
+                            "defaultValue": "[variables('selectedApiHostname')]",
+                            "type": "string"
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'TrendAI-OAT')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties":
+							{
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dataType": "TrendAI OAT Detections",
+                                "dcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "streamName": "Custom-OAT_CL"
+                                },
+                                "auth": {
+                                    "type": "APIKey",
+                                    "apiKeyName": "Authorization",
+                                    "apiKey": "[[concat('Bearer ', parameters('apikey'))]"
+                                },
+                                "request": {
+                                    "apiEndpoint": "[[concat('https://', parameters('selectedApiHostname'), '/v3.0/oat/detections')]",
+                                    "httpMethod": "GET",
+                                    "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                                    "startTimeAttributeName": "detectedStartDateTime",
+                                    "endTimeAttributeName": "detectedEndDateTime",
+                                    "queryWindowInMin": 5,
+                                    "queryParameters": {
+                                        "top": "500"
+                                    },
+                                    "headers": "[[if(empty(parameters('tmv1filter')), json('{}'), json(concat('{\"TMV1-Filter\": \"', parameters('tmv1filter'), '\"}')))]",
+                                    "rateLimitQPS": 10,
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$.items"
+                                    ],
+                                    "format": "json"
+                                },
+                                "isActive": true
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        }
+    ]
+}

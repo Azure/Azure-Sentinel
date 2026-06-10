@@ -1,0 +1,114 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string"
+        },
+        "workspace-location": {
+            "type": "string"
+        },
+        "apikey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Trend Vision One API token (without 'Bearer' prefix)."
+            }
+        },
+        "trendaiRegion": {
+            "type": "string",
+            "allowedValues": [ "UK", "US", "SG", "CA", "JP" ],
+            "metadata": {
+                "description": "Trend Vision One region where the tenant is hosted."
+            }
+        },
+        "oatFilter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional TMV1-Filter expression. Example: (riskLevel eq 'high'). Leave empty for no filter."
+            }
+        },
+        "dceEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "Logs-ingestion endpoint URL of the Data Collection Endpoint."
+            }
+        },
+        "dcrImmutableId": {
+            "type": "string",
+            "metadata": {
+                "description": "Immutable ID of the Data Collection Rule."
+            }
+        },
+        "streamName": {
+            "type": "string",
+            "metadata": {
+                "description": "Stream name declared by the DCR (e.g. Custom-TrendMicro_XDR_OAT_V2_CL)."
+            }
+        }
+    },
+    "variables": {
+        "connectorId": "TrendMicro_XDR_OAT",
+        "apiHostnames": {
+            "UK": "api.uk.xdr.trendmicro.com",
+            "US": "api.xdr.trendmicro.com",
+            "SG": "api.sg.xdr.trendmicro.com",
+            "CA": "api.ca.xdr.trendmicro.com",
+            "JP": "api.jp.xdr.trendmicro.com"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2023-02-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorId'), '-connection')]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "RestApiPoller",
+            "properties": {
+                "connectorDefinitionName": "[variables('connectorId')]",
+                "dataType": "TrendMicro_XDR_OAT_V2_CL",
+                "dcrConfig": {
+                    "streamName": "[parameters('streamName')]",
+                    "dataCollectionEndpoint": "[parameters('dceEndpoint')]",
+                    "dataCollectionRuleImmutableId": "[parameters('dcrImmutableId')]"
+                },
+                "auth": {
+                    "type": "APIKey",
+                    "apiKeyName": "Authorization",
+                    "apiKey": "[concat('Bearer ', parameters('apikey'))]"
+                },
+                "request": {
+                    "apiEndpoint": "[concat('https://', variables('apiHostnames')[parameters('trendaiRegion')], '/v3.0/oat/detections')]",
+                    "rateLimitQPS": 10,
+                    "queryWindowInMin": 5,
+                    "httpMethod": "GET",
+                    "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "startTimeAttributeName": "detectedStartDateTime",
+                    "endTimeAttributeName": "detectedEndDateTime",
+                    "queryParameters": {
+                        "top": "500"
+                    },
+                    "headers": "[if(empty(parameters('oatFilter')), json('{}'), json(concat('{\"TMV1-Filter\": \"', parameters('oatFilter'), '\"}')))]",
+                    "retryCount": 3,
+                    "timeoutInSeconds": 60
+                },
+                "response": {
+                    "eventsJsonPaths": [
+                        "$.items"
+                    ],
+                    "format": "json"
+                },
+                "paging": {
+                    "pagingType": "LinkHeader",
+                    "linkHeaderTokenJsonPath": "$.nextLink"
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "connectorId": {
+            "type": "string",
+            "value": "[variables('connectorId')]"
+        }
+    }
+}

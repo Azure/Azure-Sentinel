@@ -1,0 +1,436 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "3.0.0.0",
+    "metadata": {
+        "description": "Microsoft-recommended pattern: DCR transforms scalar fields, arrays stored as dynamic, expanded by post-ingestion parsers"
+    },
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "metadata": {"description": "Log Analytics workspace name"}
+        },
+        "workspace-location": {
+            "type": "string",
+            "metadata": {"description": "Workspace Azure region"}
+        },
+        "trendaiRegion": {
+            "type": "string",
+            "defaultValue": "US",
+            "allowedValues": ["UK", "US", "SG", "CA", "JP"],
+            "metadata": {"description": "Trend Vision One region"}
+        },
+        "apikey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {"description": "Trend AI Vision One API Key (Bearer token without 'Bearer' prefix)"}
+        },
+        "tmv1Filter": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional: Filter expression to limit which alerts are ingested. Examples: investigationStatus eq 'New' and contains(impactScopeEntityValue,'nimda'). Leave empty to fetch all alerts."
+            }
+        }
+    },
+    "variables": {
+        "tableName": "TrendMicro_XDR_WORKBENCH_V2_CL",
+        "dceName": "TrendMicro-XDR-DCE",
+        "dcrName": "TrendMicro-XDR-Workbench-DCR",
+        "connectorId": "TrendMicro_XDR_Workbench",
+        "apiHostnames": {
+            "UK": "api.uk.xdr.trendmicro.com",
+            "US": "api.xdr.trendmicro.com",
+            "SG": "api.sg.xdr.trendmicro.com",
+            "CA": "api.ca.xdr.trendmicro.com",
+            "JP": "api.jp.xdr.trendmicro.com"
+        },
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('tableName')]",
+                    "columns": [
+                        {"name": "TimeGenerated", "type": "datetime"},
+                        {"name": "SourceSystem", "type": "string"},
+                        {"name": "MG", "type": "string"},
+                        {"name": "ManagementGroupName", "type": "string"},
+                        {"name": "Computer", "type": "string"},
+                        {"name": "RawData", "type": "string"},
+                        {"name": "workbenchId_s", "type": "string"},
+                        {"name": "schemaVersion_s", "type": "string"},
+                        {"name": "investigationStatus_s", "type": "string"},
+                        {"name": "alertStatus_s", "type": "string"},
+                        {"name": "investigationResult_s", "type": "string"},
+                        {"name": "workbenchLink_s", "type": "string"},
+                        {"name": "alertProvider_s", "type": "string"},
+                        {"name": "modelId_g", "type": "string"},
+                        {"name": "modelId_s", "type": "string"},
+                        {"name": "model_s", "type": "string"},
+                        {"name": "workbenchName_s", "type": "string"},
+                        {"name": "modelType_s", "type": "string"},
+                        {"name": "priorityScore_d", "type": "real"},
+                        {"name": "severity_s", "type": "string"},
+                        {"name": "createdTime_t", "type": "datetime"},
+                        {"name": "updatedTime_t", "type": "datetime"},
+                        {"name": "alertTriggerTimestamp_t", "type": "datetime"},
+                        {"name": "workbenchCompleteTimestamp_t", "type": "datetime"},
+                        {"name": "incidentId_s", "type": "string"},
+                        {"name": "description_s", "type": "string"},
+                        {"name": "desktopCount_d", "type": "real"},
+                        {"name": "serverCount_d", "type": "real"},
+                        {"name": "accountCount_d", "type": "real"},
+                        {"name": "emailAddressCount_d", "type": "real"},
+                        {"name": "containerCount_d", "type": "real"},
+                        {"name": "cloudIdentityCount_d", "type": "real"},
+                        {"name": "cloudWorkloadCount_d", "type": "real"},
+                        {"name": "indicators_s", "type": "string"},
+                        {"name": "indicators", "type": "dynamic"},
+                        {"name": "impactScope_s", "type": "string"},
+                        {"name": "impactScope_Summary_s", "type": "string"},
+                        {"name": "entities", "type": "dynamic"},
+                        {"name": "matchedRules_s", "type": "string"},
+                        {"name": "matchedRules", "type": "dynamic"},
+                        {"name": "xdrCustomerID_g", "type": "string"},
+                        {"name": "FileName_s", "type": "string"},
+                        {"name": "FileHashValue_s", "type": "string"},
+                        {"name": "DomainName_s", "type": "string"},
+                        {"name": "FileDirectory_s", "type": "string"},
+                        {"name": "IPAddress", "type": "string"},
+                        {"name": "URL_s", "type": "string"},
+                        {"name": "HostHostName_s", "type": "string"},
+                        {"name": "ProcessCommandLine_s", "type": "string"},
+                        {"name": "RegistryKey_s", "type": "string"},
+                        {"name": "RegistryValue_s", "type": "string"},
+                        {"name": "RegistryValueName_s", "type": "string"},
+                        {"name": "UserAccountNTDomain_s", "type": "string"},
+                        {"name": "UserAccountName_s", "type": "string"},
+                        {"name": "MailboxPrimaryAddress_s", "type": "string"},
+                        {"name": "MalwareName_s", "type": "string"}
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dceName')]",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "networkAcls": {"publicNetworkAccess": "Enabled"}
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dcrName')]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+                "streamDeclarations": {
+                    "Custom-TrendMicro_XDR_WORKBENCH_V2_CL": {
+                        "columns": [
+                            {"name": "id", "type": "string"},
+                            {"name": "schemaVersion", "type": "string"},
+                            {"name": "investigationStatus", "type": "string"},
+                            {"name": "status", "type": "string"},
+                            {"name": "investigationResult", "type": "string"},
+                            {"name": "workbenchLink", "type": "string"},
+                            {"name": "alertProvider", "type": "string"},
+                            {"name": "modelId", "type": "string"},
+                            {"name": "model", "type": "string"},
+                            {"name": "modelType", "type": "string"},
+                            {"name": "score", "type": "int"},
+                            {"name": "severity", "type": "string"},
+                            {"name": "createdDateTime", "type": "datetime"},
+                            {"name": "updatedDateTime", "type": "datetime"},
+                            {"name": "incidentId", "type": "string"},
+                            {"name": "description", "type": "string"},
+                            {"name": "impactScope", "type": "dynamic"},
+                            {"name": "indicators", "type": "dynamic"},
+                            {"name": "matchedRules", "type": "dynamic"}
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [{
+                        "workspaceResourceId": "[variables('workspaceResourceId')]",
+                        "name": "clv2ws1"
+                    }]
+                },
+                "dataFlows": [{
+                    "streams": ["Custom-TrendMicro_XDR_WORKBENCH_V2_CL"],
+                    "destinations": ["clv2ws1"],
+                    "transformKql": "source | extend TimeGenerated = todatetime(createdDateTime) | extend SourceSystem = 'RestAPI' | extend Computer = '' | extend MG = '' | extend ManagementGroupName = '' | extend RawData = tostring(indicators) | extend workbenchId_s = tostring(id) | extend schemaVersion_s = tostring(schemaVersion) | extend investigationStatus_s = tostring(investigationStatus) | extend alertStatus_s = tostring(status) | extend investigationResult_s = tostring(investigationResult) | extend workbenchLink_s = tostring(workbenchLink) | extend alertProvider_s = tostring(alertProvider) | extend modelId_g = tostring(modelId) | extend modelId_s = tostring(modelId) | extend model_s = tostring(model) | extend workbenchName_s = tostring(model) | extend modelType_s = tostring(modelType) | extend priorityScore_d = todouble(score) | extend severity_s = tostring(severity) | extend createdTime_t = todatetime(createdDateTime) | extend updatedTime_t = todatetime(updatedDateTime) | extend alertTriggerTimestamp_t = todatetime(createdDateTime) | extend workbenchCompleteTimestamp_t = todatetime(updatedDateTime) | extend incidentId_s = tostring(incidentId) | extend description_s = tostring(description) | extend desktopCount_d = todouble(impactScope.desktopCount) | extend serverCount_d = todouble(impactScope.serverCount) | extend accountCount_d = todouble(impactScope.accountCount) | extend emailAddressCount_d = todouble(impactScope.emailAddressCount) | extend containerCount_d = todouble(impactScope.containerCount) | extend cloudIdentityCount_d = todouble(impactScope.cloudIdentityCount) | extend cloudWorkloadCount_d = todouble(impactScope.cloudWorkloadCount) | extend indicators_dynamic = indicators | extend indicators_s = tostring(indicators) | extend impactScope_s = tostring(impactScope) | extend impactScope_Summary_s = tostring(impactScope) | extend entities = impactScope.entities | extend matchedRules_dynamic = matchedRules | extend matchedRules_s = tostring(matchedRules) | extend xdrCustomerID_g = '' | extend FileName_s = '' | extend FileHashValue_s = '' | extend DomainName_s = '' | extend FileDirectory_s = '' | extend IPAddress = '' | extend URL_s = '' | extend HostHostName_s = '' | extend ProcessCommandLine_s = '' | extend RegistryKey_s = '' | extend RegistryValue_s = '' | extend RegistryValueName_s = '' | extend UserAccountNTDomain_s = '' | extend UserAccountName_s = '' | extend MailboxPrimaryAddress_s = '' | extend MalwareName_s = '' | extend indicators = indicators_dynamic | extend matchedRules = matchedRules_dynamic | project-away id, schemaVersion, investigationStatus, status, investigationResult, workbenchLink, alertProvider, modelId, model, modelType, score, severity, createdDateTime, updatedDateTime, incidentId, description, impactScope, indicators_dynamic, matchedRules_dynamic",
+                    "outputStream": "Custom-TrendMicro_XDR_WORKBENCH_V2_CL"
+                }]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorId'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+            ],
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "[variables('connectorId')]",
+                    "title": "TrendAI Vision One - Workbench Data Connector",
+                    "publisher": "Trend AI",
+                    "logo": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik01LjI1MDEzIDkuNzM3MjdDNi4yMjk1NCAxMC43MzY3IDcuMTgzNzEgMTEuOTc0IDcuNDA1NTMgMTMuMjgwM0M3LjgwNDc2IDExLjA0MTIgMTAuODE3MiA3Ljk5MzM4IDEzLjA2NTcgNy42MDczMUMxMC44MzE4IDcuMjQ1MjkgNy43NjA0OSA0LjE3MjUxIDcuNDA1NyAxLjkyOTY5QzcuMDAzNDcgNC4xNDI2MiAzLjk3MDAzIDcuMjE3ODIgMS43NDUzNyA3LjYwNDAzQzMuMDQxOTIgNy44Mjc1OSA0LjI1NDcyIDguNzY0NjggNS4yNTAxMyA5LjczNzI3WiIgZmlsbD0iI0Q3MTkyMCIvPgo8cGF0aCBkPSJNMjMuMDgyMyAzLjMyNzY0QzIwLjc3MDcgMC41NjYwOTMgMTYuNDczMyAxLjQwOTQ5IDEzLjE1NCAyLjc1OTNDMTguNDIxOCAxLjA5NDcyIDIzLjI1MjQgMy4yODUwMiAyMC43MzE3IDkuNTQ2MTFDMTkuNDgzIDEyLjYyNDMgMTYuMzQyMSAxNS43NzI4IDEzLjMzMjIgMTcuNTUyNkMxMS43NDI4IDE4LjU4MDEgMTAuMDQyNyAxOS40NDU1IDguMTkwMDYgMTkuNzA0NkM1LjMzOTggMjAuMDk1NyAzLjYzMTY1IDE4LjYyNDIgNC4zNTY2MyAxNS42ODM3QzQuNTM5NDUgMTQuOTY1NyA0Ljg3MjI2IDE0LjI0MDggNS4yMDI2OCAxMy41MzU2QzQuNjU4NzIgMTIuMjQ0NiAzLjQ4ODM3IDEwLjkyMzkgMi4yMzIzOCAxMC41NTY5QzEuNTU1MzMgMTEuNTc1NiAxLjA2MjcyIDEyLjQ5NzcgMC41NjE0OTUgMTMuOTIzNUMtMC41NzI4MTIgMTYuOTg3OCAtMC4yMDIzMDIgMjEuNDg3MyAzLjY3MzY1IDIyLjQ2MDlDMTAuNzY2OCAyMy44NzQxIDIwLjM2MiAxNi4zMzQ2IDIzLjA5MzEgMTAuMDUxNUMyNC4yNjIgNy40MDM0NSAyNC4zNDU2IDQuOTU1ODggMjMuMDgyMyAzLjMyNzY0WiIgZmlsbD0iI0Q3MTkyMCIvPgo8L3N2Zz4K",
+                    "descriptionMarkdown": "**Microsoft-recommended architecture**: DCR transforms scalar fields, arrays stored as dynamic columns. Post-deployment: create 3 saved KQL functions for IOC/entity extraction. Fully backward-compatible schema.",
+                    "graphQueriesTableName": "TrendMicro_XDR_WORKBENCH_V2_CL",
+                    "dataTypes": [{
+                        "name": "TrendMicro_XDR_WORKBENCH_V2_CL",
+                        "lastDataReceivedQuery": "TrendMicro_XDR_WORKBENCH_V2_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }],
+                    "graphQueries": [{
+                        "metricName": "Total data received",
+                        "legend": "TrendMicro_XDR_WORKBENCH_V2_CL",
+                        "baseQuery": "TrendMicro_XDR_WORKBENCH_V2_CL"
+                    }],
+                    "sampleQueries": [
+                        {
+                            "description": "All Workbench Alerts (Raw Table)",
+                            "query": "TrendMicro_XDR_WORKBENCH_V2_CL | take 10"
+                        },
+                        {
+                            "description": "High/Critical Severity Alerts",
+                            "query": "TrendMicro_XDR_WORKBENCH_V2_CL | where severity_s in ('high', 'critical') | project TimeGenerated, workbenchId_s, workbenchName_s, severity_s, priorityScore_d"
+                        }
+                    ],
+                    "connectivityCriteria": [{
+                        "type": "HasDataConnectors"
+                    }],
+                    "availability": {"status": 1, "isPreview": false},
+                    "permissions": {
+                        "resourceProvider": [{
+                            "provider": "Microsoft.OperationalInsights/workspaces",
+                            "permissionsDisplayText": "Read and Write permissions required",
+                            "providerDisplayName": "Workspace",
+                            "scope": "Workspace",
+                            "requiredPermissions": {"write": true, "read": true, "delete": true}
+                        }]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "1. Get API Token",
+                            "description": "Obtain your Trend AI Vision One API token from the Administration Console",
+                            "instructions": [
+                                {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                        "text": "Log in to Trend AI Vision One Console → Administration → API Keys → Generate new API key with 'SIEM' role permissions"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "title": "2. Deploy Connector",
+                            "description": "Click Deploy below",
+                            "instructions": [
+                                {
+                                    "type": "InstallAgent",
+                                    "parameters": {}
+                                }
+                            ]
+                        },
+                        {
+                            "title": "3. Post-Deployment: Create Saved Functions",
+                            "description": "After deployment, create 3 saved KQL functions in Log Analytics for IOC/entity extraction. See deployment guide for function definitions.",
+                            "instructions": [
+                                {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                        "text": "Run the 3 KQL function creation scripts from the deployment package to enable IOC extraction from indicators/entities dynamic columns"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2023-02-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorId'), '-connection')]",
+            "location": "[parameters('workspace-location')]",
+            "condition": "[not(empty(parameters('apikey')))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', variables('connectorId'))]"
+            ],
+            "kind": "RestApiPoller",
+            "properties": {
+                "connectorDefinitionName": "[variables('connectorId')]",
+                "dataType": "TrendMicro_XDR_WORKBENCH_V2_CL",
+                "dcrConfig": {
+                    "streamName": "Custom-TrendMicro_XDR_WORKBENCH_V2_CL",
+                    "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2021-09-01-preview').logsIngestion.endpoint]",
+                    "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2021-09-01-preview').immutableId]"
+                },
+                "auth": {
+                    "type": "APIKey",
+                    "apiKeyName": "Authorization",
+                    "apiKey": "[concat('Bearer ', parameters('apikey'))]"
+                },
+                "request": {
+                    "apiEndpoint": "[concat('https://', variables('apiHostnames')[parameters('trendaiRegion')], '/v3.0/workbench/alerts')]",
+                    "rateLimitQPS": 1,
+                    "queryWindowInMin": 5,
+                    "httpMethod": "GET",
+                    "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                    "startTimeAttributeName": "startDateTime",
+                    "endTimeAttributeName": "endDateTime",
+                    "headers": {
+                        "TMV1-Filter": "[parameters('tmv1Filter')]"
+                    }
+                },
+                "response": {
+                    "eventsJsonPaths": ["$.items"],
+                    "format": "json"
+                },
+                "paging": {
+                    "pagingType": "LinkHeader",
+                    "linkHeaderTokenJsonPath": "$.nextLink"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', guid('workbench-analytic-rule', parameters('workspace')))]",
+            "apiVersion": "2023-02-01-preview",
+            "kind": "Scheduled",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+            ],
+            "properties": {
+                "description": "This Query creates an incident based on Trend Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.",
+                "displayName": "Trend Vision One - Create Incident for Workbench Alerts",
+                "enabled": false,
+                "query": "TrendMicroWorkbench_Complete\n| extend Severity = case(severity_s == \"low\", \"Informational\",\n                        severity_s == \"medium\", \"Low\",\n                        severity_s == \"high\", \"Medium\",\n                        \"High\"\n                        )",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "tactics": [],
+                "techniques": [],
+                "entityMappings": [
+                    {
+                        "fieldMappings": [
+                            {"columnName": "UserAccountName_s", "identifier": "Name"},
+                            {"columnName": "UserAccountNTDomain_s", "identifier": "NTDomain"}
+                        ],
+                        "entityType": "Account"
+                    },
+                    {
+                        "fieldMappings": [
+                            {"columnName": "FileName_s", "identifier": "Name"},
+                            {"columnName": "FileDirectory_s", "identifier": "Directory"}
+                        ],
+                        "entityType": "File"
+                    },
+                    {
+                        "fieldMappings": [
+                            {"columnName": "ProcessCommandLine_s", "identifier": "CommandLine"}
+                        ],
+                        "entityType": "Process"
+                    },
+                    {
+                        "fieldMappings": [
+                            {"columnName": "RegistryKey_s", "identifier": "Key"}
+                        ],
+                        "entityType": "RegistryKey"
+                    },
+                    {
+                        "fieldMappings": [
+                            {"columnName": "RegistryValueName_s", "identifier": "Name"},
+                            {"columnName": "RegistryValue_s", "identifier": "Value"}
+                        ],
+                        "entityType": "RegistryValue"
+                    }
+                ],
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "customDetails": {
+                    "Provider": "alertProvider_s",
+                    "PriorityScore": "priorityScore_d",
+                    "ImpactScopeSummary": "impactScope_Summary_s",
+                    "WorkbenchID": "workbenchId_s",
+                    "WorkbenchLink": "workbenchLink_s",
+                    "WorkbenchName": "workbenchName_s",
+                    "Severity": "severity_s",
+                    "XDRCustomerID": "xdrCustomerID_g",
+                    "CreatedAt": "createdTime_t"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{workbenchName_s}}",
+                    "alertSeverityColumnName": "Severity",
+                    "alertDescriptionFormat": "{{description_s}}"
+                },
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "matchingMethod": "Selected",
+                        "enabled": true,
+                        "lookbackDuration": "PT5M",
+                        "reopenClosedIncident": false,
+                        "groupByCustomDetails": ["WorkbenchID"]
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/workbooks",
+            "name": "[guid('workbench-workbook', parameters('workspace'))]",
+            "location": "[parameters('workspace-location')]",
+            "apiVersion": "2023-06-01",
+            "kind": "shared",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+            ],
+            "properties": {
+                "displayName": "TrendVisionOneWorkbenchOverview",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Trend Vision One - Workbench Alerts\\n---\\n[Trend Micro Success Portal](https://success.trendmicro.com)\\n\\nIf you have any feedback, please send to <xdrfeedback@trendmicro.com>\"},\"name\":\"text - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicroWorkbench_Complete\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(7d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Workbench Alerts Last 7 days\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicroWorkbench_Complete\\n| summarize Alerts = count() by bin(TimeGenerated,1d), severity_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Workbench Alerts Last 30 days\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicroWorkbench_Complete\\n| summarize Alerts = count() by bin(TimeGenerated,1d), model_s\\n| where TimeGenerated >= ago(30d)\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Detection Models in Last 30 Days\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicroWorkbench_Complete\\n| summarize Alerts = count() by severity_s\\n| render piechart\",\"size\":0,\"title\":\"Alerts by Severity\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"medium\",\"label\":\"Medium\",\"color\":\"orange\"},{\"seriesName\":\"high\",\"label\":\"High\",\"color\":\"redBright\"},{\"seriesName\":\"low\",\"label\":\"Low\",\"color\":\"yellow\"},{\"seriesName\":\"critical\",\"label\":\"Critical\",\"color\":\"redDark\"}]}},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TrendMicroWorkbench_Complete\\n| where isnotempty(HostHostName_s) and HostHostName_s != '[]'\\n| summarize Alerts = count() by HostHostName_s\\n| top 10 by Alerts desc\",\"size\":0,\"title\":\"Top 10 Affected Hosts\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 5\"}],\"styleSettings\":{},\"fromTemplateId\":\"sentinel-TrendVisionOneWorkbench\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+            }
+        }
+    ],
+    "outputs": {
+        "tableName": {
+            "type": "string",
+            "value": "[variables('tableName')]"
+        },
+        "analyticRuleId": {
+            "type": "string",
+            "value": "[guid('workbench-analytic-rule', parameters('workspace'))]"
+        },
+        "workbookId": {
+            "type": "string",
+            "value": "[guid('workbench-workbook', parameters('workspace'))]"
+        },
+        "message": {
+            "type": "string",
+            "value": "✅ Deployment complete! Deployed: Table, DCE, DCR, Data connector, Analytic rule (disabled), and Workbook. Next steps: 1) Deploy parser: Use templates/legacy/deploy-parser-function.json 2) Enable analytic rule: Sentinel → Analytics 3) View dashboard: Sentinel → Workbooks"
+        }
+    }
+}

@@ -1,0 +1,149 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "config": {
+            "isWizard": false,
+            "basics": {
+                "description": "**Trend Vision One - OAT (Observed Attack Techniques)** data connector ingests MITRE ATT&CK mapped detections from Trend Micro Vision One into Microsoft Sentinel.\n\n**Data ingestion:** Observed Attack Techniques with full process trees, file hashes, network indicators, and MITRE ATT&CK mappings.\n\n**Provide your Trend Vision One API token during deployment to enable the live poller.** If you leave it blank, the connector definition and supporting resources still deploy and you can attach credentials later from the Sentinel portal.",
+                "subscription": {
+                    "constraints": {
+                        "validations": []
+                    },
+                    "resourceProviders": [
+                        "Microsoft.OperationalInsights",
+                        "Microsoft.SecurityInsights",
+                        "Microsoft.Insights",
+                        "Microsoft.OperationsManagement"
+                    ]
+                },
+                "resourceGroup": {
+                    "constraints": {},
+                    "allowExisting": true
+                },
+                "location": {
+                    "label": "Location",
+                    "toolTip": "Location for all resources",
+                    "resourceTypes": [
+                        "Microsoft.OperationalInsights/workspaces"
+                    ]
+                }
+            }
+        },
+        "basics": [
+            {
+                "name": "getLAWorkspace",
+                "type": "Microsoft.Solutions.ArmApiControl",
+                "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+                "condition": "[greater(length(resourceGroup().name),0)]",
+                "request": {
+                    "method": "GET",
+                    "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+                }
+            },
+            {
+                "name": "workspace",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Workspace",
+                "placeholder": "Select a workspace",
+                "toolTip": "Select the Microsoft Sentinel workspace where you want to install the solution",
+                "constraints": {
+                    "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+                    "required": true
+                },
+                "visible": true
+            }
+        ],
+        "steps": [
+            {
+                "name": "trendConfig",
+                "label": "Trend Vision One Configuration",
+                "elements": [
+                    {
+                        "name": "trendaiRegion",
+                        "type": "Microsoft.Common.DropDown",
+                        "label": "Trend Vision One Region",
+                        "defaultValue": "United States",
+                        "toolTip": "Select the region where your Trend Vision One tenant is hosted",
+                        "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                                {
+                                    "label": "United States",
+                                    "value": "US"
+                                },
+                                {
+                                    "label": "United Kingdom / European Union",
+                                    "value": "UK"
+                                },
+                                {
+                                    "label": "Singapore / Asia Pacific",
+                                    "value": "SG"
+                                },
+                                {
+                                    "label": "Canada",
+                                    "value": "CA"
+                                },
+                                {
+                                    "label": "Japan",
+                                    "value": "JP"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "apiKeyInfo",
+                        "type": "Microsoft.Common.InfoBox",
+                        "options": {
+                            "icon": "Info",
+                            "text": "Generate your API token from: Trend Vision One Console → Administration → API Keys (SIEM role). Paste it below to enable the poller at deploy time. Leave it blank to defer credentials and attach them later via the Sentinel portal."
+                        }
+                    },
+                    {
+                        "name": "apikey",
+                        "type": "Microsoft.Common.PasswordBox",
+                        "label": {
+                            "password": "Trend Vision One API Token",
+                            "confirmPassword": "Confirm API Token"
+                        },
+                        "toolTip": "Bearer token (without the 'Bearer' prefix). Leave blank to skip the live poller; the rest of the connector still deploys.",
+                        "constraints": {
+                            "required": false,
+                            "regex": "",
+                            "validationMessage": ""
+                        },
+                        "options": {
+                            "hideConfirmation": true
+                        }
+                    },
+                    {
+                        "name": "oatFilter",
+                        "type": "Microsoft.Common.TextBox",
+                        "label": "Optional TMV1-Filter",
+                        "defaultValue": "",
+                        "toolTip": "Optional TMV1-Filter expression sent on every OAT API call. Example: (riskLevel eq 'high'). Leave empty for no filter.",
+                        "constraints": {
+                            "required": false
+                        }
+                    },
+                    {
+                        "name": "excludeThirdPartyOat",
+                        "type": "Microsoft.Common.CheckBox",
+                        "label": "Exclude third-party OAT detections (productCode == 'tlc')",
+                        "defaultValue": true,
+                        "toolTip": "When checked, the DCR transform drops rows where productCode == 'tlc' (third-party linked sources). Uncheck to ingest everything."
+                    }
+                ]
+            }
+        ],
+        "outputs": {
+            "workspace": "[basics('workspace')]",
+            "workspace-location": "[location()]",
+            "trendaiRegion": "[steps('trendConfig').trendaiRegion]",
+            "apikey": "[steps('trendConfig').apikey]",
+            "oatFilter": "[steps('trendConfig').oatFilter]",
+            "excludeThirdPartyOat": "[steps('trendConfig').excludeThirdPartyOat]"
+        }
+    }
+}
