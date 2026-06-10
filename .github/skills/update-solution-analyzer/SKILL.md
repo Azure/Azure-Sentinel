@@ -1,6 +1,6 @@
 ---
 name: update-solution-analyzer
-description: "MANDATORY guidelines for ANY edit to ANY file under Tools/Solutions Analyzer/ — including the mapper (map_solutions_connectors_tables.py), doc generator (generate_connector_docs.py), interactive docs (generate_interactive_docs.py), ASIM browser, collect_table_info, collect_asim_fields, upload_to_kusto, compare_runs, solution_analyzer_overrides.csv, filter_field_resolution.yaml, or any other script/config in that folder. Use when: editing/modifying/refactoring/fixing/renaming/tweaking ANY logic in those files, even one-line fixes such as renaming a classification, escaping a character, adjusting a regex, adding an override row, suppressing a false positive, or changing a constant. Covers: keeping script-docs in sync, README Version History changelog rules (MUST be updated on EVERY script change in the same commit), CSV output sync with upload_to_kusto.py, static/interactive index synchronization, and markdown/HTML entity page synchronization."
+description: "MANDATORY guidelines for ANY edit to ANY file under Tools/Solutions Analyzer/ — including the mapper (map_solutions_connectors_tables.py), doc generator (generate_connector_docs.py), interactive docs (generate_interactive_docs.py), ASIM browser, collect_table_info, collect_asim_fields, upload_to_kusto, compare_runs, solution_analyzer_overrides.csv, filter_field_resolution.yaml, or any other script/config in that folder. Use when: editing/modifying/refactoring/fixing/renaming/tweaking ANY logic in those files, even one-line fixes such as renaming a classification, escaping a character, adjusting a regex, adding an override row, suppressing a false positive, or changing a constant. Covers: keeping script-docs in sync, README Version History changelog rules (required for feature/behavior changes; optional for small bug fixes), CSV output sync with upload_to_kusto.py, static/interactive index synchronization, and markdown/HTML entity page synchronization."
 ---
 
 # Update Solution Analyzer Scripts
@@ -19,9 +19,9 @@ When updating a script, update the corresponding doc in `script-docs/` to reflec
 
 ## README Changelog
 
-**MANDATORY for every script change, including small fixes.** Renames, escape-character tweaks, regex adjustments, override-row additions, false-positive suppressions, and one-line behavior changes all qualify and must appear in the changelog. There is no "too small to log" threshold for Solutions Analyzer scripts.
+**Required for feature additions and behavior changes; optional for small bug fixes.** New features, changed analysis logic, new/renamed/removed CSV columns, parameter changes, and other user-visible behavior changes must appear in the changelog. Pure bug fixes — such as correcting a typo, fixing a crash, escape-character tweaks, regex corrections, or one-line fixes that restore intended behavior without changing it — may be logged at your discretion but are not required.
 
-Update the `## Version History` section in `Tools/Solutions Analyzer/README.md`:
+When a changelog entry is warranted, update the `## Version History` section in `Tools/Solutions Analyzer/README.md`:
 - Add the change under the **latest version heading** at the top of the changelog
 - If the latest version has not been committed yet (i.e., it already has uncommitted changes in the changelog), add to that existing version — do **not** create a new version entry
 - If the latest version was already committed, create a new version entry with an incremented version number and a short descriptive title

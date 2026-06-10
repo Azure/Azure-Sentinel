@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 try:
     import urllib.request
@@ -636,7 +636,7 @@ _force_refresh_types: Set[str] = set()
 
 # Analysis types that can be cached
 # Offline types (no network access needed): asim, parsers, solutions, standalone
-# Online types (require network access): marketplace, tables
+# Online types (require network access): marketplace, tables, learn_docs
 ANALYSIS_TYPES = {
     "asim": "ASIM parser analysis",
     "parsers": "Non-ASIM parser analysis",
@@ -644,10 +644,11 @@ ANALYSIS_TYPES = {
     "standalone": "Standalone content item analysis",
     "marketplace": "Marketplace availability check",
     "tables": "Table reference info from Microsoft docs",
+    "learn_docs": "Microsoft Learn data-connectors-reference anchors",
 }
 
 # Analysis types that require network access
-ONLINE_ANALYSIS_TYPES = {"marketplace", "tables"}
+ONLINE_ANALYSIS_TYPES = {"marketplace", "tables", "learn_docs"}
 
 
 def init_cache(cache_dir: Path, force_refresh: str = "") -> None:
@@ -3712,7 +3713,7 @@ def extract_schema_from_arm_table_files(solutions_dir: Path) -> Dict[str, List[D
 
 def find_companion_table_files(connector_json_path: Path) -> Tuple[List[Path], List[Path]]:
     """
-    Find *_Table.json and *_DCR.json files in the same directory as a connector JSON.
+    Find companion table/DCR JSON files in the same directory as a connector JSON.
     
     These companion files often contain table definitions that aren't embedded
     in the connector definition itself (common with CCP/CCF connectors).
@@ -3729,12 +3730,53 @@ def find_companion_table_files(connector_json_path: Path) -> Tuple[List[Path], L
     
     for file_path in parent_dir.glob("*.json"):
         name_lower = file_path.name.lower()
-        if name_lower.endswith("_table.json"):
+        if name_lower.endswith("table.json"):
             table_files.append(file_path)
-        elif name_lower.endswith("_dcr.json"):
+        elif name_lower.endswith("dcr.json"):
             dcr_files.append(file_path)
     
     return table_files, dcr_files
+
+
+def is_solution_package_template(data: Any) -> bool:
+    """
+    Return True if an ARM template is a full *solution-package* deployment template
+    rather than a standalone data-connector definition.
+
+    Packaged Sentinel solutions emit a single ``contentPackages`` resource
+    (``Microsoft.OperationalInsights/workspaces/providers/contentPackages``) that
+    describes the whole solution. Such templates also bundle analytic rules,
+    hunting queries, playbooks, workbooks, and parsers as ``contentTemplates``.
+
+    These package templates are sometimes committed inside a solution's
+    ``Data Connectors`` folder (e.g. ``azuredeploy_*.json``). When that happens
+    they must NOT be treated as connector sources: the connectors they embed are
+    already discovered from their authoritative ``*_DataConnectorDefinition.json`` /
+    ``Connector_*.json`` files. Mining the package template instead produces a
+    phantom connector with the wrong title (an embedded legacy resource) and a
+    merged/incorrect table list.
+
+    Detection is name-agnostic and keys solely on the presence of a
+    ``contentPackages`` resource, which never appears in a genuine standalone
+    connector ARM template.
+
+    Args:
+        data: Parsed JSON content of the candidate file.
+
+    Returns:
+        True if the file is a solution-package template, False otherwise.
+    """
+    if not isinstance(data, dict):
+        return False
+    resources = data.get("resources")
+    if not isinstance(resources, list):
+        return False
+    for resource in resources:
+        if isinstance(resource, dict):
+            resource_type = resource.get("type")
+            if isinstance(resource_type, str) and resource_type.lower().endswith("contentpackages"):
+                return True
+    return False
 
 
 # CCF config file name patterns (lowercased for matching)
@@ -4363,9 +4405,32 @@ def find_connector_readme(solution_dir: Path) -> str:
     """
 
 
+# Top-level JSON files in a solution's Data folder that look like a solution
+# definition but are generated side-cars, never the authoritative definition.
+_NON_DEFINITION_DATA_FILES = {"system_generated_metadata.json", "solutionmetadata.json"}
+
+# Content arrays that only ever appear in a real solution definition file.
+_SOLUTION_DEFINITION_CONTENT_KEYS = (
+    "Data Connectors", "Analytic Rules", "Workbooks", "Parsers",
+    "Playbooks", "Hunting Queries", "Watchlists",
+)
+
+
+def _looks_like_solution_definition(data: Any) -> bool:
+    """Heuristic test for a solution definition JSON.
+
+    A real definition has a top-level "Name" plus at least one content array
+    (Data Connectors, Analytic Rules, Workbooks, ...). Used as a fallback when
+    the standard ``Solution_*.json`` naming convention is not followed.
+    """
+    if not isinstance(data, dict) or "Name" not in data:
+        return False
+    return any(k in data for k in _SOLUTION_DEFINITION_CONTENT_KEYS)
+
+
 def find_solution_json(solution_dir: Path) -> Optional[Dict[str, Any]]:
     """
-    Find and read the Solution_*.json file from the Data folder.
+    Find and read the solution definition JSON from the Data folder.
     
     The Solution JSON contains metadata like Name, Logo, Author, Version, Description,
     and lists of content items. This is more accurate than SolutionMetadata.json for
@@ -4377,6 +4442,7 @@ def find_solution_json(solution_dir: Path) -> Optional[Dict[str, Any]]:
     Returns:
         Parsed JSON content or None if not found
     """
+    # Primary: standard Solution_*.json naming convention.
     # Check both "Data" and "data" folders (case-insensitive)
     for data_folder_name in ["Data", "data"]:
         data_dir = solution_dir / data_folder_name
@@ -4388,6 +4454,27 @@ def find_solution_json(solution_dir: Path) -> Optional[Dict[str, Any]]:
             data = read_json(json_path)
             if data and isinstance(data, dict):
                 return data
+    
+    # Fallback: some solutions use a non-standard definition file name, e.g.
+    # "Solutions_AzureDataLake.json" (plural), "CTM360.json" (no prefix), or
+    # "OpenSystems_Solution_Input.json". When no Solution_*.json matched, scan
+    # the Data folder for a definition-shaped JSON, excluding generated metadata
+    # side-cars. Only adopt it when exactly one candidate is found, so a
+    # "system_generated_metadata.json"-style look-alike can never be mistaken
+    # for the authoritative definition.
+    for data_folder_name in ["Data", "data"]:
+        data_dir = solution_dir / data_folder_name
+        if not data_dir.exists():
+            continue
+        candidates = []
+        for json_path in sorted(data_dir.glob("*.json")):
+            if json_path.name.lower() in _NON_DEFINITION_DATA_FILES:
+                continue
+            data = read_json(json_path)
+            if _looks_like_solution_definition(data):
+                candidates.append(data)
+        if len(candidates) == 1:
+            return candidates[0]
     
     return None
 
@@ -4540,7 +4627,321 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
 # Marketplace cache filename (stored in .cache folder)
 MARKETPLACE_CACHE_FILENAME = "marketplace_data.json"
 
-# Fields extracted from marketplace API response
+# ----- Microsoft Learn data-connectors-reference anchors -----
+# The mapper enriches each connector with a deep-link to its section on the
+# Microsoft Learn `data-connectors-reference` page when the connector's title
+# slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page.
+LEARN_DOCS_URL = "https://learn.microsoft.com/azure/sentinel/data-connectors-reference"
+LEARN_DOCS_CACHE_FILENAME = "data_connectors_reference_anchors.json"
+LEARN_DOCS_HTML_CACHE_FILENAME = "data_connectors_reference.html"
+_LEARN_ANCHOR_RE = re.compile(r'<a\s+(?:[^>]*?\s+)?name="([^"]+)"', re.IGNORECASE)
+_LEARN_SLUG_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Trailing qualifier suffixes that Learn appends to anchor slugs but that the
+# in-repo connector title may render differently (or omit). When a primary
+# slug doesn't match an anchor, we strip these from both sides and try the
+# bare base, then re-add each variant. Order matters: longer first.
+_LEARN_QUALIFIER_SUFFIXES = (
+    "using-azure-functions",
+    "using-azure-function",
+    "via-codeless-connector-framework",
+    "via-legacy-agent",
+    "polling-ccf",
+    "polling-ccp",  # typo on Learn for a couple of entries
+    "via-ama",
+    "ccf",
+    "ccp",  # typo on Learn for a couple of entries (e.g. box-events-ccp)
+    "preview",
+)
+_LEARN_QUALIFIER_STRIP_RE = re.compile(
+    r"-(?:" + "|".join(_LEARN_QUALIFIER_SUFFIXES) + r")(?=-|$)",
+    re.IGNORECASE,
+)
+# Trailing -v<digits> on a slug (e.g., `-v1`, `-v2`). Learn typically exposes
+# a single anchor per topic; stripping this from the slug base lets V1/V2
+# analyzer connectors collapse onto that single Learn anchor.
+_LEARN_VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=-|$)", re.IGNORECASE)
+# Trailing parenthesised clause on a title (e.g., `Cloudflare (Preview)`).
+_LEARN_PAREN_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
+# Leading bracket marketing prefix on a title (`[Recommended]`,
+# `[Preview]`, `[Deprecated]`) and on a Learn anchor slug
+# (`recommended-`, `preview-`, `deprecated-`).
+_LEARN_BRACKET_PREFIX_RE = re.compile(
+    r"^\s*\[(?:recommended|preview|deprecated)\]\s*", re.IGNORECASE
+)
+_LEARN_ANCHOR_PREFIX_RE = re.compile(
+    r"^(?:recommended|preview|deprecated)-", re.IGNORECASE
+)
+_LEARN_DASH_RUN_RE = re.compile(r"-+")
+
+
+def _slugify_for_learn(text: str) -> str:
+    """GitHub-style slugify used by the Microsoft Learn TOC.
+
+    Lowercases the input, replaces every run of non-alphanumeric characters
+    with a single hyphen, and strips leading/trailing hyphens. This matches
+    the way Learn generates anchor names for data-connectors-reference
+    section headings.
+    """
+    if not text:
+        return ""
+    return _LEARN_SLUG_NON_ALNUM_RE.sub("-", text.lower()).strip("-")
+
+
+# Characters that the Learn page's heading-anchor generator drops entirely
+# (no replacement, no dash). Spaces and `-` are handled separately.
+_LEARN_ANCHOR_DROP_RE = re.compile(r"[&/().:,;'\"!?\[\]{}|*<>=+@#$%^`~\\]")
+_LEARN_ANCHOR_KEEP_RE = re.compile(r"[^a-z0-9\-]")
+
+
+def _slugify_learn_anchor(text: str) -> str:
+    """Reproduce the Learn data-connectors-reference anchor algorithm.
+
+    Unlike `_slugify_for_learn` (which collapses every non-alnum run to a
+    single dash), the live Learn page drops certain punctuation outright
+    (so `Pub/Sub` -> `pubsub`, `Audit & Authentication` -> `audit--auth…`)
+    and preserves consecutive dashes (so `XDR - Incidents` -> `xdr---incidents`).
+
+    Rules, applied in order:
+      1. Lowercase.
+      2. Drop characters in `_LEARN_ANCHOR_DROP_RE` with no replacement.
+      3. Replace each whitespace character with `-`.
+      4. Drop any remaining non `[a-z0-9-]` character.
+      5. Strip leading/trailing `-`. Consecutive `-` are preserved.
+    """
+    if not text:
+        return ""
+    s = text.lower()
+    s = _LEARN_ANCHOR_DROP_RE.sub("", s)
+    s = "".join("-" if c.isspace() else c for c in s)
+    s = _LEARN_ANCHOR_KEEP_RE.sub("", s)
+    return s.strip("-")
+
+
+def fetch_learn_docs_html(cache_dir: Path, force_refresh: bool = False) -> str:
+    """Fetch (and cache) the raw Learn `data-connectors-reference` HTML.
+
+    Shared by both the anchor-set extractor and out-of-band consumers (e.g.,
+    the `reports/learn_docs_audit.py` audit). The HTML is cached at
+    `.cache/data_connectors_reference.html`. Returns an empty string on any
+    fetch/network failure.
+    """
+    html_cache = cache_dir / LEARN_DOCS_HTML_CACHE_FILENAME
+    if not force_refresh and html_cache.exists():
+        try:
+            return html_cache.read_text(encoding="utf-8")
+        except Exception as e:
+            log_print(f"  Warning: could not read cached Learn HTML: {e}")
+
+    if not HAS_URLLIB:
+        return ""
+
+    log_print(f"  Fetching Microsoft Learn HTML from {LEARN_DOCS_URL} …")
+    try:
+        request = urllib.request.Request(
+            LEARN_DOCS_URL,
+            headers={"User-Agent": "Mozilla/5.0 (Azure-Sentinel-Solutions-Analyzer)"},
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            html = response.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        log_print(f"  Warning: failed to fetch Learn docs page: {e}")
+        return ""
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        html_cache.write_text(html, encoding="utf-8")
+        log_print(f"    Cached {len(html):,} bytes → {html_cache.name}")
+    except Exception as e:
+        log_print(f"  Warning: could not save Learn HTML cache: {e}")
+
+    return html
+
+
+def fetch_learn_docs_anchors(cache_dir: Path, force_refresh: bool = False) -> Set[str]:
+    """Fetch (and cache) the set of `<a name="…">` anchors on the Learn page.
+
+    The Microsoft Learn `data-connectors-reference` page is a single very
+    large document (~5 MB) with one `<a name="connector-slug">` anchor per
+    connector section. We fetch it at most once per cache lifetime; pass
+    `--force-refresh=learn_docs` to refetch.
+
+    Maintains two cache artefacts:
+      * `data_connectors_reference.html` — the raw page (shared with the
+        out-of-band audit report).
+      * `data_connectors_reference_anchors.json` — the extracted anchor
+        index, regenerated whenever the HTML is re-fetched.
+
+    Returns:
+        Set of anchor names (lowercase slugs). Empty set on any failure.
+    """
+    cache_file = cache_dir / LEARN_DOCS_CACHE_FILENAME
+
+    if not force_refresh and cache_file.exists():
+        try:
+            with cache_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            anchors = set(data.get("anchors") or [])
+            if anchors:
+                return anchors
+        except Exception as e:
+            log_print(f"  Warning: could not load Learn docs anchor cache: {e}")
+
+    html = fetch_learn_docs_html(cache_dir, force_refresh=force_refresh)
+    if not html:
+        return set()
+
+    anchors = {m.group(1).lower() for m in _LEARN_ANCHOR_RE.finditer(html)}
+    log_print(f"    Found {len(anchors)} anchors on the Learn data-connectors-reference page")
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        with cache_file.open("w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "url": LEARN_DOCS_URL,
+                    "fetched_at": datetime.now().isoformat(timespec="seconds"),
+                    "anchors": sorted(anchors),
+                },
+                f,
+                indent=2,
+            )
+    except Exception as e:
+        log_print(f"  Warning: could not save Learn docs anchor cache: {e}")
+
+    return anchors
+
+
+def _learn_base_slug(slug: str) -> str:
+    r"""Strip trailing Learn qualifier suffixes (e.g. `-using-azure-functions`,
+    `-ccf`, `-via-legacy-agent`, `-preview`) and any trailing `-v\d+` from a
+    slug, repeatedly, until no more strip away. Used to align analyzer titles
+    against Learn anchors that carry different (or extra) qualifier suffixes
+    or that collapse V1/V2 analyzer connectors onto a single Learn anchor.
+    """
+    if not slug:
+        return slug
+    prev = None
+    cur = slug
+    while prev != cur:
+        prev = cur
+        cur = _LEARN_QUALIFIER_STRIP_RE.sub("", cur).rstrip("-")
+        cur = _LEARN_VERSION_SUFFIX_RE.sub("", cur).rstrip("-")
+    return cur
+
+
+def build_learn_anchor_lookup(anchors: Set[str]) -> Dict[str, str]:
+    """Build a normalised lookup `{key: original_anchor}` over Learn anchors.
+
+    The lookup adds extra keys that absorb common normalisation differences
+    between in-repo connector titles and Learn page anchor slugs:
+      * the raw anchor itself;
+      * the anchor with runs of `-` collapsed to single `-`
+        (so `mimecast-audit--authentication-using-azure-functions`
+         is reachable as the GitHub-style slug);
+      * the anchor with a leading `recommended-` / `preview-` /
+        `deprecated-` prefix stripped (Learn sometimes carries these,
+        in-repo titles usually do not);
+      * both transformations combined.
+    Later additions never overwrite earlier ones, so the raw anchor wins.
+    """
+    lookup: Dict[str, str] = {}
+    def _add(key: str, anchor: str) -> None:
+        if key and key not in lookup:
+            lookup[key] = anchor
+
+    for anchor in anchors:
+        _add(anchor, anchor)
+    for anchor in anchors:
+        collapsed = _LEARN_DASH_RUN_RE.sub("-", anchor).strip("-")
+        _add(collapsed, anchor)
+        stripped = _LEARN_ANCHOR_PREFIX_RE.sub("", anchor)
+        _add(stripped, anchor)
+        stripped_collapsed = _LEARN_DASH_RUN_RE.sub("-", stripped).strip("-")
+        _add(stripped_collapsed, anchor)
+    return lookup
+
+
+def resolve_learn_doc_url(connector_title: str, anchors) -> str:
+    r"""Return the Learn deep-link URL for a connector title, or '' if no match.
+
+    `anchors` is either a `Set[str]` of raw anchors (legacy callers) or a
+    pre-built lookup dict from `build_learn_anchor_lookup`. Passing the
+    lookup avoids rebuilding it for every connector.
+
+    Matching strategy (first hit wins):
+      1. Primary slug of the title (GitHub-style and Learn-anchor flavour).
+      2. Same, with `[Recommended]` / `[Preview]` / `[Deprecated]` bracketed
+         prefix stripped.
+      3. Same, after stripping each trailing `(…)` clause iteratively
+         (e.g. `Cloudflare (Preview) (using Azure Functions)` → `Cloudflare`).
+      4. Base slug (all trailing qualifier suffixes and `-v\d+` stripped)
+         combined with each known Learn qualifier suffix.
+      5. The bare base slug, in case Learn omits qualifiers entirely.
+    All variants are also checked against a normalised anchor lookup so
+    that double-dashes and `recommended-`/`deprecated-` prefixes on the
+    Learn side do not block a match.
+    """
+    if not connector_title or not anchors:
+        return ""
+
+    lookup: Dict[str, str]
+    if isinstance(anchors, dict):
+        lookup = anchors
+    else:
+        lookup = build_learn_anchor_lookup(set(anchors))
+
+    candidates: List[str] = []
+
+    def _add(slug: str) -> None:
+        if slug and slug not in candidates:
+            candidates.append(slug)
+
+    def _add_slug_variants(text: str) -> None:
+        if not text:
+            return
+        primary = _slugify_for_learn(text)
+        _add(primary)
+        _add(_slugify_learn_anchor(text))
+        if primary:
+            base = _learn_base_slug(primary)
+            if base and base != primary:
+                for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                    _add(f"{base}-{suffix}")
+                _add(base)
+            else:
+                for suffix in _LEARN_QUALIFIER_SUFFIXES:
+                    _add(f"{primary}-{suffix}")
+
+    _add_slug_variants(connector_title)
+
+    # Strip bracketed marketing prefixes like `[Recommended]` / `[Preview]` /
+    # `[Deprecated]` that the in-repo title carries but Learn anchors usually
+    # do not (Learn deprecated entries become `deprecated-<slug>` anchors,
+    # absorbed via the lookup normalisation).
+    cleaned = _LEARN_BRACKET_PREFIX_RE.sub("", connector_title)
+    if cleaned != connector_title:
+        _add_slug_variants(cleaned)
+
+    # Iteratively strip trailing `(…)` clauses from the title and try the
+    # result at each step (handles `Cloudflare (Preview) (using Azure Functions)`,
+    # `Auth0 Logs (via Codeless Connector Framework)`, `Abnormal Security (Push)`).
+    cur = cleaned
+    while True:
+        new = _LEARN_PAREN_SUFFIX_RE.sub("", cur).rstrip()
+        if new == cur or not new:
+            break
+        _add_slug_variants(new)
+        cur = new
+
+    for slug in candidates:
+        anchor = lookup.get(slug)
+        if anchor:
+            return f"{LEARN_DOCS_URL}#{anchor}"
+
+    return ""
+
+
 MARKETPLACE_FIELDS = [
     'mp_is_published',
     'mp_url',
@@ -4722,7 +5123,10 @@ def check_marketplace_availability(publisher_id: str, offer_id: str) -> Dict[str
 
     # Build the API URL
     legacy_id = f"{publisher_id}.{offer_id}"
-    api_url = f"{AZURE_MARKETPLACE_API_URL}/{legacy_id}?api-version={AZURE_MARKETPLACE_API_VERSION}"
+    # URL-encode the legacy id path segment: some publisher/offer ids contain
+    # spaces (e.g. "Red Canary"), which raise urllib InvalidURL before any
+    # request is made and were silently swallowed as "assume published".
+    api_url = f"{AZURE_MARKETPLACE_API_URL}/{quote(legacy_id, safe='')}?api-version={AZURE_MARKETPLACE_API_VERSION}"
 
     try:
         request = urllib.request.Request(api_url)
@@ -6063,7 +6467,6 @@ def _connector_folders_from_files(
         rel = url[len(prefix):]
         # Decode percent-encoding (e.g. %20 -> space).
         try:
-            from urllib.parse import unquote
             rel = unquote(rel)
         except Exception:
             pass
@@ -8496,6 +8899,8 @@ def main() -> None:
     
     # Track connector documentation status (filename -> not_in_solution_json)
     connector_not_in_solution_json: Dict[str, str] = {}
+    # Connector-level DCR definition URLs discovered from companion DCR files.
+    connector_dcr_definition_files: Dict[str, List[str]] = {}
     
     # Track all solutions and identify those without any connectors
     all_solutions_info: Dict[str, Dict[str, str]] = {}
@@ -8693,6 +9098,34 @@ def main() -> None:
                         "details": f"Failed to parse JSON file: {json_path.name}",
                     })
                     continue
+
+                # Skip full solution-package ARM templates that happen to live in the
+                # Data Connectors folder (e.g. azuredeploy_*.json that bundle analytic
+                # rules, hunting queries, playbooks, parsers and a contentPackages
+                # resource). They are deployment artifacts, not connector definitions;
+                # the connectors they embed are discovered from their authoritative
+                # *_DataConnectorDefinition.json / Connector_*.json files. Mining the
+                # package template yields a phantom connector (wrong title + merged
+                # tables), so drop it here.
+                if is_solution_package_template(data):
+                    add_issue(
+                        issues,
+                        solution_name=solution_info["solution_name"],
+                        solution_folder=solution_info["solution_folder"],
+                        connector_id="",
+                        connector_title="",
+                        connector_publisher="",
+                        relevant_file=safe_relative(json_path, data_connectors_dir),
+                        reason="solution_package_template_skipped",
+                        details=(
+                            f"Skipped '{json_path.name}': it is a full solution-package "
+                            f"ARM template (has a contentPackages resource), not a "
+                            f"connector definition. Its connectors are discovered from "
+                            f"their own definition files."
+                        ),
+                    )
+                    continue
+
                 connector_entries = find_connector_objects(data)
                 if not connector_entries:
                     continue
@@ -8710,13 +9143,34 @@ def main() -> None:
 
                 # Phase 2: Filter out azuredeploy entries that duplicate a definition file
                 if is_azuredeploy_file:
+                    # Titles that already have a literal (non-generated) id within THIS
+                    # azuredeploy file. A generated-id entry sharing such a title is an
+                    # intra-file phantom duplicate: some azuredeploy wrappers emit both a
+                    # resource whose id resolves to a literal value AND a second resource
+                    # whose id is an unresolvable ARM expression (so it gets a synthetic
+                    # title-derived id). For example Cisco Meraki's
+                    # azuredeploy_Cisco_Meraki_native_poller_connector.json yields both the
+                    # literal "CiscoMerakiNativePoller" and a title-generated
+                    # "CiscoMeraki(usingRESTAPI)" — both titled "Cisco Meraki (using REST
+                    # API)". They describe the same connector, so the generated one is
+                    # dropped. (The pre-existing cross-file dedup below still handles the
+                    # literal-id-in-a-separate-definition-file case.)
+                    local_literal_id_by_title = {
+                        e.get("title", ""): e.get("id", "")
+                        for e in connector_entries
+                        if not e.get("id_generated", False) and e.get("title")
+                    }
                     filtered_entries = []
                     for entry in connector_entries:
                         if entry.get("id_generated", False):
                             title = entry.get("title", "")
                             key = (parent_dir_key, title)
+                            real_id = None
                             if key in definition_title_by_dir:
                                 real_id = definition_title_by_dir[key]
+                            elif title and title in local_literal_id_by_title:
+                                real_id = local_literal_id_by_title[title]
+                            if real_id is not None:
                                 synthetic_id = entry.get("id", "")
                                 add_issue(
                                     issues,
@@ -8729,7 +9183,7 @@ def main() -> None:
                                     reason="azuredeploy_duplicate_skipped",
                                     details=f"Skipped azuredeploy wrapper connector '{synthetic_id}' "
                                             f"(synthetic ID from title); same title already registered "
-                                            f"from definition file with literal ID '{real_id}'.",
+                                            f"with literal ID '{real_id}'.",
                                 )
                                 continue  # Skip this duplicate entry
                         filtered_entries.append(entry)
@@ -8769,6 +9223,7 @@ def main() -> None:
                 # Priority 2: Extract from *_DCR.json files
                 # Trust tables from companion files - they are explicitly defined
                 dcr_schema_rows_for_file: List[Dict[str, str]] = []
+                dcr_definition_urls_for_file: List[str] = []
                 for dcr_json_path in dcr_json_files:
                     dcr_tables = extract_tables_from_dcr_json(dcr_json_path)
                     for tbl_name, tbl_info in dcr_tables.items():
@@ -8785,6 +9240,7 @@ def main() -> None:
                     # Extract schema information from this DCR file
                     dcr_relative = safe_relative(dcr_json_path, repo_root)
                     dcr_github_url = f"{GITHUB_REPO_URL}/{quote(str(dcr_relative).replace(chr(92), '/'))}"
+                    dcr_definition_urls_for_file.append(dcr_github_url)
                     schema_rows = extract_schema_from_dcr_json(dcr_json_path)
                     for row in schema_rows:
                         row["dcr_file"] = str(dcr_relative)
@@ -8793,20 +9249,40 @@ def main() -> None:
                         row["source_url"] = dcr_github_url
                         row["description"] = ""
                     dcr_schema_rows_for_file.extend(schema_rows)
+
+                if dcr_definition_urls_for_file:
+                    unique_dcr_urls = sorted(set(dcr_definition_urls_for_file))
+                    for entry in connector_entries:
+                        # Connector entries may use either connector_id or id depending on source shape.
+                        conn_id = entry.get('connector_id', '') or entry.get('id', '')
+                        if not conn_id:
+                            continue
+                        existing_urls = connector_dcr_definition_files.setdefault(conn_id, [])
+                        for dcr_url in unique_dcr_urls:
+                            if dcr_url not in existing_urls:
+                                existing_urls.append(dcr_url)
                 
-                # Priority 3: Query analysis from connector JSON
-                query_tables = {k: v for k, v in extract_tables(data).items() if k.lower() != "let"}
-                for tbl_name, tbl_info in query_tables.items():
-                    # Accept both valid tables and known parser names (parsers will be expanded later)
-                    tbl_name_normalized = normalize_parser_name(tbl_name)
-                    if is_valid_table_candidate(tbl_name) or tbl_name_normalized in parser_names_lower:
-                        if tbl_name not in table_map:
-                            table_map[tbl_name] = tbl_info
-                        else:
-                            # Merge sources
-                            existing_sources = table_map[tbl_name].get("sources", set())
-                            if isinstance(existing_sources, set):
-                                existing_sources.update(tbl_info.get("sources", set()))
+                # Priority 3: Query analysis from connector JSON.
+                # When authoritative companion *_Table.json / *_DCR.json files already
+                # define the connector's tables, treat the DCR/Table files as the ground
+                # truth for what the connector ingests and skip query analysis. Connector
+                # UI status queries (e.g. lastDataReceivedQuery) frequently run through a
+                # parser that unions legacy tables; mining them would otherwise attach
+                # non-ingested tables to the connector (e.g. a v2 CCF connector picking up
+                # a legacy *_CL table via its shared parser). The DCR trumps when present.
+                if not tables_from_companion_files:
+                    query_tables = {k: v for k, v in extract_tables(data).items() if k.lower() != "let"}
+                    for tbl_name, tbl_info in query_tables.items():
+                        # Accept both valid tables and known parser names (parsers will be expanded later)
+                        tbl_name_normalized = normalize_parser_name(tbl_name)
+                        if is_valid_table_candidate(tbl_name) or tbl_name_normalized in parser_names_lower:
+                            if tbl_name not in table_map:
+                                table_map[tbl_name] = tbl_info
+                            else:
+                                # Merge sources
+                                existing_sources = table_map[tbl_name].get("sources", set())
+                                if isinstance(existing_sources, set):
+                                    existing_sources.update(tbl_info.get("sources", set()))
                 
                 log_table_candidates = extract_log_analytics_tables(data)
                 used_loganalytics_fallback = False
@@ -9348,6 +9824,12 @@ def main() -> None:
     connector_info_map: Dict[str, Dict[str, Any]] = {}
     # Track connector -> json_content for collection method detection
     connector_json_content: Dict[str, Tuple[str, str]] = {}  # connector_id -> (json_content, filename)
+    # Track whether each (solution_folder, connector_id) was matched to the Solution
+    # definition file, and which solutions have at least one matched connector. Used by
+    # the post-loop filter to drop folder-only connector artifacts from solutions that
+    # ship a working definition file.
+    documented_by_sol_conn: Dict[Tuple[str, str], bool] = {}
+    solutions_with_documented_connector: Set[str] = set()
     
     for row_key in sorted(grouped_rows.keys()):
         path_map = grouped_rows[row_key]
@@ -9426,17 +9908,20 @@ def main() -> None:
         
         # Track connector info for connectors.csv
         connector_id = row_key[12]
-        if connector_id and connector_id not in connector_info_map:
-            # Check if any connector file is documented in Solution JSON
-            # Extract filenames from the GitHub URLs and check against our tracking
-            solution_folder = row_key[1]
-            connector_files_list = github_urls
-            is_documented = False
-            for github_url in connector_files_list:
-                # Extract filename from GitHub URL
-                filename = github_url.split('/')[-1] if github_url else ""
-                connector_file_key = f"{solution_folder}:{filename}"
-                if connector_not_in_solution_json.get(connector_file_key) == "false":
+        solution_folder = row_key[1]
+        # Determine whether this connector is referenced by the Solution definition file
+        # (i.e. documented). Computed for every row so the post-loop filter can drop
+        # folder-only connector artifacts from solutions that ship a working definition.
+        is_documented = False
+        if connector_id:
+            for github_url in github_urls:
+                # github_url is URL-encoded (quote()), but connector_not_in_solution_json
+                # is keyed by the raw on-disk filename. Decode before lookup, otherwise any
+                # connector whose Data Connectors file name contains a space or parenthesis
+                # (e.g. "CEF AMA.json", "Windows Firewall.json") fails to match and is
+                # wrongly treated as undocumented.
+                filename = unquote(github_url.split('/')[-1]) if github_url else ""
+                if connector_not_in_solution_json.get(f"{solution_folder}:{filename}") == "false":
                     is_documented = True
                     break
             # Also check mainTemplate and synthetic connector entries
@@ -9445,6 +9930,12 @@ def main() -> None:
                     if connector_not_in_solution_json.get(f"{solution_folder}:{suffix}") == "false":
                         is_documented = True
                         break
+            if is_documented:
+                solutions_with_documented_connector.add(solution_folder)
+                documented_by_sol_conn[(solution_folder, connector_id)] = True
+            elif (solution_folder, connector_id) not in documented_by_sol_conn:
+                documented_by_sol_conn[(solution_folder, connector_id)] = False
+        if connector_id and connector_id not in connector_info_map:
             not_in_json = "false" if is_documented else "true"
             
             connector_info_map[connector_id] = {
@@ -9460,6 +9951,120 @@ def main() -> None:
                 'solution_folder': row_key[1],  # Solution folder for README lookup
                 'not_in_solution_json': not_in_json,
             }
+
+    # ------------------------------------------------------------------
+    # Canonical attribution fix: the per-connector connectors.csv record takes
+    # its not_in_solution_json from the FIRST mapping row encountered for that
+    # connector_id. A connector can legitimately appear in several rows sourced
+    # from different files — e.g. the 1Password connector is mapped from both
+    # the definition-referenced "1Password_API_FunctionApp.json" (documented)
+    # and a non-referenced "deployment/1Password_data_connector.json" wrapper.
+    # If the undocumented row happens to be processed first, the canonical
+    # record is wrongly flagged not_in_solution_json="true" ("discovered") even
+    # though the connector IS referenced by the solution definition through
+    # another file. Re-assert the canonical flag as documented ("false")
+    # whenever the connector id is documented in ANY (solution, connector)
+    # association.
+    # ------------------------------------------------------------------
+    documented_any_cids = {
+        cid for (_folder, cid), is_doc in documented_by_sol_conn.items() if is_doc
+    }
+    for cid in documented_any_cids:
+        info = connector_info_map.get(cid)
+        if info is not None and info.get("not_in_solution_json") == "true":
+            info["not_in_solution_json"] = "false"
+
+    # ------------------------------------------------------------------
+    # Flag folder-discovered connectors that are NOT referenced by the
+    # Solution definition file as UNPUBLISHED (not on the content hub),
+    # but ONLY for solutions that HAVE a working definition (i.e. at least
+    # one of their connectors matched the Solution JSON).
+    #
+    # Rationale: when a Solution JSON exists and references its connectors,
+    # that definition is authoritative for what ships to the content hub.
+    # Extra connector artifacts left in the Data Connectors folder
+    # (legacy/superseded poller templates, sample files, ARM wrappers that
+    # mint phantom IDs, etc.) are still real, discovered connectors and are
+    # RETAINED, but because they are absent from the shipped definition they
+    # are not published to the content hub. We keep them and mark
+    # is_published=false in the marketplace/is_published pass below, rather
+    # than deleting them. When NO connector matched the definition (no
+    # Solution JSON, or it references none of the discovered connectors), the
+    # folder is the only discovery source and we cannot reliably distinguish a
+    # genuinely-unpublished connector from a definition-matching miss, so those
+    # are left at their solution-level marketplace status.
+    #
+    # Two collaborating structures are produced here and consumed in the
+    # is_published pass:
+    #   * folder_only_sol_conn      -> per-(folder, connector) associations that
+    #                                  are folder-only; used to mark the matching
+    #                                  mapping rows is_published=false.
+    #   * unpublished_folder_only_ids -> connector_ids that are folder-only in
+    #                                  EVERY solution they appear in (never
+    #                                  documented anywhere); used to mark the
+    #                                  canonical connectors.csv record
+    #                                  is_published=false. A connector documented
+    #                                  by at least one solution stays published
+    #                                  through that solution.
+    # ------------------------------------------------------------------
+    folder_only_sol_conn: Dict[Tuple[str, str], Tuple[str, str]] = {}  # (folder,cid) -> (solution_name, title)
+    unpublished_folder_only_ids: Set[str] = set()  # connector_ids folder-only in every solution
+    if solutions_with_documented_connector:
+        for row in rows:
+            cid = row.get("connector_id", "")
+            folder = row.get("solution_folder", "")
+            if (
+                cid
+                and folder in solutions_with_documented_connector
+                and documented_by_sol_conn.get((folder, cid)) is False
+            ):
+                folder_only_sol_conn[(folder, cid)] = (
+                    row.get("solution_name", ""),
+                    row.get("connector_title", ""),
+                )
+
+        # A connector is unpublished by this rule only if EVERY solution it
+        # appears in is folder-only. Any connector with at least one row that is
+        # NOT a folder-only association is documented somewhere and remains
+        # published through that solution.
+        documented_cids = {
+            row.get("connector_id", "")
+            for row in rows
+            if row.get("connector_id")
+            and (row.get("solution_folder", ""), row.get("connector_id", "")) not in folder_only_sol_conn
+        }
+        unpublished_folder_only_ids = {
+            cid for (_folder, cid) in folder_only_sol_conn if cid not in documented_cids
+        }
+
+        # Record each folder-only (solution, connector) association in the
+        # issues report. The connector is retained but flagged unpublished.
+        for (folder, cid), (sol_name, title) in sorted(folder_only_sol_conn.items()):
+            add_issue(
+                issues,
+                solution_name=sol_name,
+                solution_folder=folder,
+                connector_id=cid,
+                connector_title=title,
+                connector_publisher="",
+                relevant_file="",
+                reason="connector_not_in_solution_definition",
+                details=(
+                    f"Connector '{cid}' was discovered by scanning the '{folder}' "
+                    f"Data Connectors folder but is not referenced by the solution "
+                    f"definition file (Solution_*.json). Because this solution has a "
+                    f"working definition that references other connectors, this "
+                    f"folder-only artifact does not ship to the content hub; it is "
+                    f"retained but marked is_published=false."
+                ),
+            )
+        if folder_only_sol_conn:
+            log_print(
+                f"  Flagged {len(folder_only_sol_conn)} folder-only mapping row(s) "
+                f"covering {len(unpublished_folder_only_ids)} connector(s) not "
+                f"referenced by their solution definition file as unpublished "
+                f"(retained, is_published=false)."
+            )
 
     # Build connector -> tables mapping BEFORE filter field extraction
     # This allows filter fields to use the connector's known tables as context
@@ -9597,7 +10202,6 @@ def main() -> None:
             candidate_folders: List[Path] = []
             connector_files = info.get('connector_files', '')
             if connector_files:
-                from urllib.parse import unquote
                 first_url = connector_files.split(';')[0]
                 parts = unquote(first_url).split('/')
                 try:
@@ -9778,6 +10382,7 @@ def main() -> None:
             'solution_name': info.get('solution_name', ''),
             'is_deprecated': 'true' if is_deprecated else 'false',
             'deprecation_date': connector_deprecation_date,
+            'dcr_definition_files': ';'.join(connector_dcr_definition_files.get(connector_id, [])),
             'ccf_config_file': ccf_config_url,
             'ccf_capabilities': ccf_capabilities_str,
         })
@@ -10095,17 +10700,30 @@ def main() -> None:
         mp = marketplace_status.get(solution_name, _default_mp)
         mapping['is_published'] = mp.get('mp_is_published', 'true')
     
-    # Add is_published to connectors data
+    # Add is_published to connectors data. A connector that is not referenced
+    # by its solution's definition file (Solution_*.json) does not ship to the
+    # content hub, so it is marked unpublished regardless of the solution's own
+    # marketplace availability (see the folder-only flagging pass above).
     for connector in connectors_data:
         solution_name = connector.get('solution_name', '')
         mp = marketplace_status.get(solution_name, _default_mp)
-        connector['is_published'] = mp.get('mp_is_published', 'true')
+        if connector.get('connector_id', '') in unpublished_folder_only_ids:
+            connector['is_published'] = 'false'
+        else:
+            connector['is_published'] = mp.get('mp_is_published', 'true')
     
-    # Add is_published to main mapping rows
+    # Add is_published to main mapping rows. A folder-only (solution, connector)
+    # association is absent from that solution's definition file and therefore
+    # is not published to the content hub for that solution, even if the
+    # connector is published through a different solution.
     for row in rows:
         solution_name = row.get('solution_name', '')
         mp = marketplace_status.get(solution_name, _default_mp)
-        row['is_published'] = mp.get('mp_is_published', 'true')
+        key = (row.get('solution_folder', ''), row.get('connector_id', ''))
+        if key in folder_only_sol_conn:
+            row['is_published'] = 'false'
+        else:
+            row['is_published'] = mp.get('mp_is_published', 'true')
     
     # Collect standalone content items from top-level directories
     log_print("\nCollecting standalone content items from top-level directories...")
@@ -10760,7 +11378,22 @@ def main() -> None:
         connectors_data = apply_overrides_to_data(connectors_data, overrides, 'solution', 'solution_name')
         all_content_items = apply_overrides_to_data(all_content_items, overrides, 'solution', 'solution_name')
         content_table_mappings = apply_overrides_to_data(content_table_mappings, overrides, 'solution', 'solution_name')
-        
+
+        # Re-assert the definition-authoritative unpublished flag. The
+        # solution-level is_published overrides applied just above (and to
+        # `rows` earlier, before table_support_tiers) are keyed by
+        # solution_name and would otherwise re-publish folder-only connectors
+        # that are absent from their solution's definition file. The
+        # definition-authoritative rule wins, so force those back to
+        # is_published=false here, after all overrides have been applied.
+        for connector in connectors_data:
+            if connector.get('connector_id', '') in unpublished_folder_only_ids:
+                connector['is_published'] = 'false'
+        for row in rows:
+            key = (row.get('solution_folder', ''), row.get('connector_id', ''))
+            if key in folder_only_sol_conn:
+                row['is_published'] = 'false'
+
         log_print(f"Applied overrides to data")
 
     # Identify internal use tables: custom tables (_CL) written by playbooks AND used by non-playbook content
@@ -11268,6 +11901,27 @@ def main() -> None:
 
     log_print(f"  Found {clv1_table_count} CLv1 tables and {clv1_connector_count} connectors using CLv1 tables")
 
+    # Enrich connectors with Microsoft Learn deep-links from the
+    # `data-connectors-reference` page (cached; refetch with
+    # --force-refresh=learn_docs).
+    learn_anchors = fetch_learn_docs_anchors(
+        cache_dir,
+        force_refresh=("learn_docs" in _force_refresh_types),
+    )
+    learn_lookup = build_learn_anchor_lookup(learn_anchors) if learn_anchors else {}
+    learn_matched = 0
+    for connector in connectors_data:
+        title = connector.get('connector_title', '')
+        url = resolve_learn_doc_url(title, learn_lookup) if learn_lookup else ''
+        connector['learn_doc_url'] = url
+        if url:
+            learn_matched += 1
+    if learn_anchors:
+        log_print(
+            f"  Matched {learn_matched} of {len(connectors_data)} connectors "
+            f"to Microsoft Learn anchors"
+        )
+
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
         "Table",
@@ -11326,11 +11980,13 @@ def main() -> None:
         'is_deprecated',
         'deprecation_date',
         'is_published',
+        'dcr_definition_files',
         'ccf_config_file',
         'ccf_capabilities',
         'ingestion_api',
         'ingestion_api_reason',
         'is_clv1',
+        'learn_doc_url',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
