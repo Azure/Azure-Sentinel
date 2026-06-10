@@ -342,7 +342,7 @@ jobs:
       #   and sends it to the GitHub Models API (GPT-5) for review.
       #   Only runs if the PR has the "SafeToRun" label.
       # ----------------------------------------------------------------
-      - name: Analyze YAML files with LLM
+      - name: Analyze parsers for ASIM best practices
         if: steps.check-safe-to-run.outputs.is_safe == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         env:
@@ -353,20 +353,25 @@ jobs:
             const yaml = require('js-yaml');
             const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
             const parserPattern = /^Parsers\/ASim\w+\/Parsers\/(.+)\.yaml$/;
-            // Only analyze the ASim-prefixed file (not the vim-prefixed variant)
-            const newYamlFiles = newFiles.filter(f => {
+
+            // Separate new YAML files into ASim-prefixed and vim-prefixed parsers
+            const asimFiles = newFiles.filter(f => {
               const match = f.match(parserPattern);
               return match && match[1].startsWith('ASim');
             });
+            const vimFiles = newFiles.filter(f => {
+              const match = f.match(parserPattern);
+              return match && match[1].startsWith('vim');
+            });
 
-            // Extract ParserQuery from the new ASim-prefixed YAML file
-            const parserQueries = [];
-            for (const filePath of newYamlFiles) {
+            // Extract ParserQuery from the ASim-prefixed YAML file
+            let asimParserQuery = null;
+            for (const filePath of asimFiles) {
               try {
                 const content = fs.readFileSync(filePath, 'utf8');
                 const parsed = yaml.load(content);
                 if (parsed && parsed.ParserQuery) {
-                  parserQueries.push(`### ${filePath}\n\`\`\`kql\n${parsed.ParserQuery}\n\`\`\``);
+                  asimParserQuery = { file: filePath, query: parsed.ParserQuery };
                 } else {
                   core.warning(`No ParserQuery found in: ${filePath}`);
                 }
@@ -375,9 +380,34 @@ jobs:
               }
             }
 
-            if (parserQueries.length === 0) {
+            // Extract ParserQuery from the vim-prefixed YAML file
+            let vimParserQuery = null;
+            for (const filePath of vimFiles) {
+              try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const parsed = yaml.load(content);
+                if (parsed && parsed.ParserQuery) {
+                  vimParserQuery = { file: filePath, query: parsed.ParserQuery };
+                } else {
+                  core.warning(`No ParserQuery found in: ${filePath}`);
+                }
+              } catch (err) {
+                core.warning(`Could not read/parse file: ${filePath} - ${err.message}`);
+              }
+            }
+
+            if (!asimParserQuery && !vimParserQuery) {
               core.info('No ParserQuery fields found in new YAML files. Skipping LLM analysis.');
               return;
+            }
+
+            core.info(`ASim parser: ${asimParserQuery?.file || 'not found'}`);
+            core.info(`vim parser: ${vimParserQuery?.file || 'not found'}`);
+
+            // Build the query content for the LLM prompt
+            const parserQueries = [];
+            if (asimParserQuery) {
+              parserQueries.push(`### ${asimParserQuery.file}\n\`\`\`kql\n${asimParserQuery.query}\n\`\`\``);
             }
 
             // Send the ParserQuery to the LLM for review
@@ -471,3 +501,83 @@ jobs:
               issue_number: context.payload.pull_request.number,
               body: body
             });
+
+            // Analyze the vim-prefixed parser query, passing the previous
+            // conversation as context so the LLM has awareness of the ASim review.
+            if (vimParserQuery) {
+              const vimPrompt = `Now review the vim (parameter/filtering) version of \
+              the same ASIM parser. This parser adds filtering parameters to improve \
+              query efficiency by reducing the number of rows processed early in the \
+              query pipeline.
+
+              You have already reviewed the ASim (parameter-less) version above. \
+              Do NOT repeat issues already identified in that review. Focus only on \
+              the filtering logic specific to this vim parser.
+
+              Here is the ParserQuery from the vim-prefixed YAML file:
+
+              ### ${vimParserQuery.file}
+              \`\`\`kql
+              ${vimParserQuery.query}
+              \`\`\`
+
+              Please review:
+              1. **Parameter placement**: Are the filtering parameters applied as \
+              early as possible in the query? Filters should be placed before any \
+              parsing or field calculations to avoid unnecessary computation on rows \
+              that will be filtered out.
+              2. **Filter efficiency**: Are the parameter-based filters using native \
+              columns and indexed fields where possible?
+              3. **Redundant computation**: Are there any calculated fields or parsing \
+              operations that occur before the parameter filters, when they could be \
+              moved after?
+              4. **Parameter completeness**: Are the filtering parameters comprehensive \
+              enough to allow efficient querying for common use cases?
+
+              **Output format:**
+
+              First, provide an overall **Readiness Rating** out of 10.
+
+              Then, return findings as a markdown table:
+
+              | # | Priority | Issue | Suggestion |
+              |---|----------|-------|------------|
+
+              Where Priority is one of: 🔴 High, 🟡 Medium, 🟢 Low.
+              Only include issues specific to the filtering/parameter logic. \
+              If no issues are found, return a single row stating "No issues found" \
+              and a rating of 10/10.`;
+
+              const vimResponse = await fetch('https://models.github.ai/inference/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: 'openai/gpt-5',
+                  messages: [
+                    { role: 'user', content: prompt },
+                    { role: 'assistant', content: analysis },
+                    { role: 'user', content: vimPrompt }
+                  ]
+                })
+              });
+
+              if (!vimResponse.ok) {
+                const errorText = await vimResponse.text();
+                core.warning(`LLM API call for vim parser failed: ${vimResponse.status} ${errorText}`);
+              } else {
+                const vimResult = await vimResponse.json();
+                const vimAnalysis = vimResult.choices[0].message.content;
+                core.info('vim Parser LLM Analysis:\n' + vimAnalysis);
+
+                const vimBody = `## ASIM vim Parser KQL Review\n\n${vimAnalysis}\n\n---\n*This review was generated automatically by the ASIM File and Parser Validation workflow using GitHub Models.*`;
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body: vimBody
+                });
+              }
+            }
