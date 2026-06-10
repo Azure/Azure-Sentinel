@@ -47,17 +47,29 @@
     "email": "support@halcyon.ai",
     "_email": "[variables('email')]",
     "_solutionName": "Halcyon",
-    "_solutionVersion": "3.1.0",
+    "_solutionVersion": "3.2.0",
     "solutionId": "halcyontech1743610828684.azure-sentinel-solution-halcyon",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.1.0",
-    "_dataConnectorContentIdConnectorDefinition1": "HalcyonPush",
+    "dataConnectorCCPVersion": "3.2.0",
+    "_dataConnectorContentIdConnectorDefinition1": "HalcyonPushV2",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
-    "_dataConnectorContentIdConnections1": "HalcyonPushConnections",
+    "_dataConnectorContentIdConnections1": "HalcyonPushV2Connections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','Halcyon_Alerts')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Halcyon_Alerts')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('Halcyon_Alerts-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "Halcyon_Alerts-Parser"
+    },
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "e3a4d2f0-7b14-4f3c-9c2e-2c4f1d8b6a01",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('e3a4d2f0-7b14-4f3c-9c2e-2c4f1d8b6a01')))]"
+    },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -71,7 +83,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
-        "displayName": "Halcyon Connector",
+        "displayName": "Halcyon Connector (v2)",
         "contentKind": "DataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -87,35 +99,48 @@
               "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "HalcyonPush",
-                  "title": "Halcyon Connector",
+                  "id": "HalcyonPushV2",
+                  "title": "Halcyon Connector (v2)",
                   "publisher": "Halcyon",
                   "logo": "halcyon.svg",
-                  "descriptionMarkdown": "The [Halcyon](https://www.halcyon.ai) connector provides the capability to send data from Halcyon to Microsoft Sentinel.",
+                  "descriptionMarkdown": "The [Halcyon](https://www.halcyon.ai) connector provides the capability to send data from Halcyon to Microsoft Sentinel. This v2 connector ingests Halcyon Events into `HalcyonEventsV2_CL` and Alert Updates into `HalcyonAlertUpdatesV2_CL`.",
                   "sampleQueries": [
                     {
                       "description": "View recent events",
-                      "query": "HalcyonEvents_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
+                      "query": "HalcyonEventsV2_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
+                    },
+                    {
+                      "description": "View recent alert updates",
+                      "query": "HalcyonAlertUpdatesV2_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
                     }
                   ],
                   "graphQueries": [
                     {
                       "metricName": "Events",
-                      "legend": "HalcyonEvents_CL",
-                      "baseQuery": "HalcyonEvents_CL"
+                      "legend": "HalcyonEventsV2_CL",
+                      "baseQuery": "HalcyonEventsV2_CL"
+                    },
+                    {
+                      "metricName": "Alert Updates",
+                      "legend": "HalcyonAlertUpdatesV2_CL",
+                      "baseQuery": "HalcyonAlertUpdatesV2_CL"
                     }
                   ],
                   "dataTypes": [
                     {
                       "name": "Halcyon Events",
-                      "lastDataReceivedQuery": "HalcyonEvents_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                      "lastDataReceivedQuery": "HalcyonEventsV2_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "Halcyon Alert Updates",
+                      "lastDataReceivedQuery": "HalcyonAlertUpdatesV2_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "HalcyonEvents_CL | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(7d)"
+                        "union isfuzzy=true (HalcyonEventsV2_CL | summarize LastLogReceived = max(TimeGenerated)), (HalcyonAlertUpdatesV2_CL | summarize LastLogReceived = max(TimeGenerated)) | summarize LastLogReceived = max(LastLogReceived) | project IsConnected = LastLogReceived > ago(7d)"
                       ]
                     }
                   ],
@@ -161,7 +186,7 @@
                         {
                           "parameters": {
                             "label": "Deploy Halcyon Connector Resources",
-                            "applicationDisplayName": "Halcyon Sentinel Connector"
+                            "applicationDisplayName": "Halcyon Sentinel Connector v2"
                           },
                           "type": "DeployPushConnectorButton"
                         }
@@ -262,7 +287,7 @@
               }
             },
             {
-              "name": "HalcyonDCR",
+              "name": "HalcyonDCRv2",
               "apiVersion": "2022-06-01",
               "type": "Microsoft.Insights/dataCollectionRules",
               "location": "[parameters('workspace-location')]",
@@ -277,143 +302,11 @@
                         "type": "datetime"
                       },
                       {
-                        "name": "activity_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "activity_name",
+                        "name": "recordType",
                         "type": "string"
                       },
                       {
-                        "name": "category_uid",
-                        "type": "int"
-                      },
-                      {
-                        "name": "category_name",
-                        "type": "string"
-                      },
-                      {
-                        "name": "class_uid",
-                        "type": "int"
-                      },
-                      {
-                        "name": "class_name",
-                        "type": "string"
-                      },
-                      {
-                        "name": "severity_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "severity",
-                        "type": "string"
-                      },
-                      {
-                        "name": "time",
-                        "type": "long"
-                      },
-                      {
-                        "name": "type_uid",
-                        "type": "long"
-                      },
-                      {
-                        "name": "type_name",
-                        "type": "string"
-                      },
-                      {
-                        "name": "message",
-                        "type": "string"
-                      },
-                      {
-                        "name": "raw_data",
-                        "type": "string"
-                      },
-                      {
-                        "name": "status_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "status",
-                        "type": "string"
-                      },
-                      {
-                        "name": "action_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "action",
-                        "type": "string"
-                      },
-                      {
-                        "name": "disposition_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "disposition",
-                        "type": "string"
-                      },
-                      {
-                        "name": "rcode",
-                        "type": "string"
-                      },
-                      {
-                        "name": "rcode_id",
-                        "type": "int"
-                      },
-                      {
-                        "name": "metadata",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "unmapped",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "actor",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "device",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "file",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "process",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "user",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "dst_endpoint",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "src_endpoint",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "query",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "answers",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "driver",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "module",
-                        "type": "dynamic"
-                      },
-                      {
-                        "name": "app",
+                        "name": "record",
                         "type": "dynamic"
                       }
                     ]
@@ -435,10 +328,191 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend TimeGenerated = datetime(1970-01-01) + (['time'] * 1ms) | project-away ['time']",
-                    "outputStream": "Custom-HalcyonEvents_CL"
+                    "transformKql": "source\n| where recordType == 'event'\n| extend\n    HalcyonSourceTime = datetime(1970-01-01) + (tolong(record.['time']) * 1ms),\n    HalcyonEventId = tostring(record.metadata.original_event_uid),\n    activity_id = toint(record.activity_id),\n    activity_name = tostring(record.activity_name),\n    category_uid = toint(record.category_uid),\n    category_name = tostring(record.category_name),\n    class_uid = toint(record.class_uid),\n    class_name = tostring(record.class_name),\n    severity_id = toint(record.severity_id),\n    severity = tostring(record.severity),\n    type_uid = tolong(record.type_uid),\n    type_name = tostring(record.type_name),\n    message = tostring(record.message),\n    raw_data = tostring(record.raw_data),\n    raw_record = tostring(record),\n    status_id = toint(record.status_id),\n    status = tostring(record.status),\n    action_id = toint(record.action_id),\n    action = tostring(record.action),\n    disposition_id = toint(record.disposition_id),\n    disposition = tostring(record.disposition),\n    rcode = tostring(record.rcode),\n    rcode_id = toint(record.rcode_id),\n    metadata = todynamic(record.metadata),\n    unmapped = todynamic(record.unmapped),\n    actor = todynamic(record.actor),\n    device = todynamic(record.device),\n    file = todynamic(record.file),\n    process = todynamic(record.process),\n    user = todynamic(record.['user']),\n    dst_endpoint = todynamic(record.dst_endpoint),\n    src_endpoint = todynamic(record.src_endpoint),\n    traffic = todynamic(record.traffic),\n    query = todynamic(record.['query']),\n    answers = todynamic(record.answers),\n    driver = todynamic(record.driver),\n    module = todynamic(record.module),\n    app = todynamic(record.app)\n| project\n    TimeGenerated, HalcyonSourceTime, HalcyonEventId, activity_id, activity_name, category_uid, category_name,\n    class_uid, class_name, severity_id, severity, type_uid, type_name,\n    message, raw_data, raw_record, status_id, status, action_id, action,\n    disposition_id, disposition, rcode, rcode_id, metadata, unmapped,\n    actor, device, file, process, user, dst_endpoint, src_endpoint, traffic,\n    query, answers, driver, module, app",
+                    "outputStream": "Custom-HalcyonEventsV2_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-Halcyon"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\n| where recordType == 'alert'\n| extend\n    HalcyonSourceTime = datetime(1970-01-01) + (tolong(record.['time']) * 1ms),\n    HalcyonAlertId = tostring(record.finding_info.uid),\n    activity_id = toint(record.activity_id),\n    activity_name = tostring(record.activity_name),\n    category_uid = toint(record.category_uid),\n    category_name = tostring(record.category_name),\n    class_uid = toint(record.class_uid),\n    class_name = tostring(record.class_name),\n    type_uid = tolong(record.type_uid),\n    type_name = tostring(record.type_name),\n    ['count'] = toint(record.['count']),\n    severity_id = toint(record.severity_id),\n    severity = tostring(record.severity),\n    status_id = toint(record.status_id),\n    status = tostring(record.status),\n    message = tostring(record.message),\n    raw_record = tostring(record),\n    action_id = toint(record.action_id),\n    action = tostring(record.action),\n    disposition_id = toint(record.disposition_id),\n    disposition = tostring(record.disposition),\n    finding_info = todynamic(record.finding_info),\n    metadata = todynamic(record.metadata),\n    device = todynamic(record.device),\n    resources = todynamic(record.resources),\n    actor = todynamic(record.actor),\n    observables = todynamic(record.observables),\n    unmapped = todynamic(record.unmapped),\n    comment = tostring(record.comment),\n    evidences = todynamic(record.evidences)\n| project\n    TimeGenerated, HalcyonSourceTime, HalcyonAlertId, activity_id, activity_name,\n    category_uid, category_name, class_uid, class_name, type_uid, type_name,\n    ['count'], severity_id, severity, status_id, status, message, raw_record, action_id, action,\n    disposition_id, disposition, finding_info, metadata, device, resources,\n    actor, observables, unmapped, comment, evidences",
+                    "outputStream": "Custom-HalcyonAlertUpdatesV2_CL"
                   }
                 ]
+              }
+            },
+            {
+              "name": "HalcyonEventsV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Basic",
+                "schema": {
+                  "name": "HalcyonEventsV2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "activity_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "activity_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "category_uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "category_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "class_uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "class_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "severity_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "type_uid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "type_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "message",
+                      "type": "string"
+                    },
+                    {
+                      "name": "raw_data",
+                      "type": "string"
+                    },
+                    {
+                      "name": "raw_record",
+                      "type": "string"
+                    },
+                    {
+                      "name": "status_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "action_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "disposition_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "disposition",
+                      "type": "string"
+                    },
+                    {
+                      "name": "rcode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "rcode_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "metadata",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "unmapped",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "actor",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "device",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "file",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "process",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "user",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "dst_endpoint",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "src_endpoint",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "traffic",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "query",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "answers",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "driver",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "module",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "app",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "HalcyonEventId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HalcyonSourceTime",
+                      "type": "datetime"
+                    }
+                  ]
+                }
               }
             },
             {
@@ -595,6 +669,145 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "HalcyonAlertUpdatesV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "HalcyonAlertUpdatesV2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "activity_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "activity_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "category_uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "category_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "class_uid",
+                      "type": "int"
+                    },
+                    {
+                      "name": "class_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "type_uid",
+                      "type": "long"
+                    },
+                    {
+                      "name": "type_name",
+                      "type": "string"
+                    },
+                    {
+                      "name": "count",
+                      "type": "int"
+                    },
+                    {
+                      "name": "severity_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "status_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "status",
+                      "type": "string"
+                    },
+                    {
+                      "name": "message",
+                      "type": "string"
+                    },
+                    {
+                      "name": "raw_record",
+                      "type": "string"
+                    },
+                    {
+                      "name": "action_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "disposition_id",
+                      "type": "int"
+                    },
+                    {
+                      "name": "disposition",
+                      "type": "string"
+                    },
+                    {
+                      "name": "finding_info",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "metadata",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "device",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "resources",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "actor",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "observables",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "unmapped",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "comment",
+                      "type": "string"
+                    },
+                    {
+                      "name": "evidences",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "HalcyonAlertId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HalcyonSourceTime",
+                      "type": "datetime"
+                    }
+                  ]
+                }
+              }
             }
           ]
         },
@@ -615,35 +828,48 @@
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "id": "HalcyonPush",
-          "title": "Halcyon Connector",
+          "id": "HalcyonPushV2",
+          "title": "Halcyon Connector (v2)",
           "publisher": "Halcyon",
           "logo": "halcyon.svg",
-          "descriptionMarkdown": "The [Halcyon](https://www.halcyon.ai) connector provides the capability to send data from Halcyon to Microsoft Sentinel.",
+          "descriptionMarkdown": "The [Halcyon](https://www.halcyon.ai) connector provides the capability to send data from Halcyon to Microsoft Sentinel. This v2 connector ingests Halcyon Events into `HalcyonEventsV2_CL` and Alert Updates into `HalcyonAlertUpdatesV2_CL`.",
           "sampleQueries": [
             {
               "description": "View recent events",
-              "query": "HalcyonEvents_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
+              "query": "HalcyonEventsV2_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
+            },
+            {
+              "description": "View recent alert updates",
+              "query": "HalcyonAlertUpdatesV2_CL\n| where TimeGenerated > ago(24h)\n| sort by TimeGenerated desc\n"
             }
           ],
           "graphQueries": [
             {
               "metricName": "Events",
-              "legend": "HalcyonEvents_CL",
-              "baseQuery": "HalcyonEvents_CL"
+              "legend": "HalcyonEventsV2_CL",
+              "baseQuery": "HalcyonEventsV2_CL"
+            },
+            {
+              "metricName": "Alert Updates",
+              "legend": "HalcyonAlertUpdatesV2_CL",
+              "baseQuery": "HalcyonAlertUpdatesV2_CL"
             }
           ],
           "dataTypes": [
             {
               "name": "Halcyon Events",
-              "lastDataReceivedQuery": "HalcyonEvents_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+              "lastDataReceivedQuery": "HalcyonEventsV2_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "Halcyon Alert Updates",
+              "lastDataReceivedQuery": "HalcyonAlertUpdatesV2_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "HalcyonEvents_CL | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(7d)"
+                "union isfuzzy=true (HalcyonEventsV2_CL | summarize LastLogReceived = max(TimeGenerated)), (HalcyonAlertUpdatesV2_CL | summarize LastLogReceived = max(TimeGenerated)) | summarize LastLogReceived = max(LastLogReceived) | project IsConnected = LastLogReceived > ago(7d)"
               ]
             }
           ],
@@ -689,7 +915,7 @@
                 {
                   "parameters": {
                     "label": "Deploy Halcyon Connector Resources",
-                    "applicationDisplayName": "Halcyon Sentinel Connector"
+                    "applicationDisplayName": "Halcyon Sentinel Connector v2"
                   },
                   "type": "DeployPushConnectorButton"
                 }
@@ -799,7 +1025,7 @@
       ],
       "properties": {
         "contentId": "[variables('_dataConnectorContentIdConnections1')]",
-        "displayName": "Halcyon Connector",
+        "displayName": "Halcyon Connector (v2)",
         "contentKind": "ResourcesDataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -821,7 +1047,7 @@
               }
             },
             "connectorDefinitionName": {
-              "defaultValue": "Halcyon Connector",
+              "defaultValue": "Halcyon Connector (v2)",
               "type": "securestring",
               "minLength": 1
             },
@@ -868,13 +1094,13 @@
               }
             },
             {
-              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'HalcyonPushConnector', parameters('guidValue'))]",
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'HalcyonPushV2Connector', parameters('guidValue'))]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "Push",
               "properties": {
-                "connectorDefinitionName": "HalcyonPush",
+                "connectorDefinitionName": "HalcyonPushV2",
                 "dcrConfig": {
                   "dataCollectionRuleId": "{{dataCollectionRuleId}}",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
@@ -908,16 +1134,233 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Halcyon_Alerts Data Parser with template version 3.2.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Parser for Halcyon Alerts",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "Halcyon_Alerts",
+                "query": "// Returns the latest state of each Halcyon alert. The Halcyon platform sends a full\n// webhook payload for each alert creation and update, so a single alert (identified by\n// HalcyonAlertId) can have multiple full rows in HalcyonAlertUpdates_CL. This parser\n// collapses them to one row per alert, keeping the payload with the most recent\n// HalcyonSourceTime (the platform event time of that webhook).\nHalcyonAlertUpdates_CL\n// Keep the most recent payload per alert. HalcyonSourceTime is millisecond precision,\n// so ties are effectively impossible; if two payloads share a timestamp, arg_max picks\n// one arbitrarily.\n| summarize arg_max(HalcyonSourceTime, *) by HalcyonAlertId\n| project\n        TimeGenerated,\n        HalcyonSourceTime,\n        HalcyonAlertId,\n        // Classification\n        activity_id, activity_name,\n        category_uid, category_name,\n        class_uid, class_name,\n        type_uid, type_name,\n        // Severity / Status\n        severity_id, severity,\n        status_id, status,\n        // Action / Disposition\n        action_id, action,\n        disposition_id, disposition,\n        // Alert body\n        ['count'],\n        message,\n        comment,\n        // Dynamic / nested objects\n        finding_info,\n        metadata,\n        device,\n        resources,\n        actor,\n        observables,\n        evidences,\n        unmapped\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Halcyon_Alerts')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "Halcyon",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Halcyon",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Halcyon",
+                  "email": "support@halcyon.ai",
+                  "tier": "Partner",
+                  "link": "https://www.halcyon.ai"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "Parser for Halcyon Alerts",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Parser for Halcyon Alerts",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "Halcyon_Alerts",
+        "query": "// Returns the latest state of each Halcyon alert. The Halcyon platform sends a full\n// webhook payload for each alert creation and update, so a single alert (identified by\n// HalcyonAlertId) can have multiple full rows in HalcyonAlertUpdates_CL. This parser\n// collapses them to one row per alert, keeping the payload with the most recent\n// HalcyonSourceTime (the platform event time of that webhook).\nHalcyonAlertUpdates_CL\n// Keep the most recent payload per alert. HalcyonSourceTime is millisecond precision,\n// so ties are effectively impossible; if two payloads share a timestamp, arg_max picks\n// one arbitrarily.\n| summarize arg_max(HalcyonSourceTime, *) by HalcyonAlertId\n| project\n        TimeGenerated,\n        HalcyonSourceTime,\n        HalcyonAlertId,\n        // Classification\n        activity_id, activity_name,\n        category_uid, category_name,\n        class_uid, class_name,\n        type_uid, type_name,\n        // Severity / Status\n        severity_id, severity,\n        status_id, status,\n        // Action / Disposition\n        action_id, action,\n        disposition_id, disposition,\n        // Alert body\n        ['count'],\n        message,\n        comment,\n        // Dynamic / nested objects\n        finding_info,\n        metadata,\n        device,\n        resources,\n        actor,\n        observables,\n        evidences,\n        unmapped\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Halcyon_Alerts')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "Halcyon",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Halcyon",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Halcyon",
+          "email": "support@halcyon.ai",
+          "tier": "Partner",
+          "link": "https://www.halcyon.ai"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Halcyon_RelatedEventsForAlert_HuntingQueries Hunting Query with template version 3.2.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "Halcyon_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Halcyon - Related Events for Alert",
+                "category": "Hunting Queries",
+                "query": "// Find all HalcyonEventsV2_CL records related to a specific HalcyonAlertId.\n// Replace <HalcyonAlertId> with the HalcyonAlertId from a Halcyon Alert.\nlet TargetAlertId = \"<HalcyonAlertId>\";\nHalcyonEventsV2_CL\n| extend HalcyonAlertId = tostring(unmapped.halcyon_alert_id)\n| where HalcyonAlertId == TargetAlertId\n| order by TimeGenerated desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Returns all Halcyon event records (HalcyonEventsV2_CL) whose unmapped.halcyon_alert_id matches the supplied HalcyonAlertId. Used to investigate the event timeline behind a Halcyon Alert."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "Execution,Impact"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1486"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "Halcyon Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Halcyon",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Halcyon",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Halcyon",
+                  "email": "support@halcyon.ai",
+                  "tier": "Partner",
+                  "link": "https://www.halcyon.ai"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Halcyon - Related Events for Alert",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.1.0",
+        "version": "3.2.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Halcyon",
         "publisherDisplayName": "Halcyon",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Halcyon/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.halcyon.ai\">Halcyon</a> solution for Microsoft Sentinel enables you to ingest Halcyon Events and Alerts into Microsoft Sentinel using the Microsoft Sentinel Analytics Workspace.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following Microsoft technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional data ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/\">Microsoft Sentinel</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor Data Collection Rules (DCR)</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview\">Azure Monitor Data Collection Endpoints (DCE)</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-workspace-overview\">Azure Log Analytics workspaces</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Halcyon/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.halcyon.ai\">Halcyon</a> solution for Microsoft Sentinel enables you to ingest Halcyon Events and Alert Updates into Microsoft Sentinel using the Microsoft Sentinel Analytics Workspace.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following Microsoft technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional data ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/\">Microsoft Sentinel</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Azure Monitor Data Collection Rules (DCR)</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview\">Azure Monitor Data Collection Endpoints (DCE)</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-workspace-overview\">Azure Log Analytics workspaces</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Hunting Queries:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -946,6 +1389,16 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentIdConnections1')]",
               "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
             }
           ]
         },
