@@ -2,8 +2,11 @@ name: New ASIM File and Parser Validation
 
 on:
   pull_request:
-    types: [opened, labeled, unlabeled, synchronize]
+    types: [labeled, synchronize]
     branches: [master]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -66,6 +69,7 @@ jobs:
             core.setOutput('has_asim_yaml_files', asimYamlFiles.length > 0 ? 'true' : 'false');
 
       - name: Validate new file paths
+        id: validate-paths
         if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_new_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
@@ -150,15 +154,15 @@ jobs:
             }
 
       - name: Checkout repository
-        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/checkout@v4
 
       - name: Install js-yaml
-        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         run: npm install js-yaml
 
       - name: Analyze YAML files with LLM
-        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,6 +176,21 @@ jobs:
               const match = f.match(parserPattern);
               return match && match[1].startsWith('ASim');
             });
+
+            // Check if the last commit in the PR touched any of the new YAML files
+            const lastCommitSha = context.payload.pull_request.head.sha;
+            const commitResponse = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: lastCommitSha
+            });
+            const lastCommitFiles = commitResponse.data.files.map(f => f.filename);
+            const touchedNewYamlFiles = newYamlFiles.filter(f => lastCommitFiles.includes(f));
+
+            if (touchedNewYamlFiles.length === 0) {
+              core.info('Last commit did not change any new ASim YAML files. Skipping LLM analysis.');
+              return;
+            }
 
             // Extract ParserQuery from the new ASim-prefixed YAML file
             const parserQueries = [];
