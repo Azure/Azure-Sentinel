@@ -1,3 +1,16 @@
+# ============================================================================
+# New ASIM File and Parser Validation
+# ============================================================================
+# This workflow validates pull requests that add new ASIM parsers.
+# It checks:
+#   1. The PR has the "ASIM" label
+#   2. New files follow the expected directory structure
+#   3. Required companion files (union parsers, changelogs) are present
+#   4. Parser.Version in new and unifying parser YAML files matches
+#      a corresponding entry in their CHANGELOG files
+#   5. The KQL ParserQuery from the new ASim-prefixed parser is
+#      analyzed by an LLM for correctness and ASIM compliance
+# ============================================================================
 name: New ASIM File and Parser Validation
 
 on:
@@ -9,14 +22,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pull-requests: write
-  models: read
+  contents: read        # Read repo contents for checkout
+  pull-requests: write  # Post validation comments on PRs
+  models: read          # Access GitHub Models API for LLM analysis
 
 jobs:
   check-asim-label:
     runs-on: ubuntu-latest
     steps:
+      # ----------------------------------------------------------------
+      # Step 1: Check if the PR has the "ASIM" label.
+      #         If not, all subsequent steps are skipped.
+      # ----------------------------------------------------------------
       - name: Check for ASIM label
         id: check-label
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
@@ -31,6 +48,11 @@ jobs:
               core.setOutput('has_label', 'false');
             }
 
+      # ----------------------------------------------------------------
+      # Step 2: Fetch all files in the PR and categorize them.
+      #         Outputs: files, new_files, asim_yaml_files,
+      #                  has_new_files, has_asim_yaml_files
+      # ----------------------------------------------------------------
       - name: Get changed files
         if: steps.check-label.outputs.has_label == 'true'
         id: changed-files
@@ -53,6 +75,8 @@ jobs:
             }
             const allFiles = files.map(f => f.filename);
             const newFiles = files.filter(f => f.status === 'added').map(f => f.filename);
+
+            // Filter for YAML files under Parsers/ASim<Schema>/Parsers/
             const parserPattern = /^Parsers\/ASim\w+\/Parsers\/.+\.yaml$/;
             const asimYamlFiles = allFiles.filter(f => parserPattern.test(f));
             const newAsimYamlFiles = newFiles.filter(f => parserPattern.test(f));
@@ -68,6 +92,15 @@ jobs:
             core.setOutput('has_new_files', newFiles.length > 0 ? 'true' : 'false');
             core.setOutput('has_asim_yaml_files', asimYamlFiles.length > 0 ? 'true' : 'false');
 
+      # ----------------------------------------------------------------
+      # Step 3: Validate the PR's file structure.
+      #   Expected for a new ASIM parser:
+      #     - 2 new YAML files in Parsers/ASim<Schema>/Parsers/
+      #     - ASim<Schema>.yaml and im<Schema>.yaml must be modified
+      #     - 2 new CHANGELOG .md files matching the new YAML filenames
+      #     - ASim<Schema>.md and im<Schema>.md in CHANGELOG/ must be modified
+      #   Posts a comment on the PR if validation fails.
+      # ----------------------------------------------------------------
       - name: Validate new file paths
         id: validate-paths
         if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_new_files == 'true'
@@ -106,7 +139,7 @@ jobs:
               const schemaName = schema.replace(/^ASim/, '');
               core.info(`Detected schema: ${schemaName} (directory: ${schema})`);
 
-              // 3. Check that ASim<Schema>.yaml and im<Schema>.yaml are modified
+              // 3. Check that the union parsers (ASim<Schema>.yaml and im<Schema>.yaml) are modified
               const expectedEdited = [
                 `Parsers/${schema}/Parsers/${schema}.yaml`,
                 `Parsers/${schema}/Parsers/im${schemaName}.yaml`
@@ -139,6 +172,7 @@ jobs:
               }
             }
 
+            // Post a comment on the PR summarizing validation failures
             if (errors.length > 0) {
               const body = `## ASIM File Validation Failed\n\nThe following validation errors were found:\n\n${errors.map(e => '- ' + e).join('\n')}\n\n---\n*This comment was generated automatically by the ASIM File and Parser Validation workflow.*`;
               await github.rest.issues.createComment({
@@ -153,6 +187,16 @@ jobs:
               core.info('All file validations passed.');
             }
 
+      # ----------------------------------------------------------------
+      # Steps 4-7: Content-based validation and LLM analysis.
+      #   Requires file validation to pass and ASIM YAML files to exist.
+      #   Step 4: Checkout the repository to read files from disk.
+      #   Step 5: Install js-yaml for YAML parsing.
+      #   Step 6: Validate Parser.Version in new parser YAML files and
+      #           unifying parsers against their CHANGELOG entries.
+      #   Step 7: Send the ASim-prefixed parser's KQL query to an LLM
+      #           for analysis (only if last commit touched the file).
+      # ----------------------------------------------------------------
       - name: Checkout repository
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/checkout@v4
@@ -161,23 +205,133 @@ jobs:
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         run: npm install js-yaml
 
+      # ----------------------------------------------------------------
+      # Step 6: Validate Parser.Version against CHANGELOG entries.
+      #   For each new parser YAML file:
+      #     - Reads Parser.Version from the YAML
+      #     - Checks that the corresponding CHANGELOG .md file
+      #       contains a matching "Version X.X" entry
+      #   For the unifying (edited) parsers (ASim<Schema>.yaml,
+      #   im<Schema>.yaml):
+      #     - Same version-to-CHANGELOG validation
+      # Outputs the parsed file contents as JSON for later steps.
+      # ----------------------------------------------------------------
+      - name: Check parser and changelog for matching versions
+        id: read-yaml
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+            const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
+            const parserPattern = /^(Parsers\/ASim\w+)\/Parsers\/(.+)\.yaml$/;
+            const newYamlFiles = newFiles.filter(f => parserPattern.test(f));
+            const errors = [];
+
+            const parsedFiles = {};
+            for (const filePath of newYamlFiles) {
+              try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                const parsed = yaml.load(content);
+                parsedFiles[filePath] = parsed;
+                core.info(`Read file: ${filePath}`);
+
+                // Extract Parser.Version and validate against CHANGELOG
+                const version = parsed?.Parser?.Version;
+                if (!version) {
+                  errors.push(`Missing Parser.Version in: ${filePath}`);
+                  continue;
+                }
+                core.info(`  Parser.Version: ${version}`);
+
+                // Derive the CHANGELOG path: Parsers/ASim<Schema>/CHANGELOG/<filename>.md
+                const match = filePath.match(parserPattern);
+                const changelogPath = `${match[1]}/CHANGELOG/${match[2]}.md`;
+
+                try {
+                  const changelogContent = fs.readFileSync(changelogPath, 'utf8');
+                  const versionPattern = new RegExp(`Version ${version.replace('.', '\\.')}`, 'm');
+                  if (versionPattern.test(changelogContent)) {
+                    core.info(`  Version ${version} found in ${changelogPath}`);
+                  } else {
+                    errors.push(`Version ${version} from ${filePath} is not referenced in ${changelogPath}`);
+                  }
+                } catch (err) {
+                  errors.push(`Could not read CHANGELOG file: ${changelogPath} - ${err.message}`);
+                }
+              } catch (err) {
+                core.warning(`Could not read/parse file: ${filePath} - ${err.message}`);
+              }
+            }
+
+            // Also validate the unifying (edited) parsers: ASim<Schema>.yaml and im<Schema>.yaml
+            // These are existing files modified in the PR, not new files.
+            // Derive the schema directory from one of the new parser files.
+            const sampleMatch = newYamlFiles[0]?.match(parserPattern);
+            if (sampleMatch) {
+              const schemaDir = sampleMatch[1]; // e.g. Parsers/ASimWebSession
+              const schemaName = schemaDir.split('/')[1]; // e.g. ASimWebSession
+              const shortSchema = schemaName.replace(/^ASim/, ''); // e.g. WebSession
+
+              const unifyingParsers = [
+                { yaml: `${schemaDir}/Parsers/${schemaName}.yaml`, changelog: `${schemaDir}/CHANGELOG/${schemaName}.md` },
+                { yaml: `${schemaDir}/Parsers/im${shortSchema}.yaml`, changelog: `${schemaDir}/CHANGELOG/im${shortSchema}.md` }
+              ];
+
+              for (const { yaml: yamlPath, changelog: changelogPath } of unifyingParsers) {
+                try {
+                  const content = fs.readFileSync(yamlPath, 'utf8');
+                  const parsed = yaml.load(content);
+                  const version = parsed?.Parser?.Version;
+                  if (!version) {
+                    errors.push(`Missing Parser.Version in unifying parser: ${yamlPath}`);
+                    continue;
+                  }
+                  core.info(`Unifying parser ${yamlPath} - Parser.Version: ${version}`);
+
+                  try {
+                    const changelogContent = fs.readFileSync(changelogPath, 'utf8');
+                    const versionPattern = new RegExp(`Version ${version.replace('.', '\\.')}`, 'm');
+                    if (versionPattern.test(changelogContent)) {
+                      core.info(`  Version ${version} found in ${changelogPath}`);
+                    } else {
+                      errors.push(`Version ${version} from ${yamlPath} is not referenced in ${changelogPath}`);
+                    }
+                  } catch (err) {
+                    errors.push(`Could not read CHANGELOG file: ${changelogPath} - ${err.message}`);
+                  }
+                } catch (err) {
+                  errors.push(`Could not read unifying parser: ${yamlPath} - ${err.message}`);
+                }
+              }
+            }
+
+            if (errors.length > 0) {
+              errors.forEach(e => core.error(e));
+              core.setFailed('YAML/CHANGELOG version validation failed. See errors above.');
+            }
+
+            core.setOutput('parsed_files', JSON.stringify(parsedFiles));
+
       - name: Analyze YAML files with LLM
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           script: |
             const fs = require('fs');
             const yaml = require('js-yaml');
             const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
             const parserPattern = /^Parsers\/ASim\w+\/Parsers\/(.+)\.yaml$/;
+            // Only analyze the ASim-prefixed file (not the vim-prefixed variant)
             const newYamlFiles = newFiles.filter(f => {
               const match = f.match(parserPattern);
               return match && match[1].startsWith('ASim');
             });
 
-            // Check if the last commit in the PR touched any of the new YAML files
+            // Skip LLM call if the latest commit didn't modify these files
             const lastCommitSha = context.payload.pull_request.head.sha;
             const commitResponse = await github.rest.repos.getCommit({
               owner: context.repo.owner,
@@ -213,6 +367,7 @@ jobs:
               return;
             }
 
+            // Send the ParserQuery to the LLM for review
             const prompt = `You are a KQL and ASIM (Advanced Security Information Model) expert reviewing a new parser for the Azure-Sentinel repository.\n\nHere is the ParserQuery from the new ASim-prefixed YAML file:\n\n${parserQueries.join('\n\n')}\n\nPlease:\n1. Analyze the KQL query: identify the data source, target ASIM schema, and summarize the parsing logic.\n2. Check for potential issues such as incorrect field mappings, missing required ASIM fields, inefficient KQL patterns, or logic errors.\n3. Suggest specific improvements to the query for correctness, performance, and ASIM compliance.`;
 
             const response = await fetch('https://models.github.ai/inference/chat/completions', {
@@ -235,6 +390,7 @@ jobs:
               return;
             }
 
+            // Parse and output the LLM response
             const result = await response.json();
             const analysis = result.choices[0].message.content;
             core.info('LLM Analysis:\n' + analysis);

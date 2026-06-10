@@ -1,6 +1,6 @@
 # Changelog for ASimAuthentication.yaml
 
-## Version 0.2.16
+## Version 0.3.10
 
 - Test
 
