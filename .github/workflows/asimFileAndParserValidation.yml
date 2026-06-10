@@ -308,12 +308,24 @@ jobs:
             }
 
             if (errors.length > 0) {
+              const body = `## ASIM Version Validation Failed\n\nThe following version/CHANGELOG mismatches were found:\n\n${errors.map(e => '- ' + e).join('\n')}\n\n---\n*This comment was generated automatically by the ASIM File and Parser Validation workflow.*`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: body
+              });
               errors.forEach(e => core.error(e));
-              core.setFailed('YAML/CHANGELOG version validation failed. See errors above.');
+              core.setFailed('YAML/CHANGELOG version validation failed. See PR comment for details.');
             }
 
-            core.setOutput('parsed_files', JSON.stringify(parsedFiles));
-
+      # ----------------------------------------------------------------
+      # Step 7: LLM-based analysis of the new parser's KQL query.
+      #   Extracts the ParserQuery from the new ASim-prefixed YAML file
+      #   and sends it to the GitHub Models API (GPT-5) for review.
+      #   Skips the API call if the last commit didn't modify the file
+      #   to avoid redundant usage.
+      # ----------------------------------------------------------------
       - name: Analyze YAML files with LLM
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
@@ -332,18 +344,24 @@ jobs:
             });
 
             // Skip LLM call if the latest commit didn't modify these files
-            const lastCommitSha = context.payload.pull_request.head.sha;
-            const commitResponse = await github.rest.repos.getCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: lastCommitSha
-            });
-            const lastCommitFiles = commitResponse.data.files.map(f => f.filename);
-            const touchedNewYamlFiles = newYamlFiles.filter(f => lastCommitFiles.includes(f));
+            // (unless the workflow was manually triggered via workflow_dispatch)
+            const isManualTrigger = '${{ github.event_name }}' === 'workflow_dispatch';
+            if (!isManualTrigger) {
+              const lastCommitSha = context.payload.pull_request.head.sha;
+              const commitResponse = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: lastCommitSha
+              });
+              const lastCommitFiles = commitResponse.data.files.map(f => f.filename);
+              const touchedNewYamlFiles = newYamlFiles.filter(f => lastCommitFiles.includes(f));
 
-            if (touchedNewYamlFiles.length === 0) {
-              core.info('Last commit did not change any new ASim YAML files. Skipping LLM analysis.');
-              return;
+              if (touchedNewYamlFiles.length === 0) {
+                core.info('Last commit did not change any new ASim YAML files. Skipping LLM analysis.');
+                return;
+              }
+            } else {
+              core.info('Workflow manually triggered. Running LLM analysis regardless of last commit.');
             }
 
             // Extract ParserQuery from the new ASim-prefixed YAML file
@@ -368,7 +386,45 @@ jobs:
             }
 
             // Send the ParserQuery to the LLM for review
-            const prompt = `You are a KQL and ASIM (Advanced Security Information Model) expert reviewing a new parser for the Azure-Sentinel repository.\n\nHere is the ParserQuery from the new ASim-prefixed YAML file:\n\n${parserQueries.join('\n\n')}\n\nPlease:\n1. Analyze the KQL query: identify the data source, target ASIM schema, and summarize the parsing logic.\n2. Check for potential issues such as incorrect field mappings, missing required ASIM fields, inefficient KQL patterns, or logic errors.\n3. Suggest specific improvements to the query for correctness, performance, and ASIM compliance.`;
+            const prompt = `You are a KQL performance and efficiency expert reviewing \
+            a new ASIM parser for the Azure-Sentinel repository. Your job is to check \
+            for efficiency and performance of the KQL query. There is already a separate \
+            schema and data tester for ASIM correctness, so focus only on performance \
+            and best practices.
+
+            Here is the ParserQuery from the new ASim-prefixed YAML file:
+
+            ${parserQueries.join('\n\n')}
+
+            Please review the KQL query for the following:
+
+            1. **Filter → Parse → Map pattern**: Verify the query follows the correct \
+            ASIM parsing flow. Filtering should happen early on native columns before \
+            any parsing. Parsing should occur next, followed by field mapping.
+
+            2. **Field mapping operators**: Check that \`project-rename\` is used for \
+            direct column-to-field mappings, and \`extend\` is used for calculated or \
+            normalized fields. Flag any misuse (e.g., using \`extend\` where \
+            \`project-rename\` would suffice).
+
+            3. **No \`project-away\`**: The query must NOT use \`project-away\` to remove \
+            unmapped columns. It should use \`project\` instead, as \`project-away\` does \
+            not protect the parser from schema changes in the source data.
+
+            4. **\`pack\` parameter**: If the query uses \`AdditionalFields\`, verify that \
+            a \`pack: bool = false\` parameter is included. This allows users to choose \
+            whether to populate \`AdditionalFields\` or return an empty dynamic, \
+            improving performance for users who do not need the extra information.
+
+            5. **Parsing operator efficiency**: Check that high-performance parsing \
+            operators are used (\`split\`, \`parse-kv\`, \`parse\`) and that regular \
+            expressions are avoided where simpler operators would work.
+
+            6. **General KQL performance**: Flag any other inefficient patterns such as \
+            unnecessary \`let\` statements, redundant filters, expensive joins, or \
+            operations that could be reordered for better performance.
+
+            Provide specific, actionable suggestions for each issue found.`;
 
             const response = await fetch('https://models.github.ai/inference/chat/completions', {
               method: 'POST',
