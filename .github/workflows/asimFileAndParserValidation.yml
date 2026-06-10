@@ -18,9 +18,6 @@ on:
     types: [labeled, synchronize]
     branches: [master]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
 permissions:
   contents: read        # Read repo contents for checkout
   pull-requests: write  # Post validation comments on PRs
@@ -344,9 +341,11 @@ jobs:
             });
 
             // Skip LLM call if the latest commit didn't modify these files
-            // (unless the workflow was manually triggered via workflow_dispatch)
-            const isManualTrigger = '${{ github.event_name }}' === 'workflow_dispatch';
-            if (!isManualTrigger) {
+            // (unless the PR has the 'SafeToRun' label, which bypasses this check)
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const isSafeToRun = labels.includes('SafeToRun');
+
+            if (!isSafeToRun) {
               const lastCommitSha = context.payload.pull_request.head.sha;
               const commitResponse = await github.rest.repos.getCommit({
                 owner: context.repo.owner,
@@ -361,7 +360,7 @@ jobs:
                 return;
               }
             } else {
-              core.info('Workflow manually triggered. Running LLM analysis regardless of last commit.');
+              core.info('PR has "SafeToRun" label. Bypassing last commit check.');
             }
 
             // Extract ParserQuery from the new ASim-prefixed YAML file
