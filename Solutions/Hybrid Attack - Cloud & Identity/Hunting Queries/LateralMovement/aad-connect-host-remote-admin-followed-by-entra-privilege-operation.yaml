@@ -51,8 +51,7 @@ query: |
       (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
   // Identify likely Entra Connect/sync hosts from process telemetry.
   let SyncHosts =
-    _ASim_ProcessEvent
-    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    _Im_ProcessEvent(starttime=BaselineStart, endtime=BaselineEnd)
     | extend ProcessName = tolower(TargetProcessName),
              ParentProcess = tolower(ActingProcessName),
              DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname))
@@ -64,8 +63,7 @@ query: |
   let RemoteAdmin =
     union isfuzzy=true
       (
-        _ASim_Authentication
-        | where TimeGenerated between (StartTime .. EndTime)
+        _Im_Authentication(starttime=StartTime, endtime=EndTime)
         | where EventResult in~ ("Success", "Partial")
         | where EventSubType =~ "RemoteInteractive" or LogonMethod has "RDP" or LogonProtocol has "RDP"
         | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
@@ -77,8 +75,7 @@ query: |
         | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = tostring(coalesce(EventSubType, LogonMethod, LogonProtocol))
       ),
       (
-        _ASim_ProcessEvent
-        | where TimeGenerated between (StartTime .. EndTime)
+        _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
         | extend ParentProcess = tolower(coalesce(ActingProcessName, ActingProcessFilename, ActingProcessFileOriginalName)),
                  ParentOriginal = tolower(ActingProcessFileOriginalName),
                  ChildCommandLine = tostring(TargetProcessCommandLine),
@@ -93,8 +90,7 @@ query: |
       );
   // Gather high-risk Entra audit activity performed by identities.
   let EntraPrivOps =
-    _ASim_AuditEvent
-    | where TimeGenerated between (StartTime .. (EndTime + 1d))
+    _Im_AuditEvent(starttime=StartTime, endtime=(EndTime + 1d))
     | extend ActorKey = tolower(ActorUsername),
              ActorIP = tostring(SrcIpAddr),
              OperationText = strcat(tostring(EventType), " ", tostring(EventMessage), " ", tostring(TargetAppName))

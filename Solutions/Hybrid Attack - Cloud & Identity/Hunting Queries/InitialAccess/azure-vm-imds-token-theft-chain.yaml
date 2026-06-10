@@ -39,8 +39,7 @@ query: |
   let StagingTokens = dynamic(["http://", "https://", " -enc ", " /c ", " /bin/sh", "wget ", "curl "]);
   // Suspicious execution chain: service parent spawning risky child process/command.
   let SuspiciousExec =
-    _ASim_ProcessEvent
-    | where TimeGenerated between (StartTime .. EndTime)
+    _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
     | extend ParentProcess = tolower(coalesce(ParentProcessName, ActingProcessName)),
              ChildProcess = tolower(TargetProcessName),
              ChildCommandLine = coalesce(TargetProcessCommandLine, "")
@@ -55,8 +54,7 @@ query: |
               InitiatingProcessCommandLine = tostring(ActingProcessCommandLine);
   // Access to Azure IMDS endpoint, commonly used to request managed identity tokens.
   let ImdsAccess =
-    _ASim_NetworkSession
-    | where TimeGenerated between (StartTime .. EndTime)
+    _Im_NetworkSession(starttime=StartTime, endtime=EndTime)
     | where DstIpAddr == "169.254.169.254"
     | where EventResult !~ "Failure"
     | project DeviceId = tostring(coalesce(DvcId, DvcHostname)),
@@ -65,8 +63,7 @@ query: |
               ImdsRemoteUrl = tostring(EventReportUrl);
   // Optional confidence booster: near-term outbound public egress from same host.
   let PublicEgress =
-    _ASim_NetworkSession
-    | where TimeGenerated between (StartTime .. EndTime)
+    _Im_NetworkSession(starttime=StartTime, endtime=EndTime)
     | where isnotempty(DstIpAddr)
     | where not(
         ipv4_is_in_range(DstIpAddr, "10.0.0.0/8")
