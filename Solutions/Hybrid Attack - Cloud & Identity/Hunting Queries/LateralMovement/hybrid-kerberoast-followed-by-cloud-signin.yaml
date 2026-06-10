@@ -25,15 +25,15 @@ tags:
 query: |
   let StartTime = todatetime('{{StartTimeISO}}');
   let EndTime = todatetime('{{EndTimeISO}}');
-    let BaselineStart = StartTime - 30d;
-    let BaselineEnd = EndTime + 1d;
+  let BaselineStart = StartTime - 30d;
+  let BaselineEnd = EndTime + 1d;
   // Build latest hybrid identity keys for reliable cross-source correlation.
   let HybridUsersRaw =
     IdentityInfo
-    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
     | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
-    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | project TimeGenerated, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | summarize arg_max(TimeGenerated, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName)),
              NameKey = tolower(AccountName);
@@ -45,7 +45,7 @@ query: |
       (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId);
   // Detect potential Kerberoast behavior as a burst of Kerberos service ticket-like auth events.
   let KerberoastBurst =
-    ASimAuthenticationEventLogs
+    _ASim_Authentication
     | where TimeGenerated between (StartTime .. EndTime)
     | where LogonProtocol =~ "Kerberos"
     | where EventResult in~ ("Success", "Partial")
@@ -65,7 +65,7 @@ query: |
     | where DistinctServices >= 8;
   // Collect successful cloud sign-ins for the same identities.
   let CloudUserSignins =
-    ASimAuthenticationEventLogs
+    _ASim_Authentication
     | where TimeGenerated between (StartTime .. (EndTime + 1d))
     | where EventResult in~ ("Success", "Partial")
     | where ActorScope has "Azure" or TargetUserScope has "Azure" or EventProduct has_any ("Azure AD", "Entra", "AAD")
@@ -90,10 +90,11 @@ query: |
               CloudIPs = make_set(CloudIP, 15),
               Apps = make_set(AppName, 10),
               ClientApps = make_set(ClientApp, 10),
-              CorrelationIds = make_set(CorrelationId, 10)
+              CorrelationIds = make_set(CorrelationId, 10),
+              ServiceSet = any(ServiceSet),
+              SourceIP = any(SourceIPs)
     by FirstKerberoast, LastKerberoast, KerberoastEvents, DistinctServices,
-       ServiceSet, SourceIPs, HybridUPN, HybridSam, BlastRadius,
-       CriticalityLevel, AccountObjectId
+      HybridUPN, HybridSam, BlastRadius, CriticalityLevel, AccountObjectId
   | extend TimeGenerated = FirstKerberoast
   | order by TimeGenerated desc
 entityMappings:
@@ -101,4 +102,8 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: HybridUPN
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
 version: 1.0.0

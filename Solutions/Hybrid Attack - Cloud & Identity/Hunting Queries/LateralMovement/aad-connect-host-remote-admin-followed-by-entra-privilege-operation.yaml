@@ -51,7 +51,7 @@ query: |
       (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
   // Identify likely Entra Connect/sync hosts from process telemetry.
   let SyncHosts =
-    ASimProcessEventLogs
+    _ASim_ProcessEvent
     | where TimeGenerated between (BaselineStart .. BaselineEnd)
     | extend ProcessName = tolower(TargetProcessName),
              ParentProcess = tolower(ActingProcessName),
@@ -64,7 +64,7 @@ query: |
   let RemoteAdmin =
     union isfuzzy=true
       (
-        ASimAuthenticationEventLogs
+        _ASim_Authentication
         | where TimeGenerated between (StartTime .. EndTime)
         | where EventResult in~ ("Success", "Partial")
         | where EventSubType =~ "RemoteInteractive" or LogonMethod has "RDP" or LogonProtocol has "RDP"
@@ -77,7 +77,7 @@ query: |
         | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = tostring(coalesce(EventSubType, LogonMethod, LogonProtocol))
       ),
       (
-        ASimProcessEventLogs
+        _ASim_ProcessEvent
         | where TimeGenerated between (StartTime .. EndTime)
         | extend ParentProcess = tolower(coalesce(ActingProcessName, ActingProcessFilename, ActingProcessFileOriginalName)),
                  ParentOriginal = tolower(ActingProcessFileOriginalName),
@@ -93,7 +93,7 @@ query: |
       );
   // Gather high-risk Entra audit activity performed by identities.
   let EntraPrivOps =
-    ASimAuditEventLogs
+    _ASim_AuditEvent
     | where TimeGenerated between (StartTime .. (EndTime + 1d))
     | extend ActorKey = tolower(ActorUsername),
              ActorIP = tostring(SrcIpAddr),
