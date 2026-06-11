@@ -7,6 +7,8 @@
 
   * [CrowdStrike API Data Connector (via Codeless Connector Framework)](#1-crowdstrike-api-data-connector-via-codeless-connector-framework)
   * [CrowdStrike Falcon Data Replicator (AWS S3) (via Codeless Connector Framework)](#2-crowdstrike-falcon-data-replicator-aws-s3-via-codeless-connector-framework)
+
+* [Best Practices](#best-practices)
 * [References](#references)
 
 ---
@@ -15,7 +17,7 @@
 
 Microsoft Sentinel provides multiple CrowdStrike data connectors for ingesting security and telemetry data from CrowdStrike Falcon.
 
-This document focuses on the **CrowdStrike Common Connector Framework (CCF)** data connectors and helps customers determine which connector best fits their data ingestion requirements.
+This document provides an overview of the **CrowdStrike Common Connector Framework (CCF)** data connectors and helps you easily determine which connector best fits your data ingestion requirements.
 
 The following CrowdStrike CCF data connectors are currently available:
 
@@ -42,7 +44,7 @@ Use this connector when you need security-related information that is available 
 
 To learn more about the available CrowdStrike APIs and supported datasets, refer to the CrowdStrike API Reference documentation:
 
-**CrowdStrike API Reference**
+**CrowdStrike API Reference**  
 https://developer.crowdstrike.com/api-reference/overview/
 
 ### Configuration Requirements
@@ -51,7 +53,6 @@ Before configuring the Microsoft Sentinel connector:
 
 1. Create an API client in CrowdStrike Falcon.
 2. Collect the following information:
-
    * Client ID
    * Client Secret
    * API Endpoint
@@ -84,7 +85,7 @@ Before configuring the Microsoft Sentinel connector:
 
 AWS setup guidance:
 
-**AWS CrowdStrike Source Setup Documentation**
+**AWS CrowdStrike Source Setup Documentation**  
 https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/crowdstrike-source-setup.html
 
 ### CrowdStrike Configuration Steps
@@ -94,7 +95,6 @@ https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/crowdstrike-sourc
 3. Add a new data source.
 4. Select **CrowdStrike Falcon Data Replicator (FDR)**.
 5. Provide the required AWS resource information, including:
-
    * Amazon S3 Bucket
    * Amazon SQS Queue
 6. CrowdStrike begins exporting telemetry data to the configured Amazon S3 bucket.
@@ -117,9 +117,10 @@ CrowdStrike Falcon
         ↓
 Microsoft Sentinel
 ```
-                                                    |
 
-### Best Practice
+---
+
+## Best Practices
 
 * Use **CrowdStrike API Data Connector (via Codeless Connector Framework)** to collect alerts, detections, incidents, findings, and other data available through CrowdStrike native APIs.
 * Use **CrowdStrike Falcon Data Replicator (AWS S3) (via Codeless Connector Framework)** to collect detailed telemetry such as process, DNS, authentication, and network events exported to Amazon S3.
@@ -131,10 +132,10 @@ Microsoft Sentinel
 
 ### CrowdStrike Documentation
 
-* CrowdStrike API Reference
+* CrowdStrike API Reference  
   https://developer.crowdstrike.com/api-reference/overview/
 
 ### AWS Documentation
 
-* AWS CrowdStrike Source Setup
+* AWS CrowdStrike Source Setup  
   https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/crowdstrike-source-setup.html
