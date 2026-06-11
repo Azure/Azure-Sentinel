@@ -7,7 +7,7 @@ This directory contains seven complementary tools for analyzing Microsoft Sentin
 | [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv`, `la_table_schemas.csv` |
 | [`collect_asim_fields.py`](script-docs/collect_asim_fields.md) | Collect ASIM field definitions from docs, tester, and physical tables | `asim_fields.csv`, `asim_entity_fields.csv`, `asim_logical_types.csv` |
 | [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv`, `solution_dependencies.csv`, `table_schemas.csv` |
-| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown and HTML documentation | Markdown docs directory + `index.html`, HTML entity pages |
+| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown and HTML documentation | Markdown docs directory + `index.html`, HTML entity pages, `artifact_doc_links.csv` |
 | [`generate_interactive_docs.py`](script-docs/generate_interactive_docs.md) | Generate interactive HTML index and HTML entity pages | `index.html`, `css/`, `js/`, HTML entity pages |
 | [`generate_asim_browser.py`](script-docs/generate_asim_browser.md) | Generate interactive ASIM Schema Browser | `asim-browser.html` |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
@@ -36,7 +36,7 @@ git pull origin master
 
 **Quick install for all scripts:**
 ```bash
-pip install requests json5 pyyaml
+pip install requests json5 pyyaml mistune
 ```
 
 **Additional packages for Kusto upload:**
@@ -65,6 +65,7 @@ pip install azure-kusto-data azure-kusto-ingest azure-identity
   - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and optional ASIM-based)
   - [`table_schemas.csv`](table_schemas.csv) - Table column schemas from DCR definition files, Azure Monitor documentation, and KQL validation tables
   - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
+  - [`artifact_doc_links.csv`](artifact_doc_links.csv) - Relative markdown and HTML links for generated documentation artifacts (for deep-link integrations)
 - The rest:
   - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
   - [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Mapping of connectors to tables to solutions with full metadata. Generated for backward compatibility.
@@ -198,10 +199,40 @@ See the script documentation for details:
 
 ## Version History
 
-### v9.8 - TI Upload API supersedes generic Azure Function
+### v9.8 - Artifact deep-links, connector/table accuracy, Learn deep-links, and faster HTML generation
 
-**Connector collection-method classification fix:**
-- Generic `Azure Function` is now dropped from a connector's `collection_method` whenever the same connector is also reclassified as `Azure Function (TI Upload API)`. TI Upload IS a specific Azure Function variant, so keeping the unrefined parent alongside it produced noisy composite labels like `Azure Function (TI Upload API)|Azure Function` (13 affected connectors in the current data set) which showed up as their own line in the Statistics page's Collection Methods breakdown. `_TI_UPLOAD_SUPERSEDES` now contains `{"REST Pull API", "REST Push API", "Azure Function"}`; the existing REST-supersession behaviour is unchanged.
+**New artifact deep-link CSV + Kusto upload:**
+- `generate_connector_docs.py` now emits `artifact_doc_links.csv` (one row per generated page, with markdown/HTML relative and site-relative link paths for external deep-linking). `upload_to_kusto.py` uploads it to `solution_analyzer_artifact_doc_links` in `--solution-analyzer` mode.
+
+**Connector discovery & publishing accuracy (mapper):**
+- Skip full *solution-package* ARM templates in `Data Connectors` folders (detected by a `contentPackages` resource), removing phantom connectors such as `OktaSingleSignOn(usingAzureFunctions)`. Reason: `solution_package_template_skipped`.
+- Treat companion `*_Table.json` / `*_DCR.json` files as ground truth for ingested tables and skip query analysis when present — e.g. Okta `OktaSSOv2` now maps only to `OktaV2_CL` instead of also picking up legacy `Okta_CL`.
+- Treat the solution definition (`Solution_*.json`) as authoritative for publishing: connectors found only by folder scan are retained but marked `is_published=false` (reason `connector_not_in_solution_definition`) instead of dropped, removing orphaned leftovers like Okta `OktaSSO_Polling` from the published count. URL-encoded file names are now decoded before matching, so connectors with spaces/parentheses (`CEF AMA.json`, `Windows Firewall.json`, etc.) are no longer misflagged.
+- Adopt non-standard solution definition file names via a shape-based fallback (`Solutions_AzureDataLake.json`, `CTM360.json`, `OpenSystems_Solution_Input.json`, `Solutions_PrancerLogIntegration.json`), so their connectors are correctly recognised as In-Solution.
+- The canonical `connectors.csv` record is now flagged `not_in_solution_json=false` whenever the connector is documented in **any** source file (fixes false "discovered" labels on `1Password`, `Onapsis`, `SAPLogServ`, `Pathlock_TDnR`, `ThreatIntelligenceUploadIndicatorsAPI`).
+- Deduplicate intra-file azuredeploy phantom connectors (e.g. Cisco Meraki's literal + generated rows collapse to one; reason `azuredeploy_duplicate_skipped`).
+- Fix issues-report crash on unparseable connector JSON (`connector_file` → `relevant_file` key).
+
+**Microsoft Learn deep-links on connector pages:**
+- The mapper fetches the canonical [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) page once per run (cached), extracts its anchors, and matches each connector by display-name slug, adding a `learn_doc_url` column to `connectors.csv` rendered as a "Microsoft Learn" row on connector pages. Expanded slug/anchor heuristics (Learn-anchor slugify flavour, qualifier-suffix iteration, `[Deprecated]`/`[Recommended]`/`[Preview]` stripping, trailing `-v\d+` handling) lift the match rate from 266/615 (43%) to 360/615 (59%).
+
+**Connector detail pages show companion DCR files:**
+- New `dcr_definition_files` column on `connectors.csv` (from `*_DCR.json` / `dcr.json` companions) renders a dedicated **DCR Definition Files** row. DCR URL association now also accepts entries exposing the id as `id` (fixes missing DCR links for CCF connectors such as Dragos).
+
+**Collection-method classification fix:**
+- Generic `Azure Function` is dropped from `collection_method` when a connector is also classified as `Azure Function (TI Upload API)`, removing noisy composite labels like `Azure Function (TI Upload API)|Azure Function`.
+
+**ASIM badge sizing fix:**
+- ASIM badge/icon `<img>` tags now use inline `style` sizing instead of the `height` attribute, so the published site's `img { height: auto }` rule no longer renders badges at native (page-filling) size.
+
+**ASIM/table collectors - fix 404 after Sentinel docs repo migration:**
+- `collect_asim_fields.py` and `collect_table_info.py` now fetch Sentinel docs from `MicrosoftDocs/defender-docs` (`public` branch) instead of the retired `MicrosoftDocs/azure-docs` path, restoring ASIM and table-reference collection (2045 schema fields, 53 entity fields, 22 logical types, 18 vendors / 46 products).
+
+**Markdown → HTML conversion is ~8× faster:**
+- `_generate_html_pages` in `generate_interactive_docs.py` parallelises per-file conversion across CPU cores (`ProcessPoolExecutor`) and prefers [`mistune`](https://pypi.org/project/mistune/) v3 (falling back to Python-Markdown), cutting the HTML stage from ~520 s to ~64 s on the current corpus. Worker count defaults to `min(cpu_count, 8)`, overridable via `SA_HTML_WORKERS`. New optional install: `pip install mistune`.
+
+**Script documentation updates:**
+- Updated script docs and per-CSV reference pages for the new CSV output, uploader table, solution-package-template skip, DCR/Table companion-file table-source priority, definition-file-authoritative publishing, non-standard definition-file fallback, canonical attribution rule, and intra-file azuredeploy deduplication.
 
 ### v9.7 - Logic Apps Index, Filter-Field Coverage, and Collection-Method Refinements
 
