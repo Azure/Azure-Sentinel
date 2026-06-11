@@ -36,7 +36,7 @@ The connector brings targeted BitSight finding data into Microsoft Sentinel for 
 
 Only **WARN** and **BAD** findings are ingested. **FAIR** findings can be added later by modifying the DCR `transformKql` filter.
 
-Publisher: **Obrela**.
+Publisher: **Microsoft Sentinel Community**.
 
 ## Package contents
 
