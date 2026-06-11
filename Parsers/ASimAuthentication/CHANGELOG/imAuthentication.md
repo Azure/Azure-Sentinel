@@ -1,9 +1,5 @@
 # Changelog for imAuthentication.yaml
 
-## Version 0.3.13
-
-- Test
-
 ## Version 0.3.12
 
 - (2026-05-05) ASIM Authentication Parser for VMware ESXi - [PR #13989](https://github.com/Azure/Azure-Sentinel/pull/13989)
