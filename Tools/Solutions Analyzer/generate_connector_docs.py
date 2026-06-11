@@ -7,7 +7,7 @@ of https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference
 
 import csv
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Set, Tuple
 import argparse
 from urllib.parse import quote
@@ -58,13 +58,18 @@ _INTERACTIVE_INDEX_PATH: str = "index.html"
 ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
 ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
 
-# ASIM icon/badge HTML - using img tags to control size for proper text alignment
+# ASIM icon/badge HTML - using img tags to control size for proper text alignment.
+# Inline ``style`` is used (not the legacy ``height`` attribute) because the
+# published interactive site's stylesheet sets ``img { height: auto }`` which
+# overrides the HTML ``height`` attribute and lets these badges render at their
+# native (much larger) pixel dimensions. Inline ``style`` wins over the CSS
+# rule and keeps the badge sized to match heading / inline text.
 # Large badge for page titles (H1 headers) - sized to match heading text (~32px)
-ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" height="32">'
+ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" style="height:32px;width:auto;vertical-align:middle">'
 # Small logo for inline use (lists, tables, section headers) - sized to match text (~16px)
-ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 # Small logo for root-level files (no ../ prefix needed)
-ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 
 # Icons for unpublished, deprecated, and discovered items
 UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors/content
@@ -5662,6 +5667,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 if files:
                     files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in files])
                     f.write(f"| **Connector Definition Files** | {files_list} |\n")
+
+            dcr_definition_files = connector_ref.get('dcr_definition_files', '')
+            if dcr_definition_files:
+                dcr_files = [f.strip() for f in dcr_definition_files.split(';') if f.strip()]
+                if dcr_files:
+                    dcr_files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in dcr_files])
+                    f.write(f"| **DCR Definition Files** | {dcr_files_list} |\n")
             
             # CCF config file (for CCF and CCF Push connectors)
             ccf_config_file = connector_ref.get('ccf_config_file', '')
@@ -5693,7 +5705,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             connector_deprecation_date = connector_ref.get('deprecation_date', '')
             if connector_deprecation_date:
                 f.write(f"| **Deprecated** | {connector_deprecation_date} |\n")
-            
+
+            # Microsoft Learn deep-link (populated by the mapper from the
+            # `data-connectors-reference` page anchors).
+            learn_doc_url = connector_ref.get('learn_doc_url', '') or first_entry.get('learn_doc_url', '')
+            if learn_doc_url:
+                f.write(f"| **Microsoft Learn** | [View on Learn]({learn_doc_url}) |\n")
+
             f.write("\n")
             
             # Description
@@ -9210,6 +9228,87 @@ def generate_docs_readme(
     print(f"Generated readme: {readme_path}")
 
 
+def _infer_artifact_type(relative_md_path: str) -> str:
+    """Infer artifact type from a markdown path relative to docs root."""
+    rel = PurePosixPath(relative_md_path)
+    parts = rel.parts
+    if not parts:
+        return "unknown"
+    if len(parts) == 1:
+        name = parts[0]
+        if name == "README.md":
+            return "docs_root"
+        if name.endswith("-index.md"):
+            return "index"
+        if name == "statistics.md":
+            return "statistics"
+        return "docs_root"
+
+    first = parts[0]
+    if first == "solutions":
+        return "solution"
+    if first == "connectors":
+        return "connector"
+    if first == "tables":
+        return "table"
+    if first == "content":
+        return "content"
+    if first == "parsers":
+        return "parser"
+    if first == "asim":
+        return "asim_parser"
+    if first == "logic-apps":
+        return "logic_app"
+    if first == "methods":
+        return "method"
+    if first == "collection-methods":
+        return "collection_method"
+    return first
+
+
+def generate_artifact_links_csv(output_dir: Path, csv_path: Path, html_docs_path: str = "") -> int:
+    """Generate CSV with markdown and HTML relative links for every markdown artifact page."""
+    normalized_docs_prefix = (html_docs_path or "").replace("\\", "/").strip()
+    if normalized_docs_prefix and not normalized_docs_prefix.endswith("/"):
+        normalized_docs_prefix += "/"
+    if normalized_docs_prefix.startswith(("http://", "https://")):
+        normalized_docs_prefix = ""
+
+    md_files = sorted(p for p in output_dir.rglob("*.md") if p.is_file())
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "artifact_type",
+                "artifact_name",
+                "markdown_relative_path",
+                "html_relative_path",
+                "markdown_site_relative_path",
+                "html_site_relative_path",
+            ],
+        )
+        writer.writeheader()
+
+        for md_file in md_files:
+            md_rel = md_file.relative_to(output_dir).as_posix()
+            html_rel = f"{md_rel[:-3]}.html"
+            writer.writerow(
+                {
+                    "artifact_type": _infer_artifact_type(md_rel),
+                    "artifact_name": md_file.stem,
+                    "markdown_relative_path": md_rel,
+                    "html_relative_path": html_rel,
+                    "markdown_site_relative_path": f"{normalized_docs_prefix}{md_rel}",
+                    "html_site_relative_path": f"{normalized_docs_prefix}{html_rel}",
+                }
+            )
+
+    print(f"Generated artifact links CSV: {csv_path}")
+    return len(md_files)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate Microsoft Learn-style connector documentation from CSV"
@@ -9334,6 +9433,13 @@ def main() -> None:
         help="Absolute URL for index.html used in static markdown navigation bars "
              "(e.g. 'https://oshezaf.github.io/sentinelninja/index.html'). "
              "Required when docs are viewed on GitHub repo (blob view) but index.html is on GitHub Pages.",
+    )
+    parser.add_argument(
+        "--artifact-links-csv",
+        type=Path,
+        default=Path(__file__).parent / "artifact_doc_links.csv",
+        help="Path for generated CSV containing relative markdown/html links for documentation artifacts "
+             "(default: artifact_doc_links.csv in script directory).",
     )
     
     args = parser.parse_args()
@@ -9678,6 +9784,7 @@ def main() -> None:
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
             row['deprecation_date'] = connectors_reference[connector_id].get('deprecation_date', '')
+            row['dcr_definition_files'] = connectors_reference[connector_id].get('dcr_definition_files', '')
             row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
             row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
             row['ingestion_api'] = connectors_reference[connector_id].get('ingestion_api', '')
@@ -9945,6 +10052,7 @@ def main() -> None:
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
                 'support_tier': conn.get('solution_support_tier', ''),
+                'dcr_definition_files': conn.get('dcr_definition_files', ''),
                 'ccf_capabilities': conn.get('ccf_capabilities', ''),
                 'ccf_config_file': conn.get('ccf_config_file', ''),
             }
@@ -10017,6 +10125,13 @@ def main() -> None:
         html_docs_path=args.html_docs_path,
         html_index_url=getattr(args, 'html_index_url', ''),
     )
+
+    generated_artifacts = generate_artifact_links_csv(
+        output_dir=args.output_dir,
+        csv_path=args.artifact_links_csv,
+        html_docs_path=args.html_docs_path,
+    )
+    print(f"  - Artifact links CSV: {args.artifact_links_csv} ({generated_artifacts} markdown artifacts)")
 
 
 if __name__ == "__main__":
