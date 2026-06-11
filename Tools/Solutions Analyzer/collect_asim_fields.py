@@ -41,7 +41,11 @@ except ImportError:
 
 # Default documentation base URLs
 LEARN_BASE_URL = 'https://learn.microsoft.com/en-us/azure/sentinel'
-GITHUB_DOCS_RAW_URL = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/sentinel'
+# The Microsoft Sentinel docs source moved from MicrosoftDocs/azure-docs
+# (articles/sentinel on main) to MicrosoftDocs/defender-docs (sentinel/ on the
+# public branch). The old raw URL now returns 404. Update this if the docs move
+# again — verify by opening the Learn page and checking its "Edit" source link.
+GITHUB_DOCS_RAW_URL = 'https://raw.githubusercontent.com/MicrosoftDocs/defender-docs/public/sentinel'
 
 # Schema list documentation URL (source of truth for available schemas and entities)
 SCHEMA_LIST_DOC = 'normalization-about-schemas.md'

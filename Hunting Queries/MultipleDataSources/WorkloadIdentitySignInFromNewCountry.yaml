@@ -1,0 +1,53 @@
+id: e366bd25-400c-433f-b984-c5b8aece15f2
+name: Workload identity sign-in from a country not in 14-day baseline
+description: |
+  Identifies service principal sign-ins from a country not present in the SP's
+  sign-in history over the preceding 14 days. A new-country sign-in for a workload
+  identity may indicate stolen client credentials or a compromised pipeline.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADServicePrincipalSignInLogs
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  let timeframe = 1d;
+  let lookback = 14d;
+  let BaselineCountries =
+      AADServicePrincipalSignInLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(Location)
+      | summarize KnownCountries = make_set(Location) by ServicePrincipalId;
+  AADServicePrincipalSignInLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where ResultType == 0
+  | where isnotempty(Location)
+  | join kind=leftouter hint.strategy=broadcast BaselineCountries on ServicePrincipalId
+  | where isnull(KnownCountries) or not(set_has_element(KnownCountries, Location))
+  | extend AccountName = ServicePrincipalName
+  | project TimeGenerated, ServicePrincipalId, ServicePrincipalName, AccountName,
+            AppId, Location, IPAddress, ResourceDisplayName, CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ServicePrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
