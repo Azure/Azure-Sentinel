@@ -28,6 +28,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # ----------------------------------------------------------------
+      # Step 0: Remove the "SafeToRun" label on forked PRs.
+      #         Forked PRs run with a read-only GITHUB_TOKEN and cannot
+      #         be trusted to run LLM analysis. Removing the label
+      #         ensures step 7 blocks them from proceeding.
+      # ----------------------------------------------------------------
+      - name: Remove SafeToRun label on forked PRs
+        if: github.event.pull_request.head.repo.fork == true && github.event.action == 'synchronize'
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (labels.includes('SafeToRun')) {
+              core.info('Forked PR detected — removing SafeToRun label.');
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  name: 'SafeToRun'
+                });
+              } catch (err) {
+                core.setFailed(`Failed to remove SafeToRun label: ${err.message}`);
+              }
+            } else {
+              core.info('Forked PR detected — SafeToRun label not present.');
+            }
+
+      # ----------------------------------------------------------------
       # Step 1: Check if the PR has the "ASIM" label.
       #         If not, all subsequent steps are skipped.
       # ----------------------------------------------------------------
@@ -204,8 +232,13 @@ jobs:
         run: npm install js-yaml
 
       # ----------------------------------------------------------------
-      # Step 6: Validate Parser.Version against CHANGELOG entries.
+      # Step 6: Validate parser YAML files and CHANGELOG entries.
       #   For each new parser YAML file:
+      #     - Checks that EquivalentBuiltInParser exists
+      #     - ASim-prefixed: verifies its EquivalentBuiltInParser value
+      #       is listed in the ASim unifying parser's Parsers list
+      #     - vim-prefixed: verifies its EquivalentBuiltInParser value
+      #       is listed in the im unifying parser's Parsers list
       #     - Reads Parser.Version from the YAML
       #     - Checks that the corresponding CHANGELOG .md file
       #       contains a matching "Version X.X" entry
@@ -214,7 +247,7 @@ jobs:
       #     - Same version-to-CHANGELOG validation
       # Outputs the parsed file contents as JSON for later steps.
       # ----------------------------------------------------------------
-      - name: Check parser and changelog for matching versions
+      - name: Validate parser files and changelog versions
         id: read-yaml
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
@@ -227,6 +260,36 @@ jobs:
             const newYamlFiles = newFiles.filter(f => parserPattern.test(f));
             const errors = [];
 
+            // Derive the schema directory and names from the first new parser file
+            const sampleMatch = newYamlFiles[0]?.match(parserPattern);
+            let schemaDir, schemaName, shortSchema, asimUnifyingParsers, imUnifyingParsers;
+            let asimUnifyingQuery, imUnifyingQuery;
+
+            if (sampleMatch) {
+              schemaDir = sampleMatch[1]; // e.g. Parsers/ASimAuthentication
+              schemaName = schemaDir.split('/')[1]; // e.g. ASimAuthentication
+              shortSchema = schemaName.replace(/^ASim/, ''); // e.g. Authentication
+
+              // Load the Parsers lists from the unifying parser YAML files
+              try {
+                const asimContent = fs.readFileSync(`${schemaDir}/Parsers/${schemaName}.yaml`, 'utf8');
+                const asimParsed = yaml.load(asimContent);
+                asimUnifyingParsers = asimParsed?.Parsers || [];
+                asimUnifyingQuery = asimParsed?.ParserQuery || '';
+              } catch (err) {
+                errors.push(`Could not read ASim unifying parser: ${schemaDir}/Parsers/${schemaName}.yaml - ${err.message}`);
+              }
+
+              try {
+                const imContent = fs.readFileSync(`${schemaDir}/Parsers/im${shortSchema}.yaml`, 'utf8');
+                const imParsed = yaml.load(imContent);
+                imUnifyingParsers = imParsed?.Parsers || [];
+                imUnifyingQuery = imParsed?.ParserQuery || '';
+              } catch (err) {
+                errors.push(`Could not read im unifying parser: ${schemaDir}/Parsers/im${shortSchema}.yaml - ${err.message}`);
+              }
+            }
+
             const parsedFiles = {};
             for (const filePath of newYamlFiles) {
               try {
@@ -235,7 +298,85 @@ jobs:
                 parsedFiles[filePath] = parsed;
                 core.info(`Read file: ${filePath}`);
 
-                // Extract Parser.Version and validate against CHANGELOG
+                const fileName = filePath.match(parserPattern)[2]; // e.g. ASimAuthenticationTestProduct
+
+                // --- Validate EquivalentBuiltInParser ---
+                const equivalentParser = parsed?.EquivalentBuiltInParser;
+                if (!equivalentParser) {
+                  errors.push(`Missing EquivalentBuiltInParser in: ${filePath}`);
+                } else {
+                  core.info(`  EquivalentBuiltInParser: ${equivalentParser}`);
+
+                  // Validate naming format
+                  if (fileName.startsWith('ASim')) {
+                    const expectedPrefix = `_ASim_${shortSchema}_`;
+                    if (!equivalentParser.startsWith(expectedPrefix)) {
+                      errors.push(`EquivalentBuiltInParser in ${filePath} must follow the format _ASim_${shortSchema}_<ProductName>, but found: ${equivalentParser}`);
+                    }
+                  }
+                  if (fileName.startsWith('vim')) {
+                    const expectedPrefix = `_Im_${shortSchema}_`;
+                    if (!equivalentParser.startsWith(expectedPrefix)) {
+                      errors.push(`EquivalentBuiltInParser in ${filePath} must follow the format _Im_${shortSchema}_<ProductName>, but found: ${equivalentParser}`);
+                    }
+                  }
+
+                  // Validate ParserName exists and is referenced in the unifying parser's ParserQuery
+                  const parserName = parsed?.ParserName;
+                  if (!parserName) {
+                    errors.push(`Missing ParserName in: ${filePath}`);
+                  } else {
+                    // Validate ParserName format
+                    if (fileName.startsWith('ASim')) {
+                      const expectedPrefix = `ASim${shortSchema}`;
+                      if (!parserName.startsWith(expectedPrefix) || parserName === expectedPrefix) {
+                        errors.push(`ParserName in ${filePath} must follow the format ASim${shortSchema}<ProductName>, but found: ${parserName}`);
+                      }
+                    }
+                    if (fileName.startsWith('vim')) {
+                      const expectedPrefix = `vim${shortSchema}`;
+                      if (!parserName.startsWith(expectedPrefix) || parserName === expectedPrefix) {
+                        errors.push(`ParserName in ${filePath} must follow the format vim${shortSchema}<ProductName>, but found: ${parserName}`);
+                      }
+                    }
+
+                    // Validate ParserName is referenced in the unifying parser's ParserQuery
+                    if (fileName.startsWith('ASim') && asimUnifyingQuery) {
+                      if (asimUnifyingQuery.includes(parserName)) {
+                        core.info(`  ParserName ${parserName} found in ${schemaName}.yaml ParserQuery`);
+                      } else {
+                        errors.push(`ParserName ${parserName} from ${filePath} is not referenced in ${schemaDir}/Parsers/${schemaName}.yaml ParserQuery`);
+                      }
+                    }
+                    if (fileName.startsWith('vim') && imUnifyingQuery) {
+                      if (imUnifyingQuery.includes(parserName)) {
+                        core.info(`  ParserName ${parserName} found in im${shortSchema}.yaml ParserQuery`);
+                      } else {
+                        errors.push(`ParserName ${parserName} from ${filePath} is not referenced in ${schemaDir}/Parsers/im${shortSchema}.yaml ParserQuery`);
+                      }
+                    }
+                  }
+
+                  // ASim-prefixed parsers must be in ASim unifying parser's Parsers list
+                  if (fileName.startsWith('ASim') && asimUnifyingParsers) {
+                    if (asimUnifyingParsers.includes(equivalentParser)) {
+                      core.info(`  ${equivalentParser} found in ${schemaName}.yaml Parsers list`);
+                    } else {
+                      errors.push(`${equivalentParser} from ${filePath} is not listed in ${schemaDir}/Parsers/${schemaName}.yaml Parsers list`);
+                    }
+                  }
+
+                  // vim-prefixed parsers must be in im unifying parser's Parsers list
+                  if (fileName.startsWith('vim') && imUnifyingParsers) {
+                    if (imUnifyingParsers.includes(equivalentParser)) {
+                      core.info(`  ${equivalentParser} found in im${shortSchema}.yaml Parsers list`);
+                    } else {
+                      errors.push(`${equivalentParser} from ${filePath} is not listed in ${schemaDir}/Parsers/im${shortSchema}.yaml Parsers list`);
+                    }
+                  }
+                }
+
+                // --- Validate Parser.Version against CHANGELOG ---
                 const version = parsed?.Parser?.Version;
                 if (!version) {
                   errors.push(`Missing Parser.Version in: ${filePath}`);
@@ -265,13 +406,7 @@ jobs:
 
             // Also validate the unifying (edited) parsers: ASim<Schema>.yaml and im<Schema>.yaml
             // These are existing files modified in the PR, not new files.
-            // Derive the schema directory from one of the new parser files.
-            const sampleMatch = newYamlFiles[0]?.match(parserPattern);
             if (sampleMatch) {
-              const schemaDir = sampleMatch[1]; // e.g. Parsers/ASimWebSession
-              const schemaName = schemaDir.split('/')[1]; // e.g. ASimWebSession
-              const shortSchema = schemaName.replace(/^ASim/, ''); // e.g. WebSession
-
               const unifyingParsers = [
                 { yaml: `${schemaDir}/Parsers/${schemaName}.yaml`, changelog: `${schemaDir}/CHANGELOG/${schemaName}.md` },
                 { yaml: `${schemaDir}/Parsers/im${shortSchema}.yaml`, changelog: `${schemaDir}/CHANGELOG/im${shortSchema}.md` }
@@ -306,7 +441,7 @@ jobs:
             }
 
             if (errors.length > 0) {
-              const body = `## ASIM Version Validation Failed\n\nThe following version/CHANGELOG mismatches were found:\n\n${errors.map(e => '- ' + e).join('\n')}\n\n---\n*This comment was generated automatically by the ASIM File and Parser Validation workflow.*`;
+              const body = `## ASIM Parser Validation Failed\n\nThe following validation errors were found:\n\n${errors.map(e => '- ' + e).join('\n')}\n\n---\n*This comment was generated automatically by the ASIM File and Parser Validation workflow.*`;
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -314,7 +449,7 @@ jobs:
                 body: body
               });
               errors.forEach(e => core.error(e));
-              core.setFailed('YAML/CHANGELOG version validation failed. See PR comment for details.');
+              core.setFailed('Parser validation failed. See PR comment for details.');
             }
 
       # ----------------------------------------------------------------
