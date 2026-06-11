@@ -17,7 +17,7 @@
 
 Microsoft Sentinel provides multiple CrowdStrike data connectors for ingesting security and telemetry data from CrowdStrike Falcon.
 
-This document provides an overview of the **CrowdStrike Common Connector Framework (CCF)** data connectors and helps you easily determine which connector best fits your data ingestion requirements.
+This document provides an overview of the **CrowdStrike Codeless Connector Framework (CCF)** data connectors and helps you easily determine which connector best fits your data ingestion requirements.
 
 The following CrowdStrike CCF data connectors are currently available:
 
