@@ -53,8 +53,8 @@ jobs:
 
       # ----------------------------------------------------------------
       # Step 2: Fetch all files in the PR and categorize them.
-      #         Outputs: files, new_files, asim_yaml_files,
-      #                  has_new_files, has_asim_yaml_files
+      #         Outputs: files, new_asim_yaml_files,
+      #                  has_new_asim_yaml_files
       # ----------------------------------------------------------------
       - name: Get changed files
         if: steps.check-label.outputs.has_label == 'true'
@@ -79,21 +79,18 @@ jobs:
             const allFiles = files.map(f => f.filename);
             const newFiles = files.filter(f => f.status === 'added').map(f => f.filename);
 
-            // Filter for YAML files under Parsers/ASim<Schema>/Parsers/
+            // Filter for new YAML files under Parsers/ASim<Schema>/Parsers/
             const parserPattern = /^Parsers\/ASim\w+\/Parsers\/.+\.yaml$/;
-            const asimYamlFiles = allFiles.filter(f => parserPattern.test(f));
             const newAsimYamlFiles = newFiles.filter(f => parserPattern.test(f));
             core.info(`Changed files (${allFiles.length}):`);
             allFiles.forEach(f => core.info(`  - ${f}`));
-            core.info(`ASIM YAML files (${asimYamlFiles.length}):`);
-            asimYamlFiles.forEach(f => core.info(`  - ${f}`));
+            core.info(`New ASIM YAML files (${newAsimYamlFiles.length}):`);
+            newAsimYamlFiles.forEach(f => core.info(`  - ${f}`));
             core.info(`New files (${newFiles.length}):`);
             newFiles.forEach(f => core.info(`  - ${f}`));
             core.setOutput('files', JSON.stringify(allFiles));
-            core.setOutput('new_files', JSON.stringify(newFiles));
-            core.setOutput('asim_yaml_files', JSON.stringify(asimYamlFiles));
-            core.setOutput('has_new_files', newFiles.length > 0 ? 'true' : 'false');
-            core.setOutput('has_asim_yaml_files', asimYamlFiles.length > 0 ? 'true' : 'false');
+            core.setOutput('new_asim_yaml_files', JSON.stringify(newAsimYamlFiles));
+            core.setOutput('has_new_asim_yaml_files', newAsimYamlFiles.length > 0 ? 'true' : 'false');
 
       # ----------------------------------------------------------------
       # Step 3: Validate the PR's file structure.
@@ -106,22 +103,17 @@ jobs:
       # ----------------------------------------------------------------
       - name: Validate new file paths
         id: validate-paths
-        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_new_files == 'true'
+        if: steps.check-label.outputs.has_label == 'true' && steps.changed-files.outputs.has_new_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
           script: |
-            const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
+            const newAsimYamlFiles = JSON.parse('${{ steps.changed-files.outputs.new_asim_yaml_files }}');
             const allFiles = JSON.parse('${{ steps.changed-files.outputs.files }}');
             const errors = [];
 
             // 1. Validate new YAML files are in Parsers/ASim<Schema>/Parsers/
             const parserPattern = /^Parsers\/(ASim\w+)\/Parsers\/(.+\.yaml)$/;
-            const newYamlFiles = newFiles.filter(f => parserPattern.test(f));
-            const invalidNewFiles = newFiles.filter(f => f.endsWith('.yaml') && !parserPattern.test(f));
-
-            if (invalidNewFiles.length > 0) {
-              errors.push(`New YAML files not in expected directory (Parsers/ASim<Schema>/Parsers/):\n${invalidNewFiles.map(f => '  - ' + f).join('\n')}`);
-            }
+            const newYamlFiles = newAsimYamlFiles;
 
             if (newYamlFiles.length !== 2) {
               errors.push(`Expected exactly 2 new YAML files in Parsers/ASim<Schema>/Parsers/, found ${newYamlFiles.length}.`);
@@ -147,7 +139,7 @@ jobs:
                 `Parsers/${schema}/Parsers/${schema}.yaml`,
                 `Parsers/${schema}/Parsers/im${schemaName}.yaml`
               ];
-              const modifiedFiles = allFiles.filter(f => !newFiles.includes(f));
+              const modifiedFiles = allFiles.filter(f => !newAsimYamlFiles.includes(f));
               for (const expected of expectedEdited) {
                 if (!modifiedFiles.includes(expected)) {
                   errors.push(`Expected modified file not found: ${expected}`);
@@ -158,7 +150,7 @@ jobs:
               const newYamlBasenames = newYamlFiles.map(f => f.match(parserPattern)[2].replace('.yaml', ''));
               const expectedNewChangelogs = newYamlBasenames.map(name => `Parsers/${schema}/CHANGELOG/${name}.md`);
               for (const expected of expectedNewChangelogs) {
-                if (!newFiles.includes(expected)) {
+                if (!allFiles.includes(expected)) {
                   errors.push(`Expected new CHANGELOG file not found: ${expected}`);
                 }
               }
@@ -205,11 +197,11 @@ jobs:
       #           for performance and best practices review.
       # ----------------------------------------------------------------
       - name: Checkout repository
-        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_new_asim_yaml_files == 'true'
         uses: actions/checkout@v4
 
       - name: Install js-yaml
-        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_new_asim_yaml_files == 'true'
         run: npm install js-yaml
 
       # ----------------------------------------------------------------
@@ -231,15 +223,14 @@ jobs:
       # ----------------------------------------------------------------
       - name: Validate parser files and changelog versions
         id: read-yaml
-        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_new_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
           script: |
             const fs = require('fs');
             const yaml = require('js-yaml');
-            const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
+            const newYamlFiles = JSON.parse('${{ steps.changed-files.outputs.new_asim_yaml_files }}');
             const parserPattern = /^(Parsers\/ASim\w+)\/Parsers\/(.+)\.yaml$/;
-            const newYamlFiles = newFiles.filter(f => parserPattern.test(f));
             const errors = [];
 
             // Derive the schema directory and names from the first new parser file
@@ -440,7 +431,7 @@ jobs:
       # ----------------------------------------------------------------
       - name: Check for SafeToRun label
         id: check-safe-to-run
-        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
+        if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_new_asim_yaml_files == 'true'
         uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
         with:
           script: |
@@ -502,15 +493,15 @@ jobs:
           script: |
             const fs = require('fs');
             const yaml = require('js-yaml');
-            const newFiles = JSON.parse('${{ steps.changed-files.outputs.new_files }}');
+            const newAsimYamlFiles = JSON.parse('${{ steps.changed-files.outputs.new_asim_yaml_files }}');
             const parserPattern = /^Parsers\/ASim\w+\/Parsers\/(.+)\.yaml$/;
 
             // Separate new YAML files into ASim-prefixed and vim-prefixed parsers
-            const asimFiles = newFiles.filter(f => {
+            const asimFiles = newAsimYamlFiles.filter(f => {
               const match = f.match(parserPattern);
               return match && match[1].startsWith('ASim');
             });
-            const vimFiles = newFiles.filter(f => {
+            const vimFiles = newAsimYamlFiles.filter(f => {
               const match = f.match(parserPattern);
               return match && match[1].startsWith('vim');
             });
