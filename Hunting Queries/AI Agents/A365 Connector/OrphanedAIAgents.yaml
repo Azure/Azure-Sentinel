@@ -1,0 +1,51 @@
+id: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
+name: A365 AI Agents - Orphaned Agents with Disabled Owners
+description: |
+  This query identifies A365 AI agents whose owners are either disabled or removed from the organization, and are not blocked. 
+  Orphaned agents without an active owner pose governance and security risks because no one is accountable for their configuration, updates, or potential misuse. 
+  If these agents remain active, they could retain sensitive connections or perform actions without proper oversight, increasing the risk of unauthorized access or persistence in the environment.
+  Recommended Action: Assign a new active owner to each orphaned agent or retire the agent if it`s no longer needed. Regularly review ownership to maintain compliance and security governance.
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1562
+query: |
+  let EnabledAccountIds = materialize (
+  IdentityInfo  
+  | where IsAccountEnabled == 1  
+  | distinct AccountObjectId);  
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn));
+  AIAgentsInfo  
+  | where RegistrySource == "A365"
+  | summarize arg_max(Timestamp, *) by AIAgentId  
+  | where IsBlocked == 0 // not blocked  
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | where isnotempty(OwnerId)
+  | where not(OwnerId in (EnabledAccountIds))
+  | project-away RawAgentInfoJson, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project AIAgentId, Timestamp, OwnerUpn, CreatorUpn, DeveloperName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+
+version: 1.0.0

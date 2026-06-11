@@ -1,15 +1,16 @@
-# (Optional) Exercise 5 — Cross-Platform Response Actions (Device Isolation) - Requires a VM onboarded to MDE
+# Exercise 5 — Cross-Platform Response Actions (Device Isolation)
 
-**Rule:** `[E5] [CrowdStrike] Device Isolation Response` _(the `[E5]` prefix is the deployed rule tag)_
-**Deployed in:** `Artifacts/DetectionRules/rules.json`
-**MITRE ATT&CK:** T1204.002 (User Execution: Malicious File)
-**Difficulty:** Advanced
+**Topic:** Understanding cross-platform response patterns between third-party EDR and MDE  
+**Difficulty:** Advanced  
+**Prerequisites:** None (reference exercise — hands-on requires MDE-onboarded devices)
+
+> **Note:** This exercise is a **reference guide**. The join pattern shown here requires real MDE device data (the `DeviceInfo` table), which is only available if you have devices onboarded to Microsoft Defender for Endpoint. The lab's injected CrowdStrike data uses simulated hostnames that won't match your MDE inventory. Read through the pattern to understand the concept, and apply it in your production environment.
 
 ---
 
 ## Objective
 
-Add an automated **device isolation** response action to a Custom Detection rule. This exercise demonstrates **cross-platform response**: a detection from CrowdStrike EDR triggers an isolation action via Microsoft Defender for Endpoint (MDE). You'll learn how to resolve the MDE `DeviceId` by joining the `DeviceInfo` table.
+Understand how to build a **cross-platform response** pattern where a detection from CrowdStrike EDR triggers an isolation action via Microsoft Defender for Endpoint (MDE). Learn how to resolve the MDE `DeviceId` by joining the `DeviceInfo` table, and how to configure automated response actions on custom detection rules.
 
 ## Background
 
@@ -26,7 +27,7 @@ CrowdStrike alerts contain the **hostname** but not the MDE **DeviceId**. To bri
 
 ### Available Response Actions
 
-Custom Detection rules in Defender XDR support the following automated response actions:
+Custom detection rules in Defender XDR support the following automated response actions:
 
 | Action | Required Column | Scope |
 |---|---|---|
@@ -53,20 +54,9 @@ Most device-scoped response actions require the MDE `DeviceId` — a GUID that u
 
 The only way to map CrowdStrike detections to MDE actions is through the shared **hostname**.
 
-## Prerequisites
+## How It Works in Practice
 
-> **Important:** This exercise requires **Defender for Endpoint** to be deployed and devices onboarded. The `DeviceInfo` table must contain the devices referenced in CrowdStrike detections. If `DeviceInfo` is empty or the hostnames don't match, the join will produce no results.
-
-Verify `DeviceInfo` is available:
-
-```kusto
-DeviceInfo
-| where Timestamp > ago(14d)
-| summarize count() by DeviceName
-| take 10
-```
-
-> **Note:** The `DeviceInfo` table uses `Timestamp` (not `TimeGenerated`) because it's a native Defender XDR table, not a Sentinel custom table.
+The following sections show the complete pattern for building a cross-platform detection-to-response rule. In a real environment with MDE-onboarded devices, you would create a custom detection rule using the query below and attach the `isolateDevice` response action.
 
 ## Techniques Covered
 
@@ -126,95 +116,6 @@ If editing in the Defender portal instead of the Graph API:
 3. Set **Isolation type** to **Full**
 4. Set **Scope** to the appropriate device groups
 
-## Steps
-
-### Step 1 — Verify the Current Rule
-
-The deployed rule E5 currently has **no join** and **no response action**. It detects CrowdStrike critical alerts but can't trigger isolation because it doesn't have the `DeviceId`.
-
-Run the current query in Advanced Hunting:
-
-```kusto
-CrowdStrikeDetections
-| where TimeGenerated > ago(4h)
-| where SeverityName == "Critical"
-| extend CSHostname = tostring(Device.hostname)
-| project TimeGenerated, Name, CSHostname, SeverityName
-```
-
-### Step 2 — Add the DeviceInfo Join
-
-Modify the query to join with `DeviceInfo`:
-
-```kusto
-CrowdStrikeDetections
-| where TimeGenerated > ago(4h)
-| where SeverityName == "Critical"
-| extend CSHostname = tostring(Device.hostname)
-| join kind=inner (
-    DeviceInfo
-    | where Timestamp > ago(14d)
-    | summarize arg_max(Timestamp, DeviceId) by DeviceName
-    | project DeviceName, DeviceId
-) on $left.CSHostname == $right.DeviceName
-| project
-    TimeGenerated,
-    Name,
-    Description,
-    SeverityName,
-    Tactic,
-    Technique,
-    TechniqueId,
-    SourceAccountUpn,
-    CSHostname,
-    DeviceId,
-    Filename,
-    Sha256,
-    Cmdline
-| extend
-    AccountUpn = SourceAccountUpn,
-    DeviceName = CSHostname,
-    FileName = Filename,
-    SHA256 = Sha256,
-    ProcessCommandLine = Cmdline,
-    ReportId = tostring(hash_sha256(strcat(tostring(TimeGenerated), Name, CSHostname)))
-```
-
-Run the query to verify results include `DeviceId`.
-
-### Step 3 — Add the Response Action
-
-**Option A — Via Defender Portal:**
-1. Save the modified query
-2. Edit the rule → Step 4 (Actions) → Select **Isolate device**
-
-**Option B — Via Graph API (JSON):**
-Update the rule file to add the response action:
-
-```json
-"responseActions": [
-    {
-        "@odata.type": "#microsoft.graph.security.isolateDeviceResponseAction",
-        "identifier": "deviceId",
-        "isolationType": "full"
-    }
-]
-```
-
-Then redeploy using the deployment script:
-```
-.\Scripts\DeployDetectionRules.ps1
-```
-
-> **Warning:** In a production environment, automatic device isolation is a high-impact action. Always test with a `selective` isolation type first, and scope to a test device group.
-
-### Step 4 — Enable and Test
-
-1. Enable the rule
-2. Ingest attack data using `.\Scripts\IngestCSV.ps1`
-3. Monitor **Triggered alerts** and **Triggered actions** in the rule details
-4. Verify the device isolation action was taken (check **Action Center** in Defender)
-
 ## Comparison with S2 (blockFile)
 
 | Aspect | S2 — blockFile | E5 — isolateDevice |
@@ -243,3 +144,9 @@ Then redeploy using the deployment script:
 - [DeviceInfo table schema](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-deviceinfo-table)
 - [Manage existing custom detection rules](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-manage)
 - [MITRE T1204.002 — User Execution: Malicious File](https://attack.mitre.org/techniques/T1204/002/)
+
+---
+
+## Next Steps
+
+Continue to **[Exercise 6 — Port Scan Detection & Threshold Tuning](./E06_port_scan_threshold_tuning.md)**
