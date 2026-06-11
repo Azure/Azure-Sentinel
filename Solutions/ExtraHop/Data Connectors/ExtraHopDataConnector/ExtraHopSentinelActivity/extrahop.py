@@ -6,7 +6,7 @@ import json
 from SharedCode.consts import LOGS_STARTS_WITH, DETECTIONS_TABLE_NAME
 from SharedCode.extrahop_exceptions import ExtraHopException
 from SharedCode.logger import applogger
-from .sentinel import MicrosoftSentinel
+from .sentinel import send_data_to_sentinel
 
 
 class ExtraHop:
@@ -14,7 +14,6 @@ class ExtraHop:
     def __init__(self) -> None:
         """Initialize instance variables for class."""
         self.logs_starts_with = LOGS_STARTS_WITH+" Activity"
-        self.microsoftsentinel = MicrosoftSentinel()
         self.error_logs = "{}(method={}) {}"
         self.check_environment_var_existance()
 
@@ -66,8 +65,7 @@ class ExtraHop:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            body = json.dumps(data)
-            self.microsoftsentinel.post_data(body=body, log_type=DETECTIONS_TABLE_NAME)
+            send_data_to_sentinel(data, DETECTIONS_TABLE_NAME)
             applogger.info(
                 "{}(method={}) Detections data is ingested into {} table of log analytics workspace.".format(
                     self.logs_starts_with, __method_name, DETECTIONS_TABLE_NAME

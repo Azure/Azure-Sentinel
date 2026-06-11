@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                       |
 |-------------|--------------------------------|------------------------------------------------------------------------------------------|
+| 3.0.6       | 06-05-2026                     | Updated **Analytical Rules** and **Hunting Queries** to Quality improvements.            |
 | 3.0.5       | 13-02-2026                     | Updated **Analytic Rule** to cover missing TTPs. Extended detection for FQDN and Destination IP across multiple sources and added new **Analytic Rule** for improved TI destination coverage.                                           |
 | 3.0.4       | 12-02-2024                     | Updated **Analytical Rule**	                                          |
 | 3.0.3       | 17-01-2024                     | Updated Azure Firewall **Data Connector**  to support resource specific logs.            |

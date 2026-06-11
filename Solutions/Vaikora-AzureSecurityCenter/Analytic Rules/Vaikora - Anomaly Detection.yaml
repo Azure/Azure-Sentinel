@@ -1,0 +1,65 @@
+id: c0984707-0855-430e-9c36-5e2d0d0ce56f
+name: Vaikora - Anomaly detection
+description: |
+  Identifies actions flagged as anomalies or confirmed threats by Vaikora. Catches behavioral anomalies that fall below high/critical severity but still represent statistically unusual activity worth investigating.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VaikoraSecurityCenter
+    dataTypes:
+      - Vaikora_SecurityAlerts_CL
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Discovery
+  - LateralMovement
+  - Collection
+  - Exfiltration
+relevantTechniques: []
+query: |
+  Vaikora_SecurityAlerts_CL
+  | where TimeGenerated >= ago(6h)
+  | where IsAnomaly_b == true or ThreatDetected_b == true
+  | where Severity_s !in ("high", "critical")
+  | extend
+      AlertId       = AlertId_s,
+      AgentId       = AgentId_s,
+      ActionType    = ActionType_s,
+      Severity      = Severity_s,
+      Title         = Title_s,
+      Description   = Description_s,
+      SourceIP      = SourceIP,
+      DestinationIP = DestinationIP_s,
+      SourceHost    = SourceHost_s,
+      DestHost      = DestinationHost_s,
+      ProcessName   = ProcessName_s,
+      UserName      = UserName_s,
+      FilePath      = FilePath_s,
+      Confidence    = ConfidenceScore_d,
+      ThreatFlag    = ThreatDetected_b,
+      AnomalyFlag   = IsAnomaly_b
+  | project
+      TimeGenerated, AlertId, AgentId, ActionType, Severity, Title, Description,
+      SourceIP, DestinationIP, SourceHost, DestHost, ProcessName, UserName, FilePath,
+      Confidence, ThreatFlag, AnomalyFlag
+  | order by Confidence desc, TimeGenerated desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vaikora Anomaly: {{Title_s}} (confidence: {{ConfidenceScore_d}})"
+  alertDescriptionFormat: "Vaikora AI detected a threat on agent {{AgentId_s}} (ThreatDetected={{ThreatDetected_b}}). {{Description_s}}"
+version: 1.0.0
+kind: Scheduled
