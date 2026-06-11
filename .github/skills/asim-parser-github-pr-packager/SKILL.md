@@ -50,6 +50,7 @@ References:
   Link: <link to the documentation that the user had provided about the product events>
 Description: |
   <description of the parser, including the data source, the use cases that the parser can support, and any other relevant information.>
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: ASim<Schema><Vendor><Product>
 EquivalentBuiltInParser: _ASim_<SchemaName>_<Vendor><Product>
 ParserParams:
@@ -83,6 +84,7 @@ References:
   Link: <link to the documentation that the user had provided about the product events>
 Description: |
   <description of the filtering parser, including the data source and the additional filter parameters it supports.>
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: vim<Schema><Vendor><Product>
 EquivalentBuiltInParser: _Im_<SchemaName>_<Vendor><Product>
 ParserParams:
