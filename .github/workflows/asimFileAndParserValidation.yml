@@ -5,11 +5,17 @@
 # It checks:
 #   1. The PR has the "ASIM" label
 #   2. New files follow the expected directory structure
-#   3. Required companion files (union parsers, changelogs) are present
-#   4. Parser.Version in new and unifying parser YAML files matches
+#   3. Required companion files (unifying parsers, changelogs) are present
+#   4. EquivalentBuiltInParser exists, follows naming conventions, and
+#      is listed in the unifying parser's Parsers list
+#   5. ParserName exists, follows naming conventions, and is
+#      referenced in the unifying parser's ParserQuery
+#   6. Parser.Version in new and unifying parser YAML files matches
 #      a corresponding entry in their CHANGELOG files
-#   5. The KQL ParserQuery from the new ASim-prefixed parser is
-#      analyzed by an LLM for correctness and ASIM compliance
+#   7. On forked PRs with synchronize events, the SafeToRun label
+#      is removed to prevent untrusted LLM execution
+#   8. The KQL ParserQuery from new ASim and vim parsers is
+#      analyzed by an LLM for performance and best practices
 # ============================================================================
 name: New ASIM File and Parser Validation
 
@@ -27,34 +33,6 @@ jobs:
   check-asim-label:
     runs-on: ubuntu-latest
     steps:
-      # ----------------------------------------------------------------
-      # Step 0: Remove the "SafeToRun" label on forked PRs.
-      #         Forked PRs run with a read-only GITHUB_TOKEN and cannot
-      #         be trusted to run LLM analysis. Removing the label
-      #         ensures step 7 blocks them from proceeding.
-      # ----------------------------------------------------------------
-      - name: Remove SafeToRun label on forked PRs
-        if: github.event.pull_request.head.repo.fork == true && github.event.action == 'synchronize'
-        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
-        with:
-          script: |
-            const labels = context.payload.pull_request.labels.map(l => l.name);
-            if (labels.includes('SafeToRun')) {
-              core.info('Forked PR detected — removing SafeToRun label.');
-              try {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.payload.pull_request.number,
-                  name: 'SafeToRun'
-                });
-              } catch (err) {
-                core.setFailed(`Failed to remove SafeToRun label: ${err.message}`);
-              }
-            } else {
-              core.info('Forked PR detected — SafeToRun label not present.');
-            }
-
       # ----------------------------------------------------------------
       # Step 1: Check if the PR has the "ASIM" label.
       #         If not, all subsequent steps are skipped.
@@ -217,11 +195,14 @@ jobs:
       #   Requires file validation to pass and ASIM YAML files to exist.
       #   Step 4: Checkout the repository to read files from disk.
       #   Step 5: Install js-yaml for YAML parsing.
-      #   Step 6: Validate Parser.Version in new parser YAML files and
-      #           unifying parsers against their CHANGELOG entries.
+      #   Step 6: Validate parser YAML fields (EquivalentBuiltInParser,
+      #           ParserName, Parser.Version) and cross-reference
+      #           against unifying parsers and CHANGELOG entries.
       #   Step 7: Check if the PR has the "SafeToRun" label.
-      #   Step 8: Send the ASim-prefixed parser's KQL query to an LLM
-      #           for analysis (only if last commit touched the file).
+      #           Then remove it on forked PRs (synchronize events)
+      #           to prevent untrusted LLM execution on next push.
+      #   Step 8: Send ASim and vim parser KQL queries to an LLM
+      #           for performance and best practices review.
       # ----------------------------------------------------------------
       - name: Checkout repository
         if: steps.validate-paths.outcome == 'success' && steps.changed-files.outputs.has_asim_yaml_files == 'true'
@@ -232,20 +213,21 @@ jobs:
         run: npm install js-yaml
 
       # ----------------------------------------------------------------
-      # Step 6: Validate parser YAML files and CHANGELOG entries.
+      # Step 6: Validate parser YAML fields and CHANGELOG entries.
       #   For each new parser YAML file:
-      #     - Checks that EquivalentBuiltInParser exists
-      #     - ASim-prefixed: verifies its EquivalentBuiltInParser value
-      #       is listed in the ASim unifying parser's Parsers list
-      #     - vim-prefixed: verifies its EquivalentBuiltInParser value
-      #       is listed in the im unifying parser's Parsers list
-      #     - Reads Parser.Version from the YAML
-      #     - Checks that the corresponding CHANGELOG .md file
-      #       contains a matching "Version X.X" entry
+      #     - EquivalentBuiltInParser: must exist, follow naming format
+      #       (_ASim_<Schema>_<Product> or _Im_<Schema>_<Product>),
+      #       and be listed in the corresponding unifying parser's
+      #       Parsers array
+      #     - ParserName: must exist, follow naming format
+      #       (ASim<Schema><Product> or vim<Schema><Product>),
+      #       and be referenced in the corresponding unifying
+      #       parser's ParserQuery
+      #     - Parser.Version: must exist and have a matching
+      #       "Version X.X" entry in the corresponding CHANGELOG
       #   For the unifying (edited) parsers (ASim<Schema>.yaml,
       #   im<Schema>.yaml):
-      #     - Same version-to-CHANGELOG validation
-      # Outputs the parsed file contents as JSON for later steps.
+      #     - Parser.Version to CHANGELOG validation
       # ----------------------------------------------------------------
       - name: Validate parser files and changelog versions
         id: read-yaml
@@ -472,9 +454,43 @@ jobs:
             }
 
       # ----------------------------------------------------------------
-      # Step 8: LLM-based analysis of the new parser's KQL query.
-      #   Extracts the ParserQuery from the new ASim-prefixed YAML file
-      #   and sends it to the GitHub Models API (GPT-5) for review.
+      # Remove the "SafeToRun" label on forked PRs.
+      #   Forked PRs run with a read-only GITHUB_TOKEN and cannot
+      #   be trusted to run LLM analysis. Removing the label on
+      #   synchronize events ensures the SafeToRun check above
+      #   blocks them from proceeding on subsequent pushes.
+      # ----------------------------------------------------------------
+      - name: Remove SafeToRun label on forked PRs
+        if: github.event.pull_request.head.repo.fork == true && github.event.action == 'synchronize'
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (labels.includes('SafeToRun')) {
+              core.info('Forked PR detected — removing SafeToRun label.');
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  name: 'SafeToRun'
+                });
+              } catch (err) {
+                core.setFailed(`Failed to remove SafeToRun label: ${err.message}`);
+              }
+            } else {
+              core.info('Forked PR detected — SafeToRun label not present.');
+            }
+
+      # ----------------------------------------------------------------
+      # Step 8: LLM-based analysis of the new parser KQL queries.
+      #   Extracts ParserQuery from the new ASim-prefixed and
+      #   vim-prefixed YAML files. Sends two sequential LLM calls:
+      #     1. ASim parser: reviewed for KQL performance, operator
+      #        efficiency, and ASIM best practices
+      #     2. vim parser: reviewed for filter parameter placement,
+      #        efficiency, and completeness (includes ParserParams)
+      #   Results are posted as separate PR comments.
       #   Only runs if the PR has the "SafeToRun" label.
       # ----------------------------------------------------------------
       - name: Analyze parsers for ASIM best practices
