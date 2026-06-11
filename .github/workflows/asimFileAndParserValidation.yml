@@ -380,14 +380,18 @@ jobs:
               }
             }
 
-            // Extract ParserQuery from the vim-prefixed YAML file
+            // Extract ParserQuery and ParserParams from the vim-prefixed YAML file
             let vimParserQuery = null;
             for (const filePath of vimFiles) {
               try {
                 const content = fs.readFileSync(filePath, 'utf8');
                 const parsed = yaml.load(content);
                 if (parsed && parsed.ParserQuery) {
-                  vimParserQuery = { file: filePath, query: parsed.ParserQuery };
+                  vimParserQuery = {
+                    file: filePath,
+                    query: parsed.ParserQuery,
+                    params: parsed.ParserParams || []
+                  };
                 } else {
                   core.warning(`No ParserQuery found in: ${filePath}`);
                 }
@@ -505,6 +509,11 @@ jobs:
             // Analyze the vim-prefixed parser query, passing the previous
             // conversation as context so the LLM has awareness of the ASim review.
             if (vimParserQuery) {
+              // Format ParserParams for the prompt
+              const paramsTable = vimParserQuery.params.map(p =>
+                `| ${p.Name} | ${p.Type} | ${p.Default} |`
+              ).join('\n');
+
               const vimPrompt = `Now review the vim (parameter/filtering) version of \
               the same ASIM parser. This parser adds filtering parameters to improve \
               query efficiency by reducing the number of rows processed early in the \
@@ -513,6 +522,22 @@ jobs:
               You have already reviewed the ASim (parameter-less) version above. \
               Do NOT repeat issues already identified in that review. Focus only on \
               the filtering logic specific to this vim parser.
+
+              Here are the filtering parameters defined in ParserParams:
+
+              | Name | Type | Default |
+              |------|------|---------|
+              ${paramsTable}
+
+              These are the ONLY filter parameters available. The query should use \
+              these parameters to filter rows as early as possible.
+
+              **Important:** Some filter parameters may not have a matching column \
+              in the source data. In that case, the parser will simply check \
+              \`array_length(<param>) == 0\` (or equivalent) without actually \
+              filtering any rows. This is correct and expected — do NOT flag \
+              these as issues. Only flag a parameter as unused if it is completely \
+              absent from the query.
 
               Here is the ParserQuery from the vim-prefixed YAML file:
 
