@@ -2,15 +2,15 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "title": "Check Point EM - Importer (Alerts \u2192 SecurityAlert \u2192 Sentinel Incidents)",
-    "description": "Queries the argsentdc_CL custom table (populated by the CCP data connector) for recent alerts and writes each one to the built-in SecurityAlert table via the Log Ingestion API. A bundled scheduled analytic rule then promotes those SecurityAlert rows into Sentinel incidents with ref_id surfaced as a Custom Detail so the CPEM Exporter playbook can read it.",
+    "title": "Check Point EM - Importer (Alerts \u2192 SecurityAlert \u2192 Microsoft Sentinel Incidents)",
+    "description": "Queries the argsentdc_CL custom table (populated by the CCP data connector) for recent alerts and writes each one to the built-in SecurityAlert table via the Log Ingestion API. A bundled scheduled analytic rule then promotes those SecurityAlert rows into Microsoft Sentinel incidents with ref_id surfaced as a Custom Detail so the CPEM Exporter playbook can read it.",
     "prerequisites": [
       "The CCP data connector must be deployed and ingesting alerts into the argsentdc_CL table.",
       "After deployment, open the playbook and authorize the Azure Monitor Logs and Microsoft Sentinel connections."
     ],
     "postDeployment": [
       "Open the playbook in the Logic App designer, authorize both API connections (Azure Monitor Logs and Microsoft Sentinel), and press Save.",
-      "The template auto-deploys a Data Collection Endpoint, a SecurityAlert-targeted DCR, a Monitoring Metrics Publisher role assignment for the Logic App Managed Identity, and a Scheduled analytic rule named '<PlaybookName> - Promote CPEM SecurityAlerts to incidents' that converts SecurityAlert rows into Sentinel incidents."
+      "The template auto-deploys a Data Collection Endpoint, a SecurityAlert-targeted DCR, a Monitoring Metrics Publisher role assignment for the Logic App Managed Identity, and a Scheduled analytic rule named '<PlaybookName> - Promote CPEM SecurityAlerts to incidents' that converts SecurityAlert rows into Microsoft Sentinel incidents."
     ],
     "lastUpdateTime": "2026-05-25T00:00:00.000Z",
     "entities": [],
@@ -41,7 +41,7 @@
         "version": "2.0",
         "title": "Check Point EM - Importer",
         "notes": [
-          "Rewritten to query argsentdc_CL table and create Sentinel incidents (RecordedFuture AlertImporter pattern)"
+          "Rewritten to query argsentdc_CL table and create Microsoft Sentinel incidents (RecordedFuture AlertImporter pattern)"
         ]
       },
       {
@@ -107,7 +107,7 @@
       "type": "Microsoft.Web/connections",
       "apiVersion": "2016-06-01",
       "name": "[variables('AzureMonitorLogsConnectionName')]",
-      "location": "[variables('workspace-location-inline')]",
+      "location": "[resourceGroup().location]",
       "properties": {
         "displayName": "[variables('AzureMonitorLogsConnectionName')]",
         "api": {
@@ -119,7 +119,7 @@
       "type": "Microsoft.Web/connections",
       "apiVersion": "2016-06-01",
       "name": "[variables('AzureSentinelConnectionName')]",
-      "location": "[variables('workspace-location-inline')]",
+      "location": "[resourceGroup().location]",
       "kind": "V1",
       "properties": {
         "displayName": "[variables('AzureSentinelConnectionName')]",
@@ -133,7 +133,7 @@
       "type": "Microsoft.Insights/dataCollectionEndpoints",
       "apiVersion": "2023-03-11",
       "name": "[variables('DceName')]",
-      "location": "[variables('workspace-location-inline')]",
+      "location": "[resourceGroup().location]",
       "properties": {
         "description": "Data Collection Endpoint used by the CPEM Importer playbook to write SecurityAlert rows via the Log Ingestion API.",
         "networkAcls": { "publicNetworkAccess": "Enabled" }
@@ -143,10 +143,10 @@
       "type": "Microsoft.Insights/dataCollectionRules",
       "apiVersion": "2023-03-11",
       "name": "[variables('DcrName')]",
-      "location": "[variables('workspace-location-inline')]",
+      "location": "[resourceGroup().location]",
       "dependsOn": [ "[variables('dceResourceId')]" ],
       "properties": {
-        "description": "Routes ingested CPEM alerts into the built-in SecurityAlert table so a bridge analytic rule can promote them to Sentinel incidents.",
+        "description": "Routes ingested CPEM alerts into the built-in SecurityAlert table so a bridge analytic rule can promote them to Microsoft Sentinel incidents.",
         "dataCollectionEndpointId": "[variables('dceResourceId')]",
         "streamDeclarations": {
           "Custom-CPEMSecurityAlert": {
@@ -199,7 +199,7 @@
       "kind": "Scheduled",
       "properties": {
         "displayName": "[concat(parameters('PlaybookName'), ' - Promote CPEM SecurityAlerts to incidents')]",
-        "description": "Bridges SecurityAlert rows ingested by the CPEM Importer into Sentinel incidents. Surfaces ref_id as a Custom Detail so the CPEM Exporter playbook can read it via properties.alerts[*].properties.additionalData['Custom Details'].",
+        "description": "Bridges SecurityAlert rows ingested by the CPEM Importer into Microsoft Sentinel incidents. Surfaces ref_id as a Custom Detail so the CPEM Exporter playbook can read it via properties.alerts[*].properties.additionalData['Custom Details'].",
         "enabled": true,
         "severity": "Medium",
         "query": "SecurityAlert\n| where ProviderName == 'Check Point Exposure Management'\n| extend Parsed = parse_json(ExtendedProperties)\n| extend RefId = tostring(Parsed.ref_id)\n| extend EventType = tostring(Parsed.event_type)\n| extend Category = tostring(Parsed.category)\n| extend OriginalSeverity = tostring(Parsed.severity)\n| extend Confidence = tostring(Parsed.confidence)\n| extend Recommendation = tostring(Parsed.recommendation)\n| project TimeGenerated, SystemAlertId, DisplayName, AlertSeverity, Description, RefId, EventType, Category, OriginalSeverity, Confidence, Recommendation",
@@ -241,7 +241,7 @@
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
-      "location": "[variables('workspace-location-inline')]",
+      "location": "[resourceGroup().location]",
       "identity": {
         "type": "SystemAssigned"
       },
