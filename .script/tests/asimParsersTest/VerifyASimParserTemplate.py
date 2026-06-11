@@ -8,7 +8,6 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir in sys.path:
     sys.path.remove(script_dir)
 
-import requests
 import yaml
 import re
 import subprocess
@@ -19,7 +18,7 @@ from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
+SAMPLE_DATA_PATH = 'Sample Data/ASIM/'
 parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
@@ -54,9 +53,9 @@ RESET = '\033[0m'  # Reset to default color
 def run():
     """Main function to execute the script logic."""
     current_directory = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
-    commit_number = get_current_commit_number()
-    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
+    sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
     parser_yaml_files = filter_yaml_files(modified_files)
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -78,27 +77,27 @@ def run():
              else :
                  # Skip the vim parser file as the corresponding ASim parser file is present and vim files will be tested with ASim files in upcoming steps.
                  continue 
-        asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{parser}'
-        print(f'{YELLOW}Constructed parser raw url:  {asim_parser_url}{RESET}') # uncomment for debugging
-        asim_union_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml'
-        print(f'{YELLOW}Constructed union parser raw url:  {asim_union_parser_url}{RESET}') # uncomment for debugging
-        asim_parser = read_github_yaml(asim_parser_url)
-        asim_union_parser = read_github_yaml(asim_union_parser_url)
+        asim_parser_path = os.path.join(repo_root, parser)
+        print(f'{YELLOW}Parser file path: {asim_parser_path}{RESET}')
+        asim_union_parser_path = os.path.join(repo_root, 'Parsers', f'ASim{schema_name}', 'Parsers', f'ASim{schema_name}.yaml')
+        print(f'{YELLOW}Union parser file path: {asim_union_parser_path}{RESET}')
+        asim_parser = read_local_yaml(asim_parser_path)
+        asim_union_parser = read_local_yaml(asim_union_parser_path)
         # Both ASim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(asim_parser, asim_parser_url) and check_parser_found(asim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(asim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_path, sample_data_path)
         print_results_table(results)
 
         check_test_failures(results, asim_parser)
 
-        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser)
+        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_path, asim_union_parser_path)
         # Both vim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(vim_parser, asim_parser_url) and check_parser_found(vim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(vim_parser, asim_parser_path) and check_parser_found(vim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(vim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_path, sample_data_path)
         print_results_table(results)
 
         check_test_failures(results, vim_parser)
@@ -265,10 +264,9 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if FileType == "ASim":
         # construct filename
         SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataUrl = ASIMSampleDataURL+SampleDataFile
-        # check if file exists
-        response = requests.get(SampleDataUrl)
-        if response.status_code == 200:
+        SampleDataFilePath = os.path.join(ASIMSampleDataURL, SampleDataFile)
+        # check if file exists locally
+        if os.path.exists(SampleDataFilePath):
             results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
         else:
             results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
@@ -308,12 +306,16 @@ def extract_schema_name(parser):
     match = re.search(r'ASim(\w+)/', parser)
     return match.group(1) if match else None
 
-def read_github_yaml(url):
+def read_local_yaml(filepath):
     try:
-        response = requests.get(url)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f.read())
+    except FileNotFoundError:
+        print(f"::error::YAML file not found at {filepath}")
+        return None
     except Exception as e:
-        print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
-    return yaml.safe_load(response.text) if response.status_code == 200 else None
+        print(f"::error::An error occurred while reading YAML file at {filepath}: {e}")
+        return None
 
 def print_test_header(parser_name):
     print("***********************************")
@@ -335,28 +337,20 @@ def check_test_failures(results, parser):
     else:
         print(f"{GREEN}All tests successfully passed for this parser.{RESET}")
 
-def check_parser_found(asim_parser,parser_url):
+def check_parser_found(asim_parser, parser_path):
     if asim_parser is None:
-        print(f"::error::Parser file not found. Please check the URL and try again: {parser_url}")
+        print(f"::error::Parser file not found at: {parser_path}")
         exit(1) # Uncomment this line to fail the workflow if parser file not found.
     else:
         return True
 
-def get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser):
-    # Split the URL into parts
-    parts = asim_parser_url.split('/')
+def get_vim_parsers(asim_parser_path, asim_union_parser_path):
     # Replace 'ASim' with 'vim' in the filename only
-    parts[-1] = parts[-1].replace('ASim', 'vim', 1)
-    # Join the parts back into a full URL for vim_parser_url
-    vim_parser_url = '/'.join(parts)
-    # Repeat the process for asim_union_parser_url
-    parts_union = asim_union_parser_url.split('/')
-    # Replace 'ASim' with 'im' in the filename only
-    parts_union[-1] = parts_union[-1].replace('ASim', 'im', 1)
-    # Join the parts back into a full URL for vim_union_parser_url
-    vim_union_parser_url = '/'.join(parts_union)
-    vim_parser = read_github_yaml(vim_parser_url)
-    vim_union_parser = read_github_yaml(vim_union_parser_url)
+    vim_parser_path = os.path.join(os.path.dirname(asim_parser_path), os.path.basename(asim_parser_path).replace('ASim', 'vim', 1))
+    # Replace 'ASim' with 'im' in the union parser filename only
+    vim_union_parser_path = os.path.join(os.path.dirname(asim_union_parser_path), os.path.basename(asim_union_parser_path).replace('ASim', 'im', 1))
+    vim_parser = read_local_yaml(vim_parser_path)
+    vim_union_parser = read_local_yaml(vim_union_parser_path)
     return vim_parser, vim_union_parser
 
 # Function to read Exclusion list for ASim Parser test from a CSV file
