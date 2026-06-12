@@ -1,5 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-|3.2.0        | 10-06-2026                     | New connector, new event and alert tables with OCSF schema, hunting query, and parsers | 
+|3.2.0        | 10-06-2026                     | New connector, new event and alert tables with OCSF schema, and parsers | 
 |3.1.0        | 24-03-2026                     | Update Connector to receive events with OCSF schemas | 
 |3.0.0        | 09-12-2025                     | Initial Solution release
