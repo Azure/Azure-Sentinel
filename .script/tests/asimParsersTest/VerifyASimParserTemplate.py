@@ -57,6 +57,7 @@ def run():
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
     parser_yaml_files = filter_yaml_files(modified_files)
+    has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
         print(f"{YELLOW}{file}{RESET}")
@@ -90,7 +91,8 @@ def run():
         results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_path, sample_data_path)
         print_results_table(results)
 
-        check_test_failures(results, asim_parser)
+        if check_test_failures(results, asim_parser):
+            has_failures = True
 
         vim_parser, vim_union_parser = get_vim_parsers(asim_parser_path, asim_union_parser_path)
         # Both vim and union parser files should be present to proceed with the tests
@@ -100,7 +102,11 @@ def run():
         results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_path, sample_data_path)
         print_results_table(results)
 
-        check_test_failures(results, vim_parser)
+        if check_test_failures(results, vim_parser):
+            has_failures = True
+
+    if has_failures:
+        exit(1)
 
 def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ParserUrl, ASIMSampleDataURL):
     """
@@ -332,17 +338,19 @@ def check_test_failures(results, parser):
         exclusion_list = read_exclusion_list_from_csv()
         if parser.get('EquivalentBuiltInParser') in exclusion_list:
             print(f"::warning::The parser {parser.get('EquivalentBuiltInParser')} is listed in the exclusions file, so this workflow run will not fail because of it. To allow this parser to trigger a workflow failure, please remove its name from the exclusions list file located at: {parser_exclusion_file_path}")
+            return False
         else:
-            exit(1)
+            return True
     else:
         print(f"{GREEN}All tests successfully passed for this parser.{RESET}")
+        return False
 
 def check_parser_found(asim_parser, parser_path):
     if asim_parser is None:
         print(f"::error::Parser file not found at: {parser_path}")
         exit(1) # Uncomment this line to fail the workflow if parser file not found.
-    else:
-        return True
+    
+    return True
 
 def get_vim_parsers(asim_parser_path, asim_union_parser_path):
     # Replace 'ASim' with 'vim' in the filename only
