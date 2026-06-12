@@ -123,14 +123,20 @@ ParserQuery: |
             ThreatIsActive = (DvcAction !startswith 'Prevented'),
             AttackTactics = replace_regex(tostring(MitreTacticIdAndName), @'(TA\d{4})\s+-\s+([\w\s]+)', @'\2 (\1)'),
             AttackTechniques = replace_regex(tostring(MitreTechniqueIdAndName), @'(T[\d\.]+)\s+-\s+([\w\s-:]+)', @'\2 (\1)'),
-            User = split(Username, @'\')[1],
+            User = tostring(split(Username, @'\')[1]),
             UserType = case(
                 Username has 'SYSTEM', 'System',
                 Username has_any ('LOCAL SERVICE', 'NETWORK SERVICE'), 'Service',
                 isempty(Username), '',
                 'Regular'
             ),
-            Url = coalesce(tostring(MaliciousUrls), DstActionExternalHostname)
+            UsernameType = case(
+                Username has @'\', 'Windows',
+                Username has '@', 'UPN',
+                'Simple'
+            ),
+            Url = coalesce(tostring(MaliciousUrls), DstActionExternalHostname),
+            DvcIdType = iff(isnotempty(DvcId), 'Other', '')
         | where ((array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any)))
         | project-away
             MitreTacticIdAndName,
@@ -205,6 +211,8 @@ ParserQuery: |
             dynamic([])
         )
         | project
+            TimeGenerated,
+            Type,
             EventUid,
             EventOriginalUid,
             EventProductVersion,
@@ -214,10 +222,12 @@ ParserQuery: |
             ThreatFirstReportedTime,
             ThreatLastReportedTime,
             Username,
+            UsernameType,
             DvcIpAddr,
             DvcHostname,
             EventOriginalSeverity,
             DvcId,
+            DvcIdType,
             DvcOs,
             DvcAction,
             DvcOriginalAction,
