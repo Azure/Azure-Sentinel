@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.5       | 28-05-2026                     | Adding search_from/search_to as per the PaloAlto **Alerts** documentation offset and sort order to asc |
 | 3.0.4       | 14-10-2025                     | Updating CCF Polling file to implement parameters                           |
 | 3.0.3       | 09-04-2025                     | Updating CCF connector parameters                                        |
 | 3.0.2       | 10-02-2025                     | Advancing CCF **Data Connector** from Public preview to Global Availability.|
