@@ -32,6 +32,10 @@ Per-CSV reference documentation. Each page covers what the CSV contains, how it'
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.md) — issues encountered while parsing connectors and content.
 - [`asim_parsers_unmatched_report.csv`](asim_parsers_unmatched_report.md) — ASIM parsers that couldn't be associated with any connector.
 
+### [`generate_connector_docs.py`](../generate_connector_docs.md)
+
+- [`artifact_doc_links.csv`](artifact_doc_links.md) — relative markdown and HTML links for every generated documentation artifact page.
+
 ### [`collect_table_info.py`](../collect_table_info.md)
 
 - [`tables_reference.csv`](tables_reference.md) — comprehensive table metadata fetched from Microsoft documentation.
@@ -54,7 +58,7 @@ Per-CSV reference documentation. Each page covers what the CSV contains, how it'
 | Role | CSVs |
 |------|------|
 | **Entity** | [`connectors`](connectors.md), [`solutions`](solutions.md), [`tables`](tables.md), [`parsers`](parsers.md), [`asim_parsers`](asim_parsers.md), [`content_items`](content_items.md) |
-| **Mapping / edges** | [`solutions_connectors_tables_mapping_simplified`](solutions_connectors_tables_mapping_simplified.md), [`content_tables_mapping`](content_tables_mapping.md), [`playbook_connectors`](playbook_connectors.md), [`solution_dependencies`](solution_dependencies.md) |
+| **Mapping / edges** | [`solutions_connectors_tables_mapping_simplified`](solutions_connectors_tables_mapping_simplified.md), [`content_tables_mapping`](content_tables_mapping.md), [`playbook_connectors`](playbook_connectors.md), [`solution_dependencies`](solution_dependencies.md), [`artifact_doc_links`](artifact_doc_links.md) |
 | **Schema** | [`table_schemas`](table_schemas.md), [`la_table_schemas`](la_table_schemas.md), [`asim_fields`](asim_fields.md), [`asim_entity_fields`](asim_entity_fields.md), [`asim_logical_types`](asim_logical_types.md), [`asim_vendors_products`](asim_vendors_products.md) |
 | **Reference** | [`tables_reference`](tables_reference.md) |
 | **Report / diagnostic** | [`solutions_connectors_tables_issues_and_exceptions_report`](solutions_connectors_tables_issues_and_exceptions_report.md), [`asim_parsers_unmatched_report`](asim_parsers_unmatched_report.md), [`asim_extraction_failures`](asim_extraction_failures.md) |
