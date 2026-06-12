@@ -1,3 +1,25 @@
+# VerifyASimParserTemplate.py
+#
+# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# For each modified parser, the following checks are performed against the parser
+# YAML and its corresponding union parser YAML:
+#
+# 1.  EventProduct  - ParserQuery must set EventProduct (exempt for _Native parsers)
+# 2.  EventVendor   - ParserQuery must set EventVendor (exempt for _Native parsers)
+# 3.  ParserName in union parser  - ParserName must appear in the union parser's ParserQuery
+# 4.  EquivalentBuiltInParser in union parser - must appear in the union parser's Parsers list
+# 5.  Parser.Title   - must be present
+# 6.  Parser.Version - must be present and in X.X.X format
+# 7.  Parser.LastUpdated - must be present and in "Mon DD, YYYY" format (e.g. Jun 29, 2024)
+# 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
+# 9.  Normalization.Version - must match the expected version for the schema in SCHEMA_INFO
+# 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
+# 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
+# 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
+# 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+#
+# Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
+
 import sys
 import os
 
@@ -88,7 +110,7 @@ def run():
         if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(asim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_path, sample_data_path)
+        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", sample_data_path)
         print_results_table(results)
 
         if check_test_failures(results, asim_parser):
@@ -99,7 +121,7 @@ def run():
         if not (check_parser_found(vim_parser, asim_parser_path) and check_parser_found(vim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(vim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_path, sample_data_path)
+        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", sample_data_path)
         print_results_table(results)
 
         if check_test_failures(results, vim_parser):
@@ -108,16 +130,32 @@ def run():
     if has_failures:
         exit(1)
 
-def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ParserUrl, ASIMSampleDataURL):
+def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIMSampleDataURL):
     """
-    Extracts properties from the given YAML files and checks if they exist in another YAML file.
+    Validates the template properties of an ASIM parser YAML file.
+
+    Checks performed:
+    - EventProduct and EventVendor are mapped in ParserQuery (or parser is _Native)
+    - ParserName is referenced in the union parser's ParserQuery
+    - EquivalentBuiltInParser is listed in the union parser's Parsers array
+    - Parser.Title is present
+    - Parser.Version is present and in X.X.X format
+    - Parser.LastUpdated is present and in 'Mon DD, YYYY' format
+    - Normalization.Schema matches a known ASIM schema name
+    - Normalization.Version matches the expected schema version
+    - References include correct schema-specific and ASIM doc links
+    - ParserName follows the naming convention <FileType><Schema>...
+    - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
+    - Sample data CSV file exists locally (ASim parsers only)
 
     Args:
-        yaml_file (dict): The YAML file to extract properties from.
-        another_yaml_file (dict): The YAML file to check for the existence of properties.
+        Parser_file (dict): Parsed YAML content of the parser file.
+        Union_Parser__file (dict): Parsed YAML content of the union parser file.
+        FileType (str): Parser type - 'ASim' or 'vim'.
+        ASIMSampleDataURL (str): Local path to the sample data directory.
 
     Returns:
-        list: A list of tuples containing the property name, the property type, and a boolean indicating if the property exists in another_yaml_file.
+        list: A list of (value, description, result) tuples where result is 'Pass' or 'Fail'.
     """
     results = []
     parser_name = Parser_file.get('ParserName')
