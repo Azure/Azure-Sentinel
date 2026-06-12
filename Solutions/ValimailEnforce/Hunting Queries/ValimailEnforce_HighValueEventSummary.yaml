@@ -1,0 +1,54 @@
+id: a2be34b7-e841-471a-aaac-142be8a74cab
+name: Valimail Enforce - High Value Event Summary
+description: |
+  Summarizes all high-value Valimail Enforce events over the selected time range,
+  grouped by category and user. Good for periodic security reviews and baselining
+  normal admin activity.
+tactics:
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1562
+  - T1098
+requiredDataConnectors:
+  - connectorId: ValimailEnforce
+    dataTypes:
+      - ValimailEnforceEvents_CL
+query: |
+  // Summarize high-value events per user and category for baselining and review
+  let timeframe = 7d;
+  ValimailEnforceEvents_CL
+  | where PerformedAt > ago(timeframe)
+  | where IsHighValueEvent == true
+  | summarize
+      EventCount = count(),
+      Domains = make_set(Subject),
+      Actions = make_set(EventType),
+      FirstSeen = min(PerformedAt),
+      LastSeen = max(PerformedAt)
+    by User, EventCategory, EventSeverity
+  | extend
+      AccountName   = tostring(split(User, "@")[0]),
+      AccountDomain = tostring(split(User, "@")[1])
+  | project
+      User,
+      AccountName,
+      AccountDomain,
+      EventCategory,
+      EventSeverity,
+      EventCount,
+      FirstSeen,
+      LastSeen,
+      Domains,
+      Actions
+  | order by EventCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain
+version: 1.0.0

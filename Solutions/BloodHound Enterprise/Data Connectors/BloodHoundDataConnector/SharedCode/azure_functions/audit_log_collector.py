@@ -1,7 +1,8 @@
 from typing import Dict, List, Tuple, Optional, Any
 import logging
 import time
-from ..utility.utils import load_environment_configs, EnvironmentConfig, AzureConfig
+import json
+from ..utility.utils import load_environment_configs, EnvironmentConfig, AzureConfig, get_azure_batch_size
 from ..utility.bloodhound_manager import BloodhoundManager
 
 def process_environment(
@@ -126,7 +127,7 @@ def send_audit_logs_to_azure_monitor(
     current_tenant_domain: str
 ) -> Tuple[int, int]:
     """
-    Sends audit logs to Azure Monitor.
+    Sends audit logs to Azure Monitor in batches of 100.
     
     Args:
         audit_logs: List of audit log entries to process
@@ -141,22 +142,53 @@ def send_audit_logs_to_azure_monitor(
         Exception: If there's an error sending logs to Azure Monitor
     """
     successful_submissions = failed_submissions = 0
-    logging.info(f"Processing {len(audit_logs)} audit logs for '{current_tenant_domain}'")
-
-    for log_entry in audit_logs:
-        log_id = log_entry.get('id', 'unknown')
-        logging.info(f"Processing log entry: ID {log_id}")
+    batch_size = get_azure_batch_size()
+    logging.info(f"Processing {len(audit_logs)} audit logs for '{current_tenant_domain}' in batches of {batch_size}")
+    
+    # Process in batches
+    for batch_start in range(0, len(audit_logs), batch_size):
+        batch_end = min(batch_start + batch_size, len(audit_logs))
+        batch = audit_logs[batch_start:batch_end]
         
-        result = bloodhound_manager.send_audit_logs_data(log_entry, azure_monitor_token)
+        # Transform batch entries to the expected schema for Azure Monitor
+        log_entries = []
+        for data in batch:
+            log_entry = {
+                "action": data.get("action", ""),
+                "actor_email": data.get("actor_email", ""),
+                "actor_id": data.get("actor_id", ""),
+                "actor_name": data.get("actor_name", ""),
+                "commit_id": data.get("commit_id", ""),
+                "created_at": data.get("created_at", ""),
+                "fields": json.dumps(data.get("fields", {})),  # fields should be a string in Log Analytics
+                "id": data.get("id", ""),
+                "request_id": data.get("request_id", ""),
+                "source_ip_address": data.get("source_ip_address", ""),
+                "status": data.get("status", ""),
+                "tenant_url": current_tenant_domain,
+            }
+            log_entries.append(log_entry)
         
-        if result.get("status") == "success":
-            successful_submissions += 1
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): IDs {[log.get('id', 'unknown') for log in log_entries[:5]]}...")
+        
+        # Send batch to Azure Monitor
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            azure_monitor_token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
+        )
+        
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} audit logs")
         else:
-            failed_submissions += 1
-            logging.error(f"Failed to send audit log ID {log_id}: {result.get('message', 'Unknown error')}")
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error') if result else 'No response'}")
         
-        # Rate limiting to prevent overwhelming the API
-        time.sleep(0.1)
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
 
     logging.info(
         f"Audit log processing for '{current_tenant_domain}' complete. "

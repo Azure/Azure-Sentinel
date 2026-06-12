@@ -1,0 +1,158 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Cisco DNAC Syslog Message
+  Version: '0.1.0'
+  LastUpdated: Apr 29, 2026
+Product:
+  Name: Cisco DNAC
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: About Cisco DNAC System Log Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/routers/access/wireless/software/guide/SysMsgLogging.html
+Description: |
+  This ASIM filtering parser supports normalizing authentication events, collected from Cisco DNAC devices using the AMA agent to the ASIM Authentication schema.
+ParserName: vimAuthenticationCiscoDNAC
+EquivalentBuiltInParser: _Im_Authentication_CiscoDNAC
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    username_has_any: dynamic = dynamic([]),
+    targetappname_has_any: dynamic = dynamic([]),
+    srcipaddr_has_any_prefix: dynamic = dynamic([]),
+    srchostname_has_any: dynamic = dynamic([]),
+    eventtype_in: dynamic = dynamic([]),
+    eventresultdetails_in: dynamic = dynamic([]),
+    eventresult: string = '*',
+    disabled: bool=false) {
+  let DNACEvents = Syslog
+  | where not(disabled)
+  | where ProcessName == "DNAC"
+  | where 
+      (isnull(starttime) or TimeGenerated >= starttime) 
+      and (isnull(endtime) or TimeGenerated <= endtime)
+      and ((array_length(username_has_any) == 0) or SyslogMessage has_any (username_has_any))
+      and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+      and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SyslogMessage, srcipaddr_has_any_prefix)))
+      and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source;
+      and (array_length(eventresultdetails_in) == 0);  // eventresultdetails not available in source
+  let LogonEvents = (T: (SyslogMessage: string)) {
+    T
+    | where SyslogMessage has "LOGIN_USER_EVENT"
+    | extend EventType = "Logon"
+  };
+  let LogoffEvents = (T: (SyslogMessage: string)) {
+    T
+    | where SyslogMessage has "LOGOFF_USER_EVENT"
+    | extend EventType = "Logoff"
+  };
+  union LogonEvents(DNACEvents), LogoffEvents(DNACEvents)
+  | where ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
+  | extend 
+      EventVendor = "Cisco",
+      EventProduct = "DNAC",
+      EventSchema = "Authentication",
+      EventSchemaVersion = "0.1.4",
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventCount = int(1),
+      Type = "Syslog"
+  | extend SyslogJson = parse_json(SyslogMessage)
+  | extend 
+      SrcIpAddr = tostring(SyslogJson.source),
+      EventOriginalType = tostring(SyslogJson.name),
+      EventOriginalSubType = tostring(SyslogJson.type),
+      TargetUsername = tostring(SyslogJson.userId),
+      TargetUsernameType = "Simple",
+      EventMessage = tostring(SyslogJson.message),
+      EventOriginalUid = tostring(SyslogJson.correlationId),
+      DvcId = tostring(SyslogJson.instanceId),
+      DvcIdType = "Other"
+  | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
+  | where ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)))
+  | extend EventResult = iff(EventMessage has "successfully", "Success", "Failure")
+  | where (eventresult == "*" or (EventResult == eventresult))
+  | extend EventSeverity = _ASIM_LookupSyslogSeverityLevel(SeverityLevel)
+  | project-rename
+      TargetIpAddr = HostIP,
+      EventOriginalSeverity = SeverityLevel
+  | extend
+      User = TargetUsername,
+      Dvc = DvcId,
+      IpAddr = SrcIpAddr,
+      Src = SrcIpAddr
+  | project
+      TimeGenerated,
+      Type,
+      EventType,
+      EventVendor,
+      EventProduct,
+      EventSchema,
+      EventSchemaVersion,
+      EventStartTime,
+      EventEndTime,
+      EventCount,
+      SrcIpAddr,
+      EventOriginalType,
+      EventOriginalSubType,
+      TargetUsername,
+      TargetUsernameType,
+      EventMessage,
+      EventOriginalUid,
+      DvcId,
+      DvcIdType,
+      EventResult,
+      EventSeverity,
+      TargetIpAddr,
+      EventOriginalSeverity,
+      User,
+      Dvc,
+      IpAddr,
+      Src
+  };
+  parser(starttime=starttime,
+        endtime=endtime,
+        username_has_any=username_has_any,
+        targetappname_has_any=targetappname_has_any,
+        srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+        srchostname_has_any=srchostname_has_any,
+        eventtype_in=eventtype_in,
+        eventresultdetails_in=eventresultdetails_in,
+        eventresult=eventresult,
+        disabled=disabled)

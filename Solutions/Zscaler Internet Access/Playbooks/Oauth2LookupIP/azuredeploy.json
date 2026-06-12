@@ -1,0 +1,275 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Zscaler OAuth2 Lookup IP",
+        "description": "This playbook looks up IP categorization information from Zscaler using OAuth2 authentication.",
+        "mainSteps": [
+            "1. Gets IP entities from the incident",
+            "2. Uses the OAuth2 authentication playbook to acquire an access token",
+            "3. Looks up IP categorization information from Zscaler"
+        ],
+        "prerequisites": [
+            "1. Deploy the Zscaler-Oauth2-Authentication playbook in the same resource group",
+            "2. Ensure the Logic App managed identity has Microsoft Sentinel Responder permissions"
+        ],
+        "lastUpdateTime": "2025-09-02T00:00:00.000Z",
+        "entities": [
+            "IP"
+        ],
+        "tags": [
+            "Enrichment"
+        ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Zscaler"
+        },
+        "source": {
+            "type": "solution",
+            "name": "Zscaler Internet Access"
+        },
+        "postDeployment": [
+            "**a. Authorize API connections**",
+            "Authorize the Microsoft Sentinel connection."
+        ],
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Zscaler OAuth2 Lookup IP",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Zscaler-Oauth2-LookupIP",
+            "type": "String",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Zscaler OAuth2 Authentication Playbook": {
+            "defaultValue": "Zscaler-Oauth2-Authentication",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Zscaler OAuth2 Authentication Playbook"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ZscalerAuthenticationFlow": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Zscaler OAuth2 Authentication Playbook'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "auth": "Oauth2",
+                "hidden-SentinelTemplateName": "Zscaler-Oauth2-LookupIP",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "zscaler": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[variables('ZscalerAuthenticationFlow')]"
+                                    }
+                                }
+                            }
+                        },
+                        "Parse_Authentication_Response": {
+                            "runAfter": {
+                                "zscaler": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('zscaler')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "HTTP_Lookup_IP": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": [
+                                            "@{items('For_each')?['Address']}"
+                                        ],
+                                        "headers": {
+                                            "Authorization": "@{concat(body('Parse_Authentication_Response')?['token_type'], ' ', body('Parse_Authentication_Response')?['access_token'])}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://api.zsapi.net/zia/api/v1/urlLookup"
+                                    }
+                                },
+                                "Parse_Lookup_Response": {
+                                    "runAfter": {
+                                        "HTTP_Lookup_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_Lookup_IP')",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    },
+                                                    "urlClassifications": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "urlClassificationsWithSecurityAlert": {
+                                                        "type": "array"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "url",
+                                                    "urlClassifications",
+                                                    "urlClassificationsWithSecurityAlert"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Authentication_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

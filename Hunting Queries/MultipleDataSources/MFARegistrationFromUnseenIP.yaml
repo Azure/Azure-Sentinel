@@ -1,0 +1,84 @@
+id: 3d36b19f-cd62-4522-8869-23cdd9cc0c9f
+name: MFA method registered from an IP address not seen in user sign-in history
+description: |
+  Identifies MFA method registration events where the source IP address has not
+  appeared in the registering user's 30-day sign-in history. An attacker who obtains
+  credentials may register a new MFA method from an attacker-controlled IP to maintain
+  access after a password reset. Does not require Entra ID P2 licensing.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/authentication/concept-mfa-howitworks
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1556/006/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1556.006
+query: |
+  let timeframe = 1d;
+  let lookback = 30d;
+  // Build per-user baseline of IPs from successful sign-ins over the past 30 days
+  let BaselineIPs =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(IPAddress)
+      | extend UserUpn = tolower(UserPrincipalName)
+      | summarize KnownIPs = make_set(IPAddress) by UserUpn;
+  // MFA registration events in the query window
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName =~ "User registered security info"
+  | where Result =~ "success"
+  | extend UserUpn    = tolower(tostring(TargetResources[0].userPrincipalName))
+  | extend UserId     = tostring(TargetResources[0].id)
+  | extend MethodType = tostring(TargetResources[0].displayName)
+  | extend RegIp      = tostring(InitiatedBy.user.ipAddress)
+  | where isnotempty(RegIp) and isnotempty(UserUpn)
+  // Join with IP baseline; hint.strategy=broadcast pushes the smaller AuditLogs
+  // stream to all nodes holding BaselineIPs, avoiding an expensive shuffle join
+  // when the 30-day baseline is large relative to the 1-day event stream.
+  | join kind=leftouter hint.strategy=broadcast BaselineIPs on $left.UserUpn == $right.UserUpn
+  // Flag registrations from IPs not present in the baseline, or users with no baseline at all
+  | where isnull(KnownIPs) or not(set_has_element(KnownIPs, RegIp))
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      TimeGenerated,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      UserId,
+      MethodType,
+      RegIp,
+      KnownIPCount = array_length(KnownIPs),
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RegIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

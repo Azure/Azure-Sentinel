@@ -1,7 +1,7 @@
 import logging
 import time
 from typing import Dict, List, Any, Optional
-from ..utility.utils import load_environment_configs, get_token_lists
+from ..utility.utils import load_environment_configs, get_token_lists, get_azure_batch_size
 from ..utility.bloodhound_manager import BloodhoundManager
 
 
@@ -159,7 +159,7 @@ def collect_posture_history(bloodhound_manager, env_id, data_types, current_tena
 
 def send_posture_history_to_azure_monitor(posture_history_data, bloodhound_manager, azure_monitor_token, current_tenant_domain, domains_data):
     """
-    Sends posture history data to Azure Monitor and returns the count of successful and failed submissions.
+    Sends posture history data to Azure Monitor in batches of 100 and returns the count of successful and failed submissions.
     """
     successful_submissions = 0
     failed_submissions = 0
@@ -168,22 +168,63 @@ def send_posture_history_to_azure_monitor(posture_history_data, bloodhound_manag
         logging.info("No posture history data was collected to send to Azure Monitor for this environment.")
         return successful_submissions, failed_submissions
 
-    logging.info(f"Sending {len(posture_history_data)} posture history records to Azure Monitor.")
+    batch_size = get_azure_batch_size()
+    logging.info(f"Sending {len(posture_history_data)} posture history records to Azure Monitor in batches of {batch_size}.")
     
-    for i, data_item in enumerate(posture_history_data, 1):
-        result = bloodhound_manager.send_posture_history_logs(
-            data_item, azure_monitor_token, current_tenant_domain, domains_data
+    # Process in batches
+    for batch_start in range(0, len(posture_history_data), batch_size):
+        batch_end = min(batch_start + batch_size, len(posture_history_data))
+        batch = posture_history_data[batch_start:batch_end]
+        
+        # Transform batch entries to the expected schema for Azure Monitor
+        log_entries = []
+        for data_item in batch:
+            domain_id = data_item.get("domain_id", "")
+            domain_name = (
+                next(
+                    (
+                        domain["name"]
+                        for domain in domains_data
+                        if domain.get("id") == domain_id
+                    ),
+                    None,
+                )
+                if domains_data
+                else None
+            )
+            
+            log_entry = {
+                "metric_date": data_item.get("date", ""),
+                "value": str(data_item.get("value", "")),
+                "start_time": data_item.get("start_date", ""),
+                "end_time": data_item.get("end_date", ""),
+                "domain_id": domain_id,
+                "data_type": data_item.get("type", ""),
+                "domain_name": domain_name,
+                "tenant_url": current_tenant_domain,
+            }
+            log_entries.append(log_entry)
+        
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): Types {[log.get('data_type', 'unknown') for log in log_entries[:5]]}...")
+        
+        # Send batch to Azure Monitor
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            azure_monitor_token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
         )
-        logging.info(f"Processing posture history entry {i}/{len(posture_history_data)}: {data_item}")
-        logging.info(f"Result of sending posture history is {result}")
         
-        if result.get("status") == "success":
-            successful_submissions += 1
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} posture history records")
         else:
-            failed_submissions += 1
-            logging.error(f"Failed to send posture history for date '{data_item.get('value')}': {result.get('message', 'Unknown error')}")
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error') if result else 'No response'}")
         
-        time.sleep(0.1)
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
     
     logging.info(f"Posture history processing complete for '{current_tenant_domain}'. Successful submissions: {successful_submissions}, Failed submissions: {failed_submissions}.")
     return successful_submissions, failed_submissions

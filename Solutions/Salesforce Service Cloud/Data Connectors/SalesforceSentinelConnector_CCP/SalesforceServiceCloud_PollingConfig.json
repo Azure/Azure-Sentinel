@@ -1,84 +1,97 @@
-[
-  {
-    "name": "SalesforceServiceCloudPolling",
-    "apiVersion": "2022-12-01-preview",
-    "type": "Microsoft.SecurityInsights/dataConnectors",
-    "location": "{{location}}",
-    "kind": "RestApiPoller",
-    "properties": {
-      "connectorDefinitionName": "SalesforceServiceCloudCCPDefinition",
-      "dataType": "SalesforceServiceCloudV2_CL",
-      "dcrConfig": {
-        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
-        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
-        "streamName": "Custom-SalesforceServiceCloudV2_CL"
+{
+  "type": "Microsoft.SecurityInsights/dataConnectors",
+  "apiVersion": "2024-09-01",
+  "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','SalesforceServiceCloudV3_CL' , uniqueString(parameters('friendlyName')) )]",
+  "location": "[[parameters('location')]",
+  "kind": "RestApiPoller",
+  "properties": {
+    "auth": {
+      "type": "OAuth2",
+      "ClientId": "[[parameters('clientId')]",
+      "ClientSecret": "[[parameters('clientSecret')]",
+      "UserName": "[[if(equals(parameters('salesforceGrantType'), 'password'), parameters('username'), '')]",
+      "Password": "[[if(equals(parameters('salesforceGrantType'), 'password'), parameters('password'), '')]",
+      "GrantType": "[[parameters('salesforceGrantType')]",
+      "TokenEndpoint": "[[concat(parameters('salesforceBaseUrl'),'/services/oauth2/token')]",
+      "TokenEndpointHeaders": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
       },
-      "auth": {
-        "type": "OAuth2",
-        "ClientSecret": "{{clientSecret}}",
-        "ClientId": "{{clientId}}",
-        "TokenEndpoint": "{{salesforceDomainName}}/services/oauth2/token",
-        "tokenEndpointHeaders": {
-          "Accept": "application/json",
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        "TokenEndpointQueryParameters": {},
-        "grantType": "client_credentials"
+      "TokenEndpointQueryParameters": {}
+    },
+    "request": {
+      "apiEndpoint": "[[concat(parameters('salesforceBaseUrl'),'/services/data/v66.0/query')]",
+      "httpMethod": "GET",
+      "rateLimitQPS": 10,
+      "queryWindowInMin": 10,
+      "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+      "retryCount": 3,
+      "timeoutInSeconds": 60,
+      "headers": {
+        "Accept": "application/json",
+        "User-Agent": "Scuba"
       },
-      "request": {
-        "apiEndpoint": "{{salesforceDomainName}}/services/data/v44.0/query",
-        "httpMethod": "GET",
-        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-        "rateLimitQPS": 10,
-        "queryWindowInMin": 60,
-        "retryCount": 3,
-        "timeoutInSeconds": 60,
-        "headers": {
-          "Accept": "application/json",
-          "User-Agent": "Scuba"
-        },
-        "queryParameters": {
-          "q": "{{queryType}}[0]"
+      "queryParameters": {
+        "q": "[[parameters('queryType')[0]]"
+      }
+    },
+    "response": {
+      "eventsJsonPaths": [
+        "$.records"
+      ],
+      "format": "json"
+    },
+    "paging": {
+      "pagingType": "NextPageUrl",
+      "nextPageUrl": "[[parameters('salesforceBaseUrl')]",
+      "nextPageTokenJsonPath": "$.nextRecordsUrl",
+      "isNextPageTokenRelativeUrl": true
+    },
+    "stepInfo": {
+      "stepType": "Nested",
+      "nextSteps": [
+        {
+          "stepId": "fetchLogFileData",
+          "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project logFileUrl = res.LogFile"
         }
-      },
-      "response": {
-        "eventsJsonPaths": [ "$.records" ],
-        "format": "json"
-      },
-      "paging": {
-        "pagingType": "NextPageUrl",
-        "nextPageTokenJsonPath": "$.nextRecordsUrl",
-        "nextPageUrl": "{{salesforceDomainName}}",
-        "isNextPageTokenRelativeUrl": true
-      },
-      "stepInfo": {
-        "stepType": "Nested",
-        "nextSteps": [
-          {
-            "stepId": "fetchLogFileData",
-            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project logFileUrl = res.LogFile"
+      ]
+    },
+    "stepCollectorConfigs": {
+      "fetchLogFileData": {
+        "shouldJoinNestedData": true,
+        "joinedDataStepName": "LogData",
+        "request": {
+          "apiEndpoint": "[[concat(parameters('salesforceBaseUrl'),'$logFileUrl$')]",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json",
+            "User-Agent": "Scuba"
           }
-        ]
-      },
-      "stepCollectorConfigs": {
-        "fetchLogFileData": {
-          "shouldJoinNestedData": true,
-          "joinedDataStepName": "LogData",
-          "request": {
-            "httpMethod": "GET",
-            "apiEndpoint": "{{salesforceDomainName}}$logFileUrl$",
-            "headers": {
-              "Accept": "application/json",
-              "User-Agent": "Scuba"
-            }
-          },
-          "response": {
-            "format": "csv",
-            "eventsJsonPaths": [ "$" ],
-            "HasCsvHeader": true
-          }
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$"
+          ],
+          "format": "csv",
+          "csvDelimiter": ",",
+          "hasCsvHeader": true,
+          "csvEscape": "\""
         }
       }
+    },
+    "connectorDefinitionName": "SalesforceServiceCloudCCPDefinition",
+    "dataType": "SalesforceServiceCloudV3_CL",
+    "dcrConfig": {
+      "streamName": "Custom-SalesforceServiceCloudV3_CL",
+      "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+      "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+    },
+    "addOnAttributes": {
+      "friendlyName": "[[parameters('friendlyName')]",
+      "grantType": "[[if(equals(parameters('salesforceGrantType'), 'client_credentials'), 'Client Credentials', 'Password')]",
+      "apiUrl": "[[parameters('salesforceBaseUrl')]",
+      "dataType": "SalesforceServiceCloudV3_CL"
     }
-  }
-]
+  },
+  "condition": "[[contains(parameters('selectedDataTypes'), 'eventLogFile')]"
+}

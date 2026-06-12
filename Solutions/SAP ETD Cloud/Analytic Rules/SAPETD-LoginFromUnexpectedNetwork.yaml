@@ -22,11 +22,14 @@ tactics:
 relevantTechniques: []
 query: |
   let AuditTimeAgo = 60m;
+  let minThreshold= 1;
+  let minScore= 50;
   let regex_sid = @"^([A-Z0-9]{3})/"; 
   let regex_client = @"/(\d{3})$";
   let SAPNetworks = _GetWatchlist('SAP - Networks');
   SAPETDAlerts_CL
   | where TimeGenerated > ago(AuditTimeAgo)
+  | where Threshold >= minThreshold and Score >= minScore
   | where PatternName in ("Logon from external with SAP standard users","Access via unallowed IP Address")
   | mv-expand NormalizedTriggeringEvents
   | extend sapOriginalEvent = tostring(NormalizedTriggeringEvents)
@@ -40,11 +43,23 @@ query: |
   | extend extracted_instance_host = NormalizedTriggeringEvents.NetworkHostnameInitiator
   | evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)
   | where isempty(Network)
-  | project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status, NormalizedTriggeringEvents
+  | project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status, NormalizedTriggeringEvents, Users
   | extend GeoLocation= iff(ipv4_is_private(extracted_user_ip), dynamic({"IsPrivate": true}), geo_info_from_ip_address(extracted_user_ip))
+  | mv-expand Users
+  | extend
+    UserAccountName = tostring(Users.UserAccountName),
+    UserEmail = tostring(Users.EmailAddresses[0])
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserAccountName
+  - entityType: Mailbox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: UserEmail
   - entityType: CloudApplication
     fieldMappings:
       - identifier: AppId
@@ -65,5 +80,6 @@ alertDetailsOverride:
     {{PatternDescription}}
 customDetails:
   SAP_User: extracted_sap_user
+  SAP_UserEmail: UserEmail
   ETD_AlertNumber: AlertId
-version: 1.0.3
+version: 1.0.4

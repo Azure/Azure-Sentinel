@@ -1,0 +1,45 @@
+id: d87bb737-2f4e-4261-b863-23c8a8999693
+name: Identify Compute VMs with Secure Boot Disabled
+description: |
+  Identifies Google Compute Engine VM instances reported by Security Command Center with Secure Boot disabled (COMPUTE_SECURE_BOOT_DISABLED findings).
+description-detailed: |
+  Secure Boot helps protect virtual machines from boot and kernel-level malware. This hunting query identifies findings where Secure Boot is disabled so SOC teams can triage, verify, and remediate affected VMs.
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+tactics:
+  - ResourceDevelopment
+  - DefenseEvasion
+relevantTechniques:
+  - T1608
+  - T1562.001
+tags:
+  - CIS GCP Foundations Benchmark v3.0
+query: |
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "COMPUTE_SECURE_BOOT_DISABLED"
+  // parse resourceName to extract project and instance
+  | extend
+    ResourceName = tostring(Findings.resourceName),
+    ResourceDisplayName = tostring(FindingsResource.displayName)
+  | extend
+    Project = extract(@"projects/([^/]+)", 1, ResourceName),
+    Instance = extract(@"instances/([^/]+)$", 1, ResourceName)
+  | extend
+    Severity = tostring(Findings.severity),
+    ResourceType = tostring(FindingsResource.type),
+    CloudResource = coalesce(tostring(FindingsResource.name), ResourceDisplayName)
+  | summarize TimeGenerated = max(TimeGenerated) by Project, Instance, FindingCategory, Severity, ResourceType, CloudResource
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Instance
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudResource
+version: 1.0.0

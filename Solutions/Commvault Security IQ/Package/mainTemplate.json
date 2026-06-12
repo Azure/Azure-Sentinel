@@ -31,15 +31,15 @@
   },
   "variables": {
     "_solutionName": "Commvault Security IQ",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.0.4",
     "solutionId": "commvault.microsoft-sentinel-solution-commvaultsecurityiq",
     "_solutionId": "[variables('solutionId')]",
     "analyticRuleObject1": {
-      "analyticRuleVersion1": "1.0.4",
+      "analyticRuleVersion1": "1.0.5",
       "_analyticRulecontentId1": "317e757e-c320-448e-8837-fc61a70fe609",
       "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '317e757e-c320-448e-8837-fc61a70fe609')]",
       "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('317e757e-c320-448e-8837-fc61a70fe609')))]",
-      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','317e757e-c320-448e-8837-fc61a70fe609','-', '1.0.4')))]"
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','317e757e-c320-448e-8837-fc61a70fe609','-', '1.0.5')))]"
     },
     "Commvault_Disable_Data_Aging_Logic_App": "Commvault_Disable_Data_Aging_Logic_App",
     "_Commvault_Disable_Data_Aging_Logic_App": "[variables('Commvault_Disable_Data_Aging_Logic_App')]",
@@ -88,7 +88,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultSecurityIQ_Alert_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "CommvaultSecurityIQ_Alert_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -105,7 +105,7 @@
                 "description": "This query identifies Alerts from Commvault Cloud.",
                 "displayName": "Commvault Cloud Alert",
                 "enabled": false,
-                "query": "let CommvaultData = union isfuzzy=true\n    (CommvaultSecurityIQ_CL | where TimeGenerated > ago(5m)),\n    (datatable(TimeGenerated:datetime, eventCodeString_s:string, Event_Code_s:string, description_s:string, Description_s:string, id_d:real, Event_Id_s:string)[]);\nCommvaultData\n| where isnotempty(TimeGenerated)\n| where eventCodeString_s in (\"7:211\", \"7:212\", \"7:293\", \"7:269\", \"14:337\", \"14:338\", \"69:59\", \"7:333\", \"69:60\", \"35:5575\")\n    or Event_Code_s in (\"7:211\", \"7:212\", \"7:293\", \"7:269\", \"14:337\", \"14:338\", \"69:59\", \"7:333\", \"69:60\", \"35:5575\")\n| extend Description = coalesce(description_s, Description_s, \"\")\n| extend EventId = coalesce(tostring(toint(id_d)), Event_Id_s, \"\")\n| extend ClientMachine = case(\n    Description contains \"on the machine\", extract(@\"on the machine \\[([^\\]]+)\\]\", 1, Description),\n    Description contains \"on client\", extract(@\"on client \\[([^\\]]+)\\]\", 1, Description),\n    Description contains \"for client\", extract(@\"for client \\[([^\\]]+)\\]\", 1, Description),\n    Description contains \"client\", extract(@\"client \\[([^\\]]+)\\]\", 1, Description),\n    Description contains \"machine\", extract(@\"machine \\[([^\\]]+)\\]\", 1, Description),\n    \"Unknown\"\n)\n| project TimeGenerated, eventCodeString_s, Event_Code_s, EventId, Description, ClientMachine, Event_Id_s, id_d\n| take 1000\n",
+                "query": "let TargetEventCodes = dynamic([\"7:211\", \"7:212\", \"7:293\", \"7:269\", \"14:337\", \"14:338\", \"69:59\", \"7:333\", \"69:60\", \"35:5575\", \"35:5636\", \"7:349\", \"17:193\", \"17:195\"]);\nCommvaultAlerts_CL\n| where TimeGenerated > ago(5m)\n| where EventCode in (TargetEventCodes)\n| take 1000\n",
                 "queryFrequency": "PT5M",
                 "queryPeriod": "PT5M",
                 "severity": "Medium",
@@ -116,10 +116,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CommvaultSecurityIQ_CL",
                     "datatypes": [
-                      "CommvaultSecurityIQ_CL"
-                    ],
-                    "connectorId": "CommvaultSecurityIQ_CL"
+                      "CommvaultAlerts_CL"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -134,12 +134,12 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "Client": "ClientMachine"
+                  "Client": "HostName"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Alert from Commvault Cloud for Event ID :  {{id_d}} . Event Description : {{Description}}  . Check the event description on Commvault Command Center for more details.",
-                  "alertDisplayNameFormat": "Alert from Commvault Cloud for Event ID :  {{id_d}} ",
-                  "alertDynamicProperties": []
+                  "alertDynamicProperties": [],
+                  "alertDescriptionFormat": "Alert from Commvault Cloud for Event ID: {{EventId}}. Event Description: {{Description}}. Check the event description on Commvault Command Center for more details.",
+                  "alertDisplayNameFormat": "Alert from Commvault Cloud for Event ID: {{EventId}}"
                 }
               }
             },
@@ -193,7 +193,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultDataAgingPlaybook Playbook with template version 3.0.3",
+        "description": "CommvaultDataAgingPlaybook Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -575,7 +575,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultSAMLPlaybook Playbook with template version 3.0.3",
+        "description": "CommvaultSAMLPlaybook Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -917,7 +917,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultUserPlaybook Playbook with template version 3.0.3",
+        "description": "CommvaultUserPlaybook Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -1294,7 +1294,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Commvault Security IQ data connector with template version 3.0.3",
+        "description": "Commvault Security IQ data connector with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -1317,26 +1317,26 @@
                     {
                       "metricName": "Commvault Events",
                       "legend": "Commvault Security IQ Logs",
-                      "baseQuery": "CommvaultSecurityIQ_CL"
+                      "baseQuery": "CommvaultAlerts_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
                       "description": "Last 10 events/alerts ",
-                      "query": "CommvaultSecurityIQ_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
+                      "query": "CommvaultAlerts_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "CommvaultSecurityIQ_CL",
-                      "lastDataReceivedQuery": "CommvaultSecurityIQ_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "name": "CommvaultAlerts_CL",
+                      "lastDataReceivedQuery": "CommvaultAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriterias": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "CommvaultSecurityIQ_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                        "CommvaultAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
                       ]
                     }
                   ],
@@ -1506,27 +1506,27 @@
             {
               "metricName": "Commvault Events",
               "legend": "Commvault Security IQ Logs",
-              "baseQuery": "CommvaultSecurityIQ_CL"
+              "baseQuery": "CommvaultAlerts_CL"
             }
           ],
           "dataTypes": [
             {
-              "name": "CommvaultSecurityIQ_CL",
-              "lastDataReceivedQuery": "CommvaultSecurityIQ_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+              "name": "CommvaultAlerts_CL",
+              "lastDataReceivedQuery": "CommvaultAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
             }
           ],
           "connectivityCriterias": [
             {
               "type": "IsConnectedQuery",
               "value": [
-                "CommvaultSecurityIQ_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                "CommvaultAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
               ]
             }
           ],
           "sampleQueries": [
             {
               "description": "Last 10 events/alerts ",
-              "query": "CommvaultSecurityIQ_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
+              "query": "CommvaultAlerts_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
             }
           ],
           "availability": {
@@ -1617,7 +1617,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Commvault Security IQ",

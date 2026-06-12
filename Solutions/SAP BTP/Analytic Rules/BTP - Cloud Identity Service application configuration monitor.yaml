@@ -1,0 +1,89 @@
+id: 3f8a2c5e-7b9d-4e1a-8f6c-2d4b9a1e3c7f
+kind: Scheduled
+name: BTP - Cloud Identity Service application configuration monitor
+description: |
+  Identifies CRUD operations on Application (SSO Domain/Service Provider) configurations
+  within SAP Cloud Identity Service. This includes both SAML 2.0 and OpenID Connect applications.
+  Unauthorized application creation could indicate an attacker establishing persistent access
+  through a rogue federated application.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1606
+  - T1556
+  - T1134
+query: |
+  SAPBTPAuditLog_CL
+  | extend data_s = tostring(Message.data)
+  | extend 
+      action = extract(@"action=""([^""]+)""", 1, data_s),
+      state = extract(@"state=""([^""]+)""", 1, data_s),
+      objectType = extract(@"objectType=""([^""]+)""", 1, data_s),
+      serviceProviderName = extract(@"serviceProviderName=""([^""]+)""", 1, data_s),
+      ipAddress = extract(@"ipAddress=""([^""]+)""", 1, data_s),
+      // Extract payload JSON for federation type
+      payloadJson = extract(@"\{""payload"":\{([^}]+)\}\}", 1, data_s)
+  | extend federationType = extract(@"""type"":""([^""]+)""", 1, payloadJson)
+  | where objectType == "ssoDomain"
+  | where state == "successful"
+  | where action in ("create", "update", "delete")
+  | extend MessageText = case(
+      action == "create", strcat("Application '", serviceProviderName, "' (", federationType, ") was created"),
+      action == "update", strcat("Application '", serviceProviderName, "' (", federationType, ") was updated"),
+      action == "delete", strcat("Application '", serviceProviderName, "' was deleted"),
+      "Unclassified operation on application"
+  )
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      ServiceProviderName = serviceProviderName,
+      FederationType = federationType,
+      Action = action,
+      Tenant,
+      ipAddress,
+      CloudApp = "SAP Cloud Identity Service"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Cloud Identity Service: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}}. Identity provider name: {{ServiceProviderName}}
+        
+    This could indicate:
+    - Legitimate administrative change to federated applications
+    - Unauthorized application registration for persistent access
+    - Rogue SAML/OIDC application added by attacker
+customDetails:
+  ServiceProviderName: ServiceProviderName
+  FederationType: FederationType
+  Action: Action
+  SourceIP: ipAddress
+version: 1.0.0

@@ -8,16 +8,19 @@ LOG_FORMAT = "{}(method = {}) : {} : {}"
 
 
 # *Sentinel related constants
-AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id", "")
-AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret", "")
-AZURE_TENANT_ID = os.environ.get("Azure_Tenant_Id", "")
-WORKSPACE_KEY = os.environ.get("WorkspaceKey", "")
-WORKSPACE_ID = os.environ.get("WorkspaceID", "")
-
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 
 # *Mimecast related constants
 MIMECAST_CLIENT_ID = os.environ.get("MimecastClientID")
 MIMECAST_CLIENT_SECRET = os.environ.get("MimecastClientSecret")
+Mimecast_TTP_Attachment_Table_Name = os.environ.get("Mimecast_TTP_Attachment_Table_Name", "Ttp_Attachment")
+Mimecast_Ttp_Impersonation_Table_Name = os.environ.get("Mimecast_Ttp_Impersonation_Table_Name", "Ttp_Impersonation")
+Mimecast_Ttp_Url_Table_Name = os.environ.get("Mimecast_Ttp_Url_Table_Name", "Ttp_Url")
 
 BASE_URL = os.environ.get("BaseURL", "https://api.services.mimecast.com")
 ENDPOINTS = {
@@ -29,10 +32,10 @@ ENDPOINTS = {
 }
 
 TABLE_NAME = {
-    "TTP_URL": "Ttp_Url",
+    "TTP_URL": Mimecast_Ttp_Url_Table_Name if Mimecast_Ttp_Url_Table_Name else "Ttp_Url",
     "SEG_DLP": "Seg_Dlp",
-    "TTP_ATTACHMENT": "Ttp_Attachment",
-    "TTP_IMPERSONATION": "Ttp_Impersonation",
+    "TTP_ATTACHMENT": Mimecast_TTP_Attachment_Table_Name if Mimecast_TTP_Attachment_Table_Name else "Ttp_Attachment",
+    "TTP_IMPERSONATION": Mimecast_Ttp_Impersonation_Table_Name if Mimecast_Ttp_Impersonation_Table_Name else "Ttp_Impersonation"
 }
 TTP_URL_FUNCTION_NAME = "TTP_URL"
 TTP_ATTACHMENT_FUNCTION_NAME = "TTP_Attachment"

@@ -24,7 +24,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         detections_obj = DetectionsCollector(
-            applogger,
+            start_time,
             consts.DETECTIONS_NAME,
             consts.DETECTIONS_CLIENT_ID,
             consts.DETECTIONS_CLIENT_SECRET,

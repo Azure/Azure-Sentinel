@@ -9,7 +9,7 @@ from .state_manager import StateManager
 from .mimecast_exception import MimecastException
 from .logger import applogger
 from . import consts
-from ..SharedCode.sentinel import post_data
+from ..SharedCode.sentinel import send_data_to_sentinel
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -785,7 +785,7 @@ class Utils:
                         ),
                     )
                 )
-                post_data(json.dumps(data_to_post), log_type=table_name)
+                send_data_to_sentinel(data_to_post, table_name)
                 if not next_page_token_flag:
                     if checkpoint_data:
                         applogger.info(

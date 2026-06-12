@@ -1,0 +1,129 @@
+id: cf5ec5ec-f5cf-479f-9604-134fa1140e12
+Function:
+  Title: Cyjax Threat Indicator
+  Version: '1.0.0'
+  LastUpdated: '2026-02-28'
+Category: Microsoft Sentinel Custom Parser
+FunctionName: CyjaxThreatIndicator
+FunctionAlias: CyjaxThreatIndicator
+FunctionQuery: |
+    let CyjaxThreatIndicator = () {
+        ThreatIntelIndicators
+        | where SourceSystem == "Cyjax-IOCs"
+        | extend RawData = todynamic(Data)
+        | extend
+            StixID              = tostring(RawData["id"]),
+            StixType            = tostring(RawData["type"]),
+            SpecVersion         = tostring(RawData["spec_version"]),
+            IndicatorName       = tostring(RawData["name"]),
+            Description         = tostring(RawData["description"]),
+            StixPattern         = tostring(RawData["pattern"]),
+            PatternType         = tostring(RawData["pattern_type"]),
+            PatternVersion      = tostring(RawData["pattern_version"]),
+            ValidFrom           = todatetime(RawData["valid_from"]),
+            ValidUntil          = todatetime(RawData["valid_until"]),
+            CreatedAt           = todatetime(RawData["created"]),
+            ModifiedAt          = todatetime(RawData["modified"]),
+            StixConfidence      = toint(RawData["confidence"]),
+            IndicatorTypesRaw   = tostring(RawData["indicator_types"])
+        | extend
+            IndicatorType  = tostring(split(IndicatorName, " - ")[1]),
+            IndicatorValue = tostring(split(IndicatorName, " - ")[2])
+        | extend
+            ObservableKey   = tostring(ObservableKey),
+            ObservableValue = tostring(ObservableValue)
+        | extend LabelsArray = RawData["labels"]
+        | extend Labels = iff(isnotempty(LabelsArray), strcat_array(LabelsArray, ", "), "")
+        | extend IndicatorCategories = iff(isnotempty(RawData["indicator_types"]),
+                                        strcat_array(RawData["indicator_types"], ", "), "")
+        | extend Ext = RawData["extensions"]
+        | extend
+            CyjaxIOCUUID               = tostring(Ext["cyjax_uuid"]),
+            CyjaxSource             = tostring(Ext["cyjax_source"]),
+            CyjaxHandlingCondition  = tostring(Ext["cyjax_handling_condition"]),
+            CyjaxIndustryType       = tostring(Ext["cyjax_industry_type"]),
+            CyjaxTTP                = tostring(Ext["cyjax_ttp"]),
+            EnrichmentIOCType       = tostring(Ext["enrichment_type"]),
+            EnrichmentLastSeen      = todatetime(Ext["enrichment_last_seen_timestamp"]),
+            EnrichmentIPAddress     = tostring(Ext["enrichment_geoip_ip_address"]),
+            EnrichmentCity          = tostring(Ext["enrichment_geoip_city"]),
+            EnrichmentCountryName   = tostring(Ext["enrichment_geoip_country_name"]),
+            EnrichmentCountryCode   = tostring(Ext["enrichment_geoip_country_code"]),
+            EnrichmentASNOrg        = tostring(Ext["enrichment_asn_organization"]),
+            EnrichmentASNNumber     = tostring(Ext["enrichment_asn_number"]),
+            EnrichmentSightingsCount= toint(Ext["enrichment_sightings_count"]),
+            EnrichmentSightings     = tostring(Ext["enrichment_sightings"])
+        | summarize arg_max(TimeGenerated, *) by CyjaxIOCUUID
+        | extend ExtRefs       = RawData["external_references"]
+        | extend FirstExtRef   = iff(isnotempty(ExtRefs), todynamic(ExtRefs)[0], dynamic(null))
+        | extend
+            SourceName         = tostring(FirstExtRef["source_name"]),
+            SourceDescription  = tostring(FirstExtRef["description"]),
+            ExternalID         = tostring(FirstExtRef["external_id"]),
+            ReportURL          = tostring(FirstExtRef["url"])
+        | extend
+            IsActive        = tobool(IsActive),
+            IsDeleted       = tobool(IsDeleted),
+            SentinelIndicatorID      = tostring(Id),
+            LastUpdateMethod= tostring(LastUpdateMethod)
+        | extend AdditionalFieldsParsed = todynamic(AdditionalFields)
+        | extend TLPLevel = tostring(AdditionalFieldsParsed["TLPLevel"])
+        | project
+            // --- Indicator Core ---
+            IndicatorType,
+            IndicatorValue,
+            IndicatorName,
+            Description,
+            StixPattern,
+            PatternType,
+            PatternVersion,
+            IndicatorCategories,
+            // --- Time ---
+            TimeGenerated,
+            CreatedAt,
+            ModifiedAt,
+            ValidFrom,
+            ValidUntil,
+            // --- Identity ---
+            SentinelIndicatorID,
+            StixID,
+            CyjaxIOCUUID,
+            ExternalID,
+            // --- Observable (Sentinel parsed) ---
+            ObservableKey,
+            ObservableValue,
+            // --- Enrichment ---
+            EnrichmentIOCType,
+            EnrichmentLastSeen,
+            EnrichmentIPAddress,
+            EnrichmentCity,
+            EnrichmentCountryName,
+            EnrichmentCountryCode,
+            EnrichmentASNOrg,
+            EnrichmentASNNumber,
+            EnrichmentSightingsCount,
+            EnrichmentSightings,
+            // --- Confidence & Status ---
+            StixConfidence,
+            Confidence,
+            IsActive,
+            IsDeleted,
+            Revoked,
+            // --- TLP & Handling ---
+            TLPLevel,
+            CyjaxHandlingCondition,
+            // --- Labels & TTP ---
+            Labels,
+            CyjaxTTP,
+            CyjaxIndustryType,
+            // --- Source ---
+            SourceName,
+            SourceDescription,
+            ReportURL,
+            CyjaxSource,
+            // --- Sentinel Metadata ---
+            LastUpdateMethod,
+            SourceSystem,
+            Tags
+    };
+    CyjaxThreatIndicator

@@ -4,17 +4,18 @@ import * as logger from "./logger.js";
 import "./stringExtenssions.js";
 
 
-const _owner = process.env.REPO_OWNER;
-const _repo = process.env.REPO_NAME;
-const _pr_number = process.env.PRNUM;
+const _owner = process.env.REPO_OWNER || process.env.GITHUB_REPOSITORY_OWNER;
+const _repo = process.env.REPO_NAME || process.env.GITHUB_REPOSITORY?.split("/")[1];
+const _pr_number = process.env.PRNUM ? Number(process.env.PRNUM) : undefined;
 
 
-if (!_owner || !_repo || !_pr_number) {
-  console.error("Environment variables REPO_OWNER, REPO_NAME and PRNUM are not set.");
+if (!_owner || !_repo) {
+  console.error("Environment variables REPO_OWNER and REPO_NAME are not set.");
   process.exit(1);
 }
 
 let pullRequestDetails: any | undefined;
+let resolvedPRNumber: number | undefined;
 let octokit: Octokit;
 
 if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
@@ -34,7 +35,14 @@ if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
   console.error("GitHub App authentication is not configured.");
 }
 
-export async function GetPRDetails(owner :string  = String(_owner), repo = String(_repo), pull_number: number = Number(_pr_number)) {
+export async function GetPRDetails(owner :string  = String(_owner), repo = String(_repo), pull_number: number | undefined = _pr_number) {
+  if (!pull_number || Number.isNaN(pull_number)) {
+    pull_number = await GetPRNumber(owner, repo);
+    if (!pull_number) {
+      return;
+    }
+  }
+
   if (typeof pullRequestDetails == "undefined") {
     if (!octokit) {
       console.error("Octokit is not initialized. Cannot get PR details.");
@@ -51,7 +59,14 @@ export async function GetPRDetails(owner :string  = String(_owner), repo = Strin
   return pullRequestDetails;
 }
 
-export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], owner :string  = String(_owner), repo = String(_repo), pull_number: number = Number(_pr_number)) {
+export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], owner :string  = String(_owner), repo = String(_repo), pull_number: number | undefined = _pr_number) {
+  if (!pull_number || Number.isNaN(pull_number)) {
+    pull_number = await GetPRNumber(owner, repo);
+    if (!pull_number) {
+      return;
+    }
+  }
+
   const pr = await GetPRDetails(owner, repo, pull_number);
 
   if (typeof pr === "undefined") {
@@ -90,4 +105,44 @@ export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: strin
   console.log(`${filterChangedFiles.length} files changed in current PR after filter. File Type Filter: ${fileTypeSuffixesLogValue}, File path Filter: ${filePathFolderPreffixesLogValue}, File Kind Filter: ${fileKindsLogValue}`);
 
   return filterChangedFiles;
+}
+
+async function GetPRNumber(owner: string, repo: string) {
+  if (_pr_number && !Number.isNaN(_pr_number)) {
+    return _pr_number;
+  }
+
+  if (resolvedPRNumber) {
+    return resolvedPRNumber;
+  }
+
+  const headBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME;
+  if (!headBranch) {
+    console.error("Environment variable PRNUM is not set and branch context is unavailable.");
+    return;
+  }
+
+  if (!octokit) {
+    console.error("Octokit is not initialized. Cannot resolve PR number.");
+    return;
+  }
+
+  console.log(`Environment variable PRNUM is not set. Resolving PR number for branch '${headBranch}'.`);
+
+  const { data: pullRequests } = await octokit.pulls.list({
+    owner,
+    repo,
+    state: "open",
+    head: `${owner}:${headBranch}`,
+    per_page: 1,
+  });
+
+  resolvedPRNumber = pullRequests?.[0]?.number;
+
+  if (!resolvedPRNumber) {
+    console.error(`Could not resolve PR number for branch '${headBranch}'. Please set PRNUM environment variable.`);
+    return;
+  }
+
+  return resolvedPRNumber;
 }

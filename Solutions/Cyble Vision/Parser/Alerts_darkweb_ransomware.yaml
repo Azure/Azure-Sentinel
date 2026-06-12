@@ -1,0 +1,68 @@
+id: 3b7e2c91-4df0-4f0c-8c9a-923a0e5e2fd2
+Function:
+  Title: Parser to extract Darkweb Ransomware alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_darkweb_ransomware
+FunctionAlias: Alerts_darkweb_ransomware
+FunctionQuery: |
+  CybleVisionAlerts_CL
+  | where Service == "darkweb_ransomware"
+  | extend Data = parse_json(Data)
+  // Extract raw content object (stringified Python style dict)
+  | extend RawContent = tostring(Data.content)
+  // Extract "text" value from the Python style string
+  | extend DW_Text = extract(@"('text':\s*'([^']*)')", 1, RawContent)
+  // Cleanup escaped characters
+  | extend DW_Text = replace(@"(\\\\n", "\n)", DW_Text)
+  | extend DW_Text = replace(@"(\\\\\\\\", "\\", DW_Text)
+  | extend DW_Text = replace(@"(\\\\'", "')", DW_Text)
+  | extend DW_Text = trim(" ", DW_Text)
+  // Extract other nested data fields
+  | extend
+      DW_CompanyLeak          = tostring(Data.company_leak),
+      DW_CreatedDate          = tostring(Data.created_date),
+      DW_DocumentYear         = tostring(Data.document_created_year),
+      DW_FileName             = tostring(Data.file_name),
+      DW_OriginalFileName     = tostring(Data.original_file_name),
+      DW_DataID               = tostring(Data.id),
+      DW_Keywords             = tostring(Data.keywords),
+      DW_ThreatActor_Nested   = tostring(Data.threat_actor),
+      DW_UpdatedDate_Nested   = tostring(Data.updated_date),
+      DW_Victim_Nested        = tostring(Data.victim)
+  // Standard risk score packing
+  | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+  // Final projection: standard columns + parsed fields + clean text
+  | project
+      TimeGenerated,
+      AlertID = tostring(ID),
+      EntityID,
+      KeywordName,
+      CompanyID,
+      Status,
+      Severity,
+      UserSeverity,
+      BucketID,
+      Domain,
+      BucketName,
+      TruePositive,
+      LLMProcessed,
+      LLMExplanation,
+      IP,
+      Service,
+      Risk_Score,
+      // Parsed fields from data
+      DW_CompanyLeak,
+      DW_CreatedDate,
+      DW_DocumentYear,
+      DW_FileName,
+      DW_OriginalFileName,
+      DW_DataID,
+      DW_Keywords,
+      DW_ThreatActor_Nested,
+      DW_UpdatedDate_Nested,
+      DW_Victim_Nested,
+      // Clean text content
+      DW_Text,
+      Data

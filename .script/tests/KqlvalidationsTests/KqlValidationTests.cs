@@ -122,7 +122,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
-            ValidateKqlForBestPractices(queryStr,fileName);
+            ValidateKqlForBestPractices(queryStr, fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
 
@@ -375,7 +375,7 @@ namespace Kqlvalidations.Tests
             var parserPaths = Directory.GetDirectories(solutionDirectories, parsersFolder, SearchOption.AllDirectories).ToList();
             parserPaths.AddRange(Directory.GetDirectories(solutionDirectories, parserFolder, SearchOption.AllDirectories).ToList());
 
-            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md" };
+            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md", ".json" };
 
             var filteredFiles = prFiles
                 .Where(file =>
@@ -477,7 +477,7 @@ namespace Kqlvalidations.Tests
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
-                .Where(template => 
+                .Where(template =>
 template.id
  == templateId)
                 .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))

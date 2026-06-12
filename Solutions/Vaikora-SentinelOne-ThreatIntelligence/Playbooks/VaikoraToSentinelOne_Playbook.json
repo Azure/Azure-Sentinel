@@ -1,0 +1,311 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Vaikora AI Agent Signals to SentinelOne",
+    "description": "This playbook polls Vaikora for AI agent behavioral signals (high or critical severity actions and anomaly detections) and pushes them as threat intelligence IOCs to SentinelOne for detection and response.",
+    "prerequisites": [
+      "1. Vaikora API Key and Agent ID (obtain from https://vaikora.com)\n2. SentinelOne API Token and Account ID with threat intelligence scope\n3. SentinelOne console URL (e.g. https://usea1-021.sentinelone.net)"
+    ],
+    "postDeployment": [
+      "1. Configure the Vaikora API Key and Agent ID parameters",
+      "2. Configure the SentinelOne API Token, Account ID, and Base URL parameters",
+      "3. Enable the Logic App and adjust the recurrence trigger as needed"
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2026-04-28T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "ThreatIntelligence",
+      "IOC",
+      "SentinelOne",
+      "Vaikora",
+      "AI Security"
+    ],
+    "support": {
+      "tier": "partner"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "pb-vaikora-to-sentinelone"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+    },
+    "VaikoraApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Vaikora API Key for authentication (X-API-Key header)"
+      }
+    },
+    "VaikoraAgentId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Vaikora Agent ID to poll for actions"
+      }
+    },
+    "SentinelOne_ApiToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne API Token"
+      }
+    },
+    "SentinelOne_BaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Your SentinelOne console URL (e.g. https://usea1-021.sentinelone.net). Log in to SentinelOne and copy the URL from your browser address bar."
+      }
+    },
+    "SentinelOne_AccountId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne Account ID"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics"
+      }
+    }
+  },
+  "variables": {
+    "workspace-name": "[parameters('workspace')]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspace-name'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelTemplateName": "VaikoraToSentinelOne",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]"
+      },
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "VaikoraApiKey": {
+            "value": "[parameters('VaikoraApiKey')]"
+          },
+          "VaikoraAgentId": {
+            "value": "[parameters('VaikoraAgentId')]"
+          },
+          "SentinelOne_ApiToken": {
+            "value": "[parameters('SentinelOne_ApiToken')]"
+          },
+          "SentinelOne_BaseUrl": {
+            "value": "[parameters('SentinelOne_BaseUrl')]"
+          },
+          "SentinelOne_AccountId": {
+            "value": "[parameters('SentinelOne_AccountId')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "Vaikora_ApiBaseUrl": {
+              "type": "string",
+              "defaultValue": "https://api.vaikora.com/api/v1"
+            },
+            "VaikoraApiKey": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "VaikoraAgentId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "SentinelOne_BaseUrl": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "SentinelOne_ApiToken": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "SentinelOne_AccountId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Hour",
+                "interval": 6,
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Get_Vaikora_Actions": {
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat(parameters('Vaikora_ApiBaseUrl'), '/actions?agent_id=', encodeUriComponent(parameters('VaikoraAgentId')), '&per_page=100')}",
+                "headers": {
+                  "X-API-Key": "@{parameters('VaikoraApiKey')}",
+                  "Accept": "application/json",
+                  "User-Agent": "Microsoft-Sentinel-Vaikora-SentinelOne/1.0"
+                }
+              }
+            },
+            "Filter_High_Severity_Or_Anomaly": {
+              "type": "Query",
+              "runAfter": {
+                "Get_Vaikora_Actions": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "from": "@body('Get_Vaikora_Actions')",
+                "where": "@or(or(equals(toLower(coalesce(item()?['severity'], '')), 'high'), equals(toLower(coalesce(item()?['severity'], '')), 'critical')), equals(item()?['is_anomaly'], true))"
+              }
+            },
+            "List_STAR_Rules": {
+              "type": "Http",
+              "runAfter": {
+                "Filter_High_Severity_Or_Anomaly": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/cloud-detection/rules?accountIds=@{parameters('SentinelOne_AccountId')}",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                }
+              }
+            },
+            "Check_Rule_Exists": {
+              "type": "If",
+              "runAfter": {
+                "List_STAR_Rules": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@contains(string(body('List_STAR_Rules')), 'Vaikora IOC Detection')",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Create_STAR_Rule": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/cloud-detection/rules",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                    },
+                    "body": {
+                      "filter": {
+                        "accountIds": [
+                          "@{parameters('SentinelOne_AccountId')}"
+                        ]
+                      },
+                      "data": {
+                        "name": "Vaikora IOC Detection",
+                        "s1ql": "IndicatorSource = \"Vaikora AI Agent Security (Data443)\"",
+                        "queryType": "events",
+                        "severity": "High",
+                        "status": "Active",
+                        "expirationMode": "Permanent",
+                        "treatAsThreat": "Suspicious"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Check_Has_Actions": {
+              "type": "If",
+              "runAfter": {
+                "Check_Rule_Exists": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Filter_High_Severity_Or_Anomaly'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "For_Each_Action": {
+                  "type": "Foreach",
+                  "foreach": "@body('Filter_High_Severity_Or_Anomaly')",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  },
+                  "actions": {
+                    "Post_IOC_to_SentinelOne": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                        "headers": {
+                          "Content-Type": "application/json",
+                          "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                        },
+                        "body": {
+                          "filter": {
+                            "accountIds": [
+                              "@{parameters('SentinelOne_AccountId')}"
+                            ]
+                          },
+                          "data": [
+                            {
+                              "value": "@{coalesce(item()?['log_hash'], concat('vaikora-', item()?['agent_id'], '-', item()?['action_type']))}",
+                              "type": "SHA256",
+                              "source": "Vaikora AI Agent Security (Data443)",
+                              "method": "EQUALS",
+                              "validUntil": "@{addDays(utcNow(), 90)}",
+                              "externalId": "@{concat('vaikora-', item()?['agent_id'], '-', item()?['action_type'], '-', item()?['timestamp'])}",
+                              "description": "@{concat('Vaikora Agent=', coalesce(item()?['agent_id'], 'N/A'), ' | ActionType=', coalesce(item()?['action_type'], 'N/A'), ' | RiskScore=', coalesce(string(item()?['risk_score']), 'N/A'), ' | RiskLevel=', coalesce(item()?['risk_level'], 'N/A'), ' | Severity=', coalesce(item()?['severity'], 'N/A'), ' | ThreatDetected=', coalesce(string(item()?['threat_detected']), 'N/A'), ' | ThreatScore=', coalesce(string(item()?['threat_score']), 'N/A'), ' | Anomaly=', coalesce(string(item()?['is_anomaly']), 'N/A'), ' | AnomalyScore=', coalesce(string(item()?['anomaly_score']), 'N/A'), ' | PolicyDecision=', coalesce(item()?['policy_decision'], 'N/A'), ' | Timestamp=', coalesce(item()?['timestamp'], 'N/A'))}",
+                              "severity": "@{if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 96), 7, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 86), 6, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 71), 5, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 51), 4, if(greaterOrEquals(coalesce(item()?['risk_score'], 0), 31), 3, 2)))))}"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

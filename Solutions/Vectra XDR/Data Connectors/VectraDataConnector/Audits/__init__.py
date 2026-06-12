@@ -24,7 +24,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         audit_obj = AuditsCollector(
-            applogger,
+            start_time,
             consts.AUDITS_NAME,
             consts.AUDIT_CLIENT_ID,
             consts.AUDIT_CLIENT_SECRET,

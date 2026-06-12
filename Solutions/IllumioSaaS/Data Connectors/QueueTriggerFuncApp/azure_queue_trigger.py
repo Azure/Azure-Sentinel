@@ -9,9 +9,6 @@ import azure.functions as func
 import urllib.parse
 from ..CommonCode.sentinel_connector import AzureSentinelConnectorAsync
 from ..CommonCode.constants import (
-    AZURE_TENANT_ID,
-    AZURE_CLIENT_ID,
-    AZURE_CLIENT_SECRET,
     DCE_ENDPOINT,
     DCR_ID,
     FLOW_LOGS_CUSTOM_TABLE,
@@ -73,9 +70,6 @@ async def _generate_sentinel_connectors(session):
             DCE_ENDPOINT,
             DCR_ID,
             stream,
-            AZURE_CLIENT_ID,
-            AZURE_CLIENT_SECRET,
-            AZURE_TENANT_ID,
         )
 
     return sentinel_connectors

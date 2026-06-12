@@ -1,0 +1,113 @@
+id: 271f4bf9-e387-48ef-a537-654bd53ca8e8
+name: Sign-in from new country followed by sensitive operation within one hour
+description: |
+  Identifies successful sign-ins from a country absent in the user's 30-day history,
+  followed within one hour by a sensitive AuditLogs operation (role assignment, consent
+  grant, credential addition, CA policy change) by the same user. Correlates geographic
+  novelty with immediate high-value administrative action as a post-compromise signal.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins
+  - https://attack.mitre.org/techniques/T1078/004/
+  - https://attack.mitre.org/techniques/T1098/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+  - T1098
+query: |
+  let timeframe = 14d;
+  let lookback = 30d;
+  let correlationWindow = 1h;
+  let sensitiveOps = dynamic([
+      "Add member to role.",
+      "Consent to application",
+      "Add service principal credentials",
+      "Update application - Certificates and secrets management",
+      "Add application",
+      "Delete conditional access policy",
+      "Update conditional access policy",
+      "Set domain authentication",
+      "Add member to role (PIM activation)"
+  ]);
+  // Build per-user baseline of countries from successful sign-ins over 30 days
+  let BaselineCountries =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe + lookback) and TimeGenerated < ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(Location)
+      | extend UserUpn = tolower(UserPrincipalName)
+      | summarize KnownCountries = make_set(Location) by UserUpn;
+  // Sign-ins from countries not in the user baseline
+  let NewCountrySignIns =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(Location)
+      | extend UserUpn = tolower(UserPrincipalName)
+      | join kind=leftouter BaselineCountries on $left.UserUpn == $right.UserUpn
+      | where isnull(KnownCountries) or not(set_has_element(KnownCountries, Location))
+      | project
+          SignInTime   = TimeGenerated,
+          UserUpn,
+          SignInIP     = IPAddress,
+          NewCountry   = Location,
+          AppDisplayName;
+  // Sensitive AuditLogs operations correlated within the window
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName in~ (sensitiveOps)
+  | where Result =~ "success"
+  | extend UserUpn    = tolower(tostring(InitiatedBy.user.userPrincipalName))
+  | extend AuditIp    = tostring(InitiatedBy.user.ipAddress)
+  | extend TargetName = tostring(TargetResources[0].displayName)
+  | where isnotempty(UserUpn)
+  | join kind=inner NewCountrySignIns on UserUpn
+  | where TimeGenerated between (SignInTime .. (SignInTime + correlationWindow))
+  | extend TimeDeltaMinutes = datetime_diff('minute', TimeGenerated, SignInTime)
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      SignInTime,
+      OperationTime     = TimeGenerated,
+      TimeDeltaMinutes,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      NewCountry,
+      SignInIP,
+      AuditIp,
+      OperationName,
+      TargetName,
+      AppDisplayName
+  | sort by SignInTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SignInIP
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

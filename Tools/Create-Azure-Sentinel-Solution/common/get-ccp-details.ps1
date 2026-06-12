@@ -16,6 +16,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
             $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
+            # Resolve to absolute path for proper comparison later
+            $ccpBaseFolderPath = (Resolve-Path -Path $ccpBaseFolderPath).Path -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
             #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
             
@@ -249,6 +251,15 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     }
 
                     try {
+                        # For dynamic stream names (parameter references), assign DCR path without stream matching
+                        if ($ccpPollerFile.isDynamicStreamName -and [string]::IsNullOrEmpty($ccpPollerFile.DCRFilePath)) {
+                            $isDCRType = if ($fileContent -is [System.Object[]]) { $fileContent[0].type -eq "Microsoft.Insights/dataCollectionRules" } else { $fileContent.type -eq "Microsoft.Insights/dataCollectionRules" }
+                            if ($isDCRType) {
+                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                continue
+                            }
+                        }
+
                         if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules" -and $fileContent.properties.dataFlows.streams -is [System.String]) {
                             $dataFlowStreams = $fileContent.properties.dataFlows;
                             foreach ($dcrDataFlowStream in $dataFlowStreams) {

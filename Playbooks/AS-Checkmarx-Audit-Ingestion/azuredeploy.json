@@ -1,0 +1,418 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Checkmarx-Audit-Ingestion",
+        "description": "This playbook ingests Checkmarx audit log events into a custom Microsoft Sentinel table on a daily schedule.",
+        "prerequisites": [
+            "1. A Key Vault secret containing the Checkmarx client secret or refresh token",
+            "2. The CheckmarxAuditEvents_CL custom table deployed to Log Analytics",
+            "3. A Data Collection Endpoint (DCE) deployed",
+            "4. A Data Collection Rule (DCR) deployed and linked to the DCE"
+        ],
+        "postDeployment": [
+            "1. Add the Logic App managed identity to Key Vault with 'Key Vault Secrets User' role",
+            "2. Add the Logic App managed identity to the DCR with 'Monitoring Metrics Publisher' role"
+        ],
+        "lastUpdateTime": "2026-03-13T00:00:00Z",
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "AS-Checkmarx-Audit-Ingestion",
+            "metadata": {
+                "description": "Name of the Logic App"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Key Vault containing the Checkmarx secret"
+            }
+        },
+        "KeyVaultSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Key Vault secret containing the Checkmarx client secret or refresh token"
+            }
+        },
+        "GrantType": {
+            "type": "string",
+            "allowedValues": [
+                "refresh_token",
+                "client_credentials"
+            ],
+            "metadata": {
+                "description": "OAuth grant type for Checkmarx authentication. Use 'client_credentials' for client ID and secret, or 'refresh_token' for refresh token authentication."
+            }
+        },
+        "CheckmarxIAMBaseUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Checkmarx IAM base URL for authentication (e.g., https://us.iam.checkmarx.net, https://eu.iam.checkmarx.net)"
+            }
+        },
+        "CheckmarxASTBaseUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Checkmarx AST base URL for API calls (e.g., https://us.ast.checkmarx.net, https://eu.ast.checkmarx.net)"
+            }
+        },
+        "CheckmarxTenant": {
+            "type": "string",
+            "metadata": {
+                "description": "Checkmarx tenant/realm name used in the authentication URL"
+            }
+        },
+        "CheckmarxClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "Checkmarx OAuth Client ID (e.g., ast-app)"
+            }
+        },
+        "DCELogsIngestionEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "Logs Ingestion Endpoint URL from the Data Collection Endpoint (e.g., https://dce-name.region.ingest.monitor.azure.com)"
+            }
+        },
+        "DCRImmutableId": {
+            "type": "string",
+            "metadata": {
+                "description": "Immutable ID of the Audit Logs Data Collection Rule (e.g., dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[concat('keyvault-', parameters('PlaybookName'))]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[concat('keyvault-', parameters('PlaybookName'))]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', concat('keyvault-', parameters('PlaybookName')))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "interval": 1,
+                                "frequency": "Day"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_secret": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+                            },
+                            "runAfter": {},
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP_-_Get_Token": {
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "[concat(parameters('CheckmarxIAMBaseUrl'), '/auth/realms/', parameters('CheckmarxTenant'), '/protocol/openid-connect/token')]",
+                                "method": "POST",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]",
+                                "retryPolicy": {
+                                    "type": "exponential",
+                                    "count": 3,
+                                    "interval": "PT10S",
+                                    "minimumInterval": "PT10S",
+                                    "maximumInterval": "PT1M"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_variable_-_AuditOffset": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AuditOffset",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "HTTP_-_Get_Token": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_AuditHasMore": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AuditHasMore",
+                                        "type": "boolean",
+                                        "value": true
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_AuditOffset": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Until_-_Paginate_Audit_Logs": {
+                            "type": "Until",
+                            "expression": "@equals(variables('AuditHasMore'), false)",
+                            "limit": {
+                                "count": 50,
+                                "timeout": "PT1H"
+                            },
+                            "actions": {
+                                "HTTP_-_Get_Audit_Logs_Page": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/audit?limit=100&offset=@{variables(''AuditOffset'')}&from-date=@{formatDateTime(addDays(utcNow(), -1), ''yyyy-MM-ddTHH:mm:ssZ'')}&to-date=@{formatDateTime(utcNow(), ''yyyy-MM-ddTHH:mm:ssZ'')}')]",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Accept": "application/json",
+                                            "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                        },
+                                        "retryPolicy": {
+                                            "type": "exponential",
+                                            "count": 3,
+                                            "interval": "PT10S",
+                                            "minimumInterval": "PT10S",
+                                            "maximumInterval": "PT1M"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Condition_-_Audit_Page_Has_Events": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(coalesce(body('HTTP_-_Get_Audit_Logs_Page')?['events'], json('[]')))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Select_-_Map_Audit_Events": {
+                                            "type": "Select",
+                                            "inputs": {
+                                                "from": "@body('HTTP_-_Get_Audit_Logs_Page')?['events']",
+                                                "select": {
+                                                    "TimeGenerated": "@utcNow()",
+                                                    "EventDate": "@item()?['eventDate']",
+                                                    "EventType": "@item()?['eventType']",
+                                                    "AuditResource": "@item()?['auditResource']",
+                                                    "ActionType": "@item()?['actionType']",
+                                                    "ActionUserId": "@item()?['actionUserId']",
+                                                    "IpAddress": "@item()?['ipAddress']",
+                                                    "UserId": "@item()?['data']?['id']",
+                                                    "Status": "@item()?['data']?['status']",
+                                                    "Username": "@item()?['data']?['username']",
+                                                    "DataJson": "@string(item()?['data'])"
+                                                }
+                                            }
+                                        },
+                                        "HTTP_-_Send_Audit_Events_to_DCR": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "[concat(parameters('DCELogsIngestionEndpoint'), '/dataCollectionRules/', parameters('DCRImmutableId'), '/streams/Custom-CheckmarxAuditEvents_CL?api-version=2023-01-01')]",
+                                                "method": "POST",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "body": "@body('Select_-_Map_Audit_Events')",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                },
+                                                "retryPolicy": {
+                                                    "type": "exponential",
+                                                    "count": 4,
+                                                    "interval": "PT10S",
+                                                    "minimumInterval": "PT10S",
+                                                    "maximumInterval": "PT1M"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Select_-_Map_Audit_Events": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Get_Audit_Logs_Page": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Set_variable_-_Increment_AuditOffset": {
+                                    "type": "IncrementVariable",
+                                    "inputs": {
+                                        "name": "AuditOffset",
+                                        "value": 100
+                                    },
+                                    "runAfter": {
+                                        "Condition_-_Audit_Page_Has_Events": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Condition_-_Check_Audit_Page_Size": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "less": [
+                                                    "@length(coalesce(body('HTTP_-_Get_Audit_Logs_Page')?['events'], json('[]')))",
+                                                    100
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Set_variable_-_AuditHasMore_False": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "AuditHasMore",
+                                                "value": false
+                                            },
+                                            "runAfter": {}
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_-_Increment_AuditOffset": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_AuditHasMore": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'keyvault')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', concat('keyvault-', parameters('PlaybookName')))]",
+                                "connectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "logicAppName": {
+            "type": "string",
+            "value": "[parameters('PlaybookName')]"
+        },
+        "logicAppResourceId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+        },
+        "logicAppPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]"
+        }
+    }
+}

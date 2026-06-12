@@ -14,7 +14,7 @@ class AzureSecretHandler:
 
     def __init__(self, KVUri):
         try:
-            credential = DefaultAzureCredential()
+            credential = DefaultAzureCredential()           # CodeQL [SM05139] CCF based data connector is in development. This dataconnector will be retired once CCF based data connector is GA.
             self.client = SecretClient(vault_url=KVUri, credential=credential)
         except ServiceRequestError as e:
             # Network error, I will let it raise to higher level

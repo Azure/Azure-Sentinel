@@ -1,7 +1,7 @@
 id: f7d298b2-726c-42a5-bbac-0d7f9950f527
 name: Critical Severity Detection
 description: |
-  'Creates an incident when a CrowdStrike Falcon sensor detection is triggered with a Critical Severity'
+  'Creates an incident when a CrowdStrike Falcon sensor detection is triggered with Critical severity. The rule queries CrowdStrikeFalconEventStream for DetectionSummaryEvent records where Severity is Critical, summarizes detections by host, source IP, user, activity, technique, file details, hash, and message, and raises an incident for each matching result.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -12,8 +12,12 @@ queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-tactics: []
-relevantTechniques: []
+tactics:
+- Execution
+- Impact
+relevantTechniques:
+- T1204.002
+- T1499
 query: |
   let timeframe = 1h;
   CrowdStrikeFalconEventStream
@@ -22,24 +26,38 @@ query: |
   | where Severity == "Critical"
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstHostName, SrcIpAddr, DstUserName, Activity, Technique, FileName, FilePath, FileHash, Message
   | extend timestamp = StartTimeUtc, AccountCustomEntity = DstUserName, HostCustomEntity = DstHostName, IPCustomEntity = SrcIpAddr, FileHashCustomEntity = FileHash, FileHashAlgo = "MD5"
+  | project StartTimeUtc, EndTimeUtc, Total, DstHostName, SrcIpAddr, DstUserName, Activity, Technique, FileName, FilePath, FileHash, Message, timestamp, AccountCustomEntity, HostCustomEntity, IPCustomEntity, FileHashCustomEntity, FileHashAlgo
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-  - entityType: Host
-    fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: IPCustomEntity
-  - entityType: FileHash
-    fieldMappings:
-      - identifier: Algorithm
-        columnName: FileHashAlgo
-      - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.4
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountCustomEntity
+- entityType: Host
+  fieldMappings:
+  - identifier: FullName
+    columnName: HostCustomEntity
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPCustomEntity
+- entityType: FileHash
+  fieldMappings:
+  - identifier: Algorithm
+    columnName: FileHashAlgo
+  - identifier: Value
+    columnName: FileHashCustomEntity
+alertDetailsOverride:
+  alertDisplayNameFormat: CrowdStrike critical detection on {{DstHostName}}
+  alertDescriptionFormat: 'CrowdStrike reported {{Total}} critical detection(s) on {{DstHostName}} for {{DstUserName}}.'
+customDetails:
+  DetectionCount: Total
+  DetectionMessage: Message
+  DetectionTechnique: Technique
+  DetectionActivity: Activity
+  DetectionFileName: FileName
+  DetectionFilePath: FilePath
+  DetectionHost: DstHostName
+  DetectionUser: DstUserName
+  DetectionSourceIp: SrcIpAddr
+version: 1.0.5
 kind: Scheduled

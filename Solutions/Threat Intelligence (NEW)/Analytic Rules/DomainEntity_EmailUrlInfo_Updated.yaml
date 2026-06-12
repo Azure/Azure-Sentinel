@@ -35,37 +35,34 @@ query: |
     | where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period
     let TI_Urls = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+    | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record per Id FIRST
+    | where IsActive == true and ValidUntil > now() // THEN filter for active indicators that haven't expired
     | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
     | where isnotempty(IndicatorType) and IndicatorType == "url"
-    | extend Url = ObservableValue
+    | extend Url = tolower(ObservableValue)
     | where isnotempty(Url) // Filter for non-empty URLs
-    | extend Url = tolower(Url) // Convert URLs to lowercase
     | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL
-    | where IsActive == true and ValidUntil > now() // Filter for active indicators that haven't expired
-    | where EmailUrlInfo_TimeGenerated < ValidUntil // Ensure email info was generated before the indicator expired
-    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by Id, Url // Get the latest email info for each indicator
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns
     let TI_Domains = ThreatIntelIndicators
     | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
     | where isnotempty(ObservableValue) // Filter for non-empty domain names
-    | where ObservableKey == "domain-name:value"
-    | extend Active = IsActive
-    | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
     | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
+    | where ObservableKey == "domain-name:value"
+    | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record per Id FIRST
+    | where IsActive == true // THEN filter for active indicators
+    | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
     | extend IndicatorId = tostring(split(Id, "--")[2]);
     let TI_Domains_UrlInfo = TI_Domains
-    | project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type
+    | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
     | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name
     | extend ExpirationDateTime = ValidUntil
     | extend Description = Data.description
     | extend ThreatType =  Data.type
     | extend ConfidenceScore = Confidence
     | extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),"ActivityGroup:","")
-    | where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired
-    | where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired
-    | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator
+    | where ExpirationDateTime > now() // Filter for indicators that haven't expired
     | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns
     union TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence data
     | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
@@ -85,5 +82,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.0.5
+version: 1.0.6
 kind: Scheduled

@@ -1,0 +1,22 @@
+# Changelog for ASimWebSessionzScalerZIA.yaml
+
+## Version 0.4.1
+
+- (2025-11-04) ASIM-WebSessionzScalerZIA. - [PR #12053](https://github.com/Azure/Azure-Sentinel/pull/12053)
+
+## Version 0.4
+
+- (2022-12-11) Asim/remove fields cef - [PR #6868](https://github.com/Azure/Azure-Sentinel/pull/6868)
+
+## Version 0.3
+
+- (2022-06-15) Asim/fixing qaws errors - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)
+
+## Version 0.2
+
+- (2022-01-13) Asim/fix web parsers - [PR #3911](https://github.com/Azure/Azure-Sentinel/pull/3911)
+
+## Version 0.1
+
+- (2021-12-15) Dev/normalization/proxy parsers - [PR #3701](https://github.com/Azure/Azure-Sentinel/pull/3701)
+

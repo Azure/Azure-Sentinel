@@ -1,0 +1,81 @@
+id: 2a2c676e-885f-43d9-90cb-2c035772e31c
+name: Anomalous non-interactive token issuance after interactive sign-in (AiTM pattern)
+description: |
+  Identifies non-interactive sign-ins from a different IP and autonomous system than
+  the preceding interactive sign-in for the same user within a 10-minute window,
+  consistent with AiTM phishing token replay.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1539
+  - T1550
+query: |
+  let timeframe = 1d;
+  let correlationWindow = 10m;
+  let InteractiveSessions =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where ResultType == 0
+      | where isnotempty(UserPrincipalName)
+      | summarize arg_max(TimeGenerated, IPAddress, AutonomousSystemNumber, CorrelationId)
+          by UserUpn = tolower(UserPrincipalName)
+      | project
+          UserUpn,
+          InteractiveTime = TimeGenerated,
+          InteractiveIp   = IPAddress,
+          InteractiveAsn  = AutonomousSystemNumber,
+          SessionId       = CorrelationId;
+  AADNonInteractiveUserSignInLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where ResultType == 0
+  | where isnotempty(UserPrincipalName)
+  | extend UserUpn = tolower(UserPrincipalName)
+  | join kind=inner InteractiveSessions on UserUpn
+  | where TimeGenerated between (InteractiveTime .. (InteractiveTime + correlationWindow))
+  | where IPAddress != InteractiveIp
+  | where AutonomousSystemNumber != InteractiveAsn
+  | extend AccountName      = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | project
+      TimeGenerated,
+      UserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      AppDisplayName,
+      NonInteractiveIp  = IPAddress,
+      NonInteractiveAsn = AutonomousSystemNumber,
+      InteractiveIp,
+      InteractiveAsn,
+      InteractiveTime,
+      SessionId,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NonInteractiveIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

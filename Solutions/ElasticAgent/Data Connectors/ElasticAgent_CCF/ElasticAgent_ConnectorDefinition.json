@@ -1,0 +1,244 @@
+{
+  "name": "ElasticAgentConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ElasticAgentConnector",
+      "title": "Elastic Agent (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The Elastic Agent data connector enables you to ingest system metrics, logs, and telemetry data collected by Elastic Agent from Elasticsearch into Microsoft Sentinel. This connector uses the Elasticsearch Search API with API key authentication to query multiple data streams (CPU, memory, process, filesystem, network, load, uptime, agent metrics, and logs). It supports DCR-based ingestion time transformations for efficient query execution. For more information, see the API documentation: https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-search",
+      "graphQueriesTableName": "ElasticAgentLogsV2_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total events collected",
+          "legend": "All Events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "CPU metrics",
+          "legend": "CPU",
+          "baseQuery": "{{graphQueriesTableName}} | where DataStreamDataset == 'system.cpu'"
+        },
+        {
+          "metricName": "Memory metrics",
+          "legend": "Memory",
+          "baseQuery": "{{graphQueriesTableName}} | where DataStreamDataset == 'system.memory'"
+        },
+        {
+          "metricName": "Network metrics",
+          "legend": "Network",
+          "baseQuery": "{{graphQueriesTableName}} | where DataStreamDataset == 'system.network'"
+        },
+        {
+          "metricName": "Filesystem metrics",
+          "legend": "Filesystem",
+          "baseQuery": "{{graphQueriesTableName}} | where DataStreamDataset == 'system.filesystem'"
+        },
+        {
+          "metricName": "Agent logs",
+          "legend": "Logs",
+          "baseQuery": "{{graphQueriesTableName}} | where DataStreamType == 'logs'"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "CPU utilization over time",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamDataset == 'system.cpu'\n| project TimeGenerated, HostHostname, SystemCpuTotalNormPct, SystemCpuUserNormPct, SystemCpuSystemNormPct, SystemCpuIdleNormPct\n| order by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Memory usage over time",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamDataset == 'system.memory'\n| project TimeGenerated, HostHostname, SystemMemoryUsedPct, SystemMemoryActualUsedPct, SystemMemoryTotal\n| order by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Filesystem usage",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamDataset == 'system.filesystem'\n| project TimeGenerated, HostHostname, SystemFilesystemMountPoint, SystemFilesystemUsedPct, SystemFilesystemFree, SystemFilesystemTotal\n| order by SystemFilesystemUsedPct desc\n| take 50"
+        },
+        {
+          "description": "Network traffic",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamDataset == 'system.network'\n| project TimeGenerated, HostHostname, SystemNetworkName, SystemNetworkInBytes, SystemNetworkOutBytes, SystemNetworkInPackets, SystemNetworkOutPackets\n| order by TimeGenerated desc\n| take 50"
+        },
+        {
+          "description": "System load (Linux)",
+          "query": "ElasticAgentLogsV2_CL\n| where isnotempty(MonitoringMetricsSystemLoad1)\n| project TimeGenerated, HostHostname, MonitoringMetricsSystemLoad1, MonitoringMetricsSystemLoad5, MonitoringMetricsSystemLoad15\n| order by TimeGenerated desc\n| take 50"
+        },
+        {
+          "description": "Process CPU consumption",
+          "query": "ElasticAgentLogsV2_CL\n| where isnotempty(SystemProcessCpuTotalTicks)\n| project TimeGenerated, HostHostname, ElasticAgentProcess, SystemProcessCpuTotalTicks, SystemProcessMemorySize\n| order by SystemProcessCpuTotalTicks desc\n| take 50"
+        },
+        {
+          "description": "Agent logs by level",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamType == 'logs'\n| where isnotempty(LogLevel)\n| summarize Count = count() by LogLevel\n| order by Count desc"
+        },
+        {
+          "description": "Error logs",
+          "query": "ElasticAgentLogsV2_CL\n| where DataStreamType == 'logs' and LogLevel == 'error'\n| project TimeGenerated, HostHostname, LogLevel, LogLogger\n| order by TimeGenerated desc\n| take 50"
+        },
+        {
+          "description": "Events by data stream",
+          "query": "ElasticAgentLogsV2_CL\n| summarize Count = count() by DataStreamDataset\n| order by Count desc"
+        },
+        {
+          "description": "Agent health overview",
+          "query": "ElasticAgentLogsV2_CL\n| summarize Count = count(), LastSeen = max(TimeGenerated) by AgentName, AgentVersion, HostHostname\n| order by LastSeen desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "ElasticAgentLogsV2_CL",
+          "lastDataReceivedQuery": "ElasticAgentLogsV2_CL\n| where TimeGenerated > ago(10h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "ElasticAgentLogsV2_CL | where TimeGenerated > ago(1h) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Prerequisites",
+          "description": "Ensure you have the required access and configuration.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Prerequisites\n\n- An Elasticsearch deployment (self-managed or Elastic Cloud)\n- Elastic Agent deployed with System integration enabled\n- Agent monitoring enabled for logs and metrics\n- Elasticsearch API key with read permissions on all indices\n- Network connectivity from Microsoft Sentinel to your Elasticsearch endpoint\n\n### Required Indices\n\nThe connector queries the following Elasticsearch indices:\n\n**Metrics:**\n- `metrics-system.cpu-*` - CPU metrics\n- `metrics-system.memory-*` - Memory metrics\n- `metrics-system.process-*` - Process metrics\n- `metrics-system.filesystem-*` - Filesystem metrics\n- `metrics-system.network-*` - Network metrics\n- `metrics-system.load-*` - System load (Linux only)\n- `metrics-system.uptime-*` - System uptime\n- `metrics-elastic_agent.*` - Agent telemetry\n\n**Logs:**\n- `logs-elastic_agent-*` - Agent logs"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure Elasticsearch Connections",
+          "description": "Add one or more Elasticsearch connections to collect data from.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Elasticsearch Connections\n\nYou can add multiple connections to collect data from different Elasticsearch deployments. Each connection requires its own Elasticsearch URL and API key.\n\n### Creating an API Key\n\n1. In Kibana, go to **Stack Management > API Keys**\n2. Click **Create API key**\n3. Set a name and configure permissions:\n   - Read access to `metrics-system.*`\n   - Read access to `metrics-elastic_agent.*`\n   - Read access to `logs-elastic_agent-*`\n4. Copy the Base64-encoded API key value"
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Stream Name",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Elasticsearch URL",
+                    "columnValue": "properties.request.apiEndpoint"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connection",
+                "title": "Add Elasticsearch Connection",
+                "subtitle": "Connect to Elasticsearch",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "### Connection Details\n\nProvide the connection details for your Elasticsearch deployment."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connector Name",
+                          "placeholder": "e.g. Production Cluster, Dev Environment",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The connector name helps you identify this connection in the list. Use a descriptive name like 'Production Cluster' or 'US-East Environment'.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Elasticsearch URL",
+                          "placeholder": "e.g. https://your-deployment.es.us-east-1.aws.elastic.cloud",
+                          "type": "text",
+                          "name": "elasticsearchUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "API Key",
+                          "placeholder": "Enter your Elasticsearch API key (base64 encoded)",
+                          "type": "password",
+                          "name": "apiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The API key will be securely stored. Use the Base64-encoded format from Kibana: `id:api_key`.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 id: 1c2310ef-19bf-4caf-b2b0-a4c983932fa5
 name: Claroty - Multiple failed logins to same destinations
-description: |
-  'Detects multiple failed logins to same destinations.'
+description: 'Detects multiple failed login attempts to the same Claroty SRA destination site within a 5-minute window. The
+  rule counts failed logins per site and alerts when the number of failures exceeds the threshold value of 10.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -19,19 +19,20 @@ relevantTechniques:
   - T1133
 query: |
   let threshold = 10;
-  ClarotyEvent
-  | where EventType has 'Login to SRA'
-  | where EventType !has 'succeeded'
-  | extend Site = column_ifexists("site_name","")
-  | where isnotempty(Site)
-  | extend SrcUsername = extract(@'User\s(.*?)\sfailed', 1, EventMessage)
-  | summarize count() by Site, bin(TimeGenerated, 5m)
-  | where count_ > threshold
-  | extend SGCustomEntity = Site
+    ClarotyEvent
+    | where EventType has 'Login to SRA'
+    | where EventType !has 'succeeded'
+    | extend Site = column_ifexists("site_name","")
+    | where isnotempty(Site)
+    | extend SrcUsername = extract(@'User\s(.*?)\sfailed', 1, EventMessage)
+    | summarize FailedLogins = count(), SampleUser = any(SrcUsername) by Site, bin(TimeGenerated, 5m)
+    | where FailedLogins > threshold
+    | extend SGCustomEntity = Site
+    | project TimeGenerated, Site, FailedLogins, Threshold = threshold, SampleUser, SGCustomEntity
 entityMappings:
-  - entityType: SecurityGroup
-    fieldMappings:
-      - identifier: DistinguishedName
-        columnName: SGCustomEntity
-version: 1.0.3
+- entityType: SecurityGroup
+  fieldMappings:
+  - identifier: DistinguishedName
+    columnName: SGCustomEntity
+version: 1.0.4
 kind: Scheduled

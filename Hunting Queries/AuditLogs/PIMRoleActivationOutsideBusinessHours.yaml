@@ -1,0 +1,84 @@
+id: 8a1fb81a-b672-4e8c-9799-9c7fd2431688
+name: Privileged Identity Management role activation outside business hours
+description: Identifies Privileged Identity Management role activations outside business hours or on weekends, which may indicate unauthorized privilege escalation by a compromised account exploiting off-hours monitoring gaps.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+query: |
+  let timeframe = 14d;
+  let BusinessHourStart = 7;   // 07:00 UTC - adjust to your organization's timezone
+  let BusinessHourEnd   = 20;  // 20:00 UTC
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where Category =~ "RoleManagement"
+  | where OperationName in~ (
+        "Add member to role (PIM activation)",
+        "Add member to role. (PIM activation)",
+        "Add eligible member to role. (PIM activation)"
+    )
+  | where Result =~ "success"
+  // Extract the activating user from TargetResources - PIM logs the subject as target
+  | extend ActivatingUserUpn = tostring(TargetResources[0].userPrincipalName)
+  | extend ActivatingUserId  = tostring(TargetResources[0].id)
+  // Extract role name from the second target resource entry
+  | extend RoleName = iff(
+        isnotempty(tostring(TargetResources[1].displayName)),
+        tostring(TargetResources[1].displayName),
+        tostring(TargetResources[0].displayName))
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend HourOfDay   = hourofday(TimeGenerated)
+  | extend DayOfWeekNum = toint(dayofweek(TimeGenerated) / 1d)
+  | extend IsWeekend              = DayOfWeekNum == 0 or DayOfWeekNum == 6
+  | extend IsOutsideBusinessHours = HourOfDay < BusinessHourStart or HourOfDay >= BusinessHourEnd
+  | where IsWeekend or IsOutsideBusinessHours
+  | extend AccountName      = iff(ActivatingUserUpn has "@",
+        tostring(split(ActivatingUserUpn, "@")[0]), ActivatingUserUpn)
+  | extend AccountUPNSuffix = iff(ActivatingUserUpn has "@",
+        tostring(split(ActivatingUserUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      RoleName,
+      ActivatingUserUpn,
+      AccountName,
+      AccountUPNSuffix,
+      ActivatingUserId,
+      ActorIp,
+      HourOfDay,
+      DayOfWeekNum,
+      IsWeekend,
+      IsOutsideBusinessHours,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActivatingUserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

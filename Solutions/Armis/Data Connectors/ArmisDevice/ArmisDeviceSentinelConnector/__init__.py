@@ -3,11 +3,6 @@
 import datetime
 import logging
 import azure.functions as func
-import base64
-import hashlib
-import hmac
-import json
-import os
 import time
 import requests
 from .state_manager import StateManager
@@ -18,14 +13,11 @@ from Exceptions.ArmisExceptions import (
     ArmisDataNotFoundException,
     ArmisTimeOutException,
 )
+from . import consts
+from .sentinel import send_data_to_sentinel
 
-
-API_KEY = os.environ["ArmisSecretKey"]
-url = os.environ["ArmisURL"]
-connection_string = os.environ["AzureWebJobsStorage"]
-customer_id = os.environ["WorkspaceID"]
-shared_key = os.environ["WorkspaceKey"]
-armis_devices_table_name = os.environ["ArmisDeviceTableName"]
+connection_string = consts.CONN_STRING
+armis_devices_table_name = consts.ARMIS_DEVICES_TABLE
 
 HTTP_ERRORS = {
     400: "Armis Device Connector: Bad request: Missing aql parameter.",
@@ -36,12 +28,6 @@ ERROR_MESSAGES = {
     "HOST_CONNECTION_ERROR": "Armis Device Connector: Invalid host while verifying 'armis account'.",
 }
 
-CHECKPOINT_TABLE_NAME = "ArmisDeviceCheckpoint"
-
-MAX_RETRY = 5
-FUNCTION_APP_TIMEOUT_SECONDS = 570
-body = ""
-
 
 class ArmisDevice:
     """This class will process the Device data and post it into the Microsoft sentinel."""
@@ -49,9 +35,9 @@ class ArmisDevice:
     def __init__(self, start_time):
         """__init__ method will initialize object of class."""
         self.start_time = start_time
-        self._link = url
+        self._link = consts.URL
         self._header = {}
-        self._secret_key = API_KEY
+        self._secret_key = consts.API_KEY
         self._data_device_from = 0
 
     def _get_access_token_device(self, armis_link_suffix):
@@ -71,7 +57,9 @@ class ArmisDevice:
                     response = response.json()
                     _access_token = response.get("data", {}).get("access_token")
                     self._header.update({"Authorization": _access_token})
-                    self.keyvault_obj.set_keyvault_secret(self.access_token_key, _access_token)
+                    self.keyvault_obj.set_keyvault_secret(
+                        self.access_token_key, _access_token
+                    )
                 elif response.status_code == 400:
                     raise ArmisException(
                         "Armis Device Connector: Please check either armis URL or armis secret key is wrong."
@@ -133,13 +121,19 @@ class ArmisDevice:
         and update the header for further use.
         """
         try:
-            keyvault_access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+            keyvault_access_token = self.keyvault_obj.get_keyvault_secret(
+                self.access_token_key
+            )
             header_access_token = self._header.get("Authorization")
             if keyvault_access_token == header_access_token:
-                logging.info("Armis Device Connector: KeyVault Access Token Invalid. Generating New Token.")
+                logging.info(
+                    "Armis Device Connector: KeyVault Access Token Invalid. Generating New Token."
+                )
                 self._get_access_token_device("/access_token/")
             else:
-                logging.info("Armis Device Connector: KeyVault Access Token Updated. Updating Header Value.")
+                logging.info(
+                    "Armis Device Connector: KeyVault Access Token Updated. Updating Header Value."
+                )
                 self._header.update({"Authorization": keyvault_access_token})
         except ArmisException as err:
             logging.error(err)
@@ -175,6 +169,7 @@ class ArmisDevice:
 
                 for i in data:
                     i["armis_device_time"] = i["lastSeen"]
+                    i["device_type"] = i["type"]
 
                 logging.info(
                     "Armis Device Connector: From {}, total length {}".format(
@@ -211,7 +206,7 @@ class ArmisDevice:
 
         """
         try:
-            for i in range(MAX_RETRY + 1):
+            for i in range(consts.MAX_RETRY + 1):
                 response = requests.get(
                     (self._link + armis_link_suffix),
                     params=parameter,
@@ -297,19 +292,23 @@ class ArmisDevice:
             self.access_token_key = "armis-access-token"
             properties_list = self.keyvault_obj.get_properties_list_of_secrets()
             if self.access_token_key in properties_list:
-                self.access_token = self.keyvault_obj.get_keyvault_secret(self.access_token_key)
+                self.access_token = self.keyvault_obj.get_keyvault_secret(
+                    self.access_token_key
+                )
                 self._header.update({"Authorization": self.access_token})
             else:
                 self._get_access_token_device("/access_token/")
 
-            azuresentinel = AzureSentinel()
             parameter_device = {
                 "aql": aql_data,
                 "orderBy": "lastSeen",
                 "length": 1000,
             }
             while self._data_device_from is not None:
-                if int(time.time()) >= self.start_time + FUNCTION_APP_TIMEOUT_SECONDS:
+                if (
+                    int(time.time())
+                    >= self.start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS
+                ):
                     raise ArmisTimeOutException()
                 parameter_device.update({"from": self._data_device_from})
                 (
@@ -322,7 +321,7 @@ class ArmisDevice:
                     "Armis Device Connector: Total length of data is %s ",
                     total_data_length,
                 )
-                azuresentinel.post_data(customer_id, json.dumps(data), table_name)
+                send_data_to_sentinel(data, table_name)
                 logging.info(
                     "Armis Device Connector: Collected %s device data and ingested into sentinel.",
                     count_per_frame_data,
@@ -382,7 +381,8 @@ class ArmisDevice:
                 connection_string=connection_string, file_path="funcarmisdevicesfile"
             )
             checkpoint_table_obj = ExportsTableStore(
-                connection_string=connection_string, table_name=CHECKPOINT_TABLE_NAME
+                connection_string=connection_string,
+                table_name=consts.CHECKPOINT_TABLE_NAME,
             )
             last_time_devices = self.state_devices.get()
 
@@ -434,7 +434,7 @@ class ArmisDevice:
             else:
                 logging.info(
                     "Armis Device Connector: Fetching Entity from Checkpoint table: {}".format(
-                        CHECKPOINT_TABLE_NAME
+                        consts.CHECKPOINT_TABLE_NAME
                     )
                 )
                 last_time_devices = record.get("last_seen")
@@ -478,94 +478,6 @@ class ArmisDevice:
 
         except ArmisDataNotFoundException:
             raise ArmisDataNotFoundException()
-
-
-class AzureSentinel:
-    """AzureSentinel is Used to post data to log analytics."""
-
-    def build_signature(
-        self,
-        date,
-        content_length,
-        method,
-        content_type,
-        resource,
-    ):
-        """To build the signature."""
-        x_headers = "x-ms-date:" + date
-        string_to_hash = (
-            method
-            + "\n"
-            + str(content_length)
-            + "\n"
-            + content_type
-            + "\n"
-            + x_headers
-            + "\n"
-            + resource
-        )
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(shared_key)
-        encoded_hash = base64.b64encode(
-            hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
-        ).decode()
-        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
-        return authorization
-
-    # Build and send a request to the POST API
-    def post_data(self, customer_id, body, log_type):
-        """Build and send a request to the POST API."""
-        method = "POST"
-        content_type = "application/json"
-        resource = "/api/logs"
-        rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-        content_length = len(body)
-        try:
-            signature = self.build_signature(
-                rfc1123date,
-                content_length,
-                method,
-                content_type,
-                resource,
-            )
-        except ArmisException as err:
-            logging.error("Armis Device Connector: Error occured: {}".format(err))
-            raise ArmisException(
-                "Armis Device Connector: Error while generating signature for log analytics."
-            )
-
-        uri = (
-            "https://"
-            + customer_id
-            + ".ods.opinsights.azure.com"
-            + resource
-            + "?api-version=2016-04-01"
-        )
-
-        headers = {
-            "content-type": content_type,
-            "Authorization": signature,
-            "Log-Type": log_type,
-            "x-ms-date": rfc1123date
-        }
-        try:
-            response = requests.post(uri, data=body, headers=headers)
-            if response.status_code >= 200 and response.status_code <= 299:
-                logging.info(
-                    "Armis Device Connector: Data posted successfully to microsoft sentinel."
-                )
-            else:
-                raise ArmisException(
-                    "Armis Device Connector: Response code: {} from posting data to log analytics.".format(
-                        response.status_code
-                    )
-                )
-
-        except ArmisException as err:
-            logging.error(err)
-            raise ArmisException(
-                "Armis Device Connector: Error while posting data to microsoft sentinel."
-            )
 
 
 def main(mytimer: func.TimerRequest) -> None:

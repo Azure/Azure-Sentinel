@@ -1,4 +1,5 @@
-| **Version** | **Date Modified (DD-MM-YYY)** | **Change History**                              |
-|-------------|-------------------------------|-------------------------------------------------| 
-| 3.0.2       |	09-09-2024	                  | Updated the python runtime version to 3.11         |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                              |
+|-------------|-------------------------------|-------------------------------------------------|
+| 3.1.0       | 04-06-2026                    | Added MuleSoft CloudHub `Alerts` CCF Connector & `Logs` CCF Push Connector for real-time log streaming via Log4j HTTP appender. |
+| 3.0.2       | 09-09-2024                    | Updated the python runtime version to 3.11         |
 | 3.0.1       | 13-06-2024                    | Updated **Data Connector** instructions to notify Cloudhub Application support.     |

@@ -1,0 +1,48 @@
+id: 5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c
+name: A365 AI Agents - Published Agents with Short Instructions
+description: |
+  This query identifies A365 AI agents that are published but have short or insufficient instructions. 
+  Short instructions increase the risk of prompt injection attacks, where malicious input can influence the agent to deviate from its intended behavior. 
+  Without clear guidance, the agent may respond unpredictably or expose sensitive data.
+  Recommended Action: Ensure all generative orchestration components have well-defined instructions that specify the agent`s purpose, boundaries, and allowed actions. 
+  Regularly review and update instructions to maintain security and prevent misuse.
+requiredDataConnectors: []
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1499
+  - T1562
+query: |
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn));
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where RegistrySource == "A365"
+  | where IsBlocked == 0 // not blocked
+  | where strlen(Instructions) < 100
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend PublishedStatus = RawAgentInfoJson.publishedStatus
+  | where PublishedStatus == "Published" //published
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | project-away RawAgentInfoJson, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, OwnerUpn, CreatorUpn, DeveloperName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

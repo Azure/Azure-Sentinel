@@ -17,7 +17,7 @@ namespace Kqlvalidations.Tests
     /// </summary>
     public sealed class GitHubApiClient
     {
-        private static GitHubApiClient _instance;
+        private static volatile GitHubApiClient _instance;
         private static readonly object _lock = new object();
         private readonly GitHubClient _client;
 

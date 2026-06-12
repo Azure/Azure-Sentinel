@@ -3,6 +3,7 @@
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/customSizeBasedBuffer"
 require "logstash/sentinel_la/logStashEventsBatcher"
+require "logstash/json"
 
 # LogStashAutoResizeBuffer class setting a resizable buffer which is flushed periodically
 # The buffer resize itself according to Azure Loganalytics  and configuration limitations
@@ -41,7 +42,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
         end
 
         # We send Json in the REST request 
-        documents_json = documents.to_json
+        documents_json = LogStash::Json.dump(documents)
         documents_byte_size = documents_json.bytesize
         if (documents_byte_size <= @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES)
         # Setting resizing to true will cause changing the max size
@@ -83,7 +84,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
         final_documents_lists = Array.new
 
         for documents_sublist in split_documents_lists do
-            documents_sublist_byte_size = documents_sublist.to_json.bytesize
+            documents_sublist_byte_size = LogStash::Json.dump(documents_sublist).bytesize
 
             if (documents_sublist_byte_size >= @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES)
                 if (documents_sublist.length > 1)
@@ -101,7 +102,7 @@ class LogStashAutoResizeBuffer < LogStashEventsBatcher
 
     def send_split_documents_list_to_loganalytics(split_documents_lists)
         for documents in split_documents_lists do
-            send_message_to_loganalytics(documents.to_json, documents.length)
+            send_message_to_loganalytics(LogStash::Json.dump(documents), documents.length)
         end
     end
    

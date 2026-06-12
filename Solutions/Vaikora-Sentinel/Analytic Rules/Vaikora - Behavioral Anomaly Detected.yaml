@@ -1,0 +1,61 @@
+id: e61258ec-1a7f-454c-95b5-458a6edb1ea4
+name: Vaikora - Behavioral anomaly detected
+description: |
+  Identifies AI agent behavioral anomalies flagged by Vaikora with an anomaly score of 0.7 or above, indicating significant deviation from the agent's established behavioral baseline.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VaikoraSentinel
+    dataTypes:
+      - Vaikora_AgentSignals_CL
+queryFrequency: 30m
+queryPeriod: 1h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Execution
+relevantTechniques:
+  - T1059
+  - T1027
+query: |
+  Vaikora_AgentSignals_CL
+  | where TimeGenerated > ago(1h)
+  | where is_anomaly_b == true
+  | where anomaly_score_d >= 0.7
+  | summarize
+      AnomalyCount = count(),
+      MaxAnomalyScore = max(anomaly_score_d),
+      AvgAnomalyScore = avg(anomaly_score_d),
+      AnomalyReasons = make_set(anomaly_reason_s),
+      ActionTypes = make_set(action_type_s)
+    by AgentId = agent_id_s, Severity = severity_s
+  | extend
+      ReasonList = strcat_array(AnomalyReasons, "; "),
+      ActionList = strcat_array(ActionTypes, ", ")
+suppressionDuration: 30m
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  MaxAnomalyScore: MaxAnomalyScore
+  AvgAnomalyScore: AvgAnomalyScore
+  AnomalyCount: AnomalyCount
+  AnomalyReasons: ReasonList
+  ActionTypes: ActionList
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AgentId
+version: 1.0.0
+kind: Scheduled

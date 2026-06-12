@@ -1,0 +1,62 @@
+id: d1fe8d30-4852-463a-b6ee-3b459788b75d
+name: GCP Security Command Center - Detect Resources with Logging Disabled
+description: |
+  Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+tags:
+  - Logging
+  - GCP
+query: |
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory in ("BUCKET_LOGGING_DISABLED", "FIREWALL_RULE_LOGGING_DISABLED", "DNS_LOGGING_DISABLED")
+  | extend FindingsJson = parse_json(Findings)
+  | extend Resource = tostring(FindingsJson.resourceName),
+           ExternalUri = tostring(FindingsJson.externalUri),
+           Description = tostring(FindingsJson.description),
+           Severity = tostring(FindingsJson.severity),
+           ProjectName = extract(@"projects/([^/]+)", 1, tostring(FindingsJson.resourceName)),
+           ResourceType = extract(@"//([a-z0-9_.-]+)/", 1, tostring(FindingsJson.resourceName)),
+           SourceProps = parse_json(tostring(FindingsJson.sourceProperties))
+  // Normalize display-friendly resource id
+  | extend ResourceName = case(
+      Resource contains "firewalls/", extract(@"firewalls/([^/]+)", 1, Resource),
+      Resource contains "storage.googleapis.com/", extract(@'storage.googleapis.com/([^/\"]+)', 1, Resource),
+      Resource contains "networks/", extract(@"networks/([^/]+)", 1, Resource),
+      Resource
+    )
+  | project TimeGenerated, ProjectName, ResourceType, ResourceName, Resource, FindingCategory, Severity, ExternalUri, Description
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ResourceName
+customDetails:
+  ProjectName: ProjectName
+  ResourceType: ResourceType
+  FindingCategory: FindingCategory
+  ExternalUri: ExternalUri
+  Description: Description
+  Severity: Severity
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP resources with logging disabled: {{ProjectName}} ({{ResourceType}})"
+  alertDescriptionFormat: |-
+    Resource {{ResourceName}} in project {{ProjectName}} (type: {{ResourceType}}) has logging disabled.
+version: 1.0.0
+kind: Scheduled

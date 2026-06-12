@@ -1,0 +1,89 @@
+id: b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+kind: Scheduled
+name: BTP - Cloud Integration JDBC data source changes
+description: |
+  Identifies deployment and undeployment of JDBC data source configurations in SAP Cloud Integration.
+  JDBC data sources contain database connection credentials and configuration that enable
+  integration flows to access backend databases.
+  
+  Unauthorized JDBC data source manipulation could indicate:
+  - Attacker adding rogue database connections for data exfiltration
+  - Credential theft by accessing stored database passwords
+  - Modification of connection strings to redirect traffic to attacker-controlled systems
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1552
+  - T1021
+query: |
+  SAPBTPAuditLog_CL
+  | where Category == "audit.security-events"
+  | extend data_s = tostring(Message.data),
+           ipAddress = tostring(Message.ip)
+  | extend parsedData = parse_json(data_s)
+  | extend action = tostring(parsedData.action),
+           objectType = tostring(parsedData.objectType),
+           objectId = tostring(parsedData.objectId)
+  | where objectType == "Data Source"
+  | where action in ("PasswordStore", "PasswordDelete")
+  | extend normalizedAction = case(
+      action == "PasswordStore", "deployed",
+      action == "PasswordDelete", "undeployed",
+      action
+  )
+  | extend MessageText = strcat("JDBC data source '", objectId, "' was ", normalizedAction)
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      DataSourceName = objectId,
+      Action = action,
+      Tenant,
+      ipAddress,
+      CloudApp = "SAP Cloud Integration"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Cloud Integration: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}} from IP {{ipAddress}}.
+    
+    JDBC data sources contain database connection credentials. Changes to these configurations
+    should be carefully reviewed.
+    
+    This could indicate:
+    - Legitimate database configuration management
+    - Unauthorized database connection configuration
+    - Attacker establishing lateral movement paths to backend systems
+customDetails:
+  DataSourceName: DataSourceName
+  Action: Action
+  SourceIP: ipAddress
+version: 1.0.0

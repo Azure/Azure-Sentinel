@@ -1,0 +1,242 @@
+{
+  "name": "VMwareWorkspaceOneConnector",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "VMwareWorkspaceOneConnector",
+      "title": "VMware Workspace ONE (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The VMware Workspace ONE connector ingests enrolled device inventory and installed application details from the Workspace ONE Unified Endpoint Management (UEM) platform into Microsoft Sentinel. It supports device compliance tracking, non-compliant endpoint detection, and unauthorized application discovery across iOS, Android, Windows, and macOS managed devices.",
+      "graphQueriesTableName": "VMwareWorkspaceOneDevices",
+      "graphQueries": [
+        {
+          "metricName": "Enrolled devices",
+          "legend": "Workspace ONE Devices",
+          "baseQuery": "VMwareWorkspaceOneDevices"
+        },
+        {
+          "metricName": "Device applications",
+          "legend": "Workspace ONE Device Apps",
+          "baseQuery": "VMwareWorkspaceOneDeviceApps"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All enrolled devices - recent",
+          "query": "{{graphQueriesTableName}}\n | take 10"
+        },
+        {
+          "description": "Non-compliant devices",
+          "query": "VMwareWorkspaceOneDevices\n | where ComplianceStatus == 'NonCompliant'\n | project TimeGenerated, DeviceFriendlyName, Platform, OwnerName, UserEmailAddress, ComplianceStatus, LastSeen"
+        },
+        {
+          "description": "Compromised or jailbroken devices",
+          "query": "VMwareWorkspaceOneDevices\n | where CompromisedStatus == true\n | project TimeGenerated, DeviceFriendlyName, Platform, SerialNumber, OwnerName, UserEmailAddress"
+        },
+        {
+          "description": "Top installed applications across all devices",
+          "query": "VMwareWorkspaceOneDeviceApps\n | summarize AppCount = count() by ApplicationName, AppVersion, BundleId\n | top 20 by AppCount desc"
+        },
+        {
+          "description": "Installed but unassigned applications (shadow IT)",
+          "query": "VMwareWorkspaceOneDeviceApps\n | where InstallStatus == 'Installed' and AssignmentStatus == 'Not Assigned'\n | project TimeGenerated, ApplicationName, BundleId, AppVersion, InstallStatus, AssignmentStatus"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "VMwareWorkspaceOneDevices",
+          "lastDataReceivedQuery": "VMwareWorkspaceOneDevices\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "VMwareWorkspaceOneDeviceApps",
+          "lastDataReceivedQuery": "VMwareWorkspaceOneDeviceApps\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read, Write, and Delete permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect VMware Workspace ONE to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Prerequisites\n\nBefore connecting, ensure:\n1. You have an active **VMware Workspace ONE UEM** (Omnissa) tenant\n2. You have administrator access to create an OAuth Client in **Groups & Settings -> Configurations -> OAuth Client Management**\n3. The OAuth Client role must include: **REST API Devices Read**, **REST API MDM Devices**, **REST API Apps Read**\n\n## Authentication Setup\n\nCreate an OAuth Client in Workspace ONE UEM:\n1. Go to **Groups & Settings -> Configurations** and search for *OAuth*\n2. Select **OAuth Client Management** -> click **Add**\n3. Enter a Name (e.g., `MicrosoftSentinelConnector`), assign a role with device/app read permissions, set Status to **Enabled**, then click **Save**\n4. **Copy the Client ID and Client Secret immediately** - they cannot be retrieved after closing the dialog\n\n## Auth URL by Region\n\nSelect the Auth URL that matches your Workspace ONE tenant's data center region:\n\n| Region | Auth URL |\n|--------|----------|\n| United States / Canada | `https://na.uemauth.vmwservices.com` |\n| United Kingdom / Germany | `https://emea.uemauth.vmwservices.com` |\n| Australia / APAC | `https://apac.uemauth.vmwservices.com` |\n| UAT Environment | `https://uat.uemauth.vmwservices.com` |"
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Connection Name",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Instance URL",
+                    "columnValue": "properties.addOnAttributes.instanceUrl"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Configure Workspace ONE Connection",
+                "subtitle": "Connect to a Workspace ONE UEM tenant",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connection Name",
+                          "placeholder": "e.g., Contoso-WS1-Production",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Provide a unique name to identify this Workspace ONE tenant connection.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Instance URL",
+                          "placeholder": "https://yourorg.awmdm.com",
+                          "type": "text",
+                          "name": "instanceUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The base URL of your Workspace ONE UEM console (without trailing slash).",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Auth URL",
+                          "placeholder": "https://na.uemauth.vmwservices.com",
+                          "type": "text",
+                          "name": "authUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Region-specific OAuth token service URL. Do not include /connect/token - it is appended automatically.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client ID",
+                          "placeholder": "Enter the OAuth Client ID",
+                          "type": "text",
+                          "name": "clientId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client Secret",
+                          "placeholder": "Enter the OAuth Client Secret",
+                          "type": "password",
+                          "name": "clientSecret",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Collect Application Details",
+                          "name": "collectAppsDetails",
+                          "options": [
+                            {
+                              "key": "true",
+                              "text": "Yes, collect installed app inventory per device"
+                            },
+                            {
+                              "key": "false",
+                              "text": "No, collect device inventory only"
+                            }
+                          ],
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "App collection triggers one additional API call per enrolled device per poll cycle. For large fleets (> 5,000 devices), consider selecting 'No' to reduce API call volume.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,57 @@
+id: 4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c
+name: A365 AI Agents - HTTP Requests to Non-HTTPS Endpoints
+description: |
+  This query identifies A365 AI agents that send HTTP requests to endpoints using non-HTTPS schemes. 
+  Communication over unencrypted HTTP exposes sensitive data in transit and increases the risk of interception or tampering. 
+  Attackers could exploit this to capture credentials, session tokens, or other confidential information, leading to data breaches or unauthorized access.
+  Recommended Action: Review these agents and update all HTTP actions to use HTTPS endpoints. 
+  If non-secure communication is absolutely required for a specific business case, document the justification and apply compensating controls such as network-level encryption or IP restrictions.
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+  - CredentialAccess
+relevantTechniques:
+  - T1071
+  - T1040
+query: |
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)); 
+  AIAgentsInfo
+  | where RegistrySource == "A365"
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | where isnotempty(AgentActionTriggers)
+  | extend AgentActionTriggersJson = parse_json(AgentActionTriggers)
+  | where array_length(AgentActionTriggersJson) > 1
+  | mv-expand Trigger = AgentActionTriggersJson
+  | extend ServerUrls = Trigger.serverUrls
+  | mv-expand Url = ServerUrls
+  | extend ParsedUrl = parse_url(tostring(Url))
+  | extend Scheme = tostring(ParsedUrl["Scheme"]) 
+  | where isnotempty(Scheme) and Scheme != "https"
+  | project-away RawAgentInfoJson, ParsedUrl, ServerUrls, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, Url, Scheme, OwnerUpn, CreatorUpn, DeveloperName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0

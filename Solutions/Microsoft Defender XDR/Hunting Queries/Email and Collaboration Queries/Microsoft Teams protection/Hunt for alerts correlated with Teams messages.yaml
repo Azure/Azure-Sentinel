@@ -1,0 +1,196 @@
+id: d0232a68-41e1-4fdf-aa17-bf67001fe7b2
+name: Hunt for alerts correlated with Teams messages
+description: |
+   Correlates Microsoft Teams message activity with downstream Defender alerts on the
+   recipient (victim) identity, surfacing potential phishing or social-engineering chats
+   that are followed by alert activity within a tunable time window.
+description-detailed: |
+   This hunt seeds from MessageEvents (Teams) and joins to AlertEvidence using three
+   parallel branches to maximize identity coverage:
+     -Victim AccountObjectId
+     -Victim UPN (RecipientSmtpAddress)
+     -ChatThreadId (extracted directly or parsed from AdditionalFields.SourceId)
+   It also enriches each Teams event with the first ChatCreated event from CloudAppEvents
+   for that thread, helping highlight first-contact / external chat patterns.
+   Tunable parameters:
+     - _huntingWindow (default 4d) controls lookback breadth
+     - _timeFrame (default 30m) bounds how soon after a Teams event an alert must occur
+   A placeholder branch (branch 4) is intentionally left in the query as an extension
+   point for correlating against host-side events (e.g., DeviceProcessEvents).
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - CloudAppEvents
+  - AlertEvidence
+tactics:
+  - InitialAccess
+  - Discovery
+relevantTechniques:
+   - T1566
+   - T1078
+query: |
+   let _timeFrame = 30m;      // Tune: how long after the Teams event to look for matching alerts
+   let _huntingWindow = 4d;   // Tune: broader lookback increases coverage but also cost
+   // Seed Teams message activity and normalize the victim/join fields you want to carry forward
+   let _teams = materialize (
+       MessageEvents
+       | where Timestamp > ago(_huntingWindow)
+       | extend Recipient = parse_json(RecipientDetails)
+       // Optional tuning: add sender/name/content filters here first to reduce volume early
+       //| where SenderDisplayName contains "add keyword"
+       //          or SenderDisplayName contains "add keyword"
+       // add other hunting terms
+       | mv-expand Recipient
+       | extend VictimAccountObjectId = tostring(Recipient.RecipientObjectId),
+                VictimUPN = tostring(Recipient.RecipientSmtpAddress)
+       | project
+           TTime = Timestamp,
+           SenderUPN = SenderEmailAddress,
+           SenderDisplayName,
+           VictimUPN,
+           VictimAccountObjectId,
+           ChatThreadId = ThreadId
+   );
+   // Distinct key sets used to prefilter downstream tables before joining
+   let _VictimAccountObjectId = materialize(
+       _teams
+       | where isnotempty(VictimAccountObjectId)
+       | distinct VictimAccountObjectId
+   );
+   let _VictimUPN = materialize(
+       _teams
+       | where isnotempty(VictimUPN)
+       | distinct VictimUPN
+   );
+   let _ChatThreadId = materialize(
+       _teams
+       | where isnotempty(ChatThreadId)
+       | distinct ChatThreadId
+   );
+   // Find first-seen chat creation events for the chat threads already present in _teams
+   // Tune: add more CloudAppEvents filters here if you want to narrow to external / one-on-one / specific chat types
+   let _firstContact = materialize(
+       CloudAppEvents
+       | where Timestamp > ago(_huntingWindow)
+       | where Application has "Teams"
+       | where ActionType == "ChatCreated"
+       | extend Raw = todynamic(RawEventData)
+       | extend ChatThreadId = tostring(Raw.ChatThreadId)
+       | where isnotempty(ChatThreadId)
+       | join kind=innerunique (_ChatThreadId) on ChatThreadId
+       | summarize FCTime = min(Timestamp) by ChatThreadId
+   );
+   // Alert branch 1: match by victim object ID
+   // Usually the cleanest identity join if the field is populated consistently
+   let _alerts_by_oid = materialize(
+       AlertEvidence
+       | where Timestamp > ago(_huntingWindow)
+       | where AccountObjectId in (_VictimAccountObjectId)
+       | project
+           ATime = Timestamp,
+           AlertId,
+           Title,
+           AccountName,
+           AccountObjectId,
+           AccountUpn = "",
+           SourceId = "",
+           ChatThreadId = ""
+   );
+   // Alert branch 2: match by victim UPN
+   // Useful when ObjectId is missing or alert evidence is only populated with UPN
+   let _alerts_by_upn = materialize(
+       AlertEvidence
+       | where Timestamp > ago(_huntingWindow)
+       | where AccountUpn in (_VictimUPN)
+       | project
+           ATime = Timestamp,
+           AlertId,
+           Title,
+           AccountName,
+           AccountObjectId,
+           AccountUpn,
+           SourceId = "",
+           ChatThreadId = ""
+   );
+   // Alert branch 3: match by chat thread ID
+   // Tune: this is typically the most expensive branch because it inspects AdditionalFields
+   let _alerts_by_thread = materialize(
+       AlertEvidence
+       | where Timestamp > ago(_huntingWindow)
+       | where AdditionalFields has_any (_ChatThreadId)
+       | extend AdditionalFields = todynamic(AdditionalFields)
+       | extend
+           SourceId = tostring(AdditionalFields.SourceId),
+           ChatThreadIdRaw = tostring(AdditionalFields.ChatThreadId)
+       | extend ChatThreadId = coalesce(
+           ChatThreadIdRaw,
+           extract(@"/(?:chats|channels|conversations|spaces)/([^/]+)/", 1, SourceId)
+       )
+       | where isnotempty(ChatThreadId)
+       | join kind=innerunique (_ChatThreadId) on ChatThreadId
+       | project
+           ATime = Timestamp,
+           AlertId,
+           Title,
+           AccountName,
+           AccountObjectId,
+           AccountUpn = "",
+           SourceId,
+           ChatThreadId
+   );
+   //
+   // add branch 4 to corrilate with host events
+   //
+   // Add first-contact context back onto the Teams seed set
+   let _teams_fc = materialize(
+       _teams
+       | join kind=leftouter _firstContact on ChatThreadId
+       | extend FirstContact = isnotnull(FCTime)
+   );
+   // Join path 1: Teams victim object ID -> alert AccountObjectId
+   let _matches_oid =
+       _teams_fc
+       | where isnotempty(VictimAccountObjectId)
+       | join hint.strategy=broadcast kind=leftouter (
+           _alerts_by_oid
+       ) on $left.VictimAccountObjectId == $right.AccountObjectId
+       // Time bound keeps only alerts near the Teams activity; widen/narrow _timeFrame to tune sensitivity
+       | where isnull(ATime) or ATime between (TTime .. TTime + _timeFrame)
+       | extend MatchType = "ObjectId";
+   // Join path 2: Teams victim UPN -> alert AccountUpn
+   let _matches_upn =
+       _teams_fc
+       | where isnotempty(VictimUPN)
+       | join hint.strategy=broadcast kind=leftouter (
+           _alerts_by_upn
+       ) on $left.VictimUPN == $right.AccountUpn
+       | where isnull(ATime) or ATime between (TTime .. TTime + _timeFrame)
+       | extend MatchType = "VictimUPN";
+   // Join path 3: Teams chat thread -> alert chat thread
+   let _matches_thread =
+       _teams_fc
+       | where isnotempty(ChatThreadId)
+       | join hint.strategy=broadcast kind=leftouter (
+           _alerts_by_thread
+       ) on ChatThreadId
+       | where isnull(ATime) or ATime between (TTime .. TTime + _timeFrame)
+       | extend MatchType = "ChatThreadId";
+   //
+   // add branch 4 for host events
+   //
+   // Merge all match paths and collapse multiple alert hits per Teams event into one row
+   union _matches_oid, _matches_upn, _matches_thread
+   | summarize
+       AlertTitles = make_set(Title, 50),
+       AlertIds = make_set(AlertId, 50),
+       MatchTypes = make_set(MatchType, 10),
+       FirstAlertTime = min(ATime)
+       by
+           TTime,
+           SenderUPN,
+           SenderDisplayName,
+           VictimUPN,
+           VictimAccountObjectId,
+           ChatThreadId
+version: 1.0.0

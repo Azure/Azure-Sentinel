@@ -1,0 +1,76 @@
+id: 3ebd25b1-6f54-49f9-b5a5-0246357ce4ca
+name: GSA - TI IP Entity
+description: |
+  This query identifies IP indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in GSA NetworkAccessTraffic.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - NetworkAccessTrafficLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let NetworkAccessTraffic_ =
+      NetworkAccessTraffic
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where TrafficType == "internet"
+      | project-rename GSANetworkAccessTraffic_TimeGenerated = TimeGenerated;
+  let IPList = NetworkAccessTraffic_ | summarize by DestinationIp;
+  ThreatIntelIndicators
+  | project-rename TI_ipEntity = ObservableValue
+  | extend IndicatorType = replace(@'\[|\]|"""', "", tostring(split(ObservableKey, ":", 0)))
+  | where IndicatorType in ("ipv4-addr", "network-traffic")
+  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | where TI_ipEntity in (IPList)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, TI_ipEntity
+  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+  | extend Description = tostring(parse_json(Data).description)
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (NetworkAccessTraffic_) on $left.TI_ipEntity == $right.DestinationIp
+  | extend GSAThreatType = ThreatType
+  | summarize GSANetworkAccessTraffic_TimeGenerated = arg_max(GSANetworkAccessTraffic_TimeGenerated, *) by Id, DestinationIp
+  | project-reorder *,
+      Tags,
+      Confidence,
+      TrafficLightProtocolLevel,
+      Type,
+      TI_ipEntity,
+      UserPrincipalName,
+      UserId,
+      DeviceId,
+      InitiatingProcessName,
+      GSAThreatType,
+      DestinationFqdn,
+      DestinationUrl,
+      DestinationPort,
+      SourceIp,
+      SourcePort,
+      HttpUserAgent
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: AzureID
+        columnName: DeviceId
+kind: Scheduled

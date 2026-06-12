@@ -23,15 +23,18 @@ requiredDataConnectors:
 queryFrequency: 1h
 queryPeriod: 25h
 triggerOperator: gt
-triggerThreshold: 1
+triggerThreshold: 0
 tactics:
   - InitialAccess
   - Exfiltration
   - CommandAndControl
+  - Discovery
 relevantTechniques:
   - T1190
   - T1041
-  - T1568
+  - T1568.001
+  - T1568.002
+  - T1046
 query: |
   let LearningPeriod = 1d;
   let RunTime = 1h;
@@ -41,25 +44,33 @@ query: |
   let NumOfStdsThreshold = 3;
   let MinThreshold = 5.0;
   let MinLearningBuckets = 5;
+  // Restrict unioned tables to the full analysis window to avoid full-table scans
+  let FullWindowStart = ago(StartLearningPeriod);
+  let FullWindowEnd = now();
   let TrafficLogs = (union isfuzzy=true
   (AzureDiagnostics
+  | where TimeGenerated between (FullWindowStart .. FullWindowEnd)
   | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName == "AzureFirewallNetworkRuleLog" 
   | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int ". " * "Action: " Action "." *
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWNetworkRule
+  | where TimeGenerated between (FullWindowStart .. FullWindowEnd)
   | extend Fqdn = DestinationIp
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWFlowTrace
+  | where TimeGenerated between (FullWindowStart .. FullWindowEnd)
   | extend Fqdn = DestinationIp
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWIdpsSignature
+  | where TimeGenerated between (FullWindowStart .. FullWindowEnd)
   | extend Fqdn = DestinationIp
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)),
   (AZFWApplicationRule
+  | where TimeGenerated between (FullWindowStart .. FullWindowEnd)
   | where Action == "Deny"
   | where isnotempty(Fqdn) and isnotempty(SourceIp)));
   let LearningSrcIpDenyRate = (TrafficLogs
@@ -69,12 +80,12 @@ query: |
   | where LearningTimeBuckets > MinLearningBuckets);
   let AlertTimeSrcIpDenyRate = (TrafficLogs
   | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
-  | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);
+  | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp, Fqdn);
   AlertTimeSrcIpDenyRate
-  | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp
+  | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp, Fqdn
   | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)
   | where AlertTimeSrcIpDenyRateCount > LearningThreshold
-  | project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd
+  | project SourceIp, Fqdn, AlertTimeSrcIpDenyRateCount, LearningTimeBuckets, LearningThreshold
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -84,5 +95,12 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Fqdn
-version: 1.1.2
+customDetails:
+  AlertCount: AlertTimeSrcIpDenyRateCount
+  Threshold: LearningThreshold
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Abnormal Deny Rate for Source IP {{SourceIp}}'
+  alertDescriptionFormat: |
+    The source IP {{SourceIp}} has an abnormal deny rate to destination {{Fqdn}} with {{AlertTimeSrcIpDenyRateCount}} denies, which is above the calculated threshold. This could indicate potential exfiltration, initial access or C2 activities.
+version: 1.1.3
 kind: Scheduled

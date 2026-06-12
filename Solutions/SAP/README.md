@@ -1,4 +1,4 @@
-# Microsoft Azure Sentinel SAP Continuous Threat Monitoring - Preview
+# Microsoft Azure Sentinel SAP Continuous Threat Monitoring
 
 Please visit: [https://docs.microsoft.com/azure/sentinel/sap-deploy-solution](https://docs.microsoft.com/azure/sentinel/sap-deploy-solution)
 

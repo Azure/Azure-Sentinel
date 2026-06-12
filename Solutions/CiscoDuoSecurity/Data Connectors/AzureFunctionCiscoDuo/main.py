@@ -90,6 +90,9 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'offline_enrollment' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
         process_offline_enrollment_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
 
     logging.info('Script finished. Sent events: {}'.format(sentinel.successfull_sent_events_number))
 
@@ -173,7 +176,7 @@ def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
             logging.info('Error in while loop while getting authentication logs- {}'.format(ex))
             if ex.status == 429:
                 logging.info('429 exception occurred, trying retry after 60 seconds')
-                time.sleep(60)
+                time.sleep(120)
                 response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
             
         if(response is not None): 
@@ -197,13 +200,14 @@ def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
 def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     limit = 1000
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
+    res = None
     try:
         res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     except Exception as err:
         logging.info('Error while getting authentication logs- {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
+            time.sleep(120)
             res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
     
     if(res is not None):
@@ -253,7 +257,7 @@ def process_admin_logs(admin_api: duo_client.Admin, start_ts, state_manager: Sta
             logging.info('Error while getting administrator logs- {}'.format(ex))
             if ex.status == 429:
                 logging.info('429 exception occurred, trying retry after 60 seconds')
-                time.sleep(60)
+                time.sleep(120)
                 events = admin_api.get_administrator_log(mintime)
             
         if(events is not None):
@@ -279,6 +283,7 @@ def process_admin_logs(admin_api: duo_client.Admin, start_ts, state_manager: Sta
 
 def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
+    events = None
     logging.info('Making administrator logs request: mintime={}'.format(mintime))
     try:
         events = admin_api.get_administrator_log(mintime)
@@ -286,7 +291,7 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
         logging.info('Error while getting administrator logs- {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
+            time.sleep(120)
             events = admin_api.get_administrator_log(mintime)
 
     if(events is not None):
@@ -335,7 +340,7 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state
             logging.info('Error while getting offline_enrollment logs - {}'.format(ex))
             if ex.status == 429:
                 logging.info('429 exception occurred, trying retry after 60 seconds')
-                time.sleep(60)
+                time.sleep(120)
                 events = make_offline_enrollment_logs_request(admin_api, mintime)
         
         if(events is not None):
@@ -362,13 +367,14 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state
 def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
     logging.info('Making offline_enrollment logs request: mintime={}'.format(mintime))
+    events = None
     try:
         events = make_offline_enrollment_logs_request(admin_api, mintime)
     except Exception as err:
         logging.info('Error while getting offline_enrollment logs- {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
+            time.sleep(120)
             events = make_offline_enrollment_logs_request(admin_api, mintime)
     
     if(events is not None):
@@ -450,7 +456,7 @@ def get_activity_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, l
         logging.info('Error while getting activity logs- {}'.format(err))
         if hasattr(err, 'status') and err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
+            time.sleep(120)
             res = admin_api.get_activity_logs(**params)
         else:
             return [], None
@@ -507,7 +513,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
             'api_version': 2,
             'mintime': mintime,
             'maxtime': maxtime,
-            'limit': str(limit),
+            'limit': limit,
             'sort': 'ts:asc'
         }
         if next_offset:
@@ -517,7 +523,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
         logging.info('Error while getting telephony logs v2 {}'.format(err))
         if hasattr(err, 'status') and err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
+            time.sleep(120)
             res = admin_api.get_telephony_log(**params)
         else:
             return [], None

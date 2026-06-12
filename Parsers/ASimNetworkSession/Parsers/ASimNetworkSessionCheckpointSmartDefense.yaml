@@ -1,0 +1,154 @@
+Parser:
+  Title: Network Session ASIM parser for Check Point Smart Defense
+  Version: '0.1.0'
+  LastUpdated: Mar 30, 2026
+Product:
+  Name: CheckPointSmartDefense
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.7'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Field Description in Check Point Logs 
+    Link: https://supportcenter.checkpoint.com/supportcenter/portal?eventSubmit_doGoviewsolutiondetails=&solutionid=sk144192
+Description: |
+  This ASIM parser supports normalizing Check Point Smart Defense logs coming from CEF Data Connector to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionCheckPointSmartDefense
+EquivalentBuiltInParser: _ASim_NetworkSession_CheckPointSmartDefense
+ParserParams:
+  - Name: disabled
+    Type: bool 
+    Default: false
+  - Name: pack
+    Type: bool 
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool, pack: bool) {
+    let DvcActionLookup = datatable (DvcOriginalAction: string, DvcAction: string) [
+        "Reject", "Deny",
+        "Drop", "Drop",
+        "Accept", "Allow",
+        "Prevent", "Deny",
+        "Detect", "Deny"
+    ];
+    let EventSeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity: string) [
+        "Low", "Low",
+        "Medium", "Medium",
+        "Very-High", "High",
+        "High", "High",
+        "Unknown", ""
+    ];
+    let ThreatConfidenceLookup = datatable (ThreatOriginalConfidence: int, ThreatConfidenceNew: int) [
+        0, 0,
+        1, 20,
+        2, 40,
+        3, 60,
+        4, 80,
+        5, 100
+    ];
+    CommonSecurityLog
+    | where not(disabled)
+    | where DeviceVendor == "Check Point" and DeviceProduct == "SmartDefense"
+    | extend
+        EventSchema = "NetworkSession",
+        EventSchemaVersion = "0.2.7",
+        EventCount = coalesce(EventCount, int(1)),
+        Type = "CommonSecurityLog",
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventVendor = "CheckPoint",
+        EventType = "NetworkSession"
+    | project-rename
+        EventProduct = DeviceProduct,
+        SrcIpAddr = SourceIP,
+        SrcPortNumber = SourcePort,
+        SrcUsername = SourceUserName,
+        SrcHostname = SourceHostName,
+        DstIpAddr = DestinationIP,
+        DstPortNumber = DestinationPort,
+        EventOriginalSeverity = LogSeverity,
+        EventMessage = Message,
+        SrcBytes = SentBytes,
+        DstBytes = ReceivedBytes,
+        DvcOriginalAction = DeviceAction,
+        EventOriginalSubType = Activity,
+        SrcAppName = SourceServiceName
+    | lookup EventSeverityLookup on EventOriginalSeverity
+    | lookup DvcActionLookup on DvcOriginalAction
+    | parse-kv AdditionalExtensions as (version: string, rule: string, rule_name: string, loguid: string, originsicname: string, origin: string) with (kv_delimiter="=", pair_delimiter=";")
+    | parse originsicname with "CN\\=" DvcHostname "," *
+    | project-rename
+        Dvc = origin,
+        EventOriginalUid = loguid
+    | extend
+        SrcUsernameType = iff(isnotempty(SrcUsername), "Simple", ""),
+        NetworkRuleName = rule_name,
+        NetworkRuleNumber = toint(rule),
+        EventProductVersion = version,
+        EventResult = iff(DvcAction == "Allow" or DvcAction == "", "Success", "Failure"),
+        NetworkDirection = case(
+            CommunicationDirection == "1", "Inbound",
+            CommunicationDirection == "0", "Outbound",
+            "NA"
+        ),
+        AdditionalFields = iff(pack, bag_pack(
+            "Performance Impact", iff(FlexNumber2Label == "Performance Impact", FlexNumber2, toint("")),
+            "Threat Prevention Rule Name", iff(DeviceCustomString1Label == "Threat Prevention Rule Name", DeviceCustomString1, ""),
+            "Protection ID", iff(DeviceCustomString2Label == "Protection ID", DeviceCustomString2, ""),
+            "Protection Type", iff(DeviceCustomString3Label == "Protection Type", DeviceCustomString3, ""),
+            "Threat Prevention Rule ID", iff(DeviceCustomString4Label == "Threat Prevention Rule ID", DeviceCustomString4, ""),
+            "Protection Name", iff(DeviceCustomString4Label == "Protection Name", DeviceCustomString4, "")
+        ), dynamic([]))
+    | extend
+        ThreatOriginalConfidence = iff(FlexNumber1Label == "Confidence", FlexNumber1, toint("")),
+        ThreatName = iff(FlexString2Label == "Attack Information", FlexString2, "")
+    | lookup ThreatConfidenceLookup on ThreatOriginalConfidence
+    | extend
+        ThreatOriginalConfidence = tostring(ThreatOriginalConfidence),
+        ThreatConfidence = ThreatConfidenceNew,
+        IpAddr = SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventSchema,
+        EventSchemaVersion,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventVendor,
+        EventProduct,
+        EventType,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcUsername,
+        SrcHostname,
+        DstIpAddr,
+        DstPortNumber,
+        EventOriginalSeverity,
+        EventMessage,
+        SrcBytes,
+        DstBytes,
+        DvcOriginalAction,
+        EventOriginalSubType,
+        SrcAppName,
+        EventSeverity,
+        DvcAction,
+        DvcHostname,
+        Dvc,
+        EventOriginalUid,
+        SrcUsernameType,
+        NetworkRuleName,
+        NetworkRuleNumber,
+        EventProductVersion,
+        EventResult,
+        NetworkDirection,
+        AdditionalFields,
+        ThreatOriginalConfidence,
+        ThreatName,
+        ThreatConfidence,
+        IpAddr
+  };
+  parser(disabled=disabled, pack=pack)

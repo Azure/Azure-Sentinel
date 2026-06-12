@@ -1,0 +1,59 @@
+id: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
+name: A365 AI Agents - Missing Tools in Instructions
+description: |
+  This query identifies A365 AI agents that have tools configured but they are not mentioned in instructions. 
+  This query identifies A365 AI agents that have tools configured but are not mentioned in instructions.
+  When tools are enabled without being explicitly referenced, the agent may use capabilities that are not clearly governed or expected, increasing the risk of unintended behavior or misuse.
+  Recommended Action: Ensure all configured tools are clearly documented in the agent's instructions, including their purpose and usage constraints. Regularly review instructions and tool configurations to maintain alignment and reduce security risks.
+
+requiredDataConnectors: []
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1499
+  - T1562
+query: |
+  let IdentityIdtoUPN = materialize (
+  IdentityInfo
+  | distinct AccountObjectId, AccountUpn
+  | extend AccountObjectId = tostring(AccountObjectId)
+  | where isnotempty(AccountObjectId) and isnotempty(AccountUpn));
+  let AgentFunctions =
+  AIAgentsInfo
+  | where RegistrySource == "A365"
+  | where isnotempty(AgentActionTriggers)
+  | extend Triggers = parse_json(AgentActionTriggers)
+  | mv-expand Trigger = Triggers
+  | extend AIAgentId = tostring(AIAgentId),
+           FunctionName = tostring(Trigger.name)
+  | where isnotempty(AIAgentId) and isnotempty(FunctionName)
+  | summarize FunctionNames = make_set(FunctionName) by AIAgentId;
+  AIAgentsInfo
+  | where RegistrySource == "A365"
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | extend AIAgentId = tostring(AIAgentId)
+  | extend RawAgentInfoJson = parse_json(RawAgentInfo)
+  | extend DeveloperName = RawAgentInfoJson.developerName
+  | where isnotempty(AgentActionTriggers)
+  | join kind=leftouter AgentFunctions on $left.AIAgentId == $right.AIAgentId
+  | where array_length(FunctionNames) > 0
+  | where Instructions !contains tostring(FunctionNames)
+  | extend OwnerId = tostring(RawAgentInfoJson.owners[0].entityId)
+  | extend CreatorId = tostring(RawAgentInfoJson.creatorId)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | join kind=leftouter IdentityIdtoUPN on $left.CreatorId == $right.AccountObjectId
+  | project-rename CreatorUpn = AccountUpn
+  | project-away RawAgentInfoJson, OwnerId, CreatorId, AccountObjectId, AccountObjectId1
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, Instructions, FunctionNames, OwnerUpn, CreatorUpn, DeveloperName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

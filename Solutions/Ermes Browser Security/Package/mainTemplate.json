@@ -45,7 +45,7 @@
   },
   "variables": {
     "_solutionName": "Ermes Browser Security",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.1.0",
     "solutionId": "ermes.azure-sentinel-solution-ermes-browser-security",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
@@ -79,7 +79,7 @@
           "resources": [
             {
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
-              "apiVersion": "2022-09-01-preview",
+              "apiVersion": "2025-09-01",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
               "location": "[parameters('workspace-location')]",
               "kind": "Customizable",
@@ -152,6 +152,18 @@
                       "description": "Connect using OAuth2 credentials",
                       "instructions": [
                         {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API URL (optional)",
+                            "placeholder": "https://api.shield.ermessecurity.com",
+                            "type": "text",
+                            "name": "apiUrl",
+                            "validations": {
+                              "required": false
+                            }
+                          }
+                        },
+                        {
                           "type": "OAuthForm",
                           "parameters": {
                             "clientIdLabel": "Client ID",
@@ -203,7 +215,7 @@
             },
             {
               "name": "ErmesOauthDCR1",
-              "apiVersion": "2022-06-01",
+              "apiVersion": "2024-03-11",
               "type": "Microsoft.Insights/dataCollectionRules",
               "location": "[parameters('workspace-location')]",
               "kind": "[variables('blanks')]",
@@ -215,7 +227,12 @@
                       {
                         "name": "_created",
                         "type": "string",
-                        "description": "Event Timestamp"
+                        "description": "Event creation timestamp (server ingestion/generation time)"
+                      },
+                      {
+                        "name": "timestamp",
+                        "type": "string",
+                        "description": "Event timestamp"
                       },
                       {
                         "name": "username",
@@ -246,6 +263,11 @@
                         "name": "message",
                         "type": "dynamic",
                         "description": "Message"
+                      },
+                      {
+                        "name": "log_data",
+                        "type": "dynamic",
+                        "description": "Event-specific log data"
                       }
                     ]
                   }
@@ -266,7 +288,7 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | project TimeGenerated = todatetime([\"_created\"]), Username = username, ClientIP = client_ip, EventCategory = event_cat, EventId = event_id, Level = level, Message = tostring(message.en)",
+                    "transformKql": "source | extend actual_timestamp = iff(isnotnull(timestamp), todatetime(timestamp), todatetime([\"_created\"])) | extend log_data_final = case(event_cat in (\"general\", \"dashboard_auth\", \"dashboard_audit\", \"device_status\"), parse_json('null'), log_data) | project TimeGenerated = actual_timestamp, Username = username, ClientIP = client_ip, EventCategory = event_cat, EventId = event_id, Level = level, Message = tostring(message.en), LogData = log_data_final",
                     "outputStream": "Custom-ErmesBrowserSecurityEvents_CL"
                   }
                 ]
@@ -274,7 +296,7 @@
             },
             {
               "name": "ErmesBrowserSecurityEvents_CL",
-              "apiVersion": "2022-10-01",
+              "apiVersion": "2025-07-01",
               "type": "Microsoft.OperationalInsights/workspaces/tables",
               "location": "[parameters('workspace-location')]",
               "kind": null,
@@ -317,6 +339,11 @@
                       "name": "Message",
                       "type": "String",
                       "description": "Message"
+                    },
+                    {
+                      "name": "LogData",
+                      "type": "Dynamic",
+                      "description": "Event-specific log data"
                     }
                   ]
                 }
@@ -335,7 +362,7 @@
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
-      "apiVersion": "2022-09-01-preview",
+      "apiVersion": "2025-09-01",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
       "location": "[parameters('workspace-location')]",
       "kind": "Customizable",
@@ -408,6 +435,18 @@
               "description": "Connect using OAuth2 credentials",
               "instructions": [
                 {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API URL (optional)",
+                    "placeholder": "https://api.shield.ermessecurity.com",
+                    "type": "text",
+                    "name": "apiUrl",
+                    "validations": {
+                      "required": false
+                    }
+                  }
+                },
+                {
                   "type": "OAuthForm",
                   "parameters": {
                     "clientIdLabel": "Client ID",
@@ -473,6 +512,34 @@
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorCCPVersion')]",
           "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Ermes Browser Security Events",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiUrl": {
+              "defaultValue": "",
+              "type": "securestring"
+            },
             "ClientId": {
               "defaultValue": "-NA-",
               "type": "securestring",
@@ -482,22 +549,6 @@
               "defaultValue": "-NA-",
               "type": "securestring",
               "minLength": 1
-            },
-            "connectorDefinitionName": {
-              "defaultValue": "Ermes Browser Security Events",
-              "type": "string",
-              "minLength": 1
-            },
-            "workspace": {
-              "defaultValue": "[parameters('workspace')]",
-              "type": "string"
-            },
-            "dcrConfig": {
-              "defaultValue": {
-                "dataCollectionEndpoint": "data collection Endpoint",
-                "dataCollectionRuleImmutableId": "data collection rule immutableId"
-              },
-              "type": "object"
             },
             "AuthorizationCode": {
               "defaultValue": "-NA-",
@@ -535,8 +586,8 @@
               }
             },
             {
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'ErmesBrowserSecurityEvents')]",
-              "apiVersion": "2023-02-01-preview",
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'ErmesBrowserSecurityEvents', parameters('guidValue'))]",
+              "apiVersion": "2025-09-01",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
@@ -550,27 +601,27 @@
                 },
                 "auth": {
                   "type": "OAuth2",
-                  "ClientSecret": "[[parameters('ClientSecret')]",
-                  "ClientId": "[[parameters('ClientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
                   "GrantType": "client_credentials",
-                  "TokenEndpoint": "https://api.shield.ermessecurity.com/oauth/token",
+                  "TokenEndpoint": "[[concat(if(empty(parameters('apiUrl')), 'https://api.shield.ermessecurity.com', parameters('apiUrl')),'/oauth/token')]",
                   "TokenEndpointHeaders": {
                     "Content-Type": "application/x-www-form-urlencoded"
                   },
                   "TokenEndpointQueryParameters": {}
                 },
                 "request": {
-                  "apiEndpoint": "https://api.shield.ermessecurity.com/public/v1/events",
+                  "apiEndpoint": "[[concat(if(empty(parameters('apiUrl')), 'https://api.shield.ermessecurity.com', parameters('apiUrl')),'/public/v1/events')]",
                   "httpMethod": "GET",
                   "queryParameters": {
                     "max_results": 100,
-                    "sort": "-_created",
+                    "sort": "_created",
                     "is_azure": "[variables('_solutionVersion')]"
                   },
                   "queryWindowInMin": 5,
                   "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.000000+00:00",
-                  "startTimeAttributeName": "gte__created",
-                  "endTimeAttributeName": "lt__created",
+                  "startTimeAttributeName": "gt__created",
+                  "endTimeAttributeName": "lte__created",
                   "rateLimitQps": 1,
                   "retryCount": 3,
                   "timeoutInSeconds": 30,
@@ -605,7 +656,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.1.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Ermes Browser Security",

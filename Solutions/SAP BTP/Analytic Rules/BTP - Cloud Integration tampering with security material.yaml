@@ -1,0 +1,105 @@
+id: 8d5f3a1b-9c2e-4f7d-b8a6-1e4c7f9d2b5a
+kind: Scheduled
+name: BTP - Cloud Integration tampering with security material
+description: |
+  Identifies operations on security material (credentials, certificates, and keys) within SAP Cloud Integration.
+  This includes credentials (passwords/secrets), X.509 certificates and key pairs, and PGP keys.
+  Unauthorized manipulation of security material could indicate an attacker attempting to:
+  - Gain access to external systems using stored credentials
+  - Intercept or tamper with encrypted communications
+  - Establish persistence through certificate manipulation
+  - Cover tracks by deleting security artifacts
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1552
+  - T1070
+query: |
+  let securityMaterialTypes = dynamic(["Credential", "X.509 Certificate", "X.509 Key-Pair", "PGP Public Keys", "PGP Secret Keys"]);
+  let keystoreActions = dynamic(["Create", "Update", "Change", "Delete"]);
+  SAPBTPAuditLog_CL
+  | where Category == "audit.security-events"
+  | extend data_s = tostring(Message.data),
+           ipAddress = tostring(Message.ip)
+  | extend parsedData = parse_json(data_s)
+  | extend action = tostring(parsedData.action),
+           objectType = tostring(parsedData.objectType),
+           objectId = tostring(parsedData.objectId),
+           keystoreName = tostring(parsedData.attributes["Keystore Name"])
+  | where objectType in (securityMaterialTypes)
+  | where 
+      (objectType == "Credential" and action in ("PasswordStore", "PasswordUpdate", "PasswordDelete"))
+      or 
+      (objectType != "Credential" and action in (keystoreActions))
+  | extend normalizedAction = case(
+      action == "PasswordStore", "created",
+      action == "PasswordUpdate", "updated",
+      action == "PasswordDelete", "deleted",
+      action == "Create", "created",
+      action == "Update", "updated",
+      action == "Change", "changed",
+      action == "Delete", "deleted",
+      action
+  )
+  | extend MessageText = case(
+      objectType == "Credential", strcat("Security credential '", objectId, "' was ", normalizedAction),
+      isnotempty(keystoreName), strcat(objectType, " '", objectId, "' was ", normalizedAction, " in keystore '", keystoreName, "'"),
+      strcat(objectType, " '", objectId, "' was ", normalizedAction)
+  )
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      ObjectType = objectType,
+      ObjectId = objectId,
+      Action = action,
+      NormalizedAction = normalizedAction,
+      KeystoreName = keystoreName,
+      Tenant,
+      ipAddress,
+      CloudApp = "SAP Cloud Integration"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Cloud Integration: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}} from IP {{ipAddress}}.
+        
+    This could indicate:
+    - Legitimate security material management
+    - Unauthorized credential or certificate manipulation
+    - Attacker tampering with security artifacts to gain access or cover tracks
+customDetails:
+  ObjectType: ObjectType
+  ObjectId: ObjectId
+  Action: Action
+  KeystoreName: KeystoreName
+  SourceIP: ipAddress
+version: 1.0.0

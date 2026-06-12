@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-LOCATION_EXTENDED_DCR_NAME = "ipinfo_rule_for_location_extended_table"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+LOCATION_EXTENDED_DCR_NAME = f"ipinfo_rule_for_location_extended_table-{WORKSPACE_NAME.lower()}"
 LOCATION_EXTENDED_TABLE_NAME = "Ipinfo_Location_extended_CL"
 LOCATION_EXTENDED_STREAM_DECLARATION = "Custom-Ipinfo_Location_extended_CL"
 

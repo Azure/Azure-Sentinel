@@ -1,0 +1,31 @@
+id: 3fb50170-4048-473e-acc0-af9ae186f4a3
+name:  Changes to Blocked Teams Domains
+description: |
+  This query detects changes to blocked Teams domains.
+description-detailed: |
+  This query detects domains being added or removed from blocked Teams domains displaying a clear audit trail for each domain. The changes could have been done from either TABL or Teams Admin Center.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  CloudAppEvents
+  | where ActionType == "TeamsAdminAction"
+  | where RawEventData.AdminActionDetail has "Skype.Policy/configurations/TenantFederationSettings/configuration/Global"
+  | where RawEventData.ModifiedProperties has "BlockedDomains"
+  | extend ModifiedPropertiesName = RawEventData.ModifiedProperties[0].Name
+  | extend ModifiedPropertiesNewValue = extract_all(@"Domain=([^,]+)", tostring(RawEventData.ModifiedProperties[0].NewValue))
+  | extend ModifiedPropertiesOldValue = extract_all(@"Domain=([^,]+)", tostring(RawEventData.ModifiedProperties[0].OldValue))
+  | extend Action = iff(array_length(ModifiedPropertiesNewValue) > array_length(ModifiedPropertiesOldValue) or isempty(ModifiedPropertiesOldValue), "Domain Added", "Domain Removed")
+  | extend DomainValue = iff(Action == "Domain Added", set_difference(ModifiedPropertiesNewValue, ModifiedPropertiesOldValue), set_difference(ModifiedPropertiesOldValue,ModifiedPropertiesNewValue))
+  | mv-expand DomainValue
+  | mv-apply EP=RawEventData.ExtraProperties on (
+      where EP.Key == "InitialCaller"
+      | extend ChangedFrom = iff(EP.Value startswith "80", "TABL", "Teams Admin Centre")
+      )
+  | project Timestamp, AccountObjectId, AccountDisplayName, Application, ActionType, Action, ChangedFrom, ModifiedPropertiesName, DomainValue, ModifiedPropertiesNewValue, ModifiedPropertiesOldValue, RawEventData, ReportId
+version: 1.0.1

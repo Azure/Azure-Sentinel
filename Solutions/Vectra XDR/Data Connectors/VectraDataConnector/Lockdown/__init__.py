@@ -24,7 +24,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         lockdown_obj = LockdownCollector(
-            applogger,
+            start_time,
             consts.LOCKDOWN_NAME,
             consts.LOCKDOWN_CLIENT_ID,
             consts.LOCKDOWN_CLIENT_SECRET,

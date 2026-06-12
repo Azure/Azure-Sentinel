@@ -1,0 +1,157 @@
+id: 40aa32c5-eb1d-4b69-878e-e943cf259ff9
+Function:
+  Title: ASIM Parser for OpenSystems Secure Web Gateway logs
+  Version: '1.0.0'
+  LastUpdated: May 14th 2025
+Category: OpenSystemsParser
+FunctionName: vimWebSessionOpenSystemsProxySecureWebGateway
+FunctionAlias: vimWebSessionOpenSystemsProxySecureWebGateway
+FunctionParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+FunctionQuery: |
+  let parser=(
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
+    url_has_any:dynamic=dynamic([]),
+    httpuseragent_has_any:dynamic=dynamic([]),
+    eventresultdetails_in:dynamic=dynamic([]),
+    eventresultdetails_has_any:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false
+    )
+    {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    OpenSystemsProxyLogs_CL
+    | extend Url = tostring(url)
+    | extend HttpUserAgent = tostring(user_agent)
+    | extend EventResultDetails = tostring(client_response_status)
+    | extend EventResult = iff(toint(client_response_status) < 400, "Success", "Failure")
+    | extend SrcIpAddr = tostring(client_ip)
+    | extend DstIpAddr = tostring(server_ip)
+    | where not(disabled)
+        and (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(url_has_any) == 0 or Url has_any (url_has_any))
+        and (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any(httpuseragent_has_any))
+        and (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in))
+        and (eventresult == '*' or EventResult =~ eventresult)
+    | extend temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any) , temp_DstMatch=has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix)
+    | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0 ,"-",
+                                  temp_SrcMatch and temp_DstMatch, "Both",
+                                  temp_SrcMatch, "SrcIpAddr",
+                                  temp_DstMatch, "DstIpAddr",
+                                  "No match"
+                              )
+    | where ASimMatchingIpAddr != "No match"
+    | extend tmp = iff(url matches regex @"^https?\:\/\/|ftp\:\/\/", url, strcat("http://", url))
+    | extend tmp2 = parse_url(tmp)
+    | extend host = tostring(tmp2.Host)
+    | extend port = tostring(tmp2.Port)
+    | project-away tmp, tmp2, temp_*
+    | extend EventCount = toint(1)
+    | extend EventStartTime = timestamp
+    | extend EventEndTime = TimeGenerated
+    | extend EventType = "HTTPsession"
+    | extend EventProduct = "Secure Web Gateway"
+    | extend EventVendor = "Open Systems"
+    | extend EventSchema = "WebSession"
+    | extend EventSchemaVersion = "0.2.6"
+    | extend DvcHostname = tostring(host_id)
+    | extend Dvc = DvcHostname
+    | extend HttpRequestMethod = tostring(http_method)
+    | extend HttpStatusCode = EventResultDetails
+    | extend HttpContentType = tostring(content_type)
+    | extend HttpReferrer = tostring(referer)
+    | extend UserAgent = HttpUserAgent
+    | extend HttpHost = tostring(host)
+    | extend NetworkDuration = toint(duration)
+    | extend Duration = NetworkDuration
+    | extend DstBytes = tolong(server_response_size)
+    | extend SrcBytes = tolong(client_request_size)
+    | extend Dst = DstIpAddr
+    | extend DstPortNumber = toint(port)
+    | extend Src = SrcIpAddr
+    | extend DvcOriginalAction = tostring(url_filter_action)
+    | extend DvcAction = case(
+                            url_filter_action == "allow", "Allow",
+                            url_filter_action == "whitelist", "Allow",
+                            url_filter_action == "deny", "Drop",
+                            "Allow"
+                        )
+    | project
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        DvcHostname,
+        Dvc,
+        HttpRequestMethod,
+        HttpStatusCode,
+        HttpContentType,
+        HttpReferrer,
+        UserAgent,
+        HttpHost,
+        NetworkDuration,
+        Duration,
+        DstBytes,
+        SrcBytes,
+        Dst,
+        DstPortNumber,
+        Src,
+        DvcOriginalAction,
+        DvcAction,
+        ASimMatchingIpAddr,
+        Url,
+        HttpUserAgent,
+        EventResult,
+        EventResultDetails,
+        SrcIpAddr,
+        DstIpAddr
+    };
+  parser (
+    starttime=starttime, 
+    endtime=endtime, 
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+    ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+    url_has_any=url_has_any, 
+    httpuseragent_has_any=httpuseragent_has_any, 
+    eventresultdetails_in=eventresultdetails_in,
+    eventresultdetails_has_any=eventresultdetails_has_any, 
+    eventresult=eventresult, disabled=disabled
+  )

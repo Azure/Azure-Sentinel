@@ -1,0 +1,90 @@
+id: bb135137-8f33-45b0-8d0f-78437f79d558
+name: Guest account initiating privileged Entra ID operation
+description: |
+  Identifies guest accounts (B2B external identities) initiating high-impact Entra ID
+  operations: role assignments, service principal credentials, policy changes. Guest
+  as initiator suggests a compromised B2B account for persistence or lateral pivot.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098.001
+  - T1098.003
+  - T1078.004
+query: |
+  let timeframe = 1d;
+  let PrivilegedOps = dynamic([
+      "Add member to role.",
+      "Add member to role",
+      "Add service principal credentials.",
+      "Add service principal credentials",
+      "Update application - Certificates and secrets management",
+      "Add owner to service principal.",
+      "Add owner to service principal",
+      "Set domain authentication.",
+      "Set domain authentication",
+      "Add policy.",
+      "Delete policy."
+  ]);
+  // Guest accounts with successful sign-ins in the window
+  let GuestAccounts =
+      SigninLogs
+      | where TimeGenerated >= ago(timeframe)
+      | where UserType =~ "Guest"
+      | where ResultType == 0
+      | extend UserUpn = tolower(UserPrincipalName)
+      | where isnotempty(UserUpn)
+      | summarize arg_max(TimeGenerated, IPAddress) by UserUpn
+      | project UserUpn, LastSignIn = TimeGenerated, SignInIp = IPAddress;
+  // Privileged audit operations initiated by those guest accounts
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName in~ (PrivilegedOps)
+  | where Result =~ "success"
+  | extend ActorUpn = tolower(tostring(InitiatedBy.user.userPrincipalName))
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | where isnotempty(ActorUpn)
+  | join kind=inner GuestAccounts on $left.ActorUpn == $right.UserUpn
+  | extend AccountName      = tostring(split(ActorUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(ActorUpn, "@")[1])
+  | mv-expand TargetResource = TargetResources
+  | extend TargetName = tostring(TargetResource.displayName)
+  | summarize
+      FirstSeen   = min(TimeGenerated),
+      LastSeen    = max(TimeGenerated),
+      Operations  = make_set(OperationName),
+      Targets     = make_set(TargetName),
+      EventCount  = dcount(CorrelationId)
+      by ActorUpn, AccountName, AccountUPNSuffix, ActorIp, LastSignIn, SignInIp
+  | sort by FirstSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

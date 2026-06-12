@@ -1,0 +1,179 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Lookout-MobileThreat-NotifyAndEnrich",
+    "description": "When a high or critical severity mobile threat incident is created in Microsoft Sentinel by Lookout, this playbook enriches the incident with a detailed investigation comment including threat intelligence context, device risk details, and recommended next steps for the analyst.",
+    "prerequisites": [
+      "1. The playbook managed identity must be granted the Microsoft Sentinel Responder role on the Log Analytics workspace."
+    ],
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Responder role to the playbook managed identity on your Log Analytics workspace.",
+      "2. In Microsoft Sentinel, create an Automation Rule that runs this playbook when incidents are created by the 'Lookout - High Severity Mobile Threats Detected (v2)' analytic rule."
+    ],
+    "entities": [
+      "Account",
+      "Host"
+    ],
+    "tags": [
+      "Enrichment",
+      "Lookout",
+      "MobileThreat",
+      "MobileSecurity"
+    ],
+    "lastUpdateTime": "2025-01-01T00:00:00.000Z",
+    "support": {
+      "tier": "Partner",
+      "link": "https://www.lookout.com/support"
+    },
+    "author": {
+      "name": "Lookout"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Lookout-MobileThreat-NotifyAndEnrich",
+      "type": "string",
+      "metadata": {
+        "description": "Name for the Logic App playbook resource."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Lookout-MobileThreat-NotifyAndEnrich",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_Accounts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/account"
+              }
+            },
+            "Entities_-_Get_Hosts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/host"
+              }
+            },
+            "Add_incident_enrichment_comment": {
+              "runAfter": {
+                "Entities_-_Get_Accounts": [
+                  "Succeeded",
+                  "Skipped"
+                ],
+                "Entities_-_Get_Hosts": [
+                  "Succeeded",
+                  "Skipped"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p><strong>🤖 Lookout Mobile Threat — Automated Response Summary</strong></p><p><strong>Threat Intelligence</strong><br>• Type: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ThreatType']?[0]}<br>• Category: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ThreatCategory']?[0]}<br>• Risk Score: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ThreatRiskScore']?[0]}/10<br>• Status: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ThreatStatus']?[0]}<br>• Classifications: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ThreatClasses']?[0]}</p><p><strong>Device Risk Context</strong><br>• Platform: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['DevicePlatform']?[0]}<br>• Security Status: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['DeviceSecStatus']?[0]}<br>• Risk Level: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['DeviceRiskLevel']?[0]}<br>• Compliance Impact: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['ComplianceImpact']?[0]}<br>• MDM Connector: @{triggerBody()?['object']?['properties']?['additionalData']?['customDetails']?['MDMConnectorId']?[0]}</p><p><strong>Actions Taken</strong><br>✅ Incident enriched with Lookout threat intelligence</p><p><strong>Recommended Next Steps</strong><br>1. Verify remediation in Lookout console — check threat status is RESOLVED<br>2. If MDM is integrated, confirm quarantine/compliance policy enforcement<br>3. Extract IOCs (package SHA, app name) and check for other affected devices<br>4. Escalate to Tier 2 if device owner is unresponsive within 2 hours<br>5. Review ThreatClassifications for lateral movement indicators</p>"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
