@@ -70,7 +70,10 @@ AZURE_MONITOR_TABLE_REF_BASE = 'https://learn.microsoft.com/en-us/azure/azure-mo
 AZURE_MONITOR_TABLE_REF_RAW_BASE = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/reference/tables/'
 
 # Sentinel tables and connectors reference (includes lake-only support info)
-SENTINEL_TABLES_CONNECTORS_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/sentinel/includes/sentinel-tables-connectors.md'
+# The Microsoft Sentinel docs source moved from MicrosoftDocs/azure-docs
+# (articles/sentinel on main) to MicrosoftDocs/defender-docs (sentinel/ on the
+# public branch). The old raw URL now returns 404.
+SENTINEL_TABLES_CONNECTORS_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/defender-docs/public/sentinel/includes/sentinel-tables-connectors.md'
 
 # Cache configuration
 DEFAULT_CACHE_DIR = Path('.cache')
