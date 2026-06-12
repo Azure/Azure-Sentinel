@@ -142,15 +142,6 @@ Use this connector when you need access to CrowdStrike-curated intelligence rela
 
 This connector enriches investigations and threat hunting activities by providing intelligence about known adversaries and their tactics, techniques, and procedures (TTPs).
 
-### Recommended Use Cases
-
-* Threat Intelligence Management
-* Threat Hunting
-* IOC Enrichment
-* Investigation Enrichment
-* Adversary Tracking
-* Security Operations Center (SOC) Workflows
-
 ---
 
 ## Best Practices
