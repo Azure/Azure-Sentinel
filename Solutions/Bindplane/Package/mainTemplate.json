@@ -1,0 +1,683 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Bindplane - TODO_BINDPLANE_SUPPORT_EMAIL",
+    "comments": "Solution template for Bindplane"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Bindplane Workbook",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "email": "TODO_BINDPLANE_SUPPORT_EMAIL",
+    "_email": "[variables('email')]",
+    "_solutionName": "Bindplane",
+    "_solutionVersion": "3.0.1",
+    "solutionId": "TODO_BINDPLANE_PUBLISHER_ID.microsoft-sentinel-solution-bindplane",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "Bindplane",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Bindplane",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "Bindplane",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Bindplane data connector with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Bindplane",
+                  "publisher": "Bindplane",
+                  "descriptionMarkdown": "The [Bindplane](https://bindplane.com) connector reports the health of records delivered into Microsoft Sentinel ASIM tables from a Bindplane pipeline. Bindplane normalizes and routes OpenTelemetry data; configure a Microsoft Sentinel destination in your Bindplane pipeline and the `asim_standardization` processor stamps every record with an `AdditionalFields.Attribution.bindplane_source` marker so the queries below scope to Bindplane-routed rows only. Requires the Bindplane OpenTelemetry collector with the `asim_standardization` processor v1.8.0 or later.",
+                  "additionalRequirementBanner": "This data connector requires the Bindplane OpenTelemetry collector running the `asim_standardization` processor v1.8.0 or later. See [the Bindplane Microsoft Sentinel destination guide](https://docs.bindplane.com/integrations/destinations/microsoft-sentinel) for setup.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Authentication events",
+                      "legend": "ASimAuthenticationEventLogs",
+                      "baseQuery": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "Network Session events",
+                      "legend": "ASimNetworkSessionLogs",
+                      "baseQuery": "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "DNS Activity events",
+                      "legend": "ASimDnsActivityLogs",
+                      "baseQuery": "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "Process events",
+                      "legend": "ASimProcessEventLogs",
+                      "baseQuery": "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "File events",
+                      "legend": "ASimFileEventLogs",
+                      "baseQuery": "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "Audit events",
+                      "legend": "ASimAuditEventLogs",
+                      "baseQuery": "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "Web Session events",
+                      "legend": "ASimWebSessionLogs",
+                      "baseQuery": "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "DHCP events",
+                      "legend": "ASimDhcpEventLogs",
+                      "baseQuery": "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "Registry events",
+                      "legend": "ASimRegistryEventLogs",
+                      "baseQuery": "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    },
+                    {
+                      "metricName": "User Management Activity events",
+                      "legend": "ASimUserManagementActivityLogs",
+                      "baseQuery": "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Bindplane-routed ASIM Authentication events",
+                      "query": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Bindplane-routed events by ASIM table, last 24 hours",
+                      "query": "union withsource=TableName\n                ASimAuthenticationEventLogs,\n                ASimNetworkSessionLogs,\n                ASimDnsActivityLogs,\n                ASimProcessEventLogs,\n                ASimFileEventLogs,\n                ASimAuditEventLogs,\n                ASimWebSessionLogs,\n                ASimDhcpEventLogs,\n                ASimRegistryEventLogs,\n                ASimUserManagementActivityLogs\n            | where TimeGenerated > ago(1d)\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Count = count() by TableName"
+                    },
+                    {
+                      "description": "Bindplane-routed events by upstream EventVendor / EventProduct",
+                      "query": "union\n                ASimAuthenticationEventLogs,\n                ASimNetworkSessionLogs,\n                ASimDnsActivityLogs,\n                ASimProcessEventLogs,\n                ASimFileEventLogs,\n                ASimAuditEventLogs,\n                ASimWebSessionLogs,\n                ASimDhcpEventLogs,\n                ASimRegistryEventLogs,\n                ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Count = count() by EventVendor, EventProduct"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ASimAuthenticationEventLogs",
+                      "lastDataReceivedQuery": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimNetworkSessionLogs",
+                      "lastDataReceivedQuery": "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimDnsActivityLogs",
+                      "lastDataReceivedQuery": "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimProcessEventLogs",
+                      "lastDataReceivedQuery": "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimFileEventLogs",
+                      "lastDataReceivedQuery": "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimAuditEventLogs",
+                      "lastDataReceivedQuery": "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimWebSessionLogs",
+                      "lastDataReceivedQuery": "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimDhcpEventLogs",
+                      "lastDataReceivedQuery": "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimRegistryEventLogs",
+                      "lastDataReceivedQuery": "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimUserManagementActivityLogs",
+                      "lastDataReceivedQuery": "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                        "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Set up a Microsoft Sentinel destination in your Bindplane pipeline using the [Bindplane Microsoft Sentinel destination guide](https://docs.bindplane.com/integrations/destinations/microsoft-sentinel). Use **ASIM mode** in the destination and pair it with the `asim_standardization` processor (`v1.8.0` or later) so every record carries the `AdditionalFields.Attribution.bindplane_source` marker this connector's queries filter on.",
+                      "title": "Configure Bindplane to send data to Microsoft Sentinel"
+                    }
+                  ],
+                  "metadata": {
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "support": {
+                      "tier": "Partner",
+                      "name": "Bindplane",
+                      "link": "https://bindplane.com/support"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Bindplane",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Bindplane",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Bindplane",
+                  "email": "TODO_BINDPLANE_SUPPORT_EMAIL",
+                  "link": "https://bindplane.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Bindplane",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Bindplane",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Bindplane",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "Bindplane",
+          "email": "TODO_BINDPLANE_SUPPORT_EMAIL",
+          "link": "https://bindplane.com/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Bindplane",
+          "publisher": "Bindplane",
+          "descriptionMarkdown": "The [Bindplane](https://bindplane.com) connector reports the health of records delivered into Microsoft Sentinel ASIM tables from a Bindplane pipeline. Bindplane normalizes and routes OpenTelemetry data; configure a Microsoft Sentinel destination in your Bindplane pipeline and the `asim_standardization` processor stamps every record with an `AdditionalFields.Attribution.bindplane_source` marker so the queries below scope to Bindplane-routed rows only. Requires the Bindplane OpenTelemetry collector with the `asim_standardization` processor v1.8.0 or later.",
+          "graphQueries": [
+            {
+              "metricName": "Authentication events",
+              "legend": "ASimAuthenticationEventLogs",
+              "baseQuery": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "Network Session events",
+              "legend": "ASimNetworkSessionLogs",
+              "baseQuery": "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "DNS Activity events",
+              "legend": "ASimDnsActivityLogs",
+              "baseQuery": "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "Process events",
+              "legend": "ASimProcessEventLogs",
+              "baseQuery": "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "File events",
+              "legend": "ASimFileEventLogs",
+              "baseQuery": "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "Audit events",
+              "legend": "ASimAuditEventLogs",
+              "baseQuery": "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "Web Session events",
+              "legend": "ASimWebSessionLogs",
+              "baseQuery": "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "DHCP events",
+              "legend": "ASimDhcpEventLogs",
+              "baseQuery": "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "Registry events",
+              "legend": "ASimRegistryEventLogs",
+              "baseQuery": "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            },
+            {
+              "metricName": "User Management Activity events",
+              "legend": "ASimUserManagementActivityLogs",
+              "baseQuery": "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\""
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ASimAuthenticationEventLogs",
+              "lastDataReceivedQuery": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimNetworkSessionLogs",
+              "lastDataReceivedQuery": "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimDnsActivityLogs",
+              "lastDataReceivedQuery": "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimProcessEventLogs",
+              "lastDataReceivedQuery": "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimFileEventLogs",
+              "lastDataReceivedQuery": "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimAuditEventLogs",
+              "lastDataReceivedQuery": "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimWebSessionLogs",
+              "lastDataReceivedQuery": "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimDhcpEventLogs",
+              "lastDataReceivedQuery": "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimRegistryEventLogs",
+              "lastDataReceivedQuery": "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimUserManagementActivityLogs",
+              "lastDataReceivedQuery": "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimNetworkSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimDnsActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimProcessEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimFileEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimAuditEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimWebSessionLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimDhcpEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimRegistryEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)",
+                "ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Bindplane-routed ASIM Authentication events",
+              "query": "ASimAuthenticationEventLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | sort by TimeGenerated desc"
+            },
+            {
+              "description": "Bindplane-routed events by ASIM table, last 24 hours",
+              "query": "union withsource=TableName\n                ASimAuthenticationEventLogs,\n                ASimNetworkSessionLogs,\n                ASimDnsActivityLogs,\n                ASimProcessEventLogs,\n                ASimFileEventLogs,\n                ASimAuditEventLogs,\n                ASimWebSessionLogs,\n                ASimDhcpEventLogs,\n                ASimRegistryEventLogs,\n                ASimUserManagementActivityLogs\n            | where TimeGenerated > ago(1d)\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Count = count() by TableName"
+            },
+            {
+              "description": "Bindplane-routed events by upstream EventVendor / EventProduct",
+              "query": "union\n                ASimAuthenticationEventLogs,\n                ASimNetworkSessionLogs,\n                ASimDnsActivityLogs,\n                ASimProcessEventLogs,\n                ASimFileEventLogs,\n                ASimAuditEventLogs,\n                ASimWebSessionLogs,\n                ASimDhcpEventLogs,\n                ASimRegistryEventLogs,\n                ASimUserManagementActivityLogs\n            | where tostring(AdditionalFields.Attribution.bindplane_source) == \"bindplane\"\n            | summarize Count = count() by EventVendor, EventProduct"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Set up a Microsoft Sentinel destination in your Bindplane pipeline using the [Bindplane Microsoft Sentinel destination guide](https://docs.bindplane.com/integrations/destinations/microsoft-sentinel). Use **ASIM mode** in the destination and pair it with the `asim_standardization` processor (`v1.8.0` or later) so every record carries the `AdditionalFields.Attribution.bindplane_source` marker this connector's queries filter on.",
+              "title": "Configure Bindplane to send data to Microsoft Sentinel"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "This data connector requires the Bindplane OpenTelemetry collector running the `asim_standardization` processor v1.8.0 or later. See [the Bindplane Microsoft Sentinel destination guide](https://docs.bindplane.com/integrations/destinations/microsoft-sentinel) for setup."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "BindplaneWorkbook Workbook with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Verify Bindplane is delivering normalized telemetry into Microsoft Sentinel ASIM tables. Surfaces event volume per ASIM table, distribution by upstream EventVendor / EventProduct, and last-data-received per table, all scoped to Bindplane-routed records via the AdditionalFields.Attribution.bindplane_source marker."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Bindplane — Microsoft Sentinel ASIM Health\\n\\nVerify that Bindplane is delivering records into Microsoft Sentinel ASIM tables. Every panel below scopes to rows tagged by the Bindplane `asim_standardization` processor (`AdditionalFields.Attribution.bindplane_source == \\\"bindplane\\\"`), so the figures reflect only Bindplane-routed data even when other sources write to the same tables.\\n\\nRequires the Bindplane OpenTelemetry collector with the `asim_standardization` processor v1.8.0 or later.\"},\"name\":\"header\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-range\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"label\":\"Time Range\",\"type\":4,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2592000000}]}}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union withsource=TableName\\n    ASimAuthenticationEventLogs,\\n    ASimNetworkSessionLogs,\\n    ASimDnsActivityLogs,\\n    ASimProcessEventLogs,\\n    ASimFileEventLogs,\\n    ASimAuditEventLogs,\\n    ASimWebSessionLogs,\\n    ASimDhcpEventLogs,\\n    ASimRegistryEventLogs,\\n    ASimUserManagementActivityLogs\\n| where tostring(AdditionalFields.Attribution.bindplane_source) == \\\"bindplane\\\"\\n| summarize Events = count() by bin(TimeGenerated, 1h), TableName\\n| render timechart\",\"size\":0,\"title\":\"Event volume by ASIM table\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"events-by-table\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union\\n    ASimAuthenticationEventLogs,\\n    ASimNetworkSessionLogs,\\n    ASimDnsActivityLogs,\\n    ASimProcessEventLogs,\\n    ASimFileEventLogs,\\n    ASimAuditEventLogs,\\n    ASimWebSessionLogs,\\n    ASimDhcpEventLogs,\\n    ASimRegistryEventLogs,\\n    ASimUserManagementActivityLogs\\n| where tostring(AdditionalFields.Attribution.bindplane_source) == \\\"bindplane\\\"\\n| summarize Events = count() by EventVendor, EventProduct\\n| sort by Events desc\",\"size\":0,\"title\":\"Distribution by EventVendor / EventProduct\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"visualization\":\"barchart\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"events-by-vendor-product\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union withsource=TableName\\n    ASimAuthenticationEventLogs,\\n    ASimNetworkSessionLogs,\\n    ASimDnsActivityLogs,\\n    ASimProcessEventLogs,\\n    ASimFileEventLogs,\\n    ASimAuditEventLogs,\\n    ASimWebSessionLogs,\\n    ASimDhcpEventLogs,\\n    ASimRegistryEventLogs,\\n    ASimUserManagementActivityLogs\\n| where tostring(AdditionalFields.Attribution.bindplane_source) == \\\"bindplane\\\"\\n| summarize LastReceived = max(TimeGenerated), Events = count() by TableName\\n| extend MinutesSinceLast = datetime_diff('minute', now(), LastReceived)\\n| project TableName, LastReceived, MinutesSinceLast, Events\\n| sort by MinutesSinceLast asc\",\"size\":0,\"title\":\"Last data received per ASIM table (Bindplane-routed)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"last-received-by-table\"}],\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=Bindplane; logoFileName=Azure_Sentinel.svg; description=Verify Bindplane is delivering normalized telemetry into Microsoft Sentinel ASIM tables. Surfaces event volume per ASIM table, distribution by upstream EventVendor / EventProduct, and last-data-received per table, all scoped to Bindplane-routed records via the AdditionalFields.Attribution.bindplane_source marker.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Bindplane Workbook; templateRelativePath=BindplaneWorkbook.json; subtitle=; provider=Bindplane; support=; author=}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Bindplane",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Bindplane",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Bindplane",
+                  "email": "TODO_BINDPLANE_SUPPORT_EMAIL",
+                  "link": "https://bindplane.com/support"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "ASimAuthenticationEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimNetworkSessionLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimDnsActivityLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimProcessEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimFileEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimAuditEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimWebSessionLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimDhcpEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimRegistryEventLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ASimUserManagementActivityLogs",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "Bindplane",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Bindplane",
+        "publisherDisplayName": "Bindplane",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Bindplane/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Bindplane is a telemetry pipeline platform that collects, normalizes, and routes OpenTelemetry data. The Bindplane Microsoft Sentinel destination delivers normalized security telemetry directly into native Microsoft Sentinel ASIM tables.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Bindplane-Logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Bindplane",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Bindplane",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Bindplane",
+          "email": "TODO_BINDPLANE_SUPPORT_EMAIL",
+          "tier": "Partner",
+          "link": "https://bindplane.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-06-09",
+        "lastPublishDate": "2026-06-09",
+        "providers": [
+          "Bindplane"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Others"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
