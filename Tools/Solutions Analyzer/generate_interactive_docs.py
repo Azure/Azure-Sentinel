@@ -1229,6 +1229,7 @@ def _write_index_html(
         <span class="navbar-brand">Microsoft Sentinel &mdash; Solutions Analyzer</span>
         <div class="navbar-nav-links">
             <a href="{_docs_base_path}README{_link_extension}" class="nav-doc-link" title="Documentation home">📖 Docs</a>
+            <a href="{_docs_base_path}logic-apps/logic-apps-index{_link_extension}" class="nav-doc-link" title="Logic Apps Connectors">🔌 Logic Apps</a>
             <a href="{_docs_base_path}statistics{_link_extension}" class="nav-doc-link" title="Statistics and metrics">📊 Statistics</a>
             <a href="asim-browser.html" class="nav-doc-link" title="ASIM Schema Browser">🔎 ASIM Browser</a>
         </div>
@@ -1731,221 +1732,340 @@ $(function() {
 </script>"""
 
 
+# ---------------------------------------------------------------------------
+# Markdown → HTML conversion (parallel, mistune-preferred)
+# ---------------------------------------------------------------------------
+#
+# Constants, regexes, helpers, and the per-file conversion routine are kept at
+# module scope so they can be reused by ``ProcessPoolExecutor`` workers without
+# re-creating them on every file. On Windows (spawn start method) workers
+# re-import this module, so module-level definitions are automatically
+# available; only the converter instance and run-specific paths need to be
+# established via the worker initializer.
+
+# Map subdirectory names to the corresponding tab hash fragment on
+# index.html so that the navbar "Interactive" link opens the right tab.
+_HTML_DIR_TO_TAB = {
+    'solutions': 'solutions',
+    'connectors': 'connectors',
+    'tables': 'tables',
+    'content': 'content',
+    'parsers': 'parsers',
+    'asim': 'asim',
+    'methods': 'connectors',   # methods are shown via the Connectors tab
+}
+
+# Map index page filenames to tab hash fragments (for browse-bar rewriting)
+_HTML_INDEX_TO_TAB = {
+    'solutions-index.html': '#solutions',
+    'connectors-index.html': '#connectors',
+    'methods-index.html': '#connectors',
+    'tables-index.html': '#tables',
+    'content-index.html': '#content',
+    'parsers-index.html': '#parsers',
+    'asim-index.html': '#asim',
+    'asim-products-index.html': '#asim',
+}
+
+# Pre-compiled regex patterns used in the per-file loop
+_HTML_RE_H1 = re.compile(r'^#\s+(.+)$', re.MULTILINE)
+_HTML_RE_STRIP_MD_FMT = re.compile(r'[*_`\[\]()]')
+_HTML_RE_MD_LINKS = re.compile(r'href="(?!https?://|mailto:)([^"]*?)\.md"')
+_HTML_RE_INDEX_LINKS = re.compile(
+    r'href="(?:[^"]*/)?((?:solutions|connectors|methods|tables|content|parsers|asim(?:-products)?)-index\.html)"'
+)
+_HTML_RE_HOME_LINK = re.compile(r'href="[^"]*README\.html"')
+_HTML_RE_INTERACTIVE_LINK = re.compile(r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>')
+_HTML_RE_SCHEMA_TABLE = re.compile(
+    r'(<h2[^>]*>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
+    re.DOTALL,
+)
+_HTML_RE_HEADING = re.compile(r'<(h[1-6])>(.*?)</\1>', re.DOTALL)
+_HTML_RE_STRIP_TAGS = re.compile(r'<[^>]+>')
+_HTML_RE_TRAILING_PAREN = re.compile(r'\s*\([^)]*\)\s*$')
+_HTML_RE_NON_SLUG = re.compile(r'[^\w\s-]')
+_HTML_RE_SPACES = re.compile(r'\s+')
+
+
+def _html_slugify(text: str) -> str:
+    """Convert heading text to a URL-friendly anchor slug.
+
+    Strips HTML tags, trailing parenthetical counts (e.g. ``(5)``), and
+    normalizes to lowercase hyphenated form.
+    """
+    plain = _HTML_RE_STRIP_TAGS.sub('', text)
+    plain = _HTML_RE_TRAILING_PAREN.sub('', plain)
+    slug = _HTML_RE_NON_SLUG.sub('', plain).strip().lower()
+    slug = _HTML_RE_SPACES.sub('-', slug)
+    return slug
+
+
+def _html_add_heading_ids(html: str) -> str:
+    """Add ``id`` attributes to ``h1``–``h6`` tags that don't already have one."""
+    def _replace(m: re.Match) -> str:
+        tag = m.group(1)
+        inner = m.group(2)
+        slug = _html_slugify(inner)
+        if slug:
+            return f'<{tag} id="{slug}">{inner}</{tag}>'
+        return m.group(0)
+    return _HTML_RE_HEADING.sub(_replace, html)
+
+
+def _make_md_converter():
+    """Build a markdown → HTML converter, preferring mistune for speed.
+
+    Returns a callable ``convert(text) -> html_str``. Mistune (v3) is ~2.7×
+    faster than Python-Markdown on the corpus produced by this tool, so it's
+    preferred when available. ``escape=False`` is required because the
+    generated markdown intentionally embeds raw HTML (solution logos, ASIM
+    badges, ``<details>`` blocks). Falls back to Python-Markdown with the
+    historical extension set (``tables``, ``fenced_code``, ``sane_lists``).
+    """
+    try:
+        import mistune as _mistune  # type: ignore
+        _md = _mistune.create_markdown(
+            escape=False,
+            plugins=['table', 'strikethrough', 'footnotes'],
+        )
+        return _md, 'mistune'
+    except ImportError:
+        pass
+    try:
+        import markdown as _markdown_lib  # type: ignore
+    except ImportError:
+        return None, None
+    _converter = _markdown_lib.Markdown(
+        extensions=['tables', 'fenced_code', 'sane_lists']
+    )
+
+    def _convert(text: str) -> str:
+        _converter.reset()
+        return _converter.convert(text)
+
+    return _convert, 'python-markdown'
+
+
+# Worker-process globals (initialized by ``_html_worker_init``). They are
+# ``None`` in the main process if it never invokes ``_html_convert_one``
+# directly.
+_HTML_WORKER_MD = None              # callable: convert(text) -> html
+_HTML_WORKER_DOCS_DIR: Optional[Path] = None
+_HTML_WORKER_OUTPUT_DIR: Optional[Path] = None
+
+
+def _html_worker_init(docs_dir_str: str, html_output_dir_str: str) -> None:
+    """``ProcessPoolExecutor`` initializer — set up per-worker state."""
+    global _HTML_WORKER_MD, _HTML_WORKER_DOCS_DIR, _HTML_WORKER_OUTPUT_DIR
+    converter, _engine = _make_md_converter()
+    if converter is None:
+        # Re-raise inside the worker so the parent process notices.
+        raise ImportError(
+            "Neither 'mistune' nor 'markdown' is installed in the worker; "
+            "install with: pip install mistune"
+        )
+    _HTML_WORKER_MD = converter
+    _HTML_WORKER_DOCS_DIR = Path(docs_dir_str)
+    _HTML_WORKER_OUTPUT_DIR = Path(html_output_dir_str)
+
+
+def _html_convert_one(md_file_str: str) -> Tuple[str, float]:
+    """Convert a single markdown file to HTML in the current process.
+
+    Uses worker-process globals (``_HTML_WORKER_MD``, ``_HTML_WORKER_DOCS_DIR``,
+    ``_HTML_WORKER_OUTPUT_DIR``) set up by ``_html_worker_init``. Returns
+    ``(relative_path_str, elapsed_seconds)`` for progress reporting.
+    """
+    import time as _time
+    file_t0 = _time.perf_counter()
+    md_file = Path(md_file_str)
+    docs_dir = _HTML_WORKER_DOCS_DIR
+    html_output_dir = _HTML_WORKER_OUTPUT_DIR
+    convert = _HTML_WORKER_MD
+
+    md_content = md_file.read_text(encoding='utf-8')
+
+    # Extract title from first H1
+    title_match = _HTML_RE_H1.search(md_content)
+    if title_match:
+        title = _HTML_RE_STRIP_TAGS.sub('', title_match.group(1))
+        title = _HTML_RE_STRIP_MD_FMT.sub('', title).strip()
+    else:
+        title = md_file.stem
+
+    parent_name = md_file.parent.name
+
+    # Convert markdown → HTML body
+    html_body = convert(md_content)
+
+    # Add id attributes to headings for anchor linking
+    html_body = _html_add_heading_ids(html_body)
+
+    # Rewrite relative .md links → .html  (leave http(s) and mailto alone)
+    html_body = _HTML_RE_MD_LINKS.sub(r'href="\1.html"', html_body)
+
+    # Compute base index URL (relative — works on file:// and on GitHub Pages)
+    base_index_url = os.path.relpath(
+        html_output_dir / 'index.html',
+        md_file.parent,
+    ).replace('\\', '/')
+
+    def _rewrite_index_link(m: re.Match, _base=base_index_url) -> str:
+        filename = m.group(1)
+        if filename in _HTML_INDEX_TO_TAB:
+            return f'href="{_base}{_HTML_INDEX_TO_TAB[filename]}"'
+        return m.group(0)
+
+    html_body = _HTML_RE_INDEX_LINKS.sub(_rewrite_index_link, html_body)
+    html_body = _HTML_RE_HOME_LINK.sub(f'href="{base_index_url}"', html_body)
+    html_body = _HTML_RE_INTERACTIVE_LINK.sub('', html_body)
+
+    # For table docs with a Schema section, tag the schema <table> with an id
+    has_schema_table = False
+    if parent_name == 'tables':
+        html_body, n = _HTML_RE_SCHEMA_TABLE.subn(
+            r'\1<table id="schema-table">',
+            html_body,
+            count=1,
+        )
+        has_schema_table = n > 0
+
+    head_extra = _DATATABLE_HEAD_EXTRA if has_schema_table else ''
+    body_extra = _DATATABLE_BODY_EXTRA if has_schema_table else ''
+
+    css_path = os.path.relpath(
+        html_output_dir / 'css' / 'page.css',
+        md_file.parent,
+    ).replace('\\', '/')
+
+    tab_fragment = _HTML_DIR_TO_TAB.get(parent_name, '')
+    tab_hash = f'#{tab_fragment}' if tab_fragment else ''
+
+    page_index_url = os.path.relpath(
+        html_output_dir / 'index.html',
+        md_file.parent,
+    ).replace('\\', '/') + tab_hash
+
+    page_asim_url = os.path.relpath(
+        html_output_dir / 'asim-browser.html',
+        md_file.parent,
+    ).replace('\\', '/')
+
+    html_page = _PAGE_HTML_TEMPLATE.format(
+        title=esc(title),
+        css_path=css_path,
+        index_url=esc(page_index_url),
+        asim_browser_url=esc(page_asim_url),
+        body=html_body,
+        head_extra=head_extra,
+        body_extra=body_extra,
+    )
+
+    html_file = md_file.with_suffix('.html')
+    html_file.write_text(html_page, encoding='utf-8')
+
+    elapsed = _time.perf_counter() - file_t0
+    rel = str(md_file.relative_to(docs_dir)).replace('\\', '/')
+    return rel, elapsed
+
+
 def _generate_html_pages(docs_dir: Path, html_output_dir: Path,
                          index_url: str) -> None:
     """Convert every .md file under *docs_dir* to a styled .html page.
 
-    * Uses Python-Markdown with ``tables`` and ``fenced_code`` extensions.
+    * Uses Mistune (preferred) or Python-Markdown with ``tables`` and
+      ``fenced_code`` extensions.
     * Rewrites relative ``.md`` links to ``.html`` so internal navigation
       works entirely within the HTML entity pages.
     * Writes a ``page.css`` stylesheet to ``{html_output_dir}/css/``.
+    * Parallelises per-file conversion via ``ProcessPoolExecutor``. Worker
+      count defaults to ``min(cpu_count, 8)`` and can be overridden via the
+      ``SA_HTML_WORKERS`` environment variable (set to ``1`` to force serial
+      execution, useful for debugging).
     """
     import time as _time
-    try:
-        import markdown as _markdown_lib
-    except ImportError:
-        print("  WARNING: 'markdown' package not installed — skipping HTML page generation.")
-        print("           Install with: pip install markdown")
+    from concurrent.futures import ProcessPoolExecutor
+
+    # Probe for a markdown engine in the main process to fail fast with a
+    # clear error before spawning workers.
+    converter, engine = _make_md_converter()
+    if converter is None:
+        print("  WARNING: neither 'mistune' nor 'markdown' is installed — "
+              "skipping HTML page generation.")
+        print("           Install with: pip install mistune")
         return
 
     # Write shared CSS for entity pages
     _write_page_css(html_output_dir / "css" / "page.css")
 
-    # Map subdirectory names to the corresponding tab hash fragment on
-    # index.html so that the navbar "Interactive" link opens the right tab.
-    _dir_to_tab = {
-        'solutions': 'solutions',
-        'connectors': 'connectors',
-        'tables': 'tables',
-        'content': 'content',
-        'parsers': 'parsers',
-        'asim': 'asim',
-        'methods': 'connectors',   # methods are shown via the Connectors tab
-    }
-
-    # Map index page filenames to tab hash fragments (for browse-bar rewriting)
-    _index_to_tab = {
-        'solutions-index.html': '#solutions',
-        'connectors-index.html': '#connectors',
-        'methods-index.html': '#connectors',
-        'tables-index.html': '#tables',
-        'content-index.html': '#content',
-        'parsers-index.html': '#parsers',
-        'asim-index.html': '#asim',
-        'asim-products-index.html': '#asim',
-    }
-
-    # Pre-compile regex patterns used in the per-file loop
-    _re_h1 = re.compile(r'^#\s+(.+)$', re.MULTILINE)
-    _re_strip_md_fmt = re.compile(r'[*_`\[\]()]')
-    _re_md_links = re.compile(r'href="(?!https?://|mailto:)([^"]*?)\.md"')
-    _re_index_links = re.compile(
-        r'href="(?:[^"]*/)?((?:solutions|connectors|methods|tables|content|parsers|asim(?:-products)?)-index\.html)"'
-    )
-    _re_home_link = re.compile(r'href="[^"]*README\.html"')
-    _re_interactive_link = re.compile(r'\s*·\s*<a\s+href="[^"]*"[^>]*>🔍</a>')
-    _re_schema_table = re.compile(
-        r'(<h2[^>]*>Schema\b[^<]*</h2>\s*(?:<p>.*?</p>\s*)?)<table>',
-        re.DOTALL,
-    )
-    _re_heading = re.compile(r'<(h[1-6])>(.*?)</\1>', re.DOTALL)
-    _re_strip_tags = re.compile(r'<[^>]+>')
-
-    def _slugify(text: str) -> str:
-        """Convert heading text to a URL-friendly anchor slug.
-        
-        Strips HTML tags, trailing parenthetical counts (e.g. '(5)'),
-        and normalizes to lowercase hyphenated form.
-        """
-        # Strip HTML tags
-        plain = _re_strip_tags.sub('', text)
-        # Remove trailing parenthetical like " (123)" or " (5 criteria, 10 total references)"
-        plain = re.sub(r'\s*\([^)]*\)\s*$', '', plain)
-        # Remove emoji/special chars, lowercase, replace spaces with hyphens
-        slug = re.sub(r'[^\w\s-]', '', plain).strip().lower()
-        slug = re.sub(r'[\s]+', '-', slug)
-        return slug
-
-    def _add_heading_ids(html: str) -> str:
-        """Add id attributes to h1-h6 tags that don't already have one."""
-        def _replace(m: re.Match) -> str:
-            tag = m.group(1)
-            inner = m.group(2)
-            slug = _slugify(inner)
-            if slug:
-                return f'<{tag} id="{slug}">{inner}</{tag}>'
-            return m.group(0)
-        return _re_heading.sub(_replace, html)
-
-    # Reuse a single Markdown converter instance (reset between files)
-    # Note: 'toc' extension intentionally omitted — we don't generate a
-    # [TOC] block and it adds significant per-file overhead.
-    md_extensions = ['tables', 'fenced_code', 'sane_lists']
-    md_converter = _markdown_lib.Markdown(extensions=md_extensions)
-
-    # Collect files first to know total count for progress reporting
     md_files = sorted(docs_dir.rglob('*.md'))
     total = len(md_files)
-    count = 0
+    if total == 0:
+        print("  No markdown files to convert.")
+        return
+
+    # Determine worker count
+    try:
+        env_workers = int(os.environ.get('SA_HTML_WORKERS', '') or '0')
+    except ValueError:
+        env_workers = 0
+    if env_workers > 0:
+        workers = env_workers
+    else:
+        workers = max(1, min(os.cpu_count() or 4, 8))
+    # Don't bother spawning more workers than files
+    workers = min(workers, total)
+
+    print(f"  Converting {total:,} markdown files to HTML "
+          f"(engine: {engine}, workers: {workers})...", flush=True)
+
     t_start = _time.perf_counter()
+    count = 0
+    file_strs = [str(p) for p in md_files]
 
-    print(f"  Converting {total} markdown files to HTML...", flush=True)
+    # Chunk size tuned to amortise IPC overhead without starving stragglers.
+    # ~50 files/chunk for typical run sizes (10k+ files, 8 workers).
+    chunksize = max(1, min(64, total // (workers * 8) or 1))
 
-    for md_file in md_files:
-        file_t0 = _time.perf_counter()
-        md_content = md_file.read_text(encoding='utf-8')
-
-        # Extract title from first H1
-        title_match = _re_h1.search(md_content)
-        if title_match:
-            title = _re_strip_tags.sub('', title_match.group(1))
-            title = _re_strip_md_fmt.sub('', title).strip()
-        else:
-            title = md_file.stem
-
-        # Determine the parent directory (used for tab linking and schema detection)
-        parent_name = md_file.parent.name
-
-        # Convert markdown → HTML body (reuse converter, reset state)
-        md_converter.reset()
-        html_body = md_converter.convert(md_content)
-
-        # Add id attributes to headings for anchor linking (TOC + direct section links)
-        html_body = _add_heading_ids(html_body)
-
-        # Rewrite relative .md links → .html  (leave http(s) and mailto alone)
-        html_body = _re_md_links.sub(r'href="\1.html"', html_body)
-
-        # Compute base index URL (without tab hash) for browse-bar rewriting.
-        # Always use relative paths — HTML entity pages coexist with index.html
-        # in the same served directory structure, so relative links work both
-        # locally (file://) and on GitHub Pages.
-        base_index_url = os.path.relpath(
-            html_output_dir / 'index.html',
-            md_file.parent,
-        ).replace('\\', '/')
-
-        # Rewrite browse-bar links: static index pages → index.html#tab
-        def _rewrite_index_link(m: re.Match, _base=base_index_url) -> str:
-            """Replace static index page links with index.html#tab links."""
-            filename = m.group(1)
-            if filename in _index_to_tab:
-                return f'href="{_base}{_index_to_tab[filename]}"'
-            return m.group(0)
-
-        html_body = _re_index_links.sub(_rewrite_index_link, html_body)
-
-        # Rewrite 🏠 home link: README.html → index.html (no tab hash)
-        html_body = _re_home_link.sub(f'href="{base_index_url}"', html_body)
-
-        # Remove the 🔍 Interactive link from the browse bar (if still present)
-        html_body = _re_interactive_link.sub('', html_body)
-
-        # For table docs with a Schema section, tag the schema <table> with
-        # an id so DataTables.js can enhance it with sort + filter.
-        has_schema_table = False
-        if parent_name == 'tables':
-            html_body, n = _re_schema_table.subn(
-                r'\1<table id="schema-table">',
-                html_body,
-                count=1,
-            )
-            has_schema_table = n > 0
-
-        head_extra = _DATATABLE_HEAD_EXTRA if has_schema_table else ''
-        body_extra = _DATATABLE_BODY_EXTRA if has_schema_table else ''
-
-        # Compute relative path to CSS
-        css_path = os.path.relpath(
-            html_output_dir / 'css' / 'page.css',
-            md_file.parent,
-        ).replace('\\', '/')
-
-        # Determine the tab fragment from the parent directory name
-        tab_fragment = _dir_to_tab.get(parent_name, '')
-        tab_hash = f'#{tab_fragment}' if tab_fragment else ''
-
-        # Compute index URL — always relative (same rationale as base_index_url)
-        page_index_url = os.path.relpath(
-            html_output_dir / 'index.html',
-            md_file.parent,
-        ).replace('\\', '/') + tab_hash
-
-        # Compute ASIM browser URL — relative from this page to asim-browser.html
-        page_asim_url = os.path.relpath(
-            html_output_dir / 'asim-browser.html',
-            md_file.parent,
-        ).replace('\\', '/')
-
-        # Assemble final page
-        html_page = _PAGE_HTML_TEMPLATE.format(
-            title=esc(title),
-            css_path=css_path,
-            index_url=esc(page_index_url),
-            asim_browser_url=esc(page_asim_url),
-            body=html_body,
-            head_extra=head_extra,
-            body_extra=body_extra,
-        )
-
-        html_file = md_file.with_suffix('.html')
-        html_file.write_text(html_page, encoding='utf-8')
-        count += 1
-
-        # Warn about slow individual files (>5s)
-        file_dt = _time.perf_counter() - file_t0
-        if file_dt > 5:
-            print(f"    SLOW ({file_dt:.1f}s): {md_file.relative_to(docs_dir)}", flush=True)
-
-        # Progress reporting every 200 converted files
-        if count % 200 == 0:
-            elapsed = _time.perf_counter() - t_start
-            rate = count / elapsed if elapsed > 0 else 0
-            remaining = (total - count) / rate if rate > 0 else 0
-            print(f"    {count:,}/{total:,} pages ({elapsed:.1f}s elapsed, ~{remaining:.0f}s remaining)", flush=True)
+    if workers == 1:
+        # Serial path — useful for debugging and avoids ProcessPoolExecutor
+        # spawn overhead on small runs.
+        _html_worker_init(str(docs_dir), str(html_output_dir))
+        for fs in file_strs:
+            rel, dt = _html_convert_one(fs)
+            count += 1
+            if dt > 5:
+                print(f"    SLOW ({dt:.1f}s): {rel}", flush=True)
+            if count % 200 == 0:
+                elapsed = _time.perf_counter() - t_start
+                rate = count / elapsed if elapsed > 0 else 0
+                remaining = (total - count) / rate if rate > 0 else 0
+                print(f"    {count:,}/{total:,} pages "
+                      f"({elapsed:.1f}s elapsed, ~{remaining:.0f}s remaining)",
+                      flush=True)
+    else:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_html_worker_init,
+            initargs=(str(docs_dir), str(html_output_dir)),
+        ) as executor:
+            for rel, dt in executor.map(
+                _html_convert_one, file_strs, chunksize=chunksize
+            ):
+                count += 1
+                if dt > 5:
+                    print(f"    SLOW ({dt:.1f}s): {rel}", flush=True)
+                if count % 500 == 0:
+                    elapsed = _time.perf_counter() - t_start
+                    rate = count / elapsed if elapsed > 0 else 0
+                    remaining = (total - count) / rate if rate > 0 else 0
+                    print(f"    {count:,}/{total:,} pages "
+                          f"({elapsed:.1f}s elapsed, ~{remaining:.0f}s remaining)",
+                          flush=True)
 
     elapsed = _time.perf_counter() - t_start
-    print(f"  Generated {count:,} HTML entity pages in {elapsed:.1f}s")
+    print(f"  Generated {count:,} HTML entity pages in {elapsed:.1f}s "
+          f"({count/elapsed:.0f} pages/s)")
 
 
 # ---------------------------------------------------------------------------

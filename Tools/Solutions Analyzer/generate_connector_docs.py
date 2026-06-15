@@ -7,7 +7,7 @@ of https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference
 
 import csv
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Set, Tuple
 import argparse
 from urllib.parse import quote
@@ -58,13 +58,18 @@ _INTERACTIVE_INDEX_PATH: str = "index.html"
 ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
 ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
 
-# ASIM icon/badge HTML - using img tags to control size for proper text alignment
+# ASIM icon/badge HTML - using img tags to control size for proper text alignment.
+# Inline ``style`` is used (not the legacy ``height`` attribute) because the
+# published interactive site's stylesheet sets ``img { height: auto }`` which
+# overrides the HTML ``height`` attribute and lets these badges render at their
+# native (much larger) pixel dimensions. Inline ``style`` wins over the CSS
+# rule and keeps the badge sized to match heading / inline text.
 # Large badge for page titles (H1 headers) - sized to match heading text (~32px)
-ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" height="32">'
+ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" style="height:32px;width:auto;vertical-align:middle">'
 # Small logo for inline use (lists, tables, section headers) - sized to match text (~16px)
-ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 # Small logo for root-level files (no ../ prefix needed)
-ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
+ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" style="height:16px;width:auto;vertical-align:middle">'
 
 # Icons for unpublished, deprecated, and discovered items
 UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors/content
@@ -83,6 +88,92 @@ ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This 
 SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
 CLV1_TABLE_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This table uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
 CLV1_CONNECTOR_FOOTNOTE = f"> {CLV1_ICON} **CLv1:** This connector ingests into a table that uses the legacy Custom Log V1 schema format with type-suffixed column names (e.g. `_s`, `_d`, `_b`, `_t`, `_g`). Note: identification is based on column name suffixes which are also permitted in CLv2, so this classification may not always be accurate."
+
+# ----- Logic App Connector / Built-in Action Microsoft Learn URLs -----
+# Hardcoded Learn pages for built-in Logic Apps actions (no per-connector page in /connectors/).
+LOGIC_APPS_BUILTIN_LEARN_URLS: Dict[str, str] = {
+    "http": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-http",
+    "function": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-azurefunctions",
+    "workflow": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-logic-apps",
+    "apimanagement": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-azureapim",
+}
+
+# Cache file for resolved Microsoft Learn URLs of managed/custom Logic Apps connectors.
+# Persists between runs; entries are kept indefinitely (only re-probed when missing).
+_LEARN_URL_CACHE_PATH: Path = Path(__file__).parent / ".cache" / "connector_learn_urls.json"
+_LEARN_URL_CACHE: Optional[Dict[str, Optional[str]]] = None
+_LEARN_URL_CACHE_DIRTY: bool = False
+
+
+def _load_learn_url_cache() -> Dict[str, Optional[str]]:
+    """Load the persistent connector-Learn-URL cache, returning the in-memory dict."""
+    global _LEARN_URL_CACHE
+    if _LEARN_URL_CACHE is not None:
+        return _LEARN_URL_CACHE
+    cache: Dict[str, Optional[str]] = {}
+    try:
+        if _LEARN_URL_CACHE_PATH.exists():
+            with _LEARN_URL_CACHE_PATH.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    cache = {str(k): (v if isinstance(v, str) or v is None else None) for k, v in data.items()}
+    except (OSError, json.JSONDecodeError):
+        cache = {}
+    _LEARN_URL_CACHE = cache
+    return cache
+
+
+def _save_learn_url_cache() -> None:
+    """Persist the in-memory cache to disk if anything changed during this run."""
+    global _LEARN_URL_CACHE_DIRTY
+    if not _LEARN_URL_CACHE_DIRTY or _LEARN_URL_CACHE is None:
+        return
+    try:
+        _LEARN_URL_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _LEARN_URL_CACHE_PATH.open("w", encoding="utf-8") as f:
+            json.dump(_LEARN_URL_CACHE, f, indent=2, sort_keys=True)
+        _LEARN_URL_CACHE_DIRTY = False
+    except OSError:
+        pass
+
+
+def resolve_connector_learn_url(api_name: str, api_kind: str) -> Optional[str]:
+    """
+    Resolve the Microsoft Learn page URL for a Logic Apps connector / built-in action.
+    
+    - Built-in (`api_kind == 'builtin'`) → hardcoded URL from `LOGIC_APPS_BUILTIN_LEARN_URLS`.
+    - Custom (`customApi`) → no Learn page (returns None).
+    - Managed (`managedApi`) → probes `https://learn.microsoft.com/en-us/connectors/<name>/`
+      with a HEAD request. Result (URL or None) is persisted in `.cache/connector_learn_urls.json`
+      so subsequent runs are offline.
+    """
+    if not api_name:
+        return None
+    api_kind = (api_kind or '').strip()
+    name_l = api_name.strip().lower()
+    if api_kind == 'builtin':
+        return LOGIC_APPS_BUILTIN_LEARN_URLS.get(name_l)
+    if api_kind == 'customApi':
+        return None
+    cache = _load_learn_url_cache()
+    cache_key = f"{api_kind}|{name_l}"
+    if cache_key in cache:
+        return cache[cache_key]
+    # Not cached → probe
+    candidate = f"https://learn.microsoft.com/en-us/connectors/{name_l}/"
+    resolved: Optional[str] = None
+    try:
+        import requests  # local import; only needed when probing
+        resp = requests.head(candidate, timeout=10, allow_redirects=True)
+        if 200 <= resp.status_code < 400:
+            resolved = candidate
+    except Exception:
+        resolved = None
+    cache[cache_key] = resolved
+    global _LEARN_URL_CACHE_DIRTY
+    _LEARN_URL_CACHE_DIRTY = True
+    return resolved
+
 
 # Collection method metadata: descriptions and documentation links
 COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
@@ -171,9 +262,9 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Connect Microsoft Defender for Cloud", "https://learn.microsoft.com/azure/sentinel/connect-defender-for-cloud"),
         ],
     },
-    "REST Pull API": {
-        "name": "REST Pull API / Custom Integration",
-        "description": "REST Pull API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
+    "REST Push API": {
+        "name": "REST Push API / Custom Integration",
+        "description": "REST Push API-based connectors push data into Microsoft Sentinel via the Azure Monitor HTTP Data Collector API or the Logs Ingestion API (DCR/DCE). The external source initiates the HTTP requests; Sentinel does not poll. These connectors may use custom scripts, Logic Apps, or other integration methods to collect data and send it to the workspace.",
         "links": [
             ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
             ("📖 Send data using the Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-walkthrough"),
@@ -269,7 +360,10 @@ def get_collection_method_link(method: str, relative_path: str = "") -> str:
     if not method or method == '?':
         return '?'
     filename = get_collection_method_filename(method)
-    return f"[{method}]({relative_path}methods/{filename}.md)"
+    # Escape pipe characters in the display label so combined methods like
+    # "A|B" don't break markdown table cells when this link is placed in a table.
+    display = method.replace('|', '\\|')
+    return f"[{display}]({relative_path}methods/{filename}.md)"
 
 
 def get_asim_icon(relative_path: str = "../tables/") -> str:
@@ -1595,6 +1689,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         ('Parsers', f'{relative_to_root}parsers/parsers-index.md', None),
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
+        ('Logic Apps', f'{relative_to_root}logic-apps/logic-apps-index.md', None),
         ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
     ]
     
@@ -1622,6 +1717,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         elif page_type == 'asim-products' and name == 'ASIM Products':
             is_current = True
         elif page_type in ('parser', 'parser-index') and name == 'Parsers':
+            is_current = True
+        elif page_type in ('logic-apps-index', 'logic-apps-page') and name == 'Logic Apps':
             is_current = True
         
         if is_current:
@@ -1662,6 +1759,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         f.write("↑ [Back to ASIM Index](asim-index.md)\n\n")
     elif page_type == 'parser':
         f.write(f"↑ [Back to Parsers Index](parsers-index.md)\n\n")
+    elif page_type == 'logic-apps-page':
+        f.write(f"↑ [Back to Logic Apps Index](logic-apps-index.md)\n\n")
     elif page_type == 'content-type-letter-header':
         type_name = kwargs.get('type_name', 'Content')
         type_slug = kwargs.get('type_slug', 'content-index')
@@ -2716,7 +2815,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                                  tables_reference: Dict[str, Dict[str, str]] = None,
                                  content_table_parser_mapping: Dict[str, Dict[str, str]] = None,
                                  parser_filter_fields: Dict[str, str] = None,
-                                 connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
+                                 connectors_reference: Dict[str, Dict[str, str]] = None,
+                                 playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = None) -> int:
     """
     Generate individual documentation pages for each content item.
     
@@ -2744,6 +2844,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
         parser_filter_fields = {}
     if connectors_reference is None:
         connectors_reference = {}
+    if playbook_connectors_by_playbook is None:
+        playbook_connectors_by_playbook = {}
     
     pages_created = 0
     
@@ -2963,6 +3065,104 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                             f.write(", ".join(solution_links))
                             f.write("\n\n")
                 
+                # Logic App Connectors section for playbooks
+                if content_type == 'playbook':
+                    pb_connectors = playbook_connectors_by_playbook.get(
+                        (solution_folder or '', content_file or ''), []
+                    )
+                    if pb_connectors:
+                        f.write("## Logic App Connectors\n\n")
+                        f.write(f"This playbook uses **{len(pb_connectors)}** Logic App connector"
+                                f"{'s' if len(pb_connectors) != 1 else ''} / built-in action"
+                                f"{'s' if len(pb_connectors) != 1 else ''}:\n\n")
+                        f.write("| Connector / Action | Type | Connections | Actions |\n")
+                        f.write("|:-------------------|:-----|:-----------:|:-------:|\n")
+                        # Sort: managed first, then custom, then builtin, then by name
+                        def _pbc_sort_key(r):
+                            k = r.get('api_kind') or ''
+                            kind_rank = {'managedApi': 0, 'customApi': 1, 'builtin': 2}.get(k, 3)
+                            return (kind_rank, (r.get('api_name') or '').lower())
+                        sorted_pbcs = sorted(pb_connectors, key=_pbc_sort_key)
+                        for r in sorted_pbcs:
+                            api_name = r.get('api_name', '')
+                            api_kind = r.get('api_kind', '')
+                            if api_kind == 'managedApi':
+                                kind_label = 'Managed'
+                            elif api_kind == 'customApi':
+                                kind_label = 'Custom'
+                            elif api_kind == 'builtin':
+                                kind_label = 'Built-in'
+                            else:
+                                kind_label = api_kind or '-'
+                            count = r.get('connection_count', '') or '0'
+                            action_count = r.get('action_count', '') or '0'
+                            # Link the connector / action name to its per-connector page
+                            # under ../logic-apps/. Fall back to plain code if api_name or
+                            # api_kind is empty (shouldn't happen, defensive).
+                            if api_name and api_kind:
+                                la_slug = _logic_apps_page_filename(api_name, api_kind)
+                                api_cell = f"[`{api_name}`](../logic-apps/{la_slug}.md)"
+                            else:
+                                api_cell = f"`{api_name}`"
+                            f.write(f"| {api_cell} | {kind_label} | {count} | {action_count} |\n")
+                        f.write("\n")
+
+                        # Per-connector action parameter details (URLs, paths, etc.)
+                        # Render as a separate sub-heading + table per connector so that
+                        # each action's parameters are clearly attributed and easy to scan.
+                        params_blocks = []
+                        kind_label_map = {'managedApi': 'Managed', 'customApi': 'Custom', 'builtin': 'Built-in'}
+                        endpoint_keys = ('uri', 'path', 'pathTemplate')
+                        other_keys = ('functionId', 'workflowId', 'apiManagementName', 'operationId', 'triggerName')
+                        for r in sorted_pbcs:
+                            params_raw = r.get('parameters') or ''
+                            if not params_raw:
+                                continue
+                            try:
+                                params_list = json.loads(params_raw) if isinstance(params_raw, str) else params_raw
+                            except (ValueError, TypeError):
+                                continue
+                            if not isinstance(params_list, list) or not params_list:
+                                continue
+                            api_name = r.get('api_name', '')
+                            api_kind = r.get('api_kind', '')
+                            kind_label = kind_label_map.get(api_kind, api_kind or '-')
+                            rows: List[str] = []
+                            for p in params_list:
+                                if not isinstance(p, dict):
+                                    continue
+                                action = p.get('action', '') or '—'
+                                method = p.get('method', '') or '—'
+                                # Endpoint: first non-empty of uri / path / pathTemplate
+                                endpoint = ''
+                                for k in endpoint_keys:
+                                    v = p.get(k)
+                                    if v:
+                                        endpoint = str(v)
+                                        break
+                                endpoint_cell = f"`{endpoint}`" if endpoint else '—'
+                                # Other params
+                                other_parts = [f"{k}=`{p[k]}`" for k in other_keys if p.get(k)]
+                                other_cell = '<br>'.join(other_parts) if other_parts else '—'
+                                rows.append(
+                                    f"| {action} | {method} | {endpoint_cell} | {other_cell} |"
+                                )
+                            if not rows:
+                                continue
+                            block = [
+                                f"#### [`{api_name}`](../logic-apps/{_logic_apps_page_filename(api_name, api_kind)}.md) ({kind_label})",
+                                "",
+                                "| Action | Method | Endpoint | Other |",
+                                "|:-------|:-------|:---------|:------|",
+                                *rows,
+                            ]
+                            params_blocks.append('\n'.join(block))
+                        if params_blocks:
+                            f.write("<details><summary>Action parameters (URLs, paths, function IDs)</summary>\n\n")
+                            for blk in params_blocks:
+                                f.write(blk + "\n\n")
+                            f.write("</details>\n\n")
+
                 # Additional Documentation section for playbooks (embedded README content)
                 if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
                     readme_content, readme_github_url = get_playbook_readme_content(
@@ -3886,7 +4086,30 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         f.write("---\n\n")
         f.write(DEPRECATED_FOOTNOTE + "\n\n")
         f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
-        
+
+        # ===================== HOW TABLE COLLECTION METHODS ARE DETERMINED =====================
+        f.write("## How collection methods are assigned to tables\n\n")
+        f.write(
+            "Each table's `collection_method` is resolved in this order:\n\n"
+            "1. **ASIM short-circuit** — tables whose name starts with `ASim` (case-insensitive) are classified as **`Various`**, since ASIM is a normalization layer that aggregates events from many heterogeneous sources.\n"
+            "2. **Intrinsic value** from `tables_reference.csv` (e.g. `AMA` for tables with VM resource types). "
+            "The shared agent-collected tables — `Syslog`, `CommonSecurityLog`, `SecurityEvent`, and `Event` — are intrinsically classified as **`AMA`** since AMA is the supported modern collection path, even though some legacy connectors that feed them still use MMA.\n"
+            "3. **Defender XDR override** — tables flagged `source_defender_xdr=Yes` are classified as `Defender`.\n"
+            "4. **Azure Resources override** — tables in the `Azure Resources` category are classified as `Azure Diagnostics`.\n"
+            "5. **Inherited from feeding connectors** when all of them use the same atomized method (1:1). Connector `collection_method` values are split on `|` before comparison.\n"
+            "6. **Published-connector trump** — when feeding connectors disagree but only some are published in the marketplace, the unpublished connectors are dropped from inference. If that yields a single method, it is used.\n"
+            "7. **Precedence collapse** when feeding connectors still disagree and the disagreement is a known generation overlap. "
+            "Newer / canonical technology wins:\n\n"
+            "   | Co-feeding methods | Inferred method |\n"
+            "   |:-------------------|:----------------|\n"
+            "   | `AMA` + `MMA` | `AMA` |\n"
+            "   | `CCF` + `CCF (Legacy)` | `CCF` |\n"
+            "   | `Azure Function` + `CCF` | `CCF` |\n\n"
+            "If steps 2–4 produced an intrinsic value that disagrees with what step 5–7 would infer, the intrinsic value wins and the disagreement is logged in the analyzer's exceptions report with `reason=table_method_conflict`. "
+            "If feeding connectors still disagree after the published-trump filter and precedence collapse, no method is back-propagated and the table is logged with `reason=table_method_ambiguity` (only when no intrinsic value was set).\n\n"
+            "`tables.csv` records the resolution path on every row via the `collection_method_source`, `collection_method_candidates`, and `feeding_connector_ids` columns.\n\n"
+        )
+
         # ===================== INGESTION API BY COLLECTION METHOD TABLE =====================
         # Build ingestion API stats per (collection_method, ingestion_api)
         api_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -3905,7 +4128,7 @@ def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]]
         if api_totals:
             f.write("---\n\n")
             f.write("## Ingestion API by Collection Method\n\n")
-            f.write("API-based connectors (CCF Push, Azure Function, REST Pull API, and Custom Log) ")
+            f.write("API-based connectors (CCF Push, Azure Function, REST Push API, and Custom Log) ")
             f.write("use one of two APIs to send data to the Log Analytics workspace. ")
             f.write("CCF and CCF (Legacy) are excluded as their ingestion is platform-managed.\n\n")
             
@@ -5444,6 +5667,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 if files:
                     files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in files])
                     f.write(f"| **Connector Definition Files** | {files_list} |\n")
+
+            dcr_definition_files = connector_ref.get('dcr_definition_files', '')
+            if dcr_definition_files:
+                dcr_files = [f.strip() for f in dcr_definition_files.split(';') if f.strip()]
+                if dcr_files:
+                    dcr_files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in dcr_files])
+                    f.write(f"| **DCR Definition Files** | {dcr_files_list} |\n")
             
             # CCF config file (for CCF and CCF Push connectors)
             ccf_config_file = connector_ref.get('ccf_config_file', '')
@@ -5475,7 +5705,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             connector_deprecation_date = connector_ref.get('deprecation_date', '')
             if connector_deprecation_date:
                 f.write(f"| **Deprecated** | {connector_deprecation_date} |\n")
-            
+
+            # Microsoft Learn deep-link (populated by the mapper from the
+            # `data-connectors-reference` page anchors).
+            learn_doc_url = connector_ref.get('learn_doc_url', '') or first_entry.get('learn_doc_url', '')
+            if learn_doc_url:
+                f.write(f"| **Microsoft Learn** | [View on Learn]({learn_doc_url}) |\n")
+
             f.write("\n")
             
             # Description
@@ -7285,6 +7521,235 @@ def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path
     return len(by_product)
 
 
+def _logic_apps_page_filename(api_name: str, api_kind: str) -> str:
+    """Stable filename slug for a Logic Apps connector / built-in action page."""
+    kind_prefix = {'managedApi': 'managed', 'customApi': 'custom', 'builtin': 'builtin'}.get(api_kind, 'other')
+    return f"{kind_prefix}-{sanitize_filename(api_name)}"
+
+
+def generate_logic_apps_index(
+    playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]],
+    output_dir: Path,
+    content_items_by_solution: Optional[Dict[str, List[Dict[str, str]]]] = None,
+) -> Tuple[int, int]:
+    """
+    Generate the Logic Apps connectors / built-in actions index plus a per-connector page.
+    
+    Each per-connector page lists every playbook that uses the connector and the solution it
+    belongs to. Microsoft Learn URLs are resolved (and cached) via `resolve_connector_learn_url`.
+    
+    Returns: (number of connectors/actions, number of per-connector pages written)
+    """
+    if not playbook_connectors_by_playbook:
+        return (0, 0)
+    
+    la_dir = output_dir / "logic-apps"
+    la_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Build a (solution_folder, content_file) -> playbook content item lookup so we can
+    # generate accurate links to playbook content pages (which embed a uniqueness hash).
+    # For standalone playbooks (under /Playbooks/ not in any Solutions folder),
+    # solution_folder is empty — match those on content_file alone.
+    playbook_lookup: Dict[Tuple[str, str], Dict[str, str]] = {}
+    if content_items_by_solution:
+        for items in content_items_by_solution.values():
+            for ci in items:
+                if (ci.get('content_type') or '') != 'playbook':
+                    continue
+                key = (ci.get('solution_folder') or '', ci.get('content_file') or '')
+                if key[1]:
+                    playbook_lookup[key] = ci
+    
+    # Aggregate across all playbooks: (api_name, api_kind) -> list of playbook usage records
+    # Each record: { playbook_name, solution_name, solution_folder, playbook_file, connection_count, action_count, github_url }
+    aggregated: Dict[Tuple[str, str], List[Dict[str, str]]] = defaultdict(list)
+    for rows in playbook_connectors_by_playbook.values():
+        for r in rows:
+            api_name = (r.get('api_name') or '').strip()
+            api_kind = (r.get('api_kind') or '').strip()
+            if not api_name or not api_kind:
+                continue
+            aggregated[(api_name, api_kind)].append(r)
+    
+    # ----- Build the index page -----
+    index_path = la_dir / "logic-apps-index.md"
+    
+    # Per-key counts
+    def _kind_label(kind: str) -> str:
+        return {'managedApi': 'Managed', 'customApi': 'Custom', 'builtin': 'Built-in'}.get(kind, kind or '-')
+    
+    # Sort by playbook count desc, then by name (kind is shown in the Type column)
+    def _index_sort_key(item):
+        (name, kind), records = item
+        unique_playbooks = len({(r.get('solution_folder') or '', r.get('playbook_file') or '') for r in records})
+        return (-unique_playbooks, name.lower())
+    
+    sorted_items = sorted(aggregated.items(), key=_index_sort_key)
+    
+    pages_written = 0
+    
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write("# Logic App Connectors and Built-in Actions\n\n")
+        write_browse_section(f, 'logic-apps-index', "../")
+        f.write("Logic Apps connectors and built-in actions referenced by Microsoft Sentinel "
+                "playbooks. Multiple action instances of the same connector within a playbook "
+                "are aggregated.\n\n")
+        
+        # Summary metrics
+        total_managed = sum(1 for (_, k) in aggregated.keys() if k == 'managedApi')
+        total_custom = sum(1 for (_, k) in aggregated.keys() if k == 'customApi')
+        total_builtin = sum(1 for (_, k) in aggregated.keys() if k == 'builtin')
+        total_playbooks = len({(r.get('solution_folder') or '', r.get('playbook_file') or '')
+                               for rows in aggregated.values() for r in rows})
+        
+        f.write("| Type | Count | Description |\n")
+        f.write("|:-----|------:|:------------|\n")
+        f.write(f"| Managed connectors | {total_managed:,} | `Microsoft.Web/connections` resources backed by Microsoft-published APIs (`/providers/Microsoft.Web/locations/.../managedApis/...`). |\n")
+        f.write(f"| Custom connectors | {total_custom:,} | Solution-specific APIs (`/customApis/...`). |\n")
+        f.write(f"| Built-in action types | {total_builtin:,} | Workflow actions of type `Http`, `Function`, `Workflow`, or `ApiManagement` that don't use a connection resource. |\n")
+        f.write(f"| Playbooks using Logic App connectors / built-ins | {total_playbooks:,} | |\n")
+        f.write("\n")
+        
+        f.write("| Connector / Action | Type | Playbooks | Solutions | Microsoft Learn |\n")
+        f.write("|:-------------------|:-----|----------:|----------:|:----------------|\n")
+        for (api_name, api_kind), records in sorted_items:
+            unique_playbooks = {(r.get('solution_folder') or '', r.get('playbook_file') or '') for r in records}
+            unique_solutions = {(r.get('solution_name') or '').strip() for r in records}
+            unique_solutions.discard('')
+            page_slug = _logic_apps_page_filename(api_name, api_kind)
+            learn_url = resolve_connector_learn_url(api_name, api_kind)
+            learn_cell = f"[Learn]({learn_url})" if learn_url else "—"
+            f.write(f"| [`{api_name}`]({page_slug}.md) | {_kind_label(api_kind)} "
+                    f"| {len(unique_playbooks)} | {len(unique_solutions)} | {learn_cell} |\n")
+        f.write("\n")
+        
+        f.write("---\n\n")
+        write_browse_section(f, 'logic-apps-index', "../")
+    
+    print(f"Generated Logic Apps index: {index_path}")
+    
+    # ----- Build per-connector pages -----
+    for (api_name, api_kind), records in sorted_items:
+        page_slug = _logic_apps_page_filename(api_name, api_kind)
+        page_path = la_dir / f"{page_slug}.md"
+        
+        # Group records by playbook (dedupe by solution_folder + playbook_file)
+        by_playbook: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for r in records:
+            key = (r.get('solution_folder') or '', r.get('playbook_file') or '')
+            existing = by_playbook.get(key)
+            try:
+                action_count = int(r.get('action_count') or 0)
+            except (TypeError, ValueError):
+                action_count = 0
+            try:
+                connection_count = int(r.get('connection_count') or 0)
+            except (TypeError, ValueError):
+                connection_count = 0
+            if existing is None:
+                by_playbook[key] = {
+                    'solution_name': r.get('solution_name') or '',
+                    'solution_folder': r.get('solution_folder') or '',
+                    'solution_github_url': r.get('solution_github_url') or '',
+                    'playbook_name': r.get('playbook_name') or '',
+                    'playbook_file': r.get('playbook_file') or '',
+                    'action_count': action_count,
+                    'connection_count': connection_count,
+                }
+            else:
+                existing['action_count'] += action_count
+                existing['connection_count'] += connection_count
+        
+        def _pb_display_name(r: Dict[str, Any]) -> str:
+            name = r.get('playbook_name') or ''
+            if name in ('', '<PlaybookName>', 'PlaybookName'):
+                ci = playbook_lookup.get((r.get('solution_folder') or '', r.get('playbook_file') or ''))
+                if ci:
+                    name = ci.get('content_name', '') or name
+            if not name or name in ('<PlaybookName>', 'PlaybookName'):
+                pb_file = r.get('playbook_file') or ''
+                name = pb_file.split('/')[0] if '/' in pb_file else (pb_file or '(unnamed)')
+            return name
+
+        sorted_playbooks = sorted(
+            by_playbook.values(),
+            key=lambda r: _pb_display_name(r).lower(),
+        )
+        
+        learn_url = resolve_connector_learn_url(api_name, api_kind)
+        
+        with page_path.open("w", encoding="utf-8") as f:
+            f.write(f"# `{api_name}` — {_kind_label(api_kind)}\n\n")
+            write_browse_section(f, 'logic-apps-page', "../")
+            
+            # Attribute block
+            f.write("| Attribute | Value |\n")
+            f.write("|:----------|:------|\n")
+            f.write(f"| **Type** | {_kind_label(api_kind)} |\n")
+            f.write(f"| **Playbooks using** | {len(by_playbook):,} |\n")
+            unique_solutions = sorted({(r.get('solution_name') or '').strip() for r in by_playbook.values() if r.get('solution_name')})
+            f.write(f"| **Solutions** | {len(unique_solutions):,} |\n")
+            if learn_url:
+                f.write(f"| **Microsoft Learn** | [View Documentation]({learn_url}) |\n")
+            else:
+                f.write(f"| **Microsoft Learn** | — |\n")
+            f.write("\n")
+            
+            # Playbooks table
+            f.write("## Playbooks Using This Connector\n\n")
+            f.write("| Playbook | Solution | Connections | Actions |\n")
+            f.write("|:---------|:---------|------------:|--------:|\n")
+            for pb in sorted_playbooks:
+                pb_name_raw = pb['playbook_name'] or ''
+                sol_name = pb['solution_name']
+                # Resolve content item to get accurate page filename (includes uniqueness hash).
+                pb_lookup_key = (pb.get('solution_folder') or '', pb.get('playbook_file') or '')
+                ci = playbook_lookup.get(pb_lookup_key)
+                # Some standalone playbook templates leave the ARM displayName as the literal
+                # placeholder `<PlaybookName>` (or `PlaybookName`). When that happens fall
+                # back to the resolved content_name from content_items.csv (which the mapper
+                # derives from the file path) so the cell isn't blank or stripped as HTML.
+                pb_name = pb_name_raw
+                if pb_name in ('', '<PlaybookName>', 'PlaybookName') and ci:
+                    pb_name = ci.get('content_name', '') or pb_name_raw
+                if not pb_name or pb_name in ('<PlaybookName>', 'PlaybookName'):
+                    # Last-resort fallback: use the playbook folder name from the file path.
+                    pb_file = pb.get('playbook_file') or ''
+                    pb_name = pb_file.split('/')[0] if '/' in pb_file else (pb_file or '(unnamed)')
+                if ci:
+                    pb_filename = get_content_item_filename(
+                        ci.get('content_id', '') or '',
+                        ci.get('content_name', '') or pb_name,
+                        ci.get('solution_name', '') or sol_name,
+                        ci.get('content_file', '') or pb.get('playbook_file', ''),
+                        ci.get('content_type', 'playbook'),
+                    )
+                    pb_link = f"[{pb_name}](../content/{pb_filename}.md)"
+                else:
+                    pb_link = pb_name
+                if sol_name and sol_name not in ('Standalone Content', 'GitHub Only'):
+                    sol_link = f"[{sol_name}](../solutions/{sanitize_filename(sol_name)}.md)"
+                elif sol_name == 'Standalone Content' or (ci and (ci.get('content_source') or '') == 'Standalone'):
+                    # Standalone content items (in /Playbooks/ but not in any Solution).
+                    # Match the icon/label convention used elsewhere in the docs (no link
+                    # — there's no Standalone Content solution page).
+                    sol_link = '📄 Standalone'
+                elif sol_name == 'GitHub Only' or (ci and (ci.get('content_source') or '') == 'GitHub Only'):
+                    sol_link = '🔗 GitHub Only'
+                else:
+                    sol_link = '-'
+                f.write(f"| {pb_link} | {sol_link} | {pb['connection_count']} | {pb['action_count']} |\n")
+            f.write("\n")
+            
+            f.write("---\n\n")
+            write_browse_section(f, 'logic-apps-page', "../")
+        
+        pages_written += 1
+    
+    print(f"Generated {pages_written} Logic Apps connector pages in {la_dir}")
+    return (len(aggregated), pages_written)
+
+
 def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, 
                                tables_reference: Dict[str, Dict[str, str]] = None,
                                connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
@@ -7366,6 +7831,7 @@ def generate_statistics_page(
     solution_dependencies: Dict[str, List[Dict[str, str]]] = None,
     tables_with_schemas: Set[str] = None,
     table_schemas_by_table: Dict[str, List[Dict[str, str]]] = None,
+    playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = None,
 ) -> None:
     """
     Generate a unified statistics page that consolidates statistics from all index pages.
@@ -7378,6 +7844,8 @@ def generate_statistics_page(
         tables_with_schemas = set()
     if table_schemas_by_table is None:
         table_schemas_by_table = {}
+    if playbook_connectors_by_playbook is None:
+        playbook_connectors_by_playbook = {}
     
     stats_path = output_dir / "statistics.md"
     
@@ -7536,7 +8004,14 @@ def generate_statistics_page(
         
         # ===================== CONNECTORS STATISTICS =====================
         f.write("## Connectors\n\n")
-        
+
+        f.write(
+            "> **Note:** The connector count Microsoft reports publicly is the number of "
+            "**active connectors published in solutions**, plus 41 connectors (at the time of writing) "
+            "that are not managed through this GitHub repository — including Logic App connectors and "
+            "Sentinel data lake-only connectors.\n\n"
+        )
+
         # Separate deprecated and active connectors
         deprecated_connectors = {}
         active_connectors = {}
@@ -8161,6 +8636,98 @@ def generate_statistics_page(
         f.write("\n")
         f.write("*\\* Parsers from solution content. See [Parsers](parsers/parsers-index.md) section for all parsers including legacy.*\n\n")
         
+        # ----- Logic App connectors used by playbooks -----
+        if playbook_connectors_by_playbook:
+            total_pb_connector_usages = sum(
+                len(rows) for rows in playbook_connectors_by_playbook.values()
+            )
+            playbooks_using_connectors = len(playbook_connectors_by_playbook)
+            unique_managed: Set[str] = set()
+            unique_custom: Set[str] = set()
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    api_name = (r.get('api_name', '') or '').lower()
+                    if not api_name:
+                        continue
+                    if r.get('api_kind') == 'managedApi':
+                        unique_managed.add(api_name)
+                    elif r.get('api_kind') == 'customApi':
+                        unique_custom.add(api_name)
+            unique_total = len(unique_managed | unique_custom)
+
+            # Built-in actions (Http, Function, Workflow, ApiManagement)
+            unique_builtins: Set[str] = set()
+            total_builtin_actions = 0
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    if r.get('api_kind') == 'builtin':
+                        nm = (r.get('api_name', '') or '').lower()
+                        if nm:
+                            unique_builtins.add(nm)
+                        try:
+                            total_builtin_actions += int(r.get('action_count') or 0)
+                        except (TypeError, ValueError):
+                            pass
+
+            f.write("### Playbook Logic App Connectors\n\n")
+            f.write("Connectors and built-in actions referenced by playbooks. Managed/custom rows "
+                    "come from `Microsoft.Web/connections` resources; built-in rows come from walking "
+                    "`definition.actions` for `Http`, `Function`, `Workflow`, and `ApiManagement` types. "
+                    "Multiple connection or action instances of the same type within a playbook are "
+                    "aggregated.\n\n")
+            f.write("| Metric | Count |\n")
+            f.write("|:-------|------:|\n")
+            f.write(f"| Playbooks using Logic App connectors / built-ins | {playbooks_using_connectors:,} |\n")
+            f.write(f"| Total connector / built-in usages (rows) | {total_pb_connector_usages:,} |\n")
+            f.write(f"| Unique managed/custom connector types | {unique_total:,} |\n")
+            f.write(f"| &nbsp;&nbsp;Managed (Microsoft-published) | {len(unique_managed):,} |\n")
+            f.write(f"| &nbsp;&nbsp;Custom | {len(unique_custom):,} |\n")
+            f.write(f"| Unique built-in action types | {len(unique_builtins):,} |\n")
+            f.write(f"| Total built-in action invocations | {total_builtin_actions:,} |\n")
+            f.write("\n")
+
+            # Top managed connectors by playbook usage
+            from collections import Counter
+            managed_counter: Counter = Counter()
+            custom_counter: Counter = Counter()
+            builtin_counter: Counter = Counter()
+            builtin_action_counter: Counter = Counter()
+            for rows in playbook_connectors_by_playbook.values():
+                for r in rows:
+                    api_name = r.get('api_name', '') or ''
+                    if not api_name:
+                        continue
+                    kind = r.get('api_kind')
+                    if kind == 'managedApi':
+                        managed_counter[api_name] += 1
+                    elif kind == 'customApi':
+                        custom_counter[api_name] += 1
+                    elif kind == 'builtin':
+                        builtin_counter[api_name] += 1
+                        try:
+                            builtin_action_counter[api_name] += int(r.get('action_count') or 0)
+                        except (TypeError, ValueError):
+                            pass
+
+            if managed_counter:
+                f.write("**Top managed connectors by playbook usage**\n\n")
+                f.write("| Connector | Playbooks |\n")
+                f.write("|:----------|----------:|\n")
+                for name, count in managed_counter.most_common(15):
+                    page_slug = _logic_apps_page_filename(name, 'managedApi')
+                    f.write(f"| [`{name}`](logic-apps/{page_slug}.md) | {count} |\n")
+                f.write("\n")
+
+            if builtin_counter:
+                f.write("**Built-in actions by playbook usage**\n\n")
+                f.write("| Action type | Playbooks | Action invocations |\n")
+                f.write("|:------------|----------:|-------------------:|\n")
+                for name, count in builtin_counter.most_common():
+                    invocations = builtin_action_counter.get(name, 0)
+                    page_slug = _logic_apps_page_filename(name, 'builtin')
+                    f.write(f"| [`{name}`](logic-apps/{page_slug}.md) | {count} | {invocations} |\n")
+                f.write("\n")
+
         # ===================== PARSERS STATISTICS =====================
         f.write("## Parsers\n\n")
         
@@ -8661,6 +9228,87 @@ def generate_docs_readme(
     print(f"Generated readme: {readme_path}")
 
 
+def _infer_artifact_type(relative_md_path: str) -> str:
+    """Infer artifact type from a markdown path relative to docs root."""
+    rel = PurePosixPath(relative_md_path)
+    parts = rel.parts
+    if not parts:
+        return "unknown"
+    if len(parts) == 1:
+        name = parts[0]
+        if name == "README.md":
+            return "docs_root"
+        if name.endswith("-index.md"):
+            return "index"
+        if name == "statistics.md":
+            return "statistics"
+        return "docs_root"
+
+    first = parts[0]
+    if first == "solutions":
+        return "solution"
+    if first == "connectors":
+        return "connector"
+    if first == "tables":
+        return "table"
+    if first == "content":
+        return "content"
+    if first == "parsers":
+        return "parser"
+    if first == "asim":
+        return "asim_parser"
+    if first == "logic-apps":
+        return "logic_app"
+    if first == "methods":
+        return "method"
+    if first == "collection-methods":
+        return "collection_method"
+    return first
+
+
+def generate_artifact_links_csv(output_dir: Path, csv_path: Path, html_docs_path: str = "") -> int:
+    """Generate CSV with markdown and HTML relative links for every markdown artifact page."""
+    normalized_docs_prefix = (html_docs_path or "").replace("\\", "/").strip()
+    if normalized_docs_prefix and not normalized_docs_prefix.endswith("/"):
+        normalized_docs_prefix += "/"
+    if normalized_docs_prefix.startswith(("http://", "https://")):
+        normalized_docs_prefix = ""
+
+    md_files = sorted(p for p in output_dir.rglob("*.md") if p.is_file())
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "artifact_type",
+                "artifact_name",
+                "markdown_relative_path",
+                "html_relative_path",
+                "markdown_site_relative_path",
+                "html_site_relative_path",
+            ],
+        )
+        writer.writeheader()
+
+        for md_file in md_files:
+            md_rel = md_file.relative_to(output_dir).as_posix()
+            html_rel = f"{md_rel[:-3]}.html"
+            writer.writerow(
+                {
+                    "artifact_type": _infer_artifact_type(md_rel),
+                    "artifact_name": md_file.stem,
+                    "markdown_relative_path": md_rel,
+                    "html_relative_path": html_rel,
+                    "markdown_site_relative_path": f"{normalized_docs_prefix}{md_rel}",
+                    "html_site_relative_path": f"{normalized_docs_prefix}{html_rel}",
+                }
+            )
+
+    print(f"Generated artifact links CSV: {csv_path}")
+    return len(md_files)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate Microsoft Learn-style connector documentation from CSV"
@@ -8717,6 +9365,12 @@ def main() -> None:
         type=Path,
         default=Path(__file__).parent / "content_tables_mapping.csv",
         help="Path to content-to-tables mapping CSV file (default: content_tables_mapping.csv)",
+    )
+    parser.add_argument(
+        "--playbook-connectors-csv",
+        type=Path,
+        default=Path(__file__).parent / "playbook_connectors.csv",
+        help="Path to playbook (Logic App) connectors CSV file (default: playbook_connectors.csv)",
     )
     parser.add_argument(
         "--solutions-csv",
@@ -8779,6 +9433,13 @@ def main() -> None:
         help="Absolute URL for index.html used in static markdown navigation bars "
              "(e.g. 'https://oshezaf.github.io/sentinelninja/index.html'). "
              "Required when docs are viewed on GitHub repo (blob view) but index.html is on GitHub Pages.",
+    )
+    parser.add_argument(
+        "--artifact-links-csv",
+        type=Path,
+        default=Path(__file__).parent / "artifact_doc_links.csv",
+        help="Path for generated CSV containing relative markdown/html links for documentation artifacts "
+             "(default: artifact_doc_links.csv in script directory).",
     )
     
     args = parser.parse_args()
@@ -8949,6 +9610,12 @@ def main() -> None:
                     # Also set the solution_name in the row so links are generated correctly
                     row['solution_name'] = 'GitHub Only'
                     content_items_by_solution['GitHub Only'].append(row)
+                elif content_source == 'Standalone':
+                    # Group Standalone items (e.g., playbooks under /Playbooks/ not in any
+                    # Solutions folder) under 'Standalone Content' synthetic solution. The
+                    # row's solution_name stays empty so downstream renderers can detect
+                    # standalone via content_source and render the 📄 icon.
+                    content_items_by_solution['Standalone Content'].append(row)
         total_content = sum(len(items) for items in content_items_by_solution.values())
         print(f"Loaded {total_content} content items from {len(content_items_by_solution)} solutions")
     else:
@@ -8968,6 +9635,21 @@ def main() -> None:
         print(f"Loaded {total_mappings} content-table mappings for {len(content_tables_by_table)} tables")
     else:
         print(f"Warning: Content-tables mapping CSV not found: {args.content_tables_csv}")
+
+    # Load playbook (Logic App) connectors CSV
+    # Keyed by (solution_folder, playbook_file) -> list of connector dicts
+    playbook_connectors_by_playbook: Dict[Tuple[str, str], List[Dict[str, str]]] = defaultdict(list)
+    if args.playbook_connectors_csv.exists():
+        print(f"Reading {args.playbook_connectors_csv}...")
+        with args.playbook_connectors_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                key = (row.get('solution_folder', ''), row.get('playbook_file', ''))
+                playbook_connectors_by_playbook[key].append(row)
+        total_pbc = sum(len(v) for v in playbook_connectors_by_playbook.values())
+        print(f"Loaded {total_pbc} playbook-connector rows for {len(playbook_connectors_by_playbook)} playbooks")
+    else:
+        print(f"Warning: Playbook connectors CSV not found: {args.playbook_connectors_csv}")
     
     # Build content_id to tables mapping for solution pages
     # Uses get_content_key() to handle items without content_id (workbooks, playbooks)
@@ -9102,6 +9784,7 @@ def main() -> None:
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
             row['deprecation_date'] = connectors_reference[connector_id].get('deprecation_date', '')
+            row['dcr_definition_files'] = connectors_reference[connector_id].get('dcr_definition_files', '')
             row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
             row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
             row['ingestion_api'] = connectors_reference[connector_id].get('ingestion_api', '')
@@ -9263,7 +9946,7 @@ def main() -> None:
     generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup, table_schemas_by_table)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
-    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference)
+    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference, playbook_connectors_by_playbook)
     
     # Generate ASIM parser documentation
     asim_source_pairs = 0
@@ -9284,6 +9967,22 @@ def main() -> None:
         print(f"  Generated {asim_parsers_count} ASIM parser pages")
     else:
         asim_products_count = 0
+    
+    # Generate Logic Apps connectors / built-in actions index and per-connector pages
+    logic_apps_connector_count = 0
+    logic_apps_pages_count = 0
+    if playbook_connectors_by_playbook:
+        print(f"Generating Logic Apps connector documentation...")
+        logic_apps_connector_count, logic_apps_pages_count = generate_logic_apps_index(
+            playbook_connectors_by_playbook,
+            args.output_dir,
+            content_items_by_solution,
+        )
+        # Persist any newly resolved Microsoft Learn URLs
+        try:
+            _save_learn_url_cache()
+        except Exception as e:
+            print(f"  Warning: Could not save Learn URL cache: {e}")
     
     # Generate non-ASIM parser documentation
     parser_pages_count = 0
@@ -9353,6 +10052,7 @@ def main() -> None:
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
                 'support_tier': conn.get('solution_support_tier', ''),
+                'dcr_definition_files': conn.get('dcr_definition_files', ''),
                 'ccf_capabilities': conn.get('ccf_capabilities', ''),
                 'ccf_config_file': conn.get('ccf_config_file', ''),
             }
@@ -9370,6 +10070,7 @@ def main() -> None:
         solution_dependencies=solution_dependencies,
         tables_with_schemas=tables_with_schemas,
         table_schemas_by_table=table_schemas_by_table,
+        playbook_connectors_by_playbook=playbook_connectors_by_playbook,
     )
     
     # Generate the README.md for the docs folder
@@ -9424,6 +10125,13 @@ def main() -> None:
         html_docs_path=args.html_docs_path,
         html_index_url=getattr(args, 'html_index_url', ''),
     )
+
+    generated_artifacts = generate_artifact_links_csv(
+        output_dir=args.output_dir,
+        csv_path=args.artifact_links_csv,
+        html_docs_path=args.html_docs_path,
+    )
+    print(f"  - Artifact links CSV: {args.artifact_links_csv} ({generated_artifacts} markdown artifacts)")
 
 
 if __name__ == "__main__":

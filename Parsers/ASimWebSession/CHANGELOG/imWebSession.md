@@ -1,5 +1,9 @@
 # Changelog for imWebSession.yaml
 
+## Version 0.6.4
+
+- (2026-06-05) Add filtering parser for Salesforce Service Cloud web session and API request logs
+
 ## Version 0.6.3
 
 - (2026-03-24) Add parser for Cisco Umbrella proxy logs - [PR #13893](https://github.com/Azure/Azure-Sentinel/pull/13893)
