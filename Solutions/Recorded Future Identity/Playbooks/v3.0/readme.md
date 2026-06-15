@@ -2,6 +2,13 @@
 
 ### This is a readme for the old version of Recorded Future Identity, for the new version based on Playbook Alerts, see [readme](../readme.md)
 
+> [!IMPORTANT]
+> ### Log Ingestion API migration (deadline: 2026-09-14)
+>
+> These playbooks previously used the deprecated Azure Log Analytics Data Collector connector, which Microsoft is retiring on September 14, 2026. They have been updated to use the Log Ingestion API via a Data Collection Endpoint (DCE) and Data Collection Rules (DCRs).
+>
+> **If you have existing deployments**, you must redeploy the Data Connectors infrastructure (step 1 below) and each affected playbook (`RFI-lookup-and-save-user`, `RFI-search-external-user`, `RFI-search-workforce-user`) using the updated templates before the deadline.
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -71,20 +78,46 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 ### Prerequisites
 
 - A Microsoft EntraID Tenant and subscription.
-- Azure subscription Owner or Contributor permissions so you can install the Logic Apps. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
-- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these logic apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
-- In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
+- A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). Note its name — it is required during deployment. If you don't have one, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace).
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
+- In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
+
+#### Required permissions (resource group scope)
+
+| Deployment step | Required roles |
+|-|-|
+| Step 1 — Data Connectors infrastructure | [Monitoring Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#monitoring-contributor) + [Log Analytics Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#log-analytics-contributor) |
+| Steps 2–6 — Connector and playbooks (with auto role assignment) | [Owner](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#owner) or [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor) + [Role Based Access Control Administrator](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#role-based-access-control-administrator) |
+| Steps 2–6 — Connector and playbooks (manual role assignment) | [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor) — then ask an admin to assign [Monitoring Metrics Publisher](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor#monitoring-metrics-publisher) on the relevant DCRs to the Logic App's managed identity |
 
 
 <a id="playbooks"></a>
 ## Playbooks
 
 > [!IMPORTANT]
-> Deploy connector and base playbooks before deploying the Search playbooks.
+> Deploy the Data Connectors infrastructure (step 1) and connector (step 2) before deploying the base and search playbooks.
+
+### Step 1 — Deploy Data Connectors infrastructure
+
+Deploys a shared Data Collection Endpoint (DCE) and three Data Collection Rules (DCRs) — one each for lookup results, malware logs, and credential dumps — along with the corresponding Log Analytics tables. Deploy this into the same resource group as your Log Analytics Workspace.
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-v3.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-v3.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+
+<details>
+<summary>Expand deployment parameters:</summary>
+
+| Parameter | Description |
+|-|-|
+| **log_analytics_workspace_name** | Name of your Log Analytics Workspace. Must be in the same resource group. |
+| **log_analytics_workspace_location** | Location of the workspace. Defaults to the resource group location. |
+
+</details>
+<hr/>
 
 <a id="connector_playbooks"></a>
-### Connector-playbooks
+
+### Step 2 — Connector playbooks
 
 Connector playbooks are used by other playbooks in this solution to communicate with Recorded Future backend API.
 
@@ -220,10 +253,10 @@ Expand Playbook Workflow
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-lookup-and-save-user"). |
+| **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-lookup-and-save-user`). |
+| **log_analytics_workspace_name** | Name of your Log Analytics Workspace. Used to resolve the DCE and DCR deployed in step 1. |
+| **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
+
 </details>
 <hr/>
 
@@ -258,13 +291,12 @@ External search playbook - will get data from Recorded Future on your clients le
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-search-workforce-user"). |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook. |
-| **Playbook-Name-confirm-EntraID-risky-user** | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook. |
-| **Playbook-Name-lookup-and-save-user** | Playbook name to use for "RFI-lookup-and-save-user" playbook. |
+| **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-search-workforce-user`). |
+| **Playbook-Name-add-EntraID-security-group-user** | Name of the `RFI-add-EntraID-security-group-user` playbook. |
+| **Playbook-Name-confirm-EntraID-risky-user** | Name of the `RFI-confirm-EntraID-risky-user` playbook. |
+| **Playbook-Name-lookup-and-save-user** | Name of the `RFI-lookup-and-save-user` playbook. |
+| **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCRs to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
+
 </details>
 <hr/>
 
@@ -279,13 +311,12 @@ External search playbook - will get data from Recorded Future on your clients le
 
 | Parameter | Description |
 |-|-|
-| **Subscription** | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together. |
-| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region** | Choose the Azure region that's right for you and your customers. Not every resource is available in every region. |
-| **Playbook-Name** | Playbook name to use for this playbook (ex. "RFI-search-external-user"). |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook. |
-| **Playbook-Name-confirm-EntraID-risky-user** | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook.                                                                                     |
-| **Playbook-Name-lookup-and-save-user** | Playbook name to use for "RFI-lookup-and-save-user" playbook. |
+| **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-search-external-user`). |
+| **Playbook-Name-add-EntraID-security-group-user** | Name of the `RFI-add-EntraID-security-group-user` playbook. |
+| **Playbook-Name-confirm-EntraID-risky-user** | Name of the `RFI-confirm-EntraID-risky-user` playbook. |
+| **Playbook-Name-lookup-and-save-user** | Name of the `RFI-lookup-and-save-user` playbook. |
+| **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
+
 </details>
 <hr/>
 
@@ -311,7 +342,6 @@ The Recorded Future identity solution uses the following connectors. Information
 |-|-|
 | **/recordedfutureidenti** | [Microsoft power platform connector](https://learn.microsoft.com/en-us/connectors/recordedfutureidenti/).<br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> Same API token as the recordedfutureidenti connector. |
-| **/azureloganalyticsdatacollector** | [Azure Log Analytics Data Collector](https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/) <br/> [How to find Log Analytics Workspace key.](https://learn.microsoft.com/en-us/answers/questions/1154380/where-is-azure-is-the-primary-key-and-workspace-id)
 | **/azuremonitorlogs** | [Azure Monitor Logs](https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |

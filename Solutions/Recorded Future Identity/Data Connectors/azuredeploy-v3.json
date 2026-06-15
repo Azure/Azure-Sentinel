@@ -1,0 +1,431 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Recorded Future Identity v3.0 - Data Connectors",
+        "description": "Deploys shared infrastructure (DCE, DCRs, LA tables) used by the RFI v3.0 playbooks (RFI-lookup-and-save-user, RFI-search-external-user, RFI-search-workforce-user) to write credential exposure data to Log Analytics via the Azure Monitor Logs Ingestion API.",
+        "lastUpdateTime": "2026-06-15T00:00:00.000Z",
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [
+                    "DCE and DCRs for RFI-lookup-and-save-user, RFI-search-external-user, and RFI-search-workforce-user.",
+                    "Creates three Log Analytics tables: UsersLookupResults, MalwareLogs, CredentialDumps."
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "log_analytics_workspace_name": {
+            "type": "string",
+            "metadata": {
+                "description": "Required. Name of the Log Analytics Workspace where the tables will be created. Must be in the same resource group as this deployment."
+            }
+        },
+        "log_analytics_workspace_location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location of the Log Analytics Workspace. Defaults to the resource group location."
+            }
+        }
+    },
+    "variables": {
+        "DceName": "recorded-future-identity-dce",
+        "DcrLookupName": "recorded-future-identity-v3-dcr-lookup-results",
+        "DcrMalwareLogsName": "recorded-future-identity-v3-dcr-malware-logs",
+        "DcrCredentialDumpsName": "recorded-future-identity-v3-dcr-credential-dumps",
+        "TableLookupName": "RFI_UsersLookupResults_V2_CL",
+        "TableMalwareLogsName": "RFI_MalwareLogs_V2_CL",
+        "TableCredentialDumpsName": "RFI_CredentialDumps_V2_CL",
+        "StreamLookupName": "Custom-RFI_UsersLookupResults_V2_CL",
+        "StreamMalwareLogsName": "Custom-RFI_MalwareLogs_V2_CL",
+        "StreamCredentialDumpsName": "Custom-RFI_CredentialDumps_V2_CL",
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('log_analytics_workspace_name'))]",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrLookupResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrLookupName'))]",
+        "dcrMalwareLogsResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrMalwareLogsName'))]",
+        "dcrCredentialDumpsResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrCredentialDumpsName'))]",
+        "tableLookupResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableLookupName'))]",
+        "tableMalwareLogsResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableMalwareLogsName'))]",
+        "tableCredentialDumpsResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableCredentialDumpsName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableLookupName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableLookupName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "risky_user_email",
+                            "type": "string"
+                        },
+                        {
+                            "name": "data",
+                            "type": "dynamic"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableMalwareLogsName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableMalwareLogsName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "login",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableCredentialDumpsName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableCredentialDumpsName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "email",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrLookupName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableLookupResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamLookupName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "risky_user_email",
+                                "type": "string"
+                            },
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamLookupName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = now(), risky_user_email = tostring(risky_user_email), data = todynamic(data)",
+                        "outputStream": "[variables('StreamLookupName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrMalwareLogsName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableMalwareLogsResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamMalwareLogsName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "login",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamMalwareLogsName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = now(), login = tostring(login), domain = tostring(domain)",
+                        "outputStream": "[variables('StreamMalwareLogsName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrCredentialDumpsName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableCredentialDumpsResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamCredentialDumpsName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "email",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamCredentialDumpsName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = now(), email = tostring(email)",
+                        "outputStream": "[variables('StreamCredentialDumpsName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/Microsoft.SecurityInsights/RecordedFutureIdentityV3')]",
+            "location": "[parameters('log_analytics_workspace_location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "RecordedFutureIdentityV3",
+                    "title": "Recorded Future Identity - Credential Exposure Importer",
+                    "publisher": "Recorded Future",
+                    "descriptionMarkdown": "Imports Recorded Future Identity credential exposure data into Microsoft Sentinel. Writes malware log exposures to `RFI_MalwareLogs_V2_CL`, credential dump exposures to `RFI_CredentialDumps_V2_CL`, and user lookup results to `RFI_UsersLookupResults_V2_CL`. For full installation details, see the [readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/v3.0/readme.md).",
+                    "graphQueries": [
+                        {
+                            "metricName": "Malware Log Exposures",
+                            "legend": "RFI_MalwareLogs_V2_CL",
+                            "baseQuery": "RFI_MalwareLogs_V2_CL"
+                        },
+                        {
+                            "metricName": "Credential Dump Exposures",
+                            "legend": "RFI_CredentialDumps_V2_CL",
+                            "baseQuery": "RFI_CredentialDumps_V2_CL"
+                        },
+                        {
+                            "metricName": "User Lookup Results",
+                            "legend": "RFI_UsersLookupResults_V2_CL",
+                            "baseQuery": "RFI_UsersLookupResults_V2_CL"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Recent malware log exposures",
+                            "query": "RFI_MalwareLogs_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Recent credential dump exposures",
+                            "query": "RFI_CredentialDumps_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "User lookup results",
+                            "query": "RFI_UsersLookupResults_V2_CL\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "RFI_MalwareLogs_V2_CL",
+                            "lastDataReceivedQuery": "RFI_MalwareLogs_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RFI_CredentialDumps_V2_CL",
+                            "lastDataReceivedQuery": "RFI_CredentialDumps_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RFI_UsersLookupResults_V2_CL",
+                            "lastDataReceivedQuery": "RFI_UsersLookupResults_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "IsConnectedQuery",
+                            "value": [
+                                "RFI_MalwareLogs_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| where LastLog >= ago(24h)"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Azure Subscription",
+                                "description": "Monitoring Contributor and Log Analytics Contributor permissions required to deploy the Data Connectors infrastructure. Owner or Role Based Access Control Administrator required to deploy playbooks with automatic role assignment."
+                            },
+                            {
+                                "name": "Recorded Future API Token",
+                                "description": "A Recorded Future Identity API token is required to authorize the RFI Custom Connector used by the playbooks."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Step 1 \u2014 Deploy Data Connectors infrastructure",
+                            "description": "Deploys the shared Data Collection Endpoint (DCE), Data Collection Rules (DCRs), Log Analytics tables (`RFI_MalwareLogs_V2_CL`, `RFI_CredentialDumps_V2_CL`, `RFI_UsersLookupResults_V2_CL`), and this connector definition tile. Deploy this into the same resource group as your Log Analytics Workspace.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Recorded%2520Future%2520Identity/Data%2520Connectors/azuredeploy-v3.json)"
+                        },
+                        {
+                            "title": "Step 2 \u2014 Deploy RFI-CustomConnector",
+                            "description": "The custom connector handles authentication towards the Recorded Future API. Deploy it once \u2014 it is shared by the playbooks.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Recorded%2520Future%2520Identity/Playbooks/v3.0/RFI-CustomConnector-0-1-0/azuredeploy.json)"
+                        },
+                        {
+                            "title": "Step 3 \u2014 Deploy playbooks",
+                            "description": "Deploy one or more of the search/lookup playbooks depending on your use case. See the [readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/v3.0/readme.md) for full deployment instructions, parameters, and post-deployment configuration."
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+        },
+        "dcrLookupImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrLookupResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrMalwareLogsImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrMalwareLogsResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrCredentialDumpsImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrCredentialDumpsResourceId'), '2024-03-11').immutableId]"
+        },
+        "streamLookupName": {
+            "type": "string",
+            "value": "[variables('StreamLookupName')]"
+        },
+        "streamMalwareLogsName": {
+            "type": "string",
+            "value": "[variables('StreamMalwareLogsName')]"
+        },
+        "streamCredentialDumpsName": {
+            "type": "string",
+            "value": "[variables('StreamCredentialDumpsName')]"
+        }
+    }
+}
