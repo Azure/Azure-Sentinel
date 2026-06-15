@@ -23,9 +23,9 @@ State as of 2026-06-10. The V3 packaging step and ARM-TTK validation are now don
 
 Replaced with the official `Bindplane-icon_black.svg` from the brand kit (the icon is designated for limited-space applications, black on light backgrounds, per Brand Guidelines p7). Also placed at `Workbooks/Images/Logos/Bindplane.svg` and referenced by the workbook entry in `Workbooks/WorkbooksMetadata.json`.
 
-## Workbooks/Images/Preview/Bindplane{Black,White}.png
+## Workbooks/Images/Preview/Bindplane{Black,White}.png — DONE (2026-06-15)
 
-Referenced from `Workbooks/WorkbooksMetadata.json`. Files do not yet exist — Microsoft's CI may or may not flag this depending on whether the validation pipeline opens them. Add the actual Black/White screenshots of the workbook before un-DRAFT. Owner: Bindplane brand team.
+Workbook screenshots captured from the `sentinel-demo` workspace and placed at `Workbooks/Images/Preview/BindplaneBlack.png` + `BindplaneWhite.png` (names match `WorkbooksMetadata.json:previewImagesFileNames`). Captured against all ASIM data (demo workspace has no Bindplane marker yet); the shipped workbook keeps the marker filter — previews are illustrative only.
 
 ## Workbooks/Images/Logos/Bindplane.svg — DONE (2026-06-11)
 
