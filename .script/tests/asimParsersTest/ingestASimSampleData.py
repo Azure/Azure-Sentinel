@@ -309,16 +309,19 @@ def hit_api(url,request,method):
 
 def senddtosentinel(immutable_id,data_result,stream_name,flag_status):
     if flag_status == 0:
-        print("DCR is not created for the table. Please create DCR first")
-        return
+        print("::error::DCR is not created for the table. Please create DCR first")
+        return False
     print("Waiting for data to be sent to sentinel (This will take atleast 20 seconds)")
     time.sleep(20)
     credential = DefaultAzureCredential()
     client = LogsIngestionClient(endpoint=endpoint_uri, credential=credential, logging_enable=True)
     try:
         client.upload(rule_id=immutable_id, stream_name=stream_name, logs=data_result)
+        print(f"Data uploaded successfully to stream '{stream_name}' via DCR '{immutable_id}'")
+        return True
     except HttpResponseError as e:
-        print(f"Upload failed: {e}")
+        print(f"::error::Upload failed: {e}")
+        return False
 
 
 def extract_event_vendor_product(parser_query,parser_file):
