@@ -2,7 +2,7 @@
 
 ## Version 0.1.4
 
-- (2026-16-04) Netskope Security Cloud - AlertEvent ASIM Parser - [PR #holding](holding)
+- (2026-16-04) Netskope Security Cloud - AlertEvent ASIM Parser - [PR #14493](https://github.com/Azure/Azure-Sentinel/pull/14493)
 
 ## Version 0.1.3
 
