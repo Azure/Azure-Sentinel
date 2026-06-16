@@ -313,7 +313,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
         if os.path.exists(SampleDataFilePath):
             results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
     return results
 
 def filter_yaml_files(modified_files):
