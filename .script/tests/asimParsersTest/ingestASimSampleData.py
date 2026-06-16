@@ -9,7 +9,7 @@
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
 #   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
 #
-# Usage: python ingestASimSampleData.py
+# Usage: python ingestASimSampleData.py <pr_number>
 
 import sys
 import os
