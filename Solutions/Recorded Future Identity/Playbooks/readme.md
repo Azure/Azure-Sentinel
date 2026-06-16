@@ -245,7 +245,7 @@ Logic App that runs on a recurring schedule.
 
 This rule queries the `RFI_PlaybookAlertResults_V2_CL` table and creates Microsoft Sentinel incidents for new identity exposures. The table is created in step B1, so this can be deployed as soon as B1 is complete.
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FAnalytic%20Rules%2FIncidentCreation%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-incident-creation-analytic-rule.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 
 The rule is also available under **Microsoft Sentinel → Configuration → Analytics → Rule Templates**.
 
