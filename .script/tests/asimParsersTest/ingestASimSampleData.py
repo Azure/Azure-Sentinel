@@ -91,7 +91,7 @@ def convert_schema_csv_to_json(csv_file):
     print(f"Schema data for {csv_file}: {data}")
     return data
 
-def infer_schema_from_data(data_result):
+def infer_schema_from_data(data_result, datetime_keys):
     """Infers a schema (list of name/type dicts) from sample data rows when no Schema CSV exists.
     Inspects the first data row's values to determine column types. Reserved columns are excluded."""
     if not data_result:
@@ -101,7 +101,9 @@ def infer_schema_from_data(data_result):
     for key, value in first_row.items():
         if key in reserved_columns:
             continue
-        if isinstance(value, bool):
+        if key in datetime_keys:
+            col_type = "datetime"
+        elif isinstance(value, bool):
             col_type = "boolean"
         elif isinstance(value, int):
             col_type = "int"
@@ -110,12 +112,15 @@ def infer_schema_from_data(data_result):
         else:
             col_type = "string"
         schema.append({'name': key, 'type': col_type})
+    # Ensure TimeGenerated is always present in the schema
+    if not any(col['name'] == 'TimeGenerated' for col in schema):
+        schema.append({'name': 'TimeGenerated', 'type': 'datetime'})
     return schema
 
 def convert_data_csv_to_json(csv_file):
     """Reads a sample data CSV file and returns its rows as a list of dicts with auto-typed values,
-    along with the table name extracted from the 'Type' column. Timestamp column suffixes
-    like '[UTC]' and '[Local Time]' are stripped from key names."""
+    the table name extracted from the 'Type' column, and a list of column names that had timestamp
+    suffixes ('[UTC]' or '[Local Time]') stripped from their keys."""
     def convert_value(value):
         # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
         try:
@@ -131,6 +136,7 @@ def convert_data_csv_to_json(csv_file):
 
     data = []
     table_name = None
+    datetime_keys = set()
     try:
         with open(csv_file, 'r', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
@@ -148,6 +154,7 @@ def convert_data_csv_to_json(csv_file):
                     if key.endswith(('[UTC]', '[Local Time]')):
                         substring = key.split(" [")[0]
                         item[substring] = item.pop(key)
+                        datetime_keys.add(substring)
     except FileNotFoundError:
         print(f"::error::Data CSV file not found: {csv_file}")
         raise
@@ -162,7 +169,7 @@ def convert_data_csv_to_json(csv_file):
     if table_name is None:
         raise ValueError(f"Could not determine table name from CSV file '{csv_file}'")
 
-    return data, table_name
+    return data, table_name, list(datetime_keys)
 
 def check_for_custom_table(table_name):
     if table_name in lia_supported_builtin_table:
@@ -419,7 +426,7 @@ for file in parser_yaml_files:
                 file.write(f.read())
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
-    data_result,table_name = convert_data_csv_to_json('tempfile.csv')
+    data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
     print(f"Log ingestion supported: {log_ingestion_supported}\n Table type: {table_type}")
@@ -438,7 +445,7 @@ for file in parser_yaml_files:
             schema_result = convert_schema_csv_to_json('tempfile.csv')
         else:
             print(f"Schema CSV not found at {schema_path}, inferring schema from sample data")
-            schema_result = infer_schema_from_data(data_result)
+            schema_result = infer_schema_from_data(data_result, datetime_keys)
         data_result = convert_data_type(schema_result, data_result)
         # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
         # boolean values are consider as string and numerical value of type string are consider 
