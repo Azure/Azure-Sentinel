@@ -1,3 +1,16 @@
+# ingestASimSampleData.py
+#
+# This script ingests ASIM parser sample data into a Log Analytics workspace for testing.
+#
+# It expects the Azure-Sentinel repo to be checked out locally and works as follows:
+#   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
+#   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
+#   3. Loads the corresponding sample data and schema CSV files from "Sample Data/ASIM/".
+#   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
+#   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
+#
+# Usage: python ingestASimSampleData.py
+
 import sys
 import os
 
@@ -35,21 +48,6 @@ def get_modified_files(current_directory):
     except subprocess.CalledProcessError as e:
         print(f"::error::Error occurred while executing the command: {e}")
         return []
-
-def get_current_commit_number():
-    cmd = "git rev-parse HEAD"
-    try:
-        return subprocess.check_output(cmd, shell=True, text=True).strip()
-    except subprocess.CalledProcessError as e:
-        print(f"::error::Error occurred while executing the command: {e}")
-        return None
-
-def read_github_yaml(url):
-    try:
-        response = requests.get(url)
-    except Exception as e:
-        print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
-    return yaml.safe_load(response.text) if response.status_code == 200 else None    
 
 def filter_yaml_files(modified_files):
     # Take only the YAML files
@@ -313,8 +311,6 @@ resourceGroupName = "asim-schemadatatester-githubshared-canary"
 subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
 dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
 endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
-SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdspSignature', 'AZFWThreatIntel']
@@ -326,7 +322,6 @@ modified_files = get_modified_files(current_directory)
 
 parser_yaml_files = filter_yaml_files(modified_files)
 
-commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
@@ -340,9 +335,15 @@ for file in parser_yaml_files:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
-    asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
-    print(f"Reading Asim Parser file from : {asim_parser_url}")
-    asim_parser = read_github_yaml(asim_parser_url)
+    repo_root = os.path.abspath(os.path.join(current_directory, '..', '..', '..'))
+    asim_parser_path = os.path.join(repo_root, file)
+    print(f"Reading Asim Parser file from local path: {asim_parser_path}")
+    try:
+        with open(asim_parser_path, 'r', encoding='utf-8') as f:
+            asim_parser = yaml.safe_load(f.read())
+    except Exception as e:
+        print(f"::error::An error occurred while trying to read YAML file at {asim_parser_path}: {e}")
+        continue
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
     schema = normalization.get('Schema')
@@ -350,15 +351,15 @@ for file in parser_yaml_files:
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
-    SampleDataUrl = sample_data_url+SampleDataFile
-    print(f"Sample data log file reading from url: {SampleDataUrl}")
-    response = requests.get(SampleDataUrl)
-    if response.status_code == 200:
-        with open('tempfile.csv', 'wb') as file:
-            file.write(response.content)
-    else:
-        print(f"::error::An error occurred while trying to get content of Sample Data file located at {SampleDataUrl}: {response.text}")
+    sample_data_dir = os.path.join(repo_root, 'Sample Data', 'ASIM')
+    sample_data_path = os.path.join(sample_data_dir, SampleDataFile)
+    print(f"Sample data log file reading from local path: {sample_data_path}")
+    try:
+        with open(sample_data_path, 'rb') as f:
+            with open('tempfile.csv', 'wb') as file:
+                file.write(f.read())
+    except Exception as e:
+        print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
         continue           
     data_result,table_name = convert_data_csv_to_json('tempfile.csv')   
     print(f"Table Name : {table_name}")
@@ -367,13 +368,13 @@ for file in parser_yaml_files:
     if log_ingestion_supported == True and table_type =="custom_log":
         flag=0 #flag value is used to check if DCR is created for the table or not
         schema_file_name = f"{table_name}_Schema.csv"
-        schemaUrl = sample_data_url+schema_file_name
-        response = requests.get(schemaUrl)
-        if response.status_code == 200:
-            with open('tempfile.csv', 'wb') as file:
-                file.write(response.content)
-        else:
-            print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
+        schema_path = os.path.join(sample_data_dir, schema_file_name)
+        try:
+            with open(schema_path, 'rb') as f:
+                with open('tempfile.csv', 'wb') as file:
+                    file.write(f.read())
+        except Exception as e:
+            print(f"::error::An error occurred while trying to read Schema file at {schema_path}: {e}")
             continue        
         schema_result = convert_schema_csv_to_json('tempfile.csv')
         data_result = convert_data_type(schema_result, data_result)
