@@ -46,54 +46,46 @@ $global:testErrors = @()
 
 function run {
     Write-Host "This is the script from PR."
-    # # Check if upstream remote already exists
-    # $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
+    # Check if upstream remote already exists
+    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
-    # if (-not $remoteExists) {
-    #     Write-Host "Adding upstream remote..."
-    #     Invoke-Expression "git remote add upstream $SentinelRepoUrl"
-    # }
+    if (-not $remoteExists) {
+        Write-Host "Adding upstream remote..."
+        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    }
 
-    # # Fetch the latest changes from upstream repositories
-    # Write-Host "Fetching latest changes from upstream..."
-    # Invoke-Expression "git fetch upstream" *> $null
+    # Fetch the latest changes from upstream repositories
+    Write-Host "Fetching latest changes from upstream..."
+    Invoke-Expression "git fetch upstream" *> $null
 
-    # # Get modified ASIM Parser files along with their status
-    # $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
-    # # Split the output into lines
-    # $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
-    # # Initialize an empty array to store the file names and their status
-    # $global:modifiedFiles = @()
-    # # Iterate over the lines
-    # foreach ($line in $modifiedFilesStatusLines) {
-    #     # Split the line into status and file name
-    #     $parts = $line -split "\t"
-    #     # Assigning the first part to $status and the last part to $file
-    #     $status = $parts[0]
-    #     $file = $parts[-1]  # -1 index refers to the last element
-    #     # Check if the file is a YAML file
-    #     if ($file -like "*.yaml") {
-    #         # Add the file name and status to the array
-    #         $global:modifiedFiles += New-Object PSObject -Property @{
-    #             Name = $file
-    #             Status = switch -Regex ($status) {
-    #                 "A" { "Added" }
-    #                 "M" { "Modified" }
-    #                 "D" { "Deleted" }
-    #                 "R" { "Renamed" }
-    #                 default { "Unknown" }
-    #             }
-    #         }
-    #     }
-    # }
-
-    $global:modifiedFiles = @(
-        New-Object PSObject -Property @{
-            Name = "Parsers/ASimAuthentication/Parsers/ASimAuthenticationCynerioTest.yaml"
-            Status = "Added"
+    # Get modified ASIM Parser files along with their status
+    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
+    # Split the output into lines
+    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
+    # Initialize an empty array to store the file names and their status
+    $global:modifiedFiles = @()
+    # Iterate over the lines
+    foreach ($line in $modifiedFilesStatusLines) {
+        # Split the line into status and file name
+        $parts = $line -split "\t"
+        # Assigning the first part to $status and the last part to $file
+        $status = $parts[0]
+        $file = $parts[-1]  # -1 index refers to the last element
+        # Check if the file is a YAML file
+        if ($file -like "*.yaml") {
+            # Add the file name and status to the array
+            $global:modifiedFiles += New-Object PSObject -Property @{
+                Name = $file
+                Status = switch -Regex ($status) {
+                    "A" { "Added" }
+                    "M" { "Modified" }
+                    "D" { "Deleted" }
+                    "R" { "Renamed" }
+                    default { "Unknown" }
+                }
+            }
         }
-    )
-
+    }
     # Print the file names and their status
     Write-Host "${green}The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:${reset}"
     foreach ($file in $modifiedFiles) {
