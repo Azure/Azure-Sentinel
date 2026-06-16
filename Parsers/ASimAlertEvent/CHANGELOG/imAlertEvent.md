@@ -1,8 +1,12 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.1.4
+
+- (2026-06-16) Google Threat Intelligence - AlertEvent ASIM Parser - [PR #14420](https://github.com/Azure/Azure-Sentinel/pull/14420)
+
 ## Version 0.1.3
 
-- (2026-06-16) Included Google Threat Intelligence alerts in results - [PR #14420](https://github.com/Azure/Azure-Sentinel/pull/14420)
+- (2026-06-04) Palo Alto XDR - AlertEvent ASIM Parser - [PR #14401](https://github.com/Azure/Azure-Sentinel/pull/14401)
 
 ## Version 0.1.2
 
