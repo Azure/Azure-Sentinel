@@ -2,7 +2,7 @@ id: 37da203d-4edd-429e-83cd-fccf11e60c20
 Function:
   Title: Parser for LookoutEvents
   Version: '3.1.0'
-  LastUpdated: '2025-12-18'
+  LastUpdated: '2026-03-11'
 Category: Microsoft Sentinel Parser
 FunctionName: LookoutEvents
 FunctionAlias: LookoutEvents
@@ -16,7 +16,7 @@ FunctionQuery: |
             EventVendor = "Lookout",
             EventProduct = "Lookout Mobile Risk API v2",
             EventType = log_type,
-            EventId = id,
+            EventId = coalesce(tostring(id), tostring(oid)),
             EventTime = TimeGenerated,
             ChangeType = change_type,
             
@@ -41,8 +41,8 @@ FunctionQuery: |
             
             // === DEVICE EVENT FIELDS (from device.* object) ===
             // Supports BOTH: REST API (flat: device.email_address) AND Streaming API (nested: device.info.email)
-            DeviceGuid = coalesce(tostring(threat.device.guid), tostring(device.guid)),
-            DeviceEmailAddress = coalesce(tostring(threat.device.email), tostring(device.info.email), tostring(device.email_address)),
+            DeviceGuid = coalesce(tostring(smishing_alert.device.guid), tostring(threat.device.guid), tostring(device.guid)),
+            DeviceEmailAddress = coalesce(tostring(smishing_alert.device.email), tostring(threat.device.email), tostring(device.info.email), tostring(device.email_address)),
             DevicePlatform = coalesce(tostring(threat.device.platform), tostring(device.platform)),
             DeviceOSVersion = coalesce(tostring(threat.device.os_version), tostring(device.software.os_version), tostring(device.os_version)),
             DeviceManufacturer = coalesce(tostring(threat.device.manufacturer), tostring(device.hardware.manufacturer), tostring(device.manufacturer)),
@@ -69,12 +69,12 @@ FunctionQuery: |
             DeviceParentGuid = tostring(device.parent_status.parent_device_guid),
             
             // === SMISHING_ALERT EVENT FIELDS (from smishing_alert.* object) ===
-            SmishingAlertId = tostring(smishing_alert.id),
-            SmishingAlertType = tostring(smishing_alert.type),
+            SmishingAlertId = tostring(smishing_alert.guid),
+            SmishingAlertType = tostring(smishing_alert.detections[0].alert_type),
             SmishingAlertSeverity = tostring(smishing_alert.severity),
             SmishingAlertDescription = tostring(smishing_alert.description),
-            SmishingAlertCategory = tostring(smishing_alert.category),
-            SmishingAlertURL = tostring(smishing_alert.url),
+            SmishingAlertCategory = tostring(smishing_alert.detections[0].category),
+            SmishingAlertURL = tostring(smishing_alert.detections[0].original_url),
             
             // === AUDIT EVENT FIELDS (from audit.*, actor.*, target.* objects) ===
             AuditType = tostring(audit.type),
@@ -108,9 +108,9 @@ FunctionQuery: |
         
         // Device Compliance Status
         | extend DeviceComplianceStatus = case(
-            DeviceActivationStatus == "ACTIVE", "Compliant",
+            DeviceActivationStatus in ("ACTIVE", "ACTIVATED"), "Compliant",
             DeviceActivationStatus == "PENDING", "Pending",
-            DeviceActivationStatus == "INACTIVE", "Non-Compliant",
+            DeviceActivationStatus in ("INACTIVE", "DEACTIVATED", "DELETED"), "Non-Compliant",
             "Unknown"
         )
         

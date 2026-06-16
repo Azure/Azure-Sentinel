@@ -1,0 +1,48 @@
+# Censys Rescan
+
+## Summary
+
+This playbook will be triggered manually. This will fetch associated IPs from the incident and make API calls to retrieve Censys data and enrich the incident with additional information as Incident comment.
+
+### Prerequisites
+
+1. Deploy the CensysAddIncidentComment playbook first and note its name.
+2. Obtain a Censys API token and store it in Azure Key Vault as a secret named 'Censys-Access-Token'.
+3. Obtain the Censys Organization ID from your Censys platform account.
+4. Create or identify an Azure Key Vault and note its name and Tenant ID.
+5. Ensure you have a Log Analytics Workspace configured for Microsoft Sentinel.
+6. Deploy the Censys Rescan workbook to use this playbook.
+
+### Deployment Instructions
+
+1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
+2. Fill in the required parameters:
+   * PlaybookName: Enter the playbook name here (default: CensysRescan).
+   * IncidentEnrichmentPlaybookName: Name of the deployed CensysAddIncidentComment playbook.
+   * OrganizationID: Your Censys Organization ID from the Censys platform account settings.
+   * WorkspaceName: Name of the Log Analytics Workspace where Microsoft Sentinel is deployed.
+   * KeyVaultName: Name of the Azure Key Vault where the Censys API token is stored.
+   * TenantId: Azure AD Tenant ID where the Key Vault is located.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCensys%2FPlaybooks%2FCensysRescan%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCensys%2FPlaybooks%2FCensysRescan%2Fazuredeploy.json)
+
+### Post-Deployment Instructions
+
+#### a. Authorize connections
+
+Once deployment is complete, authorize each connection.
+1. Go to your logic app → API connections → Select Key Vault connection resource.
+2. Go to General → edit API connection.
+3. Click Authorize.
+4. Sign in.
+5. Click Save.
+6. Repeat steps for Azure Monitor Logs and Log Analytics Data Collector connections.
+
+#### b. Add Access policy in Keyvault
+
+Add access policy for the playbook's managed identity to read secrets from Key Vault.
+1. Go to logic app → *your logic app* → identity → System assigned Managed identity and copy Object (principal) ID.
+2. Go to keyvaults → *your keyvault* → Access policies → create.
+3. Select Get and List permissions for Secrets. Click next.
+4. In the principal section, search by copied object ID. Click next.
+5. Click review + create.

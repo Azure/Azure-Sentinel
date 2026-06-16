@@ -2,23 +2,25 @@
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
-  pull_request:
-    types: [opened, edited, reopened, synchronize, labeled]
+  pull_request_target:
+    types: [labeled, synchronize]
     branches:
       - master
     paths:
-    - 'Parsers/ASimDns/Parsers/**'
-    - 'Parsers/ASimNetworkSession/Parsers/**'
-    - 'Parsers/ASimWebSession/Parsers/**'
-    - 'Parsers/ASimProcessEvent/Parsers/**'
-    - 'Parsers/ASimAuditEvent/Parsers/**'
-    - 'Parsers/ASimAuthentication/Parsers/**'
-    - 'Parsers/ASimFileEvent/Parsers/**'
-    - 'Parsers/ASimRegistryEvent/Parsers/**'
-    - 'Parsers/ASimUserManagement/Parsers/**'
-    - 'Parsers/ASimDhcpEvent/Parsers/**'
-    - 'Parsers/ASimAlertEvent/Parsers/**'
-    
+      - "Parsers/ASimDns/Parsers/**"
+      - "Parsers/ASimNetworkSession/Parsers/**"
+      - "Parsers/ASimWebSession/Parsers/**"
+      - "Parsers/ASimProcessEvent/Parsers/**"
+      - "Parsers/ASimAuditEvent/Parsers/**"
+      - "Parsers/ASimAuthentication/Parsers/**"
+      - "Parsers/ASimFileEvent/Parsers/**"
+      - "Parsers/ASimRegistryEvent/Parsers/**"
+      - "Parsers/ASimUserManagement/Parsers/**"
+      - "Parsers/ASimDhcpEvent/Parsers/**"
+      - "Parsers/ASimAlertEvent/Parsers/**"
+      - "Parsers/ASimAssetEntity/Parsers/**"
+      - "Parsers/ASimAgentEvent/Parsers/**"
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -26,16 +28,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: asim-tests-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  # group: asim-tests-${{ github.event.pull_request.number || github.sha }}
+  # cancel-in-progress: true
+  group: >-
+    asim-tests-${{ github.event.pull_request.head.repo.fork
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event.pull_request.head.repo.fork }}
 
-jobs: 
+jobs:
   # Security gate: Fork PRs require manual approval via "SafeToRun" label
   # Internal PRs (same repo) can proceed without labels
   security-gate:
     name: Security approval gate for fork PRs
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
@@ -49,13 +56,13 @@ jobs:
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
-          
+
           log_info "Starting PR approval check..."
-          
+
           # Check if this is a fork PR
           is_fork="${{ github.event.pull_request.head.repo.fork }}"
           log_info "Fork PR: $is_fork"
-          
+
           if [ "$is_fork" = "true" ]; then
             log_info "FORK PR DETECTED - Proceeding with security checks"
             
@@ -63,31 +70,38 @@ jobs:
             labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
             log_info "Available labels: $labels"
             
-            if echo "$labels" | grep -q "SafeToRun"; then
-              log_success "'SafeToRun' label found - checking if re-approval needed"
+            # For fork PRs, only approve on 'labeled' events where SafeToRun is being added
+            trigger_event="${{ github.event.action }}"
+            log_info "Workflow triggered by event: $trigger_event"
+            
+            if [ "$trigger_event" = "labeled" ]; then
+              # Check if the label being added is 'SafeToRun'
+              label_added="${{ github.event.label.name }}"
+              log_info "Label event: $label_added"
               
-              # Check if this workflow was triggered by new commits (synchronize event)
-              trigger_event="${{ github.event.action }}"
-              log_info "Workflow triggered by: $trigger_event"
-              
-              if [ "$trigger_event" = "synchronize" ]; then
-                log_info "New commits detected on fork PR with existing 'SafeToRun' label"
-                log_info "Maintainer must remove and re-add the 'SafeToRun' label for security"
-                echo "approved=false" >> $GITHUB_OUTPUT
-                echo "needs_approval=false" >> $GITHUB_OUTPUT
-                echo "comment_needed=true" >> $GITHUB_OUTPUT
-                exit 1
-              else
-                log_success "Label approval granted (no new commits)"
+              if [ "$label_added" = "SafeToRun" ]; then
+                log_success "SafeToRun label being added on fork PR - approving"
                 echo "approved=true" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=false" >> $GITHUB_OUTPUT
+              else
+                log_info "Different label applied, not SafeToRun"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
               fi
-            else
-              log_info "'SafeToRun' label not found - approval required"
+            elif [ "$trigger_event" = "synchronize" ]; then
+              log_info "New commits detected (synchronize event) - SafeToRun label will be auto-removed"
               echo "approved=false" >> $GITHUB_OUTPUT
-              echo "needs_approval=true" >> $GITHUB_OUTPUT
-              echo "comment_needed=true" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
+              echo "should_remove_label=true" >> $GITHUB_OUTPUT
+              exit 1
+            else
+              log_info "Unexpected event for fork PR: $trigger_event"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
               exit 1
             fi
           else
@@ -96,7 +110,85 @@ jobs:
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
-      
+
+      - name: Auto-remove SafeToRun label on synchronize for fork PRs
+        if: |
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'synchronize' &&
+          steps.check-approval.outputs.should_remove_label == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            try {
+              log('info', 'Attempting to remove stale SafeToRun label on synchronize event');
+              
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+              });
+
+              const hasLabel = pr.labels.some(label => label.name === 'SafeToRun');
+              
+              if (hasLabel) {
+                log('info', 'SafeToRun label found, removing it...');
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'SafeToRun'
+                });
+                log('success', 'SafeToRun label removed due to new commits');
+              } else {
+                log('info', 'SafeToRun label not present, nothing to remove');
+              }
+            } catch (error) {
+              log('error', `Failed to remove label: ${error.message}`);
+              if (error.status === 404) {
+                log('info', 'Label or PR not found, continuing...');
+              } else {
+                throw error;
+              }
+            }
+
+      - name: Prevent fork modifications to test infrastructure
+        if: github.event.pull_request.head.repo.fork == true
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
+
+            // Paginate through all changed files in the PR
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const forbiddenFiles = files
+              .map(f => f.filename)
+              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
+
+            if (forbiddenFiles.length > 0) {
+              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
+              log('error', 'Modified test files detected:');
+              forbiddenFiles.forEach(f => console.log(`  - ${f}`));
+              core.setFailed('Fork PR modifies protected test infrastructure files');
+            } else {
+              log('success', 'No modifications to asimParsersTest folder detected');
+            }
+
       - name: Comment on fork PR for approval guidance
         if: |
           always() && 
@@ -110,9 +202,9 @@ jobs:
               const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
               console.log(`${icons[level] || 'ℹ️'} ${message}`);
             };
-            
+
             log('info', 'Comment step triggered for fork PR approval guidance');
-            
+
             try {
               // Fetch existing comments
               const { data: comments } = await github.rest.issues.listComments({
@@ -149,16 +241,16 @@ jobs:
               *🤖 Automated security check • Created: ${timestamp}*  
               *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
               } else {
-                // Re-approval scenario (new commits with existing label)
+                // Re-approval scenario (new commits OR pr edits with existing label)
                 commentBody = `🔒 **Security Re-approval Required**
               
-              ⚠️ **New commits detected**: This fork PR has been updated with new commits while the \`SafeToRun\` label was present.
+              ⚠️ **Fork PR verification needed**: This fork PR has been updated.
               
               **For security, a maintainer must:**
               1. 📝 Review the latest commits carefully for any security concerns
-              2. ✅ **Verify file types** - Ensure new commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
+              2. ✅ **Verify file types** - Ensure commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
               3. 🏷️ Remove the \`SafeToRun\` label
-              4. 🏷️ Re-add the \`SafeToRun\` label if the new commits are safe
+              4. 🏷️ Re-add the \`SafeToRun\` label if the latest commits are safe
               
               This simple process ensures that all commits have been properly reviewed before testing with repository secrets.
               
@@ -192,55 +284,61 @@ jobs:
   Run-ASim-TemplateValidation:
     name: Run ASim Template Validation tests
     needs: security-gate
-    if: needs.security-gate.outputs.approved == 'true'
+    if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout pull request branch
         uses: actions/checkout@v3
         with:
-            ref: ${{github.event.pull_request.head.sha}}
-            repository: ${{github.event.pull_request.head.repo.full_name}}
-            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+          ref: ${{github.event.pull_request.head.sha}}
+          repository: ${{ github.repository }}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
-              git merge origin/master
-              Conflicts=$(git ls-files -u | wc -l)
-              if [ "$Conflicts" -gt 0 ] ; then
-                echo "There is a merge conflict. Aborting"
-                git merge --abort
-                exit 1
-              fi
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install requests
-              pip install PyYAML
-              pip install tabulate
+          python -m pip install --upgrade pip
+          pip install requests
+          pip install PyYAML
+          pip install tabulate
       - name: Run ASim parsers template validations python script
         run: |
-              filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              # Execute the script
-              python "$filePath" 
+          filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
+          # Check if file exists and delete if it does
+          if [ -f "$filePath" ]; then
+            rm -f "$filePath"
+          fi
+          # Download the file
+          echo "Downloading script from the master: $url"
+          curl -o "$filePath" "$url"
+          # Execute the script
+          python "$filePath"
   Run-ASim-Sample-Data-Ingest:
     needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
+    if: |
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -249,37 +347,37 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@v4
         with:
-            ref: ${{github.event.pull_request.head.sha}}
-            repository: ${{github.event.pull_request.head.repo.full_name}}
-            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+          ref: ${{github.event.pull_request.head.sha}}
+          repository: ${{ github.repository }}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
-              git merge origin/master
-              Conflicts=$(git ls-files -u | wc -l)
-              if [ "$Conflicts" -gt 0 ] ; then
-                echo "There is a merge conflict. Aborting"
-                git merge --abort
-                exit 1
-              fi
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install azure-identity
-              pip install requests
-              pip install PyYAML
-              pip install azure-monitor-ingestion
-              pip install azure-core
+          python -m pip install --upgrade pip
+          pip install azure-identity
+          pip install requests
+          pip install PyYAML
+          pip install azure-monitor-ingestion
+          pip install azure-core
       - name: Login to Azure Public Cloud
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -287,21 +385,24 @@ jobs:
       - name: Asim Sample Log Ingestion
         id: Ingestlogs
         run: |
-              filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              chmod +x "$filePath"
-              # Execute the script
-              python "$filePath" "${{ github.event.pull_request.number }}"
+          filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
+          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
+          # Check if file exists and delete if it does
+          if [ -f "$filePath" ]; then
+            rm -f "$filePath"
+          fi
+          # Download the file
+          echo "Downloading script from the master: $url"
+          curl -o "$filePath" "$url"
+          chmod +x "$filePath"
+          # Execute the script
+          python "$filePath" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
+    if: |
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -311,12 +412,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          repository: ${{ github.repository }}
           persist-credentials: false
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-      
+
       - name: Login to Azure Public Cloud with AzPowershell
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -338,7 +439,7 @@ jobs:
             exit 1
           fi
       - name: Run ASIM Schema and Data tests PowerShell script
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
         with:
           inlineScript: |
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
@@ -375,13 +476,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          repository: ${{ github.repository }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
       - name: Setup git config
         run: |
-              git config --local user.name "github-actions[bot]"
-              git config --local user.email "<>"
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
       - name: Merge master into pull request branch
         run: |
           git merge origin/master
@@ -394,15 +495,15 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Install dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install PyYAML
-              pip install azure-identity
-              pip install azure-monitor-query
+          python -m pip install --upgrade pip
+          pip install PyYAML
+          pip install azure-identity
+          pip install azure-monitor-query
       - name: Login to Azure Public Cloud
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
