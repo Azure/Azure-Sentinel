@@ -1,0 +1,310 @@
+Parser:
+  Title: Alert Event ASIM parser for CrowdStrike Falcon
+  Version: "0.1.0"
+  LastUpdated: Jun 16, 2026
+Product:
+  Name: CrowdStrike Falcon
+Normalization:
+  Schema: AlertEvent
+  Version: "0.1"
+References:
+  - Title: ASIM Alert Schema
+    Link: https://aka.ms/ASimAlertEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the CrowdStrike API logs (via Codeless Connector Framework) to the ASIM Alert normalized schema.
+ParserName: vimAlertEventCrowdStrikeFalcon
+EquivalentBuiltInParser: _Im_AlertEvent_CrowdStrikeFalcon
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      hostname_has_any: dynamic=dynamic([]),
+      username_has_any: dynamic=dynamic([]),
+      attacktactics_has_any: dynamic=dynamic([]),
+      attacktechniques_has_any: dynamic=dynamic([]),
+      threatcategory_has_any: dynamic=dynamic([]),
+      alertverdict_has_any: dynamic=dynamic([]),
+      eventseverity_has_any: dynamic=dynamic([]),
+      disabled: bool=false,
+      pack: bool=false
+  ){
+      CrowdStrikeDetections
+      | where not(disabled)
+      | where (isnull(starttime) or CreatedTimestamp >= starttime)
+          and (isnull(endtime) or CreatedTimestamp <= endtime)
+      | where ((array_length(ipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(Device.local_ip, ipaddr_has_any_prefix))
+      | where ((array_length(hostname_has_any) == 0) or Device.hostname has_any (hostname_has_any))
+      // The tactics & techniques also include CrowdStrike pseudo-values (CS-prefixed), these are filtered out later
+      | where ((array_length(attacktactics_has_any) == 0) or Tactic has_any (attacktactics_has_any) or TacticId has_any (attacktactics_has_any))
+      | where ((array_length(attacktechniques_has_any) == 0) or Technique has_any (attacktechniques_has_any) or TechniqueId has_any (attacktechniques_has_any))
+      | where (array_length(threatcategory_has_any) == 0) //Parser does not support ThreatCategory
+      | where (array_length(alertverdict_has_any) == 0) //Parser does not support AlertVerdict
+      | extend
+          EventCount = int(1),
+          EventEndTime = CreatedTimestamp,
+          EventType = "Alert",
+          EventProduct = "Falcon",
+          EventVendor = "CrowdStrike",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "0.1",
+          DvcIpAddr = tostring(Device.local_ip),
+          DvcHostname = tostring(Device.hostname),
+          DvcDomain = tostring(Device.hostinfo.domain),
+          DvcDomainType = iif(isnotempty(Device.hostinfo.domain), "FQDN", ""),
+          DvcId = tostring(Device.device_id),
+          DvcIdType = iff(isnotempty(Device.device_id), "Other", ""),
+          EventProductVersion = tostring(Device.agent_version),
+          DvcOs = tostring(Device.platform_name),
+          DvcOsVersion = extract(@"([\d\.]+)", 1, tostring(Device.os_version))
+      | project-rename
+          EventStartTime = CreatedTimestamp,
+          EventOriginalUid = Id,
+          EventMessage = Description,
+          EventOriginalSeverity = SeverityName,
+          EventOriginalSubType = Scenario,
+          EventOriginalType = DetectionType,
+          EventReportUrl = FalconHostLink,
+          DvcOriginalAction = PatternDispositionDescription
+      | extend
+          AlertId = EventOriginalUid,
+          EventUid = _ItemId,
+          AlertDescription = EventMessage,
+          AlertStatus = iif(
+              Status in ("new", "in_progress"), "Active",
+              "Closed"
+          ),
+          DetectionMethod = case(
+              Objective == "Falcon Detection Method" and (
+                  Name contains_cs "Policy"
+                  or Name contains_cs "CustomTemplate"
+                  or Name has_cs "CustomerIOC"
+              ), "User Defined Blocked List",
+              Objective == "Falcon Detection Method" and EventOriginalSubType == "intel_detection", "Threat Intelligence",
+              Objective == "Falcon Detection Method" and EventOriginalSubType in ("NGAV", "known_malware", ""), "Antivirus",
+              "EDR"
+          ),
+          EventSeverity = case(
+              EventOriginalSeverity in ("High", "Critical"), "High",
+              EventOriginalSeverity == "Medium", "Medium",
+              EventOriginalSeverity == "Low", "Low",
+              "Informational"
+          ),
+          EventSubType = iif(EventOriginalSubType == "suspicious_activity", "Suspicious Activity", "Threat"),
+          Rule = Name,
+          RuleNumber = toint(MitreAttack[0].pattern_id),
+          RuleName = Name,
+          RuleDescription = EventMessage,
+          ThreatName = tostring(IocContext[0].ioc_value),
+          IndicatorType = case(
+              IocContext[0].ioc_type in ("ipv4", "ipv6"), "Ip",
+              // IocContext[0].ioc_type == "", "User",
+              // IocContext[0].ioc_type == "", "Process",
+              // IocContext[0].ioc_type == "", "Registry",
+              // IocContext[0].ioc_type == "", "Url",
+              IocContext[0].ioc_type == "domain", "Host",
+              // IocContext[0].ioc_type == "", "Cloud Resource",
+              // IocContext[0].ioc_type == "", "Application",
+              IocContext[0].ioc_type in ("hash_sha256"), "File",
+              // IocContext[0].ioc_type == "", "Email",
+              // IocContext[0].ioc_type == "", "Mailbox",
+              // IocContext[0].ioc_type == "", "Logon Session",
+              ""
+          ),
+          AttackTactics = iif(TacticId startswith_cs "TA", Tactic, ""),
+          AttackTechniques = iif(TechniqueId startswith_cs "T", strcat(Technique, " (", TechniqueId, ")"), ""),
+          ThreatOriginalRiskLevel = tostring(Severity),
+          ThreatOriginalConfidence = tostring(Confidence),
+          UserIdType = case(
+              isnotempty(UserId) and UserId startswith_cs "S-", "SID",
+              isnotempty(UserId), "Other",
+              ""
+          ),
+          Username = coalesce(UserPrincipal, UserName),
+          FileName = Filename,
+          FilePath = Filepath,
+          FileSHA1 = Sha1,
+          FileSHA256 = Sha256
+      | where ((array_length(username_has_any) == 0) or Username has_any (username_has_any))
+      | where ((array_length(attacktactics_has_any) == 0) or AttackTactics has_any (attacktactics_has_any))
+      | where ((array_length(attacktechniques_has_any) == 0) or AttackTechniques has_any (attacktechniques_has_any))
+      | where ((array_length(eventseverity_has_any) == 0) or EventSeverity has_any (eventseverity_has_any))
+      | project-rename
+          AlertName = Name,
+          AlertOriginalStatus = Status,
+          ThreatRiskLevel = Severity,
+          ThreatConfidence = Confidence,
+          ProcessCommandLine = Cmdline,
+          ProcessName = Filename
+      | extend
+          UsernameType = case(
+              Username contains "@", "UPN",
+              isnotempty(Username), "Simple",
+              ""
+          ),
+          User = Username,
+          IpAddr = DvcIpAddr,
+          Hostname = DvcHostname,
+          AdditionalFields = iif(
+              pack, bag_pack(
+                  "Device", Device,
+                  "GlobalPrevalence", GlobalPrevalence,
+                  "GrandparentDetails", GrandparentDetails,
+                  "LocalPrevalence", LocalPrevalence,
+                  "ParentDetails", ParentDetails,
+                  "PatternDispositionDetails", PatternDispositionDetails,
+                  "Objective", Objective
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated
+          , Type
+          , AdditionalFields
+          , AlertDescription
+          , AlertId
+          , AlertName
+          , AlertOriginalStatus
+          , AlertStatus
+          // , AlertVerdict
+          // , AttackRemediationSteps
+          , AttackTactics
+          , AttackTechniques
+          , DetectionMethod
+          // , DvcAction
+          // , DvcDescription
+          , DvcDomain
+          , DvcDomainType
+          // , DvcFQDN
+          , DvcHostname
+          , DvcId
+          , DvcIdType
+          // , DvcInterface
+          , DvcIpAddr
+          // , DvcMacAddr
+          , DvcOriginalAction
+          , DvcOs
+          , DvcOsVersion
+          // , DvcScope
+          // , DvcScopeId
+          // , DvcZone
+          // , EmailMessageId
+          // , EmailSubject
+          , EventCount
+          , EventEndTime
+          , EventMessage
+          , EventOriginalSeverity
+          , EventOriginalSubType
+          , EventOriginalType
+          , EventOriginalUid
+          // , EventOwner
+          , EventProduct
+          , EventProductVersion
+          , EventReportUrl
+          //, EventResult
+          , EventSchema
+          , EventSchemaVersion
+          , EventSeverity
+          , EventStartTime
+          , EventSubType
+          , EventType
+          , EventUid
+          , EventVendor
+          //, FileMD5
+          , FileName
+          , FilePath
+          , FileSHA1
+          , FileSHA256
+          //, FileSize
+          , Hostname
+          //, IndicatorAssociation
+          , IndicatorType
+          , IpAddr
+          //, OriginalUserType
+          , ProcessCommandLine
+          //, ProcessFileCompany
+          , ProcessId
+          , ProcessName
+          // , RegistryKey
+          // , RegistryValue
+          // , RegistryValueData
+          // , RegistryValueType
+          , Rule
+          , RuleDescription
+          , RuleName
+          , RuleNumber
+          //, ThreatCategory
+          , ThreatConfidence
+          // , ThreatFirstReportedTime
+          // , ThreatId
+          // , ThreatIsActive
+          // , ThreatLastReportedTime
+          , ThreatName
+          // , ThreatOriginalCategory
+          , ThreatOriginalConfidence
+          , ThreatOriginalRiskLevel
+          , ThreatRiskLevel
+          // , Url
+          , User
+          , UserId
+          , UserIdType
+          , Username
+          , UsernameType
+          // , UserScope
+          // , UserScopeId
+          // , UserSessionId
+          // , UserType
+  };
+  parser(
+      starttime = starttime, 
+      endtime = endtime, 
+      ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+      hostname_has_any = hostname_has_any,
+      username_has_any = username_has_any,
+      attacktactics_has_any = attacktactics_has_any,
+      attacktechniques_has_any = attacktechniques_has_any,
+      threatcategory_has_any = threatcategory_has_any,
+      alertverdict_has_any = alertverdict_has_any,
+      eventseverity_has_any = eventseverity_has_any,
+      pack=pack,
+      disabled=disabled
+  )
