@@ -116,22 +116,40 @@ function testSchema([string] $ParserFile) {
     }
 }
 
+function getTesterLetStatements() {
+    # Load the latest ASimSchemaTester and ASimDataTester from the repo YAML files
+    # and return them as let statements with a LIVE suffix to avoid conflicts with saved workspace functions
+    $testersPath = "$($PSScriptRoot)/../../../ASIM/dev/ASimTester/Testers"
+
+    $schemaTesterYaml = Get-Content -Raw "$testersPath/ASimSchemaTester.yaml" | ConvertFrom-Yaml
+    $dataTesterYaml = Get-Content -Raw "$testersPath/ASimDataTester.yaml" | ConvertFrom-Yaml
+
+    $schemaTesterQuery = $schemaTesterYaml.ParserQuery
+    $dataTesterQuery = $dataTesterYaml.ParserQuery
+
+    $schemaTesterLet = "let ASimSchemaTesterLIVE = (T:(ColumnName:string,ColumnType:string), selected_schema:string='') { $schemaTesterQuery };"
+    $dataTesterLet = "let ASimDataTesterLIVE = (T:(*), selected_schema:string='') { $dataTesterQuery };"
+
+    return "$schemaTesterLet`r`n$dataTesterLet"
+}
+
 function testParser([Parser] $parser) {
     Write-Host "***************************************************"
     Write-Host "${yellow}Testing parser - '$($parser.Name)'${reset}"
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
+    $testerLetStatements = getTesterLetStatements
     
     Write-Host "${yellow}Running 'Schema' test for '$($parser.Name)' parser${reset}"
     Write-Host "***************************************************"
-    $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
+    $schemaTest = "$testerLetStatements`r`n$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTesterLIVE('$($parser.Schema)')"
     Write-Host "${yellow}Schema name : $($parser.Schema)${reset}"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
     # Test with only last 30 minutes of data.
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
+    $dataTest = "$testerLetStatements`r`n$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTesterLIVE('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
 }
