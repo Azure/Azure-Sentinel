@@ -55,25 +55,67 @@ def filter_yaml_files(modified_files):
 
 
 def convert_schema_csv_to_json(csv_file):
+    """Reads a schema CSV file with 'ColumnName' and 'ColumnType' headers and returns a list of
+    column definitions (name/type dicts) suitable for table creation APIs. Reserved columns are
+    excluded and 'bool' types are mapped to 'boolean'."""
     data = []
-    with open(csv_file, 'r',encoding='utf-8-sig') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            if row['ColumnName'] in reserved_columns:
-                continue
-            elif row['ColumnType'] == "bool":
-                data.append({        
-                'name': row['ColumnName'],
-                'type': "boolean",
-                })
-            else:
-                data.append({        
-                'name': row['ColumnName'],
-                'type': row['ColumnType'],
-                })                       
+    try:
+        with open(csv_file, 'r',encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if 'ColumnName' not in row or 'ColumnType' not in row:
+                    raise KeyError(f"Required columns 'ColumnName' and/or 'ColumnType' not found in schema CSV '{csv_file}'. Available columns: {list(row.keys())}")
+                if row['ColumnName'] in reserved_columns:
+                    continue
+                elif row['ColumnType'] == "bool":
+                    data.append({        
+                    'name': row['ColumnName'],
+                    'type': "boolean",
+                    })
+                else:
+                    data.append({        
+                    'name': row['ColumnName'],
+                    'type': row['ColumnType'],
+                    })
+    except FileNotFoundError:
+        print(f"::error::Schema CSV file not found: {csv_file}")
+        raise
+    except KeyError:
+        raise
+    except Exception as e:
+        print(f"::error::Failed to parse schema CSV file '{csv_file}': {e}")
+        raise
+
+    if not data:
+        raise ValueError(f"No schema columns found in CSV file '{csv_file}'")
+    print(f"Schema data for {csv_file}: {data}")
     return data
 
+def infer_schema_from_data(data_result):
+    """Infers a schema (list of name/type dicts) from sample data rows when no Schema CSV exists.
+    Inspects the first data row's values to determine column types. Reserved columns are excluded."""
+    if not data_result:
+        raise ValueError("Cannot infer schema from empty data")
+    first_row = data_result[0]
+    schema = []
+    for key, value in first_row.items():
+        if key in reserved_columns:
+            continue
+        if isinstance(value, bool):
+            col_type = "boolean"
+        elif isinstance(value, int):
+            col_type = "int"
+        elif isinstance(value, float):
+            col_type = "real"
+        else:
+            col_type = "string"
+        schema.append({'name': key, 'type': col_type})
+    return schema
+
 def convert_data_csv_to_json(csv_file):
+    """Reads a sample data CSV file and returns its rows as a list of dicts with auto-typed values,
+    along with the table name extracted from the 'Type' column. Timestamp column suffixes
+    like '[UTC]' and '[Local Time]' are stripped from key names."""
     def convert_value(value):
         # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
         try:
@@ -88,20 +130,37 @@ def convert_data_csv_to_json(csv_file):
                 return value
 
     data = []
-    with open(csv_file, 'r', encoding='utf-8-sig') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            table_name = row['Type']
-            # Convert each value in the row to its appropriate type
-            processed_row = {key: convert_value(value) for key, value in row.items()}
-            data.append(processed_row)
-        
-        for item in data:
-            for key in list(item.keys()):
-                # If the key matches '[UTC]' or '[Local Time]', rename it
-                if key.endswith(('[UTC]', '[Local Time]')):
-                    substring = key.split(" [")[0]
-                    item[substring] = item.pop(key)
+    table_name = None
+    try:
+        with open(csv_file, 'r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if 'Type' not in row:
+                    raise KeyError(f"'Type' column not found in CSV file '{csv_file}'. Available columns: {list(row.keys())}")
+                table_name = row['Type']
+                # Convert each value in the row to its appropriate type
+                processed_row = {key: convert_value(value) for key, value in row.items()}
+                data.append(processed_row)
+            
+            for item in data:
+                for key in list(item.keys()):
+                    # If the key matches '[UTC]' or '[Local Time]', rename it
+                    if key.endswith(('[UTC]', '[Local Time]')):
+                        substring = key.split(" [")[0]
+                        item[substring] = item.pop(key)
+    except FileNotFoundError:
+        print(f"::error::Data CSV file not found: {csv_file}")
+        raise
+    except KeyError:
+        raise
+    except Exception as e:
+        print(f"::error::Failed to parse data CSV file '{csv_file}': {e}")
+        raise
+
+    if not data:
+        raise ValueError(f"No data rows found in CSV file '{csv_file}'")
+    if table_name is None:
+        raise ValueError(f"Could not determine table name from CSV file '{csv_file}'")
 
     return data, table_name
 
@@ -360,8 +419,7 @@ for file in parser_yaml_files:
                 file.write(f.read())
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
-        continue           
-    data_result,table_name = convert_data_csv_to_json('tempfile.csv')   
+    data_result,table_name = convert_data_csv_to_json('tempfile.csv')
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
     print(f"Log ingestion supported: {log_ingestion_supported}\n Table type: {table_type}")
@@ -369,14 +427,18 @@ for file in parser_yaml_files:
         flag=0 #flag value is used to check if DCR is created for the table or not
         schema_file_name = f"{table_name}_Schema.csv"
         schema_path = os.path.join(sample_data_dir, schema_file_name)
-        try:
-            with open(schema_path, 'rb') as f:
-                with open('tempfile.csv', 'wb') as file:
-                    file.write(f.read())
-        except Exception as e:
-            print(f"::error::An error occurred while trying to read Schema file at {schema_path}: {e}")
-            continue        
-        schema_result = convert_schema_csv_to_json('tempfile.csv')
+        if os.path.exists(schema_path):
+            try:
+                with open(schema_path, 'rb') as f:
+                    with open('tempfile.csv', 'wb') as file:
+                        file.write(f.read())
+            except Exception as e:
+                print(f"::error::An error occurred while trying to read Schema file at {schema_path}: {e}")
+                continue
+            schema_result = convert_schema_csv_to_json('tempfile.csv')
+        else:
+            print(f"Schema CSV not found at {schema_path}, inferring schema from sample data")
+            schema_result = infer_schema_from_data(data_result)
         data_result = convert_data_type(schema_result, data_result)
         # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
         # boolean values are consider as string and numerical value of type string are consider 

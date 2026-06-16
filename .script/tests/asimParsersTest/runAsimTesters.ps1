@@ -1,3 +1,18 @@
+# runAsimTesters.ps1
+#
+# Validates modified ASIM parsers by running schema and data tests against a Log Analytics workspace.
+#
+# The script performs the following steps:
+#   1. Detects ASIM parser YAML files modified in the current PR by diffing against upstream/master.
+#   2. Converts each parser YAML to an object and wraps its query in a KQL let statement.
+#   3. Runs the ASimSchemaTester against each parser to verify its output conforms to the ASIM schema.
+#   4. Runs the ASimDataTester against each parser using the last 30 minutes of ingested data.
+#   5. Reports errors/warnings per parser, respecting an exclusion list that allows known
+#      failing parsers to produce warnings instead of blocking the workflow.
+#
+# Usage: Called by the GitHub Actions workflow (runAsimSchemaAndDataTesters.yaml).
+#        Requires the Az.OperationalInsights PowerShell module and an authenticated Azure session.
+
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
 $global:workspaceId = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
 
