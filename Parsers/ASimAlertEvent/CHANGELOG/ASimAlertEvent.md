@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.1.4
+
+- (2026-16-04) Netskope Security Cloud - AlertEvent ASIM Parser - [PR #holding](holding)
+
 ## Version 0.1.3
 
 - (2026-06-04) Palo Alto XDR - AlertEvent ASIM Parser - [PR #14401](https://github.com/Azure/Azure-Sentinel/pull/14401)
