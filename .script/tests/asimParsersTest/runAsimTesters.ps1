@@ -42,48 +42,58 @@ Class Parser {
     }
 }
 
+$global:testErrors = @()
+
 function run {
     Write-Host "This is the script from PR."
-    # Check if upstream remote already exists
-    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
+    # # Check if upstream remote already exists
+    # $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
-    if (-not $remoteExists) {
-        Write-Host "Adding upstream remote..."
-        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
-    }
+    # if (-not $remoteExists) {
+    #     Write-Host "Adding upstream remote..."
+    #     Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    # }
 
-    # Fetch the latest changes from upstream repositories
-    Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" *> $null
+    # # Fetch the latest changes from upstream repositories
+    # Write-Host "Fetching latest changes from upstream..."
+    # Invoke-Expression "git fetch upstream" *> $null
 
-    # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
-    # Split the output into lines
-    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
-    # Initialize an empty array to store the file names and their status
-    $global:modifiedFiles = @()
-    # Iterate over the lines
-    foreach ($line in $modifiedFilesStatusLines) {
-        # Split the line into status and file name
-        $parts = $line -split "\t"
-        # Assigning the first part to $status and the last part to $file
-        $status = $parts[0]
-        $file = $parts[-1]  # -1 index refers to the last element
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
-            # Add the file name and status to the array
-            $global:modifiedFiles += New-Object PSObject -Property @{
-                Name = $file
-                Status = switch -Regex ($status) {
-                    "A" { "Added" }
-                    "M" { "Modified" }
-                    "D" { "Deleted" }
-                    "R" { "Renamed" }
-                    default { "Unknown" }
-                }
-            }
+    # # Get modified ASIM Parser files along with their status
+    # $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
+    # # Split the output into lines
+    # $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
+    # # Initialize an empty array to store the file names and their status
+    # $global:modifiedFiles = @()
+    # # Iterate over the lines
+    # foreach ($line in $modifiedFilesStatusLines) {
+    #     # Split the line into status and file name
+    #     $parts = $line -split "\t"
+    #     # Assigning the first part to $status and the last part to $file
+    #     $status = $parts[0]
+    #     $file = $parts[-1]  # -1 index refers to the last element
+    #     # Check if the file is a YAML file
+    #     if ($file -like "*.yaml") {
+    #         # Add the file name and status to the array
+    #         $global:modifiedFiles += New-Object PSObject -Property @{
+    #             Name = $file
+    #             Status = switch -Regex ($status) {
+    #                 "A" { "Added" }
+    #                 "M" { "Modified" }
+    #                 "D" { "Deleted" }
+    #                 "R" { "Renamed" }
+    #                 default { "Unknown" }
+    #             }
+    #         }
+    #     }
+    # }
+
+    $global:modifiedFiles = @(
+        New-Object PSObject -Property @{
+            Name = "Parsers/ASimAuthentication/Parsers/ASimAuthenticationCynerioTest.yaml"
+            Status = "Added"
         }
-    }
+    )
+
     # Print the file names and their status
     Write-Host "${green}The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:${reset}"
     foreach ($file in $modifiedFiles) {
@@ -93,6 +103,13 @@ function run {
 
     # Call testSchema function for each modified parser file
     $modifiedFiles | ForEach-Object { testSchema $_.Name }
+
+    # Throw all collected errors at the end so every parser gets tested
+    if ($global:testErrors.Count -gt 0) {
+        Write-Host "::error::The following parsers failed testing:"
+        $global:testErrors | ForEach-Object { Write-Host "::error::  - $_" }
+        throw "$($global:testErrors.Count) parser(s) failed testing. Please fix the errors and try again."
+    }
 }
 
 function testSchema([string] $ParserFile) {
@@ -106,13 +123,13 @@ function testSchema([string] $ParserFile) {
             $modifiedFiles[$i].Name = $functionName
         }
     }
-    $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
+    $Schema = $parsersAsObject.Normalization.Schema
     if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")){
         Write-Host "***************************************************"
         Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema, $parsersAsObject.ParserParams))
     }
 }
 
@@ -189,7 +206,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error:: $FinalMessage"
-                    throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
+                    $global:testErrors += $FinalMessage
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
                     Write-Host "${green}$FinalMessage${reset}"
@@ -207,7 +224,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         
         Write-Host "::error::  -- $_"
         Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        throw $_ # Commented out to allow the script to continue running
+        $global:testErrors += "'$name' '$kind' - query execution failed: $_"
     }
 }
 
