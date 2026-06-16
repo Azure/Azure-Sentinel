@@ -1,0 +1,65 @@
+id: 4f7b9e6c-5d1a-4392-8c2b-3e4f5a6b7c8d
+name: "UniFi Site Manager: Console firmware likely security-relevant"
+description: |
+  Identifies UniFi console / gateway devices (UDM, Cloud Key, USG, UXG, gateway) running firmware behind a major or minor version of the available release. Major/minor firmware jumps on consoles routinely include security advisory fixes (e.g. UniFi Security Advisory Bulletins). Patch-level updates are excluded since those are typically minor non-security bug fixes covered by the lower-severity FirmwareUpdateAvailable rule.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_Devices_CL
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+subTechniques: []
+query: |
+  // Detects consoles/gateways with a major-or-minor firmware Version gap vs the available release.
+  // Patch-level gaps (e.g. 5.1.11 -> 5.1.12) are excluded - covered by FirmwareUpdateAvailable at Low severity.
+  Unifi_SiteManager_Devices_CL
+  | where TimeGenerated > ago(6h)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where IsConsole == true
+  | where FirmwareStatus == "updateAvailable"
+  | where isnotempty(Version) and isnotempty(UpdateAvailable)
+  | extend
+      currentMajor = toint(extract(@"^(\d+)\.", 1, Version)),
+      currentMinor = toint(extract(@"^\d+\.(\d+)", 1, Version)),
+      availableMajor = toint(extract(@"^(\d+)\.", 1, UpdateAvailable)),
+      availableMinor = toint(extract(@"^\d+\.(\d+)", 1, UpdateAvailable))
+  | where isnotnull(currentMajor) and isnotnull(availableMajor)
+  | where (availableMajor > currentMajor) or (availableMajor == currentMajor and availableMinor > currentMinor)
+  | extend GapType = iff(availableMajor > currentMajor, "major", "minor")
+  | extend
+      TimeGenerated = now(),
+      Activity = strcat('Console ', Name, ' running ', Version, ' - likely security-relevant ', GapType, ' update available to ', UpdateAvailable)
+  | project
+      TimeGenerated,
+      DeviceId = Id,
+      DeviceName = Name,
+      Model = Model,
+      ProductLine = ProductLine,
+      CurrentVersion = Version,
+      AvailableVersion = UpdateAvailable,
+      GapType,
+      Activity
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+      - identifier: NetBiosName
+        columnName: DeviceId
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0
