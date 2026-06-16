@@ -298,6 +298,9 @@ In addition to the documentation tree, the script writes `artifact_doc_links.csv
 - Deprecated solutions marked with 🚫 icon (in solutions index)
 - Cross-references between solutions, connectors, tables, content, and parsers
 
+> **Solutions-index completeness safety net:** the solutions index is grouped from `solutions_connectors_tables_mapping.csv`, so a solution that produced **no** mapping rows would otherwise be dropped from the index even though its detail page is generated. After grouping, the generator seeds `by_solution` from the **union** of the mapping CSV and `solutions.csv`: any solution present in `solutions.csv` but missing from the mapping CSV is added with an empty-connector placeholder row (empty `connector_id`, so it adds no phantom connector). This guarantees every solution remains linked from `solutions-index.md`. The same seeding is applied in `generate_interactive_docs.py` for `index.html`.
+
+
 ## Interactive HTML Index
 
 **Script:** `generate_interactive_docs.py`

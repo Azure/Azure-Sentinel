@@ -9846,33 +9846,6 @@ def main() -> None:
                         if not had_table_definitions:
                             reason = "no_table_definitions"
                             details = "Connector definition did not expose any table tokens."
-                            # Still include connector in output with empty table
-                            row_key = (
-                                solution_info["solution_name"],
-                                solution_info["solution_folder"],
-                                solution_info["solution_publisher_id"],
-                                solution_info["solution_offer_id"],
-                                solution_info["solution_first_publish_date"],
-                                solution_info["solution_last_publish_date"],
-                                solution_info["solution_version"],
-                                solution_info["solution_support_name"],
-                                solution_info["solution_support_tier"],
-                                solution_info["solution_support_link"],
-                                solution_info["solution_author_name"],
-                                solution_info["solution_categories"],
-                                connector_id,
-                                connector_publisher,
-                                connector_title,
-                                connector_description,
-                                connector_instruction_steps,
-                                connector_permissions,
-                                connector_id_generated,
-                                "",  # Empty table name
-                            )
-                            existing_flag = grouped_rows[row_key].get(relative_path)
-                            if existing_flag is None or (existing_flag and not is_azuredeploy):
-                                grouped_rows[row_key][relative_path] = is_azuredeploy
-                            produced_rows += 1
                         elif parser_filtered_tables and len(parser_filtered_tables) == total_table_entries:
                             reason = "parser_tables_only"
                             tables_list = ", ".join(sorted(parser_filtered_tables))
@@ -9886,6 +9859,41 @@ def main() -> None:
                             details = "Table tokens were detected but none could be emitted."
                         if used_loganalytics_fallback and reason == "no_table_definitions":
                             details = "No table tokens detected; emitted tables solely from logAnalyticsTableId values but still filtered."
+                        # Always include the connector in the output with an empty
+                        # table, regardless of WHY no table rows were produced. A
+                        # connector whose every table token was filtered out (parser
+                        # functions, failed validation, or a reported_table_exclusions
+                        # override — e.g. a Function App health connector that only
+                        # references AzureDiagnostics/AzureMetrics) is still a real
+                        # connector. Dropping its row would silently remove the whole
+                        # solution from the mapping CSV (and therefore the docs index)
+                        # when the connector is the solution's only one.
+                        row_key = (
+                            solution_info["solution_name"],
+                            solution_info["solution_folder"],
+                            solution_info["solution_publisher_id"],
+                            solution_info["solution_offer_id"],
+                            solution_info["solution_first_publish_date"],
+                            solution_info["solution_last_publish_date"],
+                            solution_info["solution_version"],
+                            solution_info["solution_support_name"],
+                            solution_info["solution_support_tier"],
+                            solution_info["solution_support_link"],
+                            solution_info["solution_author_name"],
+                            solution_info["solution_categories"],
+                            connector_id,
+                            connector_publisher,
+                            connector_title,
+                            connector_description,
+                            connector_instruction_steps,
+                            connector_permissions,
+                            connector_id_generated,
+                            "",  # Empty table name
+                        )
+                        existing_flag = grouped_rows[row_key].get(relative_path)
+                        if existing_flag is None or (existing_flag and not is_azuredeploy):
+                            grouped_rows[row_key][relative_path] = is_azuredeploy
+                        produced_rows += 1
                         # Log all issues including no_table_definitions to track items without detected tables
                         add_issue(
                             issues,

@@ -6,7 +6,7 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 637 | 195 | 30.6% |
+| Connectors | 638 | 196 | 30.7% |
 | Content Items | 6742 | 2510 | 37.2% |
 | ASIM Parsers | 215 | 121 | 56.3% |
 
@@ -137,6 +137,7 @@ The following table.field combinations were detected in queries:
 | AWSSecurityHubFindings.ComplianceStatus | 12 |
 | AWSSecurityHubFindings.RecordState | 12 |
 | AzureDiagnostics.Message | 12 |
+| AzureDiagnostics.Resource | 12 |
 | CloudAppEvents.Application | 12 |
 | EmailEvents.SenderFromAddress | 12 |
 | MessageEvents.RecipientDetails | 12 |
@@ -145,7 +146,6 @@ The following table.field combinations were detected in queries:
 | _Computed.Type | 12 |
 | _Computed.UserName | 12 |
 | _Computed.action | 12 |
-| AzureDiagnostics.Resource | 11 |
 | DeviceEvents.AdditionalFields | 11 |
 | SecurityBaseline.AnalyzeResult | 11 |
 | ThreatIntelligenceIndicator.SourceSystem | 11 |
@@ -460,6 +460,7 @@ The following table.field combinations were detected in queries:
 | AuditLogs.SourceSystem | 2 |
 | AzureActivity.ResourceGroup | 2 |
 | AzureDiagnostics.instanceId_s | 2 |
+| AzureMetrics.MetricName | 2 |
 | CloudAppEvents.AccountId | 2 |
 | CloudAppEvents.ApplicationId | 2 |
 | CloudAppEvents.ObjectType | 2 |
@@ -688,8 +689,6 @@ The following table.field combinations were detected in queries:
 | ASimDnsActivityLogs.EventResultDetails | 1 |
 | ASimDnsActivityLogs.EventType | 1 |
 | ASimDnsActivityLogs.EventVendor | 1 |
-| ASimFileEventLogs.EventProduct | 1 |
-| ASimFileEventLogs.EventVendor | 1 |
 | ASimNetworkSessionLogs.DstIpAddr | 1 |
 | ASimNetworkSessionLogs.DstPortNumber | 1 |
 | ASimNetworkSessionLogs.DvcAction | 1 |
@@ -701,6 +700,8 @@ The following table.field combinations were detected in queries:
 | ASimNetworkSessionSonicWallFirewall.EventMessage | 1 |
 | ASimNetworkSessionSonicWallFirewall.EventOriginalType | 1 |
 | ASimNetworkSessionSonicWallFirewall.NetworkProtocol | 1 |
+| ASimProcessEventLogs.EventProduct | 1 |
+| ASimProcessEventLogs.EventVendor | 1 |
 | ASimProcessEventLogs.Type | 1 |
 | ASimUserManagementLogs_CL.EventProduct | 1 |
 | ASimUserManagementLogs_CL.EventVendor | 1 |
@@ -725,7 +726,6 @@ The following table.field combinations were detected in queries:
 | AzureDiagnostics.conditions_sourceIP_s | 1 |
 | AzureDiagnostics.conditions_sourcePortRange_s | 1 |
 | AzureDiagnostics.direction_s | 1 |
-| AzureMetrics.MetricName | 1 |
 | CommonSecurityLog.DeviceCustomString4 | 1 |
 | CommonSecurityLog.EventOutcome | 1 |
 | CommonSecurityLog.RequestContext | 1 |
@@ -1212,7 +1212,7 @@ The following fields are extracted from queries:
 
 ## Connectors with Filter Fields
 
-Total: 195 connectors
+Total: 196 connectors
 
 | Connector ID | Title | Filter Fields | File |
 |--------------|-------|---------------|------|
@@ -1380,6 +1380,7 @@ Total: 195 connectors
 | RidgeBotDataConnector | [Deprecated] RIDGEBOT - data connector for Microsoft Sentine | CommonSecurityLog.DeviceEventClassID == "4001"  \|  CommonSecurityLog.DeviceVendor == "RidgeSecurity" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
 | SemperisDSP | Semperis Directory Services Protector | SecurityEvent.EventID in "9208,9211,9212"  \|  SecurityEvent.EventSourceName == "Semperis-DSP-Security" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 | SilverfortAma | Silverfort Admin Console | CommonSecurityLog.DeviceEventClassID == "NewIncident"  \|  CommonSecurityLog.DeviceProduct == "Admin Console"  \|  CommonSecurityLog.DeviceProduct has "Admin Console"  \|  CommonSecurityLog.DeviceVendor == "Silverfort"  \|  CommonSecurityLog.DeviceVendor has "Silverfort"  \|  CommonSecurityLog.Message has "UserBruteForce" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
+| SlashNextFunctionApp | SlashNext Function App | AzureDiagnostics.Resource == "SlashnextFunctionApp"  \|  AzureMetrics.MetricName == "FunctionExecutionCount" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/DataConnectors/SlashNext_FunctionApp.json) |
 | SonicWallFirewall | [Deprecated] SonicWall Firewall via Legacy Agent | CommonSecurityLog.AdditionalExtensions contains "fw_action="  \|  CommonSecurityLog.DeviceVendor == "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/SonicwallFirewall.json) |
 | SonicWallFirewallAma | [Deprecated] SonicWall Firewall via AMA | CommonSecurityLog.AdditionalExtensions contains "fw_action="  \|  CommonSecurityLog.DeviceVendor =~ "SonicWall" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/template_SonicwallFirewallAMA.json) |
 | SophosXGFirewall | [Deprecated] Sophos XG Firewall | Syslog.Facility == "local0" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Data%20Connectors/Connector_Syslog_SophosXGFirewall.json) |
@@ -1404,7 +1405,7 @@ Total: 195 connectors
 | WireX_Systems_NFPAma | [Deprecated] WireX Network Forensics Platform via AMA | CommonSecurityLog.ApplicationProtocol in "DNS,HTTP,TDS"  \|  CommonSecurityLog.DeviceProduct =~ "WireX NFP"  \|  CommonSecurityLog.DeviceVendor =~ "WireX" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WireX%20Network%20Forensics%20Platform/Data%20Connectors/template_WireXsystemsNFPAMA.json) |
 | WithSecureElementsViaConnector | [Deprecated] WithSecure Elements via Connector | CommonSecurityLog.DeviceVendor == "WithSecure™" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaConnector/Data%20Connectors/WithSecureElementsViaConnector.json) |
 | WorkdayCCPDefinition | Workday User Activity | ASimAuditEventLogs.EventProduct == "Workday" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workday/Data%20Connectors/Workday_ccp/Workday_DataConnectorDefinition.json) |
-| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 (via Codeless Connector | ASimFileEventLogs.EventProduct == "Carbon Black Cloud"  \|  ASimFileEventLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_DataConnectorDefinition.json) |
+| carbonBlackAWSS3 | VMware Carbon Black Cloud via AWS S3 (via Codeless Connector | ASimProcessEventLogs.EventProduct == "Carbon Black Cloud"  \|  ASimProcessEventLogs.EventVendor == "VMWare" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_DataConnectorDefinition.json) |
 | iboss | [Deprecated] iboss via Legacy Agent | CommonSecurityLog.AdditionalExtensions !contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/iboss_cef.json) |
 | ibossAma | iboss via AMA | CommonSecurityLog.AdditionalExtensions contains "amaExternalLogService=true"  \|  CommonSecurityLog.DeviceVendor =~ "iboss" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/template_ibossAMA.json) |
 | illusiveAttackManagementSystem | [Deprecated] Illusive Platform via Legacy Agent | CommonSecurityLog.DeviceEventClassID in "illusive:access,illusive:login,illusive:suspicious"  \|  CommonSecurityLog.DeviceProduct == "illusive"  \|  CommonSecurityLog.DeviceVendor == "illusive"  \|  CommonSecurityLog.Message !contains "hasForensics"  \|  CommonSecurityLog.SourceHostName != "Failed to obtain" | [Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Data%20Connectors/illusive%20Attack%20Management%20System.json) |
