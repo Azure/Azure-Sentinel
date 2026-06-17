@@ -843,7 +843,7 @@ When a connector references a parser function (e.g., `ASimDns`):
 For each connector, tables are gathered from several sources. The most authoritative source for what a connector *ingests* is its Data Collection Rule (DCR) and table-definition companion files, so the analyzer applies the following priority:
 
 1. **`dataTypes` declarations** in the connector definition.
-2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR's output stream (e.g., `Custom-OktaV2_CL`) and the table definition declare exactly what the connector writes to.
+2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR `dataFlows` stream declarations (`outputStream` and `streams`) and the table definition declare exactly what the connector writes to. Stream values are normalized by stripping `Microsoft-` / `Custom-` prefixes and a leading `Sentinel` token (for example, `Microsoft-SentinelAlibabaCloudWAFLogs` -> `AlibabaCloudWAFLogs`).
 3. **Query analysis** of the connector's UI/status queries (`graphQueries`, `sampleQueries`, `lastDataReceivedQuery`, connectivity criteria), including expansion of any parser functions they reference.
 
 **The DCR/Table companion files trump query analysis.** When companion `*_Table.json` / `*_DCR.json` files are present for a connector, the analyzer treats them as ground truth and **skips query analysis** (priority 3) entirely for that connector. This prevents non-ingested tables from leaking onto the connector.

@@ -3568,12 +3568,14 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
                             output_streams.extend(s for s in streams if isinstance(s, str))
                         
                         for output_stream in output_streams:
-                            # Strip "Microsoft-" or "Custom-" prefix
+                            # Normalize stream names to table names
                             table_name = output_stream.strip()
                             if table_name.startswith("Microsoft-"):
                                 table_name = table_name[len("Microsoft-"):]
                             elif table_name.startswith("Custom-"):
                                 table_name = table_name[len("Custom-"):]
+                            if table_name.startswith("Sentinel"):
+                                table_name = table_name[len("Sentinel"):]
                             
                             # Skip if it looks like an expression or placeholder
                             if table_name and not table_name.startswith("[") and not table_name.startswith("{{"):
