@@ -351,7 +351,7 @@ CheckmarxSASTFindings_CL
 * Verify the Key Vault name and secret name are correct.
 * Role assignment may still be propagating. Wait up to 10 minutes after deployment before retrying.
 
-**Logic App fails at "HTTP - Get Token Initial" or "HTTP - Refresh Token" step:**
+**Logic App fails at "HTTP - Get Token Initial" or "HTTP - Get Token" step:**
 * Verify the Checkmarx IAM Base URL matches your Checkmarx region.
 * Verify the Checkmarx Tenant name is correct.
 * If using `client_credentials`, verify the client secret stored in Key Vault is valid.
