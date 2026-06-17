@@ -5,14 +5,14 @@
         "title": "AS-Checkmarx-SAST-Ingestion",
         "description": "This playbook ingests Checkmarx SAST scan findings into a custom Microsoft Sentinel table on a daily schedule. This single template deploys the custom Log Analytics table, Data Collection Endpoint, Data Collection Rule, Key Vault API connection, Logic App, and all required role assignments.",
         "prerequisites": [
-            "1. A Key Vault secret containing the Checkmarx refresh token",
+            "1. A Key Vault secret containing the Checkmarx client secret or refresh token",
             "2. An existing Log Analytics workspace"
         ],
         "postDeployment": [
             "1. Allow up to 10 minutes for role assignments to propagate",
             "2. Enable the Logic App (deployed in Disabled state) and run it to backfill"
         ],
-        "lastUpdateTime": "2026-04-23T00:00:00Z",
+        "lastUpdateTime": "2026-06-11T00:00:00.000Z",
         "support": {
             "tier": "partner"
         },
@@ -62,7 +62,21 @@
             "type": "string",
             "defaultValue": "checkmarx-integration-secret",
             "metadata": {
-                "description": "Name of the Key Vault secret (refresh token or client secret depending on GrantType)"
+                "description": "Name of the Key Vault secret containing the Checkmarx client secret or refresh token"
+            }
+        },
+        "DataCollectionEndpointName": {
+            "type": "string",
+            "defaultValue": "dce-checkmarx-sast-ingestion",
+            "metadata": {
+                "description": "Name of the Data Collection Endpoint. Override the default if deploying multiple ingestion playbooks into the same resource group to avoid name collisions."
+            }
+        },
+        "DataCollectionRuleName": {
+            "type": "string",
+            "defaultValue": "dcr-checkmarx-sast-ingestion",
+            "metadata": {
+                "description": "Name of the Data Collection Rule. Override the default if deploying multiple ingestion playbooks into the same resource group to avoid name collisions."
             }
         },
         "CheckmarxIAMBaseUrl": {
@@ -103,37 +117,21 @@
         },
         "LookbackDays": {
             "type": "int",
-            "defaultValue": 7,
+            "defaultValue": 2,
             "minValue": 1,
             "metadata": {
-                "description": "Number of days prior to each run to pull completed Checkmarx scans from. Set higher for an initial backfill, then lower for steady-state daily runs."
-            }
-        },
-        "ScanPageSize": {
-            "type": "int",
-            "defaultValue": 100,
-            "metadata": {
-                "description": "Page size for the Checkmarx /api/scans pagination loop"
-            }
-        },
-        "BatchSize": {
-            "type": "int",
-            "defaultValue": 200,
-            "metadata": {
-                "description": "Number of SAST results sent per DCR ingestion request. The DCR API enforces a 1 MB maximum payload size; this controls how results are chunked to stay under that limit."
+                "description": "Number of days prior to each run to pull completed Checkmarx scans from. Default is 2. Set higher for an initial backfill, then reduce for steady-state daily operation. Can be changed later by editing the LookbackDays variable in the Logic App's Initialize_Variables action."
             }
         }
     },
     "variables": {
         "tableName": "CheckmarxSASTFindings_CL",
         "streamName": "Custom-CheckmarxSASTFindings_CL",
-        "dataCollectionEndpointName": "dce-checkmarx-sast-ingestion",
-        "dataCollectionRuleName": "dcr-checkmarx-sast-ingestion",
         "connectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
         "keyVaultRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
         "monitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
         "kvRoleAssignmentDeploymentName": "[concat('kv-role-', uniqueString(parameters('PlaybookName'), parameters('KeyVaultName'), resourceGroup().id))]",
-        "dcrRoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName')), parameters('PlaybookName'), 'MonitoringMetricsPublisher')]"
+        "dcrRoleAssignmentName": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName')), parameters('PlaybookName'), 'MonitoringMetricsPublisher')]"
     },
     "resources": [
         {
@@ -146,14 +144,14 @@
                 "schema": {
                     "name": "[variables('tableName')]",
                     "columns": [
-                        { "name": "TimeGenerated", "type": "datetime", "description": "Populated by the DCR transform at ingestion. Declared here because Sentinel custom tables require it (MSG 1005). NOT declared in the DCR stream declaration and NOT populated in the Logic App Select — the transform is the single source of truth." },
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Populated by the DCR transform at ingestion. Declared here because Sentinel custom tables require it (MSG 1005). NOT declared in the DCR stream declaration and NOT populated in the Logic App Select \u2014 the transform is the single source of truth." },
                         { "name": "ResultHash", "type": "string", "description": "Unique hash for the result" },
                         { "name": "QueryID", "type": "string", "description": "ID of the query that found the vulnerability" },
                         { "name": "QueryName", "type": "string", "description": "Name of the vulnerability query" },
                         { "name": "LanguageName", "type": "string", "description": "Programming language" },
                         { "name": "VulnerabilityGroup", "type": "string", "description": "Category/group of the vulnerability" },
                         { "name": "CweID", "type": "int", "description": "Common Weakness Enumeration ID" },
-                        { "name": "Severity", "type": "string", "description": "Severity level (HIGH, MEDIUM, LOW, INFO)" },
+                        { "name": "Severity", "type": "string", "description": "Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO)" },
                         { "name": "CvssScore", "type": "real", "description": "CVSS vulnerability score" },
                         { "name": "SimilarityID", "type": "int", "description": "ID for similar vulnerabilities" },
                         { "name": "State", "type": "string", "description": "Current state (TO_VERIFY, CONFIRMED, etc.)" },
@@ -178,7 +176,7 @@
         {
             "type": "Microsoft.Insights/dataCollectionEndpoints",
             "apiVersion": "2022-06-01",
-            "name": "[variables('dataCollectionEndpointName')]",
+            "name": "[parameters('DataCollectionEndpointName')]",
             "location": "[parameters('WorkspaceLocation')]",
             "properties": {
                 "networkAcls": {
@@ -189,14 +187,14 @@
         {
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2022-06-01",
-            "name": "[variables('dataCollectionRuleName')]",
+            "name": "[parameters('DataCollectionRuleName')]",
             "location": "[parameters('WorkspaceLocation')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
                 "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('tableName'))]"
             ],
             "properties": {
-                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
                 "streamDeclarations": {
                     "[variables('streamName')]": {
                         "columns": [
@@ -276,8 +274,8 @@
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('connectionName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
             ],
             "properties": {
                 "state": "Disabled",
@@ -299,14 +297,19 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "BatchSize",
-                                        "type": "integer",
-                                        "value": "[parameters('BatchSize')]"
-                                    },
-                                    {
                                         "name": "ScanPageSize",
                                         "type": "integer",
-                                        "value": "[parameters('ScanPageSize')]"
+                                        "value": 100
+                                    },
+                                    {
+                                        "name": "ResultPageSize",
+                                        "type": "integer",
+                                        "value": 1000
+                                    },
+                                    {
+                                        "name": "BatchSize",
+                                        "type": "integer",
+                                        "value": 200
                                     },
                                     {
                                         "name": "FromDate",
@@ -335,6 +338,16 @@
                                     },
                                     {
                                         "name": "ScanFilteredTotal",
+                                        "type": "integer",
+                                        "value": 1
+                                    },
+                                    {
+                                        "name": "ResultOffset",
+                                        "type": "integer",
+                                        "value": 0
+                                    },
+                                    {
+                                        "name": "ResultTotalCount",
                                         "type": "integer",
                                         "value": 1
                                     }
@@ -367,7 +380,7 @@
                                 }
                             }
                         },
-                        "HTTP_-_Get_Token": {
+                        "HTTP_-_Get_Token_Initial": {
                             "type": "Http",
                             "inputs": {
                                 "uri": "[concat(parameters('CheckmarxIAMBaseUrl'), '/auth/realms/', parameters('CheckmarxTenant'), '/protocol/openid-connect/token')]",
@@ -398,113 +411,113 @@
                                 }
                             }
                         },
-                        "Until_All_Scans_Retrieved": {
+                        "Until_-_All_Scans_Retrieved": {
                             "type": "Until",
                             "expression": "@greaterOrEquals(variables('ScanOffset'), variables('ScanFilteredTotal'))",
                             "limit": {
                                 "count": 100,
-                                "timeout": "PT30M"
+                                "timeout": "PT15M"
                             },
                             "actions": {
                                 "HTTP_-_Get_Scans_Page": {
-                                    "type": "Http",
-                                    "inputs": {
-                                        "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/scans?statuses=Completed&from-date=@{variables(''FromDate'')}&limit=@{variables(''ScanPageSize'')}&offset=@{variables(''ScanOffset'')}')]",
-                                        "method": "GET",
-                                        "headers": {
-                                            "Accept": "application/json",
-                                            "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/scans?statuses=Completed&from-date=@{variables(''FromDate'')}&limit=@{variables(''ScanPageSize'')}&offset=@{variables(''ScanOffset'')}')]",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Accept": "application/json",
+                                                    "Authorization": "Bearer @{body('HTTP_-_Get_Token_Initial')?['access_token']}"
+                                                },
+                                                "retryPolicy": {
+                                                    "type": "exponential",
+                                                    "count": 3,
+                                                    "interval": "PT10S",
+                                                    "minimumInterval": "PT10S",
+                                                    "maximumInterval": "PT1M"
+                                                }
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs"
+                                                    ]
+                                                }
+                                            }
                                         },
-                                        "retryPolicy": {
-                                            "type": "exponential",
-                                            "count": 3,
-                                            "interval": "PT10S",
-                                            "minimumInterval": "PT10S",
-                                            "maximumInterval": "PT1M"
+                                        "Set_Variable_-_ScanFilteredTotal": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "ScanFilteredTotal",
+                                                "value": "@coalesce(body('HTTP_-_Get_Scans_Page')?['filteredTotalCount'], 0)"
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_Get_Scans_Page": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Compose_-_Union_Scans": {
+                                            "type": "Compose",
+                                            "inputs": "@union(variables('AllScans'), coalesce(body('HTTP_-_Get_Scans_Page')?['scans'], json('[]')))",
+                                            "runAfter": {
+                                                "Set_Variable_-_ScanFilteredTotal": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_Variable_-_AllScans": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "AllScans",
+                                                "value": "@outputs('Compose_-_Union_Scans')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_-_Union_Scans": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Compose_-_Next_ScanOffset": {
+                                            "type": "Compose",
+                                            "inputs": "@add(variables('ScanOffset'), variables('ScanPageSize'))",
+                                            "runAfter": {
+                                                "Set_Variable_-_AllScans": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_Variable_-_ScanOffset": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "ScanOffset",
+                                                "value": "@outputs('Compose_-_Next_ScanOffset')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_-_Next_ScanOffset": [
+                                                    "Succeeded"
+                                                ]
+                                            }
                                         }
                                     },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "inputs"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "Set_ScanFilteredTotal": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "ScanFilteredTotal",
-                                        "value": "@body('HTTP_-_Get_Scans_Page')?['filteredTotalCount']"
-                                    },
                                     "runAfter": {
-                                        "HTTP_-_Get_Scans_Page": [
+                                        "HTTP_-_Get_Token_Initial": [
                                             "Succeeded"
                                         ]
                                     }
                                 },
-                                "Compose_Union_Scans": {
-                                    "type": "Compose",
-                                    "inputs": "@union(variables('AllScans'), coalesce(body('HTTP_-_Get_Scans_Page')?['scans'], json('[]')))",
-                                    "runAfter": {
-                                        "Set_ScanFilteredTotal": [
-                                            "Succeeded"
-                                        ]
-                                    }
-                                },
-                                "Set_AllScans": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "AllScans",
-                                        "value": "@outputs('Compose_Union_Scans')"
-                                    },
-                                    "runAfter": {
-                                        "Compose_Union_Scans": [
-                                            "Succeeded"
-                                        ]
-                                    }
-                                },
-                                "Compose_Next_ScanOffset": {
-                                    "type": "Compose",
-                                    "inputs": "@add(variables('ScanOffset'), variables('ScanPageSize'))",
-                                    "runAfter": {
-                                        "Set_AllScans": [
-                                            "Succeeded"
-                                        ]
-                                    }
-                                },
-                                "Set_ScanOffset": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "ScanOffset",
-                                        "value": "@outputs('Compose_Next_ScanOffset')"
-                                    },
-                                    "runAfter": {
-                                        "Compose_Next_ScanOffset": [
-                                            "Succeeded"
-                                        ]
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "HTTP_-_Get_Token": [
-                                    "Succeeded"
-                                ]
-                            }
-                        },
-                        "For_Each_Scan": {
+                        "For_Each_-_Scan": {
                             "type": "Foreach",
                             "foreach": "@variables('AllScans')",
                             "actions": {
-                                "HTTP_-_Get_SAST_Results_Page": {
+                                "HTTP_-_Get_Token": {
                                     "type": "Http",
                                     "inputs": {
-                                        "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/sast-results/?scan-id=@{items(''For_Each_Scan'')?[''id'']}')]",
-                                        "method": "GET",
+                                        "uri": "[concat(parameters('CheckmarxIAMBaseUrl'), '/auth/realms/', parameters('CheckmarxTenant'), '/protocol/openid-connect/token')]",
+                                        "method": "POST",
                                         "headers": {
-                                            "Accept": "application/json",
-                                            "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                            "Content-Type": "application/x-www-form-urlencoded"
                                         },
+                                        "body": "[if(equals(parameters('GrantType'), 'client_credentials'), concat('grant_type=client_credentials&client_id=', parameters('CheckmarxClientId'), '&client_secret=@{body(''Get_secret'')?[''value'']}'), concat('grant_type=refresh_token&client_id=', parameters('CheckmarxClientId'), '&refresh_token=@{body(''Get_secret'')?[''value'']}'))]",
                                         "retryPolicy": {
                                             "type": "exponential",
                                             "count": 3,
@@ -513,167 +526,270 @@
                                             "maximumInterval": "PT1M"
                                         }
                                     },
+                                    "runAfter": {},
                                     "runtimeConfiguration": {
                                         "secureData": {
                                             "properties": [
-                                                "inputs"
+                                                "inputs",
+                                                "outputs"
                                             ]
                                         }
                                     }
                                 },
-                                "Condition_-_SAST_Results_Exist": {
-                                    "type": "If",
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "greater": [
-                                                    "@length(coalesce(body('HTTP_-_Get_SAST_Results_Page')?['results'], json('[]')))",
-                                                    0
-                                                ]
-                                            }
+                                "Set_ResultOffset_to_Zero": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ResultOffset",
+                                        "value": 0
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Get_Token": [
+                                            "Succeeded"
                                         ]
+                                    }
+                                },
+                                "Set_Variable_-_ResultTotalCount_to_One": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ResultTotalCount",
+                                        "value": 1
+                                    },
+                                    "runAfter": {
+                                        "Set_ResultOffset_to_Zero": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Until_-_All_Results_Retrieved": {
+                                    "type": "Until",
+                                    "expression": "@greaterOrEquals(variables('ResultOffset'), variables('ResultTotalCount'))",
+                                    "limit": {
+                                        "count": 1000,
+                                        "timeout": "PT15M"
                                     },
                                     "actions": {
-                                        "Select_SAST_Results": {
-                                            "type": "Select",
+                                        "HTTP_-_Get_SAST_Results_Page": {
+                                            "type": "Http",
                                             "inputs": {
-                                                "from": "@body('HTTP_-_Get_SAST_Results_Page')?['results']",
-                                                "select": {
-                                                    "ResultHash": "@item()?['resultHash']",
-                                                    "QueryID": "@item()?['queryIDStr']",
-                                                    "QueryName": "@item()?['queryName']",
-                                                    "LanguageName": "@item()?['languageName']",
-                                                    "VulnerabilityGroup": "@item()?['group']",
-                                                    "CweID": "@item()?['cweID']",
-                                                    "Severity": "@item()?['severity']",
-                                                    "CvssScore": "@item()?['cvssScore']",
-                                                    "SimilarityID": "@item()?['similarityID']",
-                                                    "State": "@item()?['state']",
-                                                    "Status": "@item()?['status']",
-                                                    "ConfidenceLevel": "@item()?['confidenceLevel']",
-                                                    "FirstFoundAt": "@item()?['firstFoundAt']",
-                                                    "FoundAt": "@item()?['foundAt']",
-                                                    "FirstScanID": "@item()?['firstScanID']",
-                                                    "Compliances": "@join(item()?['compliances'], ', ')",
-                                                    "SourceFileName": "@item()?['nodes'][0]?['fileName']",
-                                                    "SourceLine": "@item()?['nodes'][0]?['line']",
-                                                    "SourceColumn": "@item()?['nodes'][0]?['column']",
-                                                    "NodeCount": "@length(item()?['nodes'])",
-                                                    "NodesJson": "@string(item()?['nodes'])",
-                                                    "ScanID": "@items('For_Each_Scan')?['id']",
-                                                    "ProjectName": "@items('For_Each_Scan')?['projectName']",
-                                                    "Initiator": "@items('For_Each_Scan')?['initiator']"
+                                                "uri": "[concat(parameters('CheckmarxASTBaseUrl'), '/api/sast-results/?scan-id=@{items(''For_Each_-_Scan'')?[''id'']}&limit=@{variables(''ResultPageSize'')}&offset=@{variables(''ResultOffset'')}')]",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Accept": "application/json",
+                                                    "Authorization": "Bearer @{body('HTTP_-_Get_Token')?['access_token']}"
+                                                },
+                                                "retryPolicy": {
+                                                    "type": "exponential",
+                                                    "count": 3,
+                                                    "interval": "PT10S",
+                                                    "minimumInterval": "PT10S",
+                                                    "maximumInterval": "PT1M"
+                                                }
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs"
+                                                    ]
                                                 }
                                             }
                                         },
-                                        "Set_TotalResults": {
+                                        "Set_Variable_-_ResultTotalCount": {
                                             "type": "SetVariable",
                                             "inputs": {
-                                                "name": "TotalResults",
-                                                "value": "@length(body('Select_SAST_Results'))"
+                                                "name": "ResultTotalCount",
+                                                "value": "@coalesce(body('HTTP_-_Get_SAST_Results_Page')?['totalCount'], 0)"
                                             },
                                             "runAfter": {
-                                                "Select_SAST_Results": [
+                                                "HTTP_-_Get_SAST_Results_Page": [
                                                     "Succeeded"
                                                 ]
                                             }
                                         },
-                                        "Set_CurrentIndex_to_Zero": {
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "CurrentIndex",
-                                                "value": 0
-                                            },
-                                            "runAfter": {
-                                                "Set_TotalResults": [
-                                                    "Succeeded"
+                                        "Condition_-_SAST_Results_Exist": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(coalesce(body('HTTP_-_Get_SAST_Results_Page')?['results'], json('[]')))",
+                                                            0
+                                                        ]
+                                                    }
                                                 ]
-                                            }
-                                        },
-                                        "Until_All_Batches_Sent": {
-                                            "type": "Until",
-                                            "expression": "@greaterOrEquals(variables('CurrentIndex'), variables('TotalResults'))",
-                                            "limit": {
-                                                "count": 500,
-                                                "timeout": "PT1H"
                                             },
                                             "actions": {
-                                                "Compose_Current_Batch": {
-                                                    "type": "Compose",
-                                                    "inputs": "@take(skip(body('Select_SAST_Results'), variables('CurrentIndex')), variables('BatchSize'))"
-                                                },
-                                                "HTTP_-_Send_SAST_Batch_to_DCR": {
-                                                    "type": "Http",
+                                                "Select_-_SAST_Results": {
+                                                    "type": "Select",
                                                     "inputs": {
-                                                        "uri": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))).immutableId, '/streams/', variables('streamName'), '?api-version=2023-01-01')]",
-                                                        "method": "POST",
-                                                        "headers": {
-                                                            "Content-Type": "application/json"
-                                                        },
-                                                        "body": "@outputs('Compose_Current_Batch')",
-                                                        "authentication": {
-                                                            "type": "ManagedServiceIdentity",
-                                                            "audience": "https://monitor.azure.com"
-                                                        },
-                                                        "retryPolicy": {
-                                                            "type": "exponential",
-                                                            "count": 4,
-                                                            "interval": "PT10S",
-                                                            "minimumInterval": "PT10S",
-                                                            "maximumInterval": "PT1M"
+                                                        "from": "@body('HTTP_-_Get_SAST_Results_Page')?['results']",
+                                                        "select": {
+                                                            "ResultHash": "@item()?['resultHash']",
+                                                            "QueryID": "@item()?['queryIDStr']",
+                                                            "QueryName": "@item()?['queryName']",
+                                                            "LanguageName": "@item()?['languageName']",
+                                                            "VulnerabilityGroup": "@item()?['group']",
+                                                            "CweID": "@item()?['cweID']",
+                                                            "Severity": "@item()?['severity']",
+                                                            "CvssScore": "@item()?['cvssScore']",
+                                                            "SimilarityID": "@item()?['similarityID']",
+                                                            "State": "@item()?['state']",
+                                                            "Status": "@item()?['status']",
+                                                            "ConfidenceLevel": "@item()?['confidenceLevel']",
+                                                            "FirstFoundAt": "@item()?['firstFoundAt']",
+                                                            "FoundAt": "@item()?['foundAt']",
+                                                            "FirstScanID": "@item()?['firstScanID']",
+                                                            "Compliances": "@join(coalesce(item()?['compliances'], json('[]')), ', ')",
+                                                            "SourceFileName": "@item()?['nodes'][0]?['fileName']",
+                                                            "SourceLine": "@item()?['nodes'][0]?['line']",
+                                                            "SourceColumn": "@item()?['nodes'][0]?['column']",
+                                                            "NodeCount": "@length(coalesce(item()?['nodes'], json('[]')))",
+                                                            "NodesJson": "@string(item()?['nodes'])",
+                                                            "ScanID": "@items('For_Each_-_Scan')?['id']",
+                                                            "ProjectName": "@items('For_Each_-_Scan')?['projectName']",
+                                                            "Initiator": "@items('For_Each_-_Scan')?['initiator']"
                                                         }
+                                                    }
+                                                },
+                                                "Set_Variable_-_TotalResults": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "TotalResults",
+                                                        "value": "@length(body('Select_-_SAST_Results'))"
                                                     },
                                                     "runAfter": {
-                                                        "Compose_Current_Batch": [
+                                                        "Select_-_SAST_Results": [
                                                             "Succeeded"
                                                         ]
                                                     }
                                                 },
-                                                "Compose_Next_Index": {
-                                                    "type": "Compose",
-                                                    "inputs": "@add(variables('CurrentIndex'), variables('BatchSize'))",
-                                                    "runAfter": {
-                                                        "HTTP_-_Send_SAST_Batch_to_DCR": [
-                                                            "Succeeded"
-                                                        ]
-                                                    }
-                                                },
-                                                "Set_CurrentIndex": {
+                                                "Set_CurrentIndex_to_Zero": {
                                                     "type": "SetVariable",
                                                     "inputs": {
                                                         "name": "CurrentIndex",
-                                                        "value": "@outputs('Compose_Next_Index')"
+                                                        "value": 0
                                                     },
                                                     "runAfter": {
-                                                        "Compose_Next_Index": [
+                                                        "Set_Variable_-_TotalResults": [
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                },
+                                                "Until_-_All_Batches_Sent": {
+                                                    "type": "Until",
+                                                    "expression": "@greaterOrEquals(variables('CurrentIndex'), variables('TotalResults'))",
+                                                    "limit": {
+                                                        "count": 500,
+                                                        "timeout": "PT15M"
+                                                    },
+                                                    "actions": {
+                                                        "Compose_-_Current_Batch": {
+                                                            "type": "Compose",
+                                                            "inputs": "@take(skip(body('Select_-_SAST_Results'), variables('CurrentIndex')), variables('BatchSize'))"
+                                                        },
+                                                        "HTTP_-_Send_SAST_Batch_to_DCR": {
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "uri": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))).immutableId, '/streams/', variables('streamName'), '?api-version=2023-01-01')]",
+                                                                "method": "POST",
+                                                                "headers": {
+                                                                    "Content-Type": "application/json"
+                                                                },
+                                                                "body": "@outputs('Compose_-_Current_Batch')",
+                                                                "authentication": {
+                                                                    "type": "ManagedServiceIdentity",
+                                                                    "audience": "https://monitor.azure.com"
+                                                                },
+                                                                "retryPolicy": {
+                                                                    "type": "exponential",
+                                                                    "count": 4,
+                                                                    "interval": "PT10S",
+                                                                    "minimumInterval": "PT10S",
+                                                                    "maximumInterval": "PT1M"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Compose_-_Current_Batch": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "Compose_-_Next_Index": {
+                                                            "type": "Compose",
+                                                            "inputs": "@add(variables('CurrentIndex'), variables('BatchSize'))",
+                                                            "runAfter": {
+                                                                "HTTP_-_Send_SAST_Batch_to_DCR": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "Set_Variable_-_CurrentIndex": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "CurrentIndex",
+                                                                "value": "@outputs('Compose_-_Next_Index')"
+                                                            },
+                                                            "runAfter": {
+                                                                "Compose_-_Next_Index": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_CurrentIndex_to_Zero": [
                                                             "Succeeded"
                                                         ]
                                                     }
                                                 }
                                             },
+                                            "else": {
+                                                "actions": {}
+                                            },
                                             "runAfter": {
-                                                "Set_CurrentIndex_to_Zero": [
+                                                "Set_Variable_-_ResultTotalCount": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Compose_-_Next_ResultOffset": {
+                                            "type": "Compose",
+                                            "inputs": "@add(variables('ResultOffset'), variables('ResultPageSize'))",
+                                            "runAfter": {
+                                                "Condition_-_SAST_Results_Exist": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_Variable_-_ResultOffset": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "ResultOffset",
+                                                "value": "@outputs('Compose_-_Next_ResultOffset')"
+                                            },
+                                            "runAfter": {
+                                                "Compose_-_Next_ResultOffset": [
                                                     "Succeeded"
                                                 ]
                                             }
                                         }
                                     },
-                                    "else": {
-                                        "actions": {}
-                                    },
                                     "runAfter": {
-                                        "HTTP_-_Get_SAST_Results_Page": [
+                                        "Set_Variable_-_ResultTotalCount_to_One": [
                                             "Succeeded"
                                         ]
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Until_All_Scans_Retrieved": [
+                                "Until_-_All_Scans_Retrieved": [
                                     "Succeeded"
                                 ]
                             },
-                            "operationOptions": "Sequential"
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 10
+                                }
+                            }
                         }
                     },
                     "outputs": {},
@@ -703,12 +819,13 @@
             }
         },
         {
-            "type": "Microsoft.Insights/dataCollectionRules/providers/roleAssignments",
+            "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[concat(variables('dataCollectionRuleName'), '/Microsoft.Authorization/', variables('dcrRoleAssignmentName'))]",
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]",
+            "name": "[variables('dcrRoleAssignmentName')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
-                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
             ],
             "properties": {
                 "roleDefinitionId": "[variables('monitoringMetricsPublisherRoleId')]",
@@ -747,10 +864,18 @@
                     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {
-                        "KeyVaultName": { "type": "string" },
-                        "PrincipalId": { "type": "string" },
-                        "RoleDefinitionId": { "type": "string" },
-                        "RoleAssignmentName": { "type": "string" }
+                        "KeyVaultName": {
+                            "type": "string"
+                        },
+                        "PrincipalId": {
+                            "type": "string"
+                        },
+                        "RoleDefinitionId": {
+                            "type": "string"
+                        },
+                        "RoleAssignmentName": {
+                            "type": "string"
+                        }
                     },
                     "resources": [
                         {
@@ -783,19 +908,19 @@
         },
         "dataCollectionEndpointId": {
             "type": "string",
-            "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+            "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))]"
         },
         "dataCollectionRuleId": {
             "type": "string",
-            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+            "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))]"
         },
         "dcrImmutableId": {
             "type": "string",
-            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))).immutableId]"
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('DataCollectionRuleName'))).immutableId]"
         },
         "logsIngestionEndpoint": {
             "type": "string",
-            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint]"
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('DataCollectionEndpointName'))).logsIngestion.endpoint]"
         },
         "managedIdentityPrincipalId": {
             "type": "string",

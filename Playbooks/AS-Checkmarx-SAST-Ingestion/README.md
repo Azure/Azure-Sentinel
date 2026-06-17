@@ -119,8 +119,8 @@ From the left menu blade, click **Overview** and take note of the **Resource ID*
 
 This single deployment creates the custom log table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), Key Vault API connection, Logic App, and all required role assignments.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Checkmarx-SAST-Ingestion%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 
@@ -137,14 +137,14 @@ In the **Instance details** section:
 * **Key Vault Name**: Enter the name of the Key Vault referenced in [Create an Azure Key Vault Secret](#create-an-azure-key-vault-secret).
 * **Key Vault Resource Group**: Enter the resource group containing the Key Vault.
 * **Key Vault Secret Name**: This can be left as "**checkmarx-integration-secret**" or changed to match the secret name you used.
+* **Data Collection Endpoint Name**: This can be left as the default. Override it only if you are deploying multiple ingestion playbooks into the same resource group and need to avoid a name collision.
+* **Data Collection Rule Name**: This can be left as the default. Override it only if you are deploying multiple ingestion playbooks into the same resource group and need to avoid a name collision.
 * **Checkmarx IAM Base Url**: Enter the IAM base URL for your Checkmarx region referenced in [Checkmarx API Permissions](#checkmarx-api-permissions).
 * **Checkmarx AST Base Url**: Enter the AST base URL for your Checkmarx region referenced in [Checkmarx API Permissions](#checkmarx-api-permissions).
 * **Checkmarx Tenant**: Enter your Checkmarx tenant/realm name (this appears in your Checkmarx URL and authentication settings).
 * **Checkmarx Client Id**: Enter your Checkmarx OAuth Client ID (e.g., "**ast-app**").
 * **Grant Type**: Select the OAuth grant type for Checkmarx authentication. Use `client_credentials` for client ID and secret, or `refresh_token` for refresh token authentication. See [Checkmarx API Permissions](#checkmarx-api-permissions) for details.
-* **Lookback Days**: Number of days prior to each run to pull completed Checkmarx scans from. Default is **7**. For the initial backfill, set this higher (e.g., **180**) to ingest historical scans, then reduce to **7** for steady-state daily operation. This can be changed later from the Logic App designer without redeploying.
-* **Scan Page Size**: Page size for the Checkmarx `/api/scans` pagination loop. Default is **100**.
-* **Batch Size**: Number of SAST results to send per request to the DCR ingestion endpoint. The DCR API enforces a 1 MB maximum payload size; this parameter controls how results are chunked to stay under that limit. A value of **200** is recommended for most environments.
+* **Lookback Days**: Number of days prior to each run to pull completed Checkmarx scans from. Default is **2**. For the initial backfill, set this higher (e.g., **180**) to ingest historical scans, then reduce to **2** for steady-state daily operation. See the [Checkmarx Scans API documentation](https://docs.checkmarx.com/en/34965-68776-scans-api.html) for endpoint specifics. This can be changed later by editing the **FromDate** variable in the Logic App's **Initialize_Variables** action.
 
 Towards the bottom, click on "**Review + create**".
 
@@ -177,6 +177,19 @@ The following role assignments are created automatically by this deployment:
 
 #
 
+### Post-Deployment Tuning
+
+A small number of operational values are baked into the Logic App definition rather than exposed as deployment parameters, because they are constrained by the Checkmarx API contract or by Azure DCR limits rather than by customer choice. They are not expected to need changes, but the edit locations are documented here in case they ever do.
+
+To edit these, navigate to the deployed Logic App, open the **Code view** from the left menu, and modify the value in place. Save when done.
+
+| Value | Default | Location in Logic App code | When to change |
+| --- | --- | --- | --- |
+| Scan page size | `100` | `Initialize_Variables` action → `ScanPageSize` variable `value` | Only if Checkmarx changes the documented page-size behavior for `/api/scans`. |
+| DCR batch size | `200` | `Initialize_Variables` action → `BatchSize` variable `value` | Lower this if `HTTP - Send SAST Batch to DCR` returns `ContentLengthLimitExceeded` (the DCR API enforces a 1 MB max payload). Raise it only after testing. Large `NodesJson` fields can push individual results to several KB each. |
+
+#
+
 ### Initial Run
 
 This playbook runs once daily, collecting completed Checkmarx SAST scan findings from the configured lookback window and ingesting them into Microsoft Sentinel.
@@ -188,9 +201,6 @@ This playbook is deployed in a **Disabled** state. After waiting for role assign
 Click on the run to view the execution details. Verify that all steps completed successfully, particularly the "**HTTP - Send SAST Batch to DCR**" step inside the `For_Each_Scan` loop.
 
 ![Checkmarx_SAST_Initial_Run_2](Images/Checkmarx_SAST_Initial_Run_2.png)
-
-> [!TIP]
-> For the initial backfill, set **Lookback Days** higher during deployment to ingest historical scans, run the playbook once, then reduce it back to a smaller window via the Logic App designer's Parameters pane. This avoids redeploying the template.
 
 #
 
@@ -309,7 +319,7 @@ CheckmarxSASTFindings_CL
 | LanguageName | string | Programming language |
 | VulnerabilityGroup | string | Category/group of the vulnerability |
 | CweID | int | Common Weakness Enumeration ID |
-| Severity | string | Severity level (HIGH, MEDIUM, LOW, INFO) |
+| Severity | string | Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO) |
 | CvssScore | real | CVSS vulnerability score |
 | SimilarityID | int | ID for similar vulnerabilities |
 | State | string | Current state (TO_VERIFY, CONFIRMED, etc.) |
@@ -339,9 +349,9 @@ CheckmarxSASTFindings_CL
 
 **Logic App fails at "Get_secret" step:**
 * Verify the Key Vault name and secret name are correct.
-* Role assignment may still be propagating — wait up to 10 minutes after deployment before retrying.
+* Role assignment may still be propagating. Wait up to 10 minutes after deployment before retrying.
 
-**Logic App fails at "HTTP - Get Token" step:**
+**Logic App fails at "HTTP - Get Token Initial" or "HTTP - Refresh Token" step:**
 * Verify the Checkmarx IAM Base URL matches your Checkmarx region.
 * Verify the Checkmarx Tenant name is correct.
 * If using `client_credentials`, verify the client secret stored in Key Vault is valid.
@@ -361,7 +371,7 @@ CheckmarxSASTFindings_CL
 * Check that the SAST results endpoint is accessible.
 
 **Logic App fails at "HTTP - Send SAST Batch to DCR" step with "ContentLengthLimitExceeded":**
-* The DCR ingestion API enforces a 1 MB maximum payload size per request. This error indicates the batch size is too large for the SAST results being sent. Reduce the **Batch Size** parameter (default: 200) via the Logic App designer's Parameters pane, or redeploy the template with a smaller value.
+* The DCR ingestion API enforces a 1 MB maximum payload size per request. This error indicates the batch size is too large for the SAST results being sent. Lower the `BatchSize` value (default: 200) in the Logic App's `Initialize_Variables` action. See [Post-Deployment Tuning](#post-deployment-tuning) for the edit location.
 
 **Logic App fails at "HTTP - Send SAST Batch to DCR" step with 403:**
 * Wait up to 10 minutes for the Monitoring Metrics Publisher role assignment to propagate.
@@ -370,7 +380,7 @@ CheckmarxSASTFindings_CL
 * The DCE endpoint URL and DCR immutable ID are resolved at deploy time from the resources created by this template, so 404s should not occur unless the DCE or DCR was deleted out-of-band. Redeploy the template to restore them.
 
 **No data appearing in Log Analytics:**
-* Wait several minutes after the first successful run — ingestion is asynchronous.
+* Wait several minutes after the first successful run, since ingestion is asynchronous.
 * Verify the **CheckmarxSASTFindings_CL** table exists under **Custom Logs** in the workspace.
 * Verify there are completed SAST scans in your Checkmarx tenant within the configured lookback window.
 * Check the Logic App run history for any errors.
