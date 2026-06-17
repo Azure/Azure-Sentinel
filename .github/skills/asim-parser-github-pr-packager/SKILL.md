@@ -50,6 +50,7 @@ References:
   Link: <link to the documentation that the user had provided about the product events>
 Description: |
   <description of the parser, including the data source, the use cases that the parser can support, and any other relevant information.>
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: ASim<Schema><Vendor><Product>
 EquivalentBuiltInParser: _ASim_<SchemaName>_<Vendor><Product>
 ParserParams:
@@ -83,6 +84,7 @@ References:
   Link: <link to the documentation that the user had provided about the product events>
 Description: |
   <description of the filtering parser, including the data source and the additional filter parameters it supports.>
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: vim<Schema><Vendor><Product>
 EquivalentBuiltInParser: _Im_<SchemaName>_<Vendor><Product>
 ParserParams:
@@ -153,15 +155,34 @@ If there is no file, then we will need to create a file.
 }
 ```
 
-## Step 9: Commit and push
+## Step 9. Generate a sample data file
+
+Extract the EventVendor and EventProduct from the parameter-less parser. Create a sample data file in the directory `SampleData/ASIM` with the following name:
+`{EventVendor}_{EventProduct}_{ASIMSchema}_IngestedLogs.csv`
+
+The headers of the CSV file should match the name of the columns from the source table. The source table columns can be derived from Step 8.
+Generate 10 rows of sample data for the CSV file.
+- Make sure that you do not use any information that could be used to identify a real person or organization.
+- Make sure to use all the columns that exist in the source table.
+- For columns that represent enumerations (dictated by the parser), ensure that the values are representative of the possible options from the parser.
+
+## Step 10. Ensure all files are present
+
+For new parsers, ensure that all of the following files are present or have been modified:
+- Addition of the new parser files specific to the product being normalized (e.g., `ASimAuditEvent{ProductName}.yaml` and `vimAuditEvent{ProductName}.yaml`)
+- Addition of the new changelog files for the new parser files (e.g., `ASimAuditEvent{ProductName}.md` and `vimAuditEvent{ProductName}.md`)
+- Modification of the unifying parsers (e.g., `ASimAuditEvent.yaml` and `imAuditEvent.yaml`)
+- Modification of the the changelog files for the unifying parsers (e.g., `ASimAuditEvent.md` and `imAuditEvent.md`)
+- The sample data file (e.g., `<EventVendor>_<EventProduct>_<ASIMSchema>_IngestedLogs.csv`)
+
+## Step 11. Generate ARM templates
+Provided that you are in the root directory of the repository (Azure-Sentinel), run the following command to generate the ARM templates:
+`.script\kqlFuncYaml2Arm.ps1`
+This will generate the necessary ARM templates for the new parsers and update the unifying parsers.
+There should not be any files deleted after running this script.
+
+## Step 11: Commit the changes
 Commit all changes with a meaningful commit message, e.g.:
 ```
 Add ASIM <SchemaName> parser for <Vendor> <Product>
 ```
-Push the branch to the remote repository.
-
-## Step 10: Create the pull request
-After pushing, instruct the user to create a pull request from the pushed branch. Provide them with the following details to use when creating the PR:
-- **Title:** `Add ASIM <SchemaName> parser for <Vendor> <Product>`
-- **Base branch:** `main`
-- **Description:** A summary of the parser, the schema it targets, and what data source it normalizes.
