@@ -1,0 +1,279 @@
+Parser:
+  Title: Alert Event ASIM parser for Netskope Security Cloud
+  Version: '0.1.0'
+  LastUpdated: Jun 16, 2026
+Product:
+  Name: Netskope Security Cloud
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+- Title: Netskope Data Connector
+  Link: https://gist.githubusercontent.com/mitchellgulledge2/1a91f1aec2fc9ff6e053fb32cb1de897/raw/bc9f580e9c5c0234e72a383efd5ff6d28f05b496/sentinel_ccp_arm.json
+Description: |
+  This ASIM parser supports normalizing the Netskope Security Cloud logs (via Codeless Connector Framework by Tim Groothuis) to the ASIM Alert normalized schema.
+ParserName: vimAlertEventNetskopeSecurityCloud
+EquivalentBuiltInParser: _Im_AlertEvent_NetskopeSecurityCloud
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+    let parser = (
+        starttime: datetime=datetime(null),
+        endtime: datetime=datetime(null),
+        ipaddr_has_any_prefix: dynamic=dynamic([]),
+        hostname_has_any: dynamic=dynamic([]),
+        username_has_any: dynamic=dynamic([]),
+        attacktactics_has_any: dynamic=dynamic([]),
+        attacktechniques_has_any: dynamic=dynamic([]),
+        threatcategory_has_any: dynamic=dynamic([]),
+        alertverdict_has_any: dynamic=dynamic([]),
+        eventseverity_has_any: dynamic=dynamic([]),
+        disabled: bool=false,
+        pack: bool=false
+    )
+    {
+        NetskopeAlerts_CL
+        | where not(disabled)
+        | where (
+            (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and ((array_length(ipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(userip, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(srcip, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(dstip, ipaddr_has_any_prefix)))
+            and ((array_length(hostname_has_any) == 0) or (hostname has_any (hostname_has_any)))
+            and ((array_length(username_has_any) == 0) or (user has_any (username_has_any)))
+            and ((array_length(attacktactics_has_any) == 0)) // AttackTactics detail not available in this parser.
+            and ((array_length(attacktechniques_has_any) == 0)) // AttackTechniques detail not available in this parser.
+            // ThreatCategory filtering done later in the parser
+            and ((array_length(alertverdict_has_any) == 0)) // AlertVerdict detail not available in this parser.
+            // EventSeverity filtering done later in the parser
+        )
+        | extend
+            EventStartTime = unixtime_seconds_todatetime(timestamp),
+            ThreatCategory = case(
+                category =~ "Blocked Risky URLs", "MaliciousUrl",
+                category in~ ("Aggressive", "Online Ads"), "Adware",
+                category in~ (
+                    "Forums",
+                    "Web Hosting, ISP & Telco",
+                    "Games",
+                    "Customer Relationship Management",
+                    "Pay To Surf",
+                    "Real Estate",
+                    "Finance/Accounting",
+                    "App Admin Console",
+                    "URL Shorteners",
+                    "Financial News",
+                    "Religion",
+                    "Social & Affiliation Organizations",
+                    "Auctions & Marketplaces",
+                    "Entertainment",
+                    "Gambling",
+                    "Trading & Investing",
+                    "Drugs"
+                ), "Security Policy Violation",
+                "Unknown"
+            )
+        | where ((array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any)))
+        | extend
+            EventEndTime = EventStartTime,
+            TimeGenerated = EventStartTime,
+            EventSeverity = case(
+                severity =~ "high", "High",
+                severity =~ "medium", "Medium",
+                severity =~ "low", "Low",
+                severity =~ "informational", "Informational",
+                "Informational"
+            )
+        | where ((array_length(eventseverity_has_any) == 0 or EventSeverity has_any (eventseverity_has_any)))
+        | extend
+            EventSubType = case(
+                alert_type in~ ("malware", "c2", "malsite", "ips", "compromised credential"), "Threat",
+                alert_type in~ ("dlp", "policy"), "Compliance Violation",
+                alert_type =~ "uba", "Anomaly",
+                ""
+            ),
+            DetectionMethod = case(
+                alert_type =~ "dlp", "Data Loss Prevention",
+                alert_type =~ "malware", "Antivirus",
+                alert_type =~ "policy", "Cloud Application Security",
+                alert_type in~ ("c2", "ips"), "Intrusion Detection",
+                alert_type =~ "compromised credential", "Threat Intelligence",
+                alert_type =~ "uba", "Behavioral Analytics",
+                alert_type =~ "malsite", "Reputation",
+                "Other"
+            ),
+            FileName = iff(
+                tolower(tostring(object_type)) == "file", tostring(object),
+                ""
+            ),
+            DvcOriginalAction = tostring(action),
+            DvcAction = case(
+                action =~ "block", "Block",
+                action in~ ("allow", "proceed", "bypass", "alert", "useralert"), "Allow",
+                action in~ ("anomaly_detection", "detection"), "Detect",
+                ""
+            ),
+            EventResult = case(
+                action =~ "block", "Failure",
+                action in~ ("allow", "proceed", "bypass", "alert", "useralert", "anomaly_detection", "detection"), "Success",
+                "NA"
+            ),
+            _cat = tostring(category),
+            _app = tostring(app),
+            _desc = tostring(breach_description),
+            DvcId = iff(isnotempty(nsdeviceuid), nsdeviceuid, ''),
+            DvcIdType = iff(isnotempty(nsdeviceuid), 'Other', '')
+        | extend
+            EventMessage = strcat(
+                trim(" ", tostring(alert_name)),
+                iff(isnotempty(_cat), strcat(" | Category: ", _cat), ""),
+                iff(isnotempty(_app), strcat(" | App: ", _app), ""),
+                iff(isnotempty(_desc), strcat(" | Breach Description: ", _desc), "")
+            )
+        | project
+            TimeGenerated,
+            EventType = "Alert",
+            EventSchema = "AlertEvent",
+            EventSchemaVersion = "0.1",
+            EventVendor = "Netskope",
+            EventProduct = "Security Cloud",
+            EventCount = int(1),
+            EventStartTime,
+            EventEndTime,
+            EventSeverity,
+            EventOriginalSeverity = severity,
+            EventSubType,
+            EventResult,
+            EventOriginalResultDetails = action,
+            DvcId,
+            DvcIdType,
+            DvcIpAddr = userip,
+            DvcHostname = hostname,
+            DvcAction,
+            EventUid = _ItemId,
+            EventOriginalSubType = tostring(alert_type),
+            ThreatOriginalCategory = tostring(category),
+            ThreatCategory,
+            EventMessage,
+            DvcOs = case(
+                os has "windows", "Windows",
+                os_version startswith "windows", "Windows",
+                os has "Mac OS", "macOS",
+                os_version startswith "Mac", "macOS",
+                ""
+            ),
+            DvcOsVersion = os_version,
+            DetectionMethod,
+            AlertName = tostring(alert_name),
+            RuleName = tostring(policy),
+            DvcOriginalAction,
+            Username = tostring(user),
+            FileName,
+            FileSHA256 = sha256,
+            FileMD5 = md5,
+            Url = url,
+            Type,
+            AdditionalFields = iff(
+                pack,
+                bag_pack(
+                    "AccessMethod", access_method,
+                    "AlertType", alert_type,
+                    "Action", action,
+                    "Activity", activity,
+                    "App", app,
+                    "AppSessionId", tostring(coalesce(columnifexists("app_sessionid", ""), "")),
+                    "AppCategory", appcategory,
+                    "AppSuite", appsuite,
+                    "Browser", browser,
+                    "BrowserSessionId", tostring(coalesce(columnifexists("browser_sessionid", ""), "")),
+                    "BrowserVersion", browser_version,
+                    "CloudConfidenceIndex", cci,
+                    "CloudConfidenceLevel", ccl,
+                    "ConnectionId", tostring(coalesce(columnifexists("connectionid", ""), "")),
+                    "MalsiteCategory", malsite_category,
+                    "MalsiteCountry", malsite_country,
+                    "Referer", referer,
+                    "ObjectType", object_type,
+                    "SourceIP", srcip,
+                    "DestinationIP", dstip
+                ),
+                dynamic({})
+            )
+        | extend
+            UsernameType = case(
+                Username has "@", "UPN",
+                Username has @"\", "Windows",
+                isnotempty(Username), "Simple",
+                ""
+            ),
+            UserType = case(
+                isempty(Username), "Anonymous",
+                Username startswith "svc_" or Username startswith "svc-" or Username startswith "svc." or Username has "_svc@", "Service",
+                Username startswith "adm_" or Username startswith "adm-" or Username has "admin@", "Admin",
+                "Regular"
+            )
+        //Aliases
+        | extend
+            AlertId = EventUid,
+            AlertDescription = EventMessage,
+            Rule = RuleName,
+            Hostname = DvcHostname,
+            IpAddr = DvcIpAddr,
+            User = Username,
+            Dvc = DvcHostname,
+            EventResultDetails = EventOriginalResultDetails
+    };
+    parser(
+        starttime = starttime,
+        endtime = endtime,
+        ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+        hostname_has_any = hostname_has_any,
+        username_has_any = username_has_any,
+        attacktactics_has_any = attacktactics_has_any,
+        attacktechniques_has_any = attacktechniques_has_any,
+        threatcategory_has_any = threatcategory_has_any,
+        alertverdict_has_any = alertverdict_has_any,
+        eventseverity_has_any = eventseverity_has_any,
+        disabled = disabled,
+        pack = pack
+    )
