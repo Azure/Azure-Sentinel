@@ -1,0 +1,652 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Vectra RUX Detection Timeline\n\nStart with any filter — **Detection ID** (click a row or type) or **Entity ID** — and the panels below update to show the full lifecycle of every matching detection.\n\n**Click any row** in the Detection Summary to drill into that single detection. **Change Type** (empty = all types) applies only to the Detection Summary and Full Timeline."
+      },
+      "name": "187944d9-5b42-47eb-aa20-5322b60bc747"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f49236c1-a3b4-4e1f-b852-857b53a0c879",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "7e3f39d6-4c23-4aee-b93a-2a94c539dcee",
+            "version": "KqlParameterItem/1.0",
+            "name": "DetectionId",
+            "label": "Detection ID",
+            "type": 2,
+            "isRequired": false,
+            "query": "VectraDetectionsCombined\n| where TimeGenerated > ago(30d)\n| extend det_id = replace_regex(tostring([\"Detection ID\"]), @\"\\.0$\", \"\")\n| where isnotempty(det_id)\n| summarize arg_max(TimeGenerated, *) by det_id\n| project value=det_id,\n          label=strcat(det_id, \" — \", tostring([\"D Type Vname\"]), \" on \", tostring([\"Entity Name\"]))\n| order by toint(value) desc",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "criteriaData": [],
+            "typeSettings": {
+              "paramValidationRules": [
+                {
+                  "regExp": "",
+                  "match": "All",
+                  "thresholdsStyle": {
+                    "mode": "Default"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "aacd07f3-7f82-4be6-88eb-c3e6f9baed18",
+            "version": "KqlParameterItem/1.0",
+            "name": "EntityId",
+            "label": "Entity ID",
+            "type": 2,
+            "isRequired": false,
+            "query": "VectraDetectionsCombined\n| where TimeGenerated > ago(30d)\n| extend eid = replace_regex(tostring([\"Entity ID\"]), @\"\\.0$\", \"\")\n| where isnotempty(eid)\n| summarize arg_max(TimeGenerated, *) by eid\n| project value=eid,\n          label=strcat(tostring([\"Entity Name\"]), \" (\", tostring([\"Entity Type\"]), \" — \", eid, \")\")\n| order by label asc",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "f4fef1b6-58e3-4949-a67f-338b5d8213ef",
+            "version": "KqlParameterItem/1.0",
+            "name": "ChangeType",
+            "label": "Change Type (empty = all)",
+            "type": 2,
+            "isRequired": false,
+            "multiSelect": true,
+            "query": "datatable(value: string, label: string)[\n    'new',                  'new — Detection created',\n    'append',               'append — Evidence added',\n    'adjust',               'adjust — Context changed',\n    'triage',               'triage — Triaged',\n    'investigation_status', 'investigation_status — Status changed',\n    'state',                'state — State/close changed'\n]",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "d1489fa0-9350-4b14-8db7-da3c3e6f4548"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nlet _ct    = tostring(\"{ChangeType}\");\nlet _ctAll = isempty(_ct) or _ct has \"<unset>\" or _ct has \"null\";\nlet _ctNew = _ctAll or indexof(_ct, \"new\")                  >= 0;\nlet _ctApp = _ctAll or indexof(_ct, \"append\")               >= 0;\nlet _ctAdj = _ctAll or indexof(_ct, \"adjust\")               >= 0;\nlet _ctTri = _ctAll or indexof(_ct, \"triage\")               >= 0;\nlet _ctInv = _ctAll or indexof(_ct, \"investigation_status\") >= 0;\nlet _ctSt  = _ctAll or indexof(_ct, \"state\")                >= 0;\nlet Counts =\n    VectraTimeline\n| where (_ctNew and change_type == \"new\")\n    or  (_ctApp and change_type == \"append\")\n    or  (_ctAdj and change_type == \"adjust\")\n    or  (_ctTri and change_type == \"triage\")\n    or  (_ctInv and change_type == \"investigation_status\")\n    or  (_ctSt  and change_type == \"state\")\n    or  (_ctAll and change_type !in (\"new\",\"append\",\"adjust\",\"triage\",\"investigation_status\",\"state\"))\n    | summarize\n        FirstSeen          = min(TimeGenerated),\n        LatestUpdate       = max(TimeGenerated),\n        TotalEvents        = count(),\n        NewEvents          = countif(change_type == \"new\"),\n        AppendEvents       = countif(change_type == \"append\"),\n        AdjustEvents       = countif(change_type == \"adjust\"),\n        CloseEvents        = countif(change_type == \"state\"),\n        LastEvidenceAppend = maxif(TimeGenerated, change_type == \"append\"),\n        LastContextAdjust  = maxif(TimeGenerated, change_type == \"adjust\")\n        by detection_id, entity_id;\nlet Latest =\n    VectraTimeline\n    | summarize arg_max(TimeGenerated, *) by detection_id, entity_id\n    | project detection_id, entity_id,\n        DetectionName = detection_name, Category = detection_category,\n        EntityName = entity_name, EntityType = entity_type,\n        LatestStatus = investigation_status, Priority = unresolved_priority,\n        AssignedTo = assigned_to, ExternalRef = external_reference,\n        EntityLink = entity_url, DetectionLink = detection_href;\nCounts\n| join kind=leftouter Latest on detection_id, entity_id\n| project detection_id, DetectionName, Category, EntityName, EntityType,\n    LatestStatus, Priority, entity_id,\n    FirstSeen, LatestUpdate, NewEvents, AppendEvents, AdjustEvents, CloseEvents, TotalEvents,\n    LastEvidenceAppend, LastContextAdjust,\n    AssignedTo, ExternalRef, EntityLink, DetectionLink\n| order by LatestUpdate desc\n",
+        "size": 0,
+        "title": "Detection Summary — click a row to drill in",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "detection_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "EntityLink",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "DetectionLink",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "FirstSeen",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "LatestUpdate",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "LastEvidenceAppend",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "LastContextAdjust",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "TotalEvents",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "gray"
+              }
+            }
+          ],
+          "rowLimit": 500
+        },
+        "exportFieldName": "detection_id",
+        "exportParameterName": "DetectionId",
+        "exportDefaultValue": ""
+      },
+      "name": "f960eb7f-641b-4c18-83b8-02271c7d481b"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "💡 **Click any row** to filter all panels to that detection. **Change Type** (multi-select, empty = all types) applies only to the two panels above."
+      },
+      "name": "35f23d36-0d76-464e-ad62-b64053af2dd4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nlet _ct    = tostring(\"{ChangeType}\");\nlet _ctAll = isempty(_ct) or _ct has \"<unset>\" or _ct has \"null\";\nlet _ctNew = _ctAll or indexof(_ct, \"new\")                  >= 0;\nlet _ctApp = _ctAll or indexof(_ct, \"append\")               >= 0;\nlet _ctAdj = _ctAll or indexof(_ct, \"adjust\")               >= 0;\nlet _ctTri = _ctAll or indexof(_ct, \"triage\")               >= 0;\nlet _ctInv = _ctAll or indexof(_ct, \"investigation_status\") >= 0;\nlet _ctSt  = _ctAll or indexof(_ct, \"state\")                >= 0;\nVectraTimeline\n| where (_ctNew and change_type == \"new\")\n    or  (_ctApp and change_type == \"append\")\n    or  (_ctAdj and change_type == \"adjust\")\n    or  (_ctTri and change_type == \"triage\")\n    or  (_ctInv and change_type == \"investigation_status\")\n    or  (_ctSt  and change_type == \"state\")\n    or  (_ctAll and change_type !in (\"new\",\"append\",\"adjust\",\"triage\",\"investigation_status\",\"state\"))\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    detection_href, entity_url\n| order by TimeGenerated asc\n",
+        "size": 1,
+        "title": "Full Detection Lifecycle Timeline — all events, oldest first",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "c52fbbe0-60d3-46f7-a7a3-ccaa37d7b211"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"new\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    src_host_name, src_account_name,\n    dst_host_name, dst_account_name,\n    dst_domain_name, dst_domain_external,\n    summary, detail,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "New Detection Information — `change_type = new`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "summary",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true,
+                "linkLabel": "View summary"
+              }
+            },
+            {
+              "columnMatch": "dst_domain_external",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "src_host_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "src_account_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_host_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_account_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_domain_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "detail",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true,
+                "linkLabel": "View details"
+              }
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "9f89c7c5-1321-4e20-b217-f827323f65c6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"append\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    src_host_name, src_account_name,\n    dst_host_name, dst_account_name,\n    dst_domain_name, dst_domain_external,\n    summary, detail,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "Evidence Appends — `change_type = append`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "summary",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true,
+                "linkLabel": "View summary"
+              }
+            },
+            {
+              "columnMatch": "dst_domain_external",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "src_host_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "src_account_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_host_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_account_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "dst_domain_name",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "detail",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "CellDetails",
+                "linkIsContextBlade": true,
+                "linkLabel": "View details"
+              }
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "237aeb8a-d08e-4488-95a6-05524d6bc0ca"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"adjust\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "Context Adjustments — `change_type = adjust`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "1521bcbf-1580-4459-98d4-43590d30ec5d"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"investigation_status\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "Investigation Status Updates — `change_type = investigation_status`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "e12972ce-1ed4-432e-b32a-23ca2bbac690"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"state\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags, reason,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "Close / State Changes — `change_type = state`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "reason",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "778c4588-6cad-4a1c-a411-8574f66562c8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet VectraTimeline = view () {\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated between ({TimeRange:start} .. {TimeRange:end})\n    | extend\n        detection_id       = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\"),\n        change_type        = tolower(tostring(column_ifexists(\"change_type\", column_ifexists(\"Change Type\", \"\")))),\n        detection_name     = tostring(column_ifexists(\"d_type_vname\", column_ifexists(\"detection_name\", column_ifexists(\"Detection Name\", \"\")))),\n        detection_category = tostring(column_ifexists(\"category\", column_ifexists(\"Detection Category\", \"\"))),\n        entity_name        = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\"))),\n        entity_id          = replace_regex(tostring(column_ifexists(\"entity_id\", column_ifexists(\"Entity ID\", \"\"))), @\"\\.0$\", \"\"),\n        entity_type        = tostring(column_ifexists(\"entity_type\", column_ifexists(\"Entity Type\", \"\"))),\n        investigation_status = tostring(column_ifexists(\"investigation_status\", column_ifexists(\"Investigation Status\", \"\"))),\n        unresolved_priority  = tostring(column_ifexists(\"unresolved_priority\", column_ifexists(\"Unresolved Priority\", \"\"))),\n        assigned_to        = tostring(column_ifexists(\"assignment_assigned_to_username\", column_ifexists(\"Assigned To\", \"\"))),\n        external_reference = tostring(column_ifexists(\"external_reference_id\", column_ifexists(\"External Reference ID\", \"\"))),\n        tags               = tostring(column_ifexists(\"tags\", column_ifexists(\"Tags\", \"\"))),\n        reason             = tostring(column_ifexists(\"reason\", column_ifexists(\"Reason\", \"\"))),\n        entity_url         = tostring(column_ifexists(\"url\", column_ifexists(\"entity_url\", column_ifexists(\"URL\", \"\")))),\n        detection_href     = tostring(column_ifexists(\"Vectra Pivot\", column_ifexists(\"detection_href\", \"\")))\n,\n        src_host_name       = tostring(column_ifexists(\"src_host_name\",              column_ifexists(\"Source Host Name\", \"\"))),\n        src_account_name    = tostring(column_ifexists(\"src_account_name\",           column_ifexists(\"Source Account Name\", \"\"))),\n        dst_host_name       = tostring(column_ifexists(\"dst_host_name\",              column_ifexists(\"Destination Host Name\", \"\"))),\n        dst_account_name    = tostring(column_ifexists(\"dst_account_name\",           column_ifexists(\"Destination Account Name\", \"\"))),\n        dst_domain_name     = tostring(column_ifexists(\"dst_domain_domain\",          column_ifexists(\"Destination Domain Name\", \"\"))),\n        dst_domain_external = tostring(column_ifexists(\"dst_domain_external_target\", column_ifexists(\"Destination Domain External Target\", \"\"))),\n        summary             = tostring(column_ifexists(\"summary\",                    column_ifexists(\"Summary\", \"\"))),\n        detail              = tostring(column_ifexists(\"detail\",                     column_ifexists(\"Details\", \"\")))\n    | where not(DetectionFilterActive) or detection_id == p_DetectionId\n    | where not(EntityFilterActive)    or entity_id == p_EntityId\n};\nVectraTimeline\n| where change_type == \"triage\"\n| project TimeGenerated, change_type, detection_id, detection_name,\n    detection_category, entity_name, entity_type, entity_id,\n    investigation_status, unresolved_priority, assigned_to,\n    external_reference, tags,\n    detection_href, entity_url\n| order by TimeGenerated desc\n",
+        "size": 1,
+        "title": "Triage State Changes — `change_type = triage`",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "entity_url",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Entity ↗"
+              }
+            },
+            {
+              "columnMatch": "detection_href",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Detection ↗"
+              }
+            },
+            {
+              "columnMatch": "entity_id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "investigation_status",
+              "formatter": 1
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "4a0abf31-c59d-4171-9997-c1490c94ca93"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let p_DetectionId = tostring(\"{DetectionId}\");\nlet p_EntityId    = tostring(\"{EntityId}\");\nlet DetectionFilterActive = p_DetectionId !in (\"\", \"<unset>\", \"null\");\nlet EntityFilterActive    = p_EntityId    !in (\"\", \"<unset>\", \"null\");\nlet AnyFilterActive = DetectionFilterActive or EntityFilterActive;\nlet EntityName = toscalar(\n    union isfuzzy=true VectraDetectionsCombined\n    | where TimeGenerated > ago(90d)\n    | extend det_id = replace_regex(tostring(column_ifexists(\"detection_id\", column_ifexists(\"Detection ID\", \"\"))), @\"\\.0$\", \"\")\n    | extend eid    = replace_regex(tostring(column_ifexists(\"entity_id\",    column_ifexists(\"Entity ID\",    \"\"))), @\"\\.0$\", \"\")\n    | extend ename  = tostring(column_ifexists(\"entity_name\", column_ifexists(\"Entity Name\", \"\")))\n    | where (DetectionFilterActive and det_id == p_DetectionId)\n         or (EntityFilterActive    and eid    == p_EntityId)\n    | top 1 by TimeGenerated desc\n    | project ename\n);\nSecurityIncident\n| where AnyFilterActive and isnotempty(EntityName)\n| where Title contains EntityName\n| summarize arg_max(TimeGenerated, *) by IncidentNumber\n| project IncidentNumber, Title, Status,\n    Owner = tostring(Owner), CreatedTime, LastActivityTime,\n    XDRIncidentId = tostring(ProviderIncidentId),\n    IncidentUrl = tostring(IncidentUrl)\n| order by LastActivityTime desc\n",
+        "size": 1,
+        "title": "All Sentinel Incidents for This Entity",
+        "showRefreshButton": true,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "CreatedTime",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "LastActivityTime",
+              "formatter": 6
+            },
+            {
+              "columnMatch": "IncidentUrl",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "Url",
+                "linkLabel": "Open Incident ↗"
+              }
+            }
+          ],
+          "rowLimit": 500
+        }
+      },
+      "name": "3405fe4e-c58c-418f-8012-0d3f6274835c",
+      "conditionalVisibility": {
+        "parameterName": "DetectionId",
+        "comparison": "isNotEqualTo",
+        "value": ""
+      }
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,244 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Vectra Detection Timeline Link",
+    "description": "When a Vectra RUX incident is created, reads the DetectionID from the first alert's Custom Details and posts a comment with a Vectra pivot link and a Detection Timeline workbook link.",
+    "author": "Vectra AI"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "VectraDetectionTimelineLink",
+      "metadata": {
+        "description": "Name of the Logic App."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name."
+      }
+    },
+    "WorkbookResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Full ARM resource ID of the Vectra Detection Timeline workbook. Example: /subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Insights/workbooks/{guid}"
+      }
+    },
+    "WorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace GUID (customerId). Get it with: az monitor log-analytics workspace show --resource-group rg-ccf-dev --workspace-name la-ccf-dev --query customerId -o tsv"
+      }
+    }
+  },
+  "variables": {
+    "SentinelConnectionName": "[concat(parameters('PlaybookName'), '-sentinel-connection')]",
+    "WorkbookPortalUrl": "[concat('https://portal.azure.com/#@', subscription().tenantId, '/resource', parameters('WorkbookResourceId'), '/workbook')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('SentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "Microsoft Sentinel",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "WorkbookUrl": {
+              "defaultValue": "[variables('WorkbookPortalUrl')]",
+              "type": "String",
+              "metadata": {
+                "description": "Azure Portal URL for the Vectra Detection Timeline workbook."
+              }
+            },
+            "WorkspaceId": {
+              "defaultValue": "[parameters('WorkspaceId')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Get_incident_title": {
+              "type": "Compose",
+              "runAfter": {},
+              "inputs": "@triggerBody()?['object']?['properties']?['title']"
+            },
+            "Get_detection_name": {
+              "type": "Compose",
+              "runAfter": {
+                "Get_incident_title": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@{trim(replace(replace(outputs('Get_incident_title'), 'Vectra AI - ', ''), concat(' on ', trim(last(split(outputs('Get_incident_title'), ' on ')))), ''))}"
+            },
+            "Get_entity_name": {
+              "type": "Compose",
+              "runAfter": {
+                "Get_incident_title": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": "@{trim(last(split(outputs('Get_incident_title'), ' on ')))}"
+            },
+            "Query_Detections": {
+              "type": "Http",
+              "runAfter": {
+                "Get_detection_name": [
+                  "Succeeded"
+                ],
+                "Get_entity_name": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "POST",
+                "uri": "@{concat('https://api.loganalytics.io/v1/workspaces/', parameters('WorkspaceId'), '/query')}",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "query": "@{concat('Detections_Data_CCF_CL | where TimeGenerated > ago(90d) | where d_type_vname has ''', outputs('Get_detection_name'), ''' and entity_name has ''', outputs('Get_entity_name'), ''' | summarize arg_max(TimeGenerated, *) by detection_id | project DetectionID = tostring(toint(detection_id)), VectraURL = tostring(detection_href) | take 1')}"
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://api.loganalytics.io/"
+                }
+              }
+            },
+            "Get_detection_id": {
+              "type": "Compose",
+              "runAfter": {
+                "Query_Detections": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "inputs": "@{coalesce(body('Query_Detections')?['tables']?[0]?['rows']?[0]?[0], '')}"
+            },
+            "Get_vectra_url": {
+              "type": "Compose",
+              "runAfter": {
+                "Query_Detections": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "inputs": "@{coalesce(body('Query_Detections')?['tables']?[0]?['rows']?[0]?[1], '')}"
+            },
+            "Post_comment_to_incident": {
+              "type": "ApiConnection",
+              "runAfter": {
+                "Get_detection_id": [
+                  "Succeeded"
+                ],
+                "Get_vectra_url": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "@{concat('<h4>\ud83d\udd0d Vectra Detection</h4>','<table>','<tr><td><b>Detection</b></td><td>',outputs('Get_detection_name'),'</td></tr>','<tr><td><b>Entity</b></td><td>',outputs('Get_entity_name'),'</td></tr>',if(empty(outputs('Get_detection_id')),'',concat('<tr><td><b>Detection ID</b></td><td><code>',outputs('Get_detection_id'),'</code></td></tr>')),'</table>',if(and(not(empty(outputs('Get_vectra_url'))),not(equals(outputs('Get_vectra_url'),'null'))),concat('<p><a href=\"',outputs('Get_vectra_url'),'\">\ud83d\udd17 Open detection in Vectra AI</a></p>',''),''),concat('<p><a href=\"',parameters('WorkbookUrl'),'\">\ud83d\udcca Open Detection Timeline Workbook</a></p>'),if(empty(outputs('Get_detection_id')),concat('<p>\u2139\ufe0f Detection ID not retrieved automatically. In the workbook, locate <b>',outputs('Get_detection_name'),'</b> in the Detection Summary and click the row.</p>'),concat('<p>In the workbook, type <code>',outputs('Get_detection_id'),'</code> into the <b>Detection ID</b> field.</p>')))}"
+                },
+                "path": "/Incidents/Comment"
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                "connectionName": "[variables('SentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "WorkspaceId": {
+            "value": "[parameters('WorkspaceId')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().subscriptionId, resourceGroup().id, parameters('PlaybookName'), 'sentinel-responder')]",
+      "scope": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/3e150937-b8fe-4cfb-8069-0eaf05ecd056')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PostDeploymentNote": {
+      "type": "string",
+      "value": "Create a Sentinel Automation Rule: trigger = 'When incident is created', filter by analytics rule name containing 'Vectra RUX', action = run this playbook."
+    }
+  }
+}
