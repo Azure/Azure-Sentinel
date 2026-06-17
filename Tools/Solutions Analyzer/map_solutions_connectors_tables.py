@@ -9534,12 +9534,36 @@ def main() -> None:
                 has_valid_connector = True
                 
                 # === Table extraction with priority ordering ===
+                # Priority 0: dataTypes in standalone connector definitions (e.g. *_ConnectorDefinition.json)
                 # Priority 1: *_Table.json companion files
                 # Priority 2: *_DCR.json companion files  
                 # Priority 3: Query analysis from connector JSON
                 
                 table_map: Dict[str, Dict[str, Any]] = {}
                 tables_from_companion_files = False
+                
+                # Priority 0: Extract tables from dataTypes in the connector definition JSON
+                # For standalone connector definition files (like *_ConnectorDefinition.json or
+                # CCF v3 definition JSON), extract table names from connectorUiConfig.dataTypes
+                if isinstance(data, dict):
+                    properties = data.get("properties", {})
+                    if isinstance(properties, dict):
+                        ui_config = properties.get("connectorUiConfig", {})
+                        if isinstance(ui_config, dict):
+                            data_types = ui_config.get("dataTypes", [])
+                            if isinstance(data_types, list):
+                                for dt in data_types:
+                                    if isinstance(dt, dict):
+                                        tbl_name = dt.get("name", "")
+                                        if isinstance(tbl_name, str) and tbl_name.strip() and not tbl_name.startswith("{{"):
+                                            if tbl_name not in table_map:
+                                                table_map[tbl_name] = {
+                                                    "has_mismatch": False,
+                                                    "actual_table": None,
+                                                    "sources": {"dataTypes"},
+                                                    "from_companion_file": True,  # Mark as authoritative
+                                                }
+                                                tables_from_companion_files = True
                 
                 # Check for companion Table and DCR files
                 table_json_files, dcr_json_files = find_companion_table_files(json_path)
