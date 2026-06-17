@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.  
 
-Plugin version: v2.2.1  
-Released on: 2026-05-27  
+Plugin version: v2.3.0  
+Released on: 2026-06-17  
 
 This plugin is currently in development and is free to use. We request and appreciate feedback from users.  
 
@@ -222,6 +222,7 @@ A complete `logstash.conf` using client secret auth with a Beats input:
 | `batcher_workers_count` | *(auto)* | Number of batcher threads |  
 | `sender_workers_count` | *(auto)* | Number of sender threads |  
 | `unifier_workers_count` | *(auto)* | Number of unifier threads |  
+| `id` | `None` | A custom identification tag to be added to sent-batches logs |  
 
 ## Known issues
  
