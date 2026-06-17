@@ -1,0 +1,192 @@
+id: 67802748-435b-4f80-9f61-b9a9ac6ea15c
+name: "[Entra ID] Suspicious Continuous OAuth Token Usage"
+version: 1.0.0
+kind: Scheduled
+description: |
+  Detects repeated use of the same OAuth token across different IPs or locations over time. This can indicate token theft or session abuse.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1606
+query: |
+  // =====================
+  // Low-noise Token Reuse Detector (fixed timespan calc)
+  // =====================
+  let GapDays = 1;
+  let MinIPChanges = 2;
+  let MinLocChanges = 2;
+  let ExcludeApps = dynamic([
+      "Microsoft Authentication Broker",
+      "Microsoft Teams",
+      "Office 365"
+      ]);
+  let Src =
+      union isfuzzy=true
+          AADNonInteractiveUserSignInLogs,
+          SigninLogs
+      | where ResultType == 0
+      | where isnotempty(UniqueTokenIdentifier);
+  let Past =
+      Src
+      | where TimeGenerated between (ago(14d) .. ago(1d))
+      | summarize
+          PastLastSeen = max(TimeGenerated),
+          PastUPNs     = make_set(UserPrincipalName, 20),
+          PastIPs      = make_set(IPAddress, 50),
+          PastLocs     = make_set(tostring(Location), 50),
+          PastApps     = make_set(AppDisplayName, 50)
+          by UniqueTokenIdentifier;
+  let Last24h =
+      Src
+      | where TimeGenerated >= ago(1d)
+      //| where AppDisplayName !in (ExcludeApps)
+      | summarize
+          CurrentFirstSeen = min(TimeGenerated),
+          CurrentLastSeen  = max(TimeGenerated),
+          CurrentUPNs      = make_set(UserPrincipalName, 20),
+          CurrentIPs       = make_set(IPAddress, 50),
+          CurrentLocs      = make_set(tostring(Location), 50),
+          CurrentApps      = make_set(AppDisplayName, 50),
+          IPCount          = dcount(IPAddress),
+          LocCount         = dcount(tostring(Location))
+          by UniqueTokenIdentifier, ResultType;
+  Last24h
+  | join kind=inner Past on UniqueTokenIdentifier
+  | extend Gap = CurrentFirstSeen - PastLastSeen
+  | extend GapThreshold = totimespan(strcat(GapDays, "d"))
+  | where Gap >= GapThreshold
+  | where IPCount >= MinIPChanges or LocCount >= MinLocChanges
+  | extend NewIPs  = set_difference(CurrentIPs, PastIPs)
+  | extend NewLocs = set_difference(CurrentLocs, PastLocs)
+  | where array_length(NewIPs) > 0 or array_length(NewLocs) > 0
+  | extend
+      CurrentUPNCount = array_length(CurrentUPNs),
+      PastUPNCount = array_length(PastUPNs)
+  | project
+      UniqueTokenIdentifier,
+      PastLastSeen,
+      CurrentFirstSeen,
+      CurrentLastSeen,
+      Gap,
+      GapThreshold,
+      CurrentUPNs,
+      CurrentUPNCount,
+      CurrentIPs,
+      IPCount,
+      NewIPs,
+      CurrentLocs,
+      LocCount,
+      NewLocs,
+      CurrentApps,
+      PastApps,
+      PastUPNs,
+      ResultType
+  | order by Gap desc, CurrentLastSeen desc
+  | extend UserNames = strcat_array(CurrentUPNs, ",")
+  | extend NewIP = strcat_array(NewIPs, ",")
+  | extend FirstNewIP = tostring(NewIPs[0])
+  | extend NewLoc = strcat_array(NewLocs, ",")
+  | extend PastUPN = strcat_array(PastUPNs, ",")
+  | extend Source_Network_IPLocation = ""
+  | project
+      Alert_Time_TW = datetime_utc_to_local(CurrentLastSeen, 'Asia/Taipei'),
+      Alert_Time_UTC0 = CurrentLastSeen,
+          Alert_Category_en = "Entra ID",
+      Alert_SubCategory_en = "Anomaly Network Access User",
+      Alert_Name_en = "Abnormal Sign-in Token Reuse",
+      Alert_Description_en=strcat(
+                           "At Taiwan time: ",
+                           format_datetime(datetime_utc_to_local(CurrentLastSeen, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                           ", detected suspected Token Reuse behavior (UniqueTokenIdentifier appeared repeatedly and the interval reached the threshold).",
+                           "Token:",
+                           iff(isnotempty(UniqueTokenIdentifier), UniqueTokenIdentifier, "<NoTokenId>"),
+                           ", users (last 2 days): ",
+                           iff(isnotempty(tostring(UserNames)), tostring(UserNames), "<NoUserNames>"),
+                           ", previous last seen: ",
+                           format_datetime(datetime_utc_to_local(PastLastSeen, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                           ", current first seen: ",
+                           format_datetime(datetime_utc_to_local(CurrentFirstSeen, "Asia/Taipei"), "yyyy-MM-dd HH:mm:ss"),
+                           ", gap: ",
+                           tostring(Gap),
+                           " days",
+                           ", IP count: ",
+                           tostring(IPCount),
+                           ", current sign-in IP: ",
+                           iff(isnotempty(tostring(NewIP)), tostring(NewIP), "<NoNewIP>"),
+                           ", location count: ",
+                           tostring(LocCount),
+                           ", current sign-in location: ",
+                           iff(isnotempty(tostring(NewLoc)), tostring(NewLoc), "<NoNewLoc>"),
+                           "."
+                       ),
+      Alert_TriageStep_en=strcat(
+                          " 1. Check whether this is truly token reuse. The reused IP is: ",
+                          iff(isnotempty(tostring(NewIP)), tostring(NewIP), "<NoNewIPs>"),
+                          ", current sign-in location: ",
+                          iff(isnotempty(tostring(NewLoc)), tostring(NewLoc), "<NoNewLocs>"),
+                          "  to determine whether it is an uncommon source, cross-country/cross-region, or anonymous cloud egress.",
+                          " 2. Check whether multiple accounts share the same token. Current triggering account count: ",
+                          tostring(CurrentUPNCount),
+                          ", accounts that previously triggered this token: ",
+                          tostring(PastUPN),
+                          "; if the UPN count is greater than 1, prioritize suspicion of token leakage or proxy/automation abuse.",
+                          " 3. Check the applications currently involved in sign-in: ",
+                          iff(isnotempty(tostring(CurrentApps)), tostring(CurrentApps), "<NoCurrentApps>"),
+                          "previous sign-in applications: ",
+                          iff(isnotempty(tostring(PastApps)), tostring(PastApps), "<NoPastApps>"),
+                          "  to determine whether they include administrative/highly sensitive applications or abnormally newly added apps."
+                      ),
+      Alert_Containment_en=strcat(
+                           "1. Immediately revoke sign-in tokens/sessions and force re-sign-in for users (last 2 days): ",
+                           iff(isnotempty(tostring(UserNames)), tostring(UserNames), "<NoUserNames>"),
+                           "  to block continued access using the reused token.  ",
+                           "2. If the current sign-in IP or location is abnormal, immediately block the current sign-in IP: ",
+                           iff(isnotempty(tostring(NewIP)), tostring(NewIP), "<NoNewIP>"),
+                           ", current sign-in location: ",
+                           iff(isnotempty(tostring(NewLoc)), tostring(NewLoc), "<NoNewLoc>"),
+                           ", and tighten Conditional Access (MFA/compliant device/named location).  ",
+                           "3. Immediately require account security recovery: reset the password, re-register MFA, and check for suspicious devices or added authentication methods.  "
+                       ),
+      Alert_Remediation_en=strcat(
+                           "1. Strengthen risk-based access: establish Conditional Access policies to block new IPs/new locations.  ",
+                           "2. Implement token protection and endpoint governance: promote compliant devices, reduce long-lived token risk, and restrict access from unmanaged devices or legacy clients.  ",
+                           "3. Inventory automation and applications: regularly check for abnormally added applications and high-privilege applications, and remove unnecessary permissions and old credentials.  ",
+                           "4. Establish automated response: automatically revoke tokens, block IPs, notify users for confirmation, and create incident tickets for follow-up investigation when alerts trigger."
+                       ),
+              Event_Code = ResultType,
+      //Event_Description = ResultDescription,
+      Event_TimeRange_Start_UTC0 = CurrentFirstSeen,
+      Event_TimeRange_End_UTC0 = CurrentLastSeen,
+      Event_TimeRange_Start_TW = datetime_utc_to_local(CurrentFirstSeen, 'Asia/Taipei'),
+      Event_TimeRange_End_TW = datetime_utc_to_local(CurrentFirstSeen, 'Asia/Taipei'),
+      Source_Identity_FullName = UserNames,
+      Source_Network_IPAddress = NewIP,
+      Source_Network_IPLocation = Source_Network_IPLocation,
+      Target_Identity_FullName = UniqueTokenIdentifier,
+      //Target_Network_IPAddress = UniqueTokenIdentifier,
+      //Target_Resource_ID = "",
+      Target_Resource_Name = "Microsoft Entra ID",
+      Target_Resource_Type = "Microsoft Entra ID"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Source_Identity_FullName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_Network_IPAddress
+alertDetailsOverride:
+  alertDynamicProperties: []
+

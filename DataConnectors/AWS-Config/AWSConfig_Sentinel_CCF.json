@@ -1,0 +1,704 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics / Microsoft Sentinel workspace name. Deploy into the resource group that contains this workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "Azure region for the DCE, DCR, Sentinel content resources, and workspace location. Example: westeurope."
+      }
+    }
+  },
+  "variables": {
+    "dceName": "dce-awsconfig",
+    "dcrName": "dcr-awsconfig",
+    "tableName": "AWSConfig_CL",
+    "tablePlan": "Analytics",
+    "tableTotalRetentionDays": 365,
+    "customStreamName": "[concat('Custom-', variables('tableName'))]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "dceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+    "dcrId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+    "solutionName": "AWS Config CCF Connector",
+    "solutionId": "azuresentinel.azure-sentinel-solution-awsconfig-ccf",
+    "solutionVersion": "1.0.1",
+    "solutionAuthor": "KanenasCS",
+    "connectorDefinitionName": "AWSConfigLogsDefinition",
+    "connectionContentId": "AWSConfigLogsConnection",
+    "dataConnectorVersionConnectorDefinition": "1.0.0",
+    "dataConnectorVersionConnections": "1.0.1",
+    "definitionTemplateName": "[concat(parameters('workspaceName'),'-dc-',uniqueString(variables('connectorDefinitionName')))]",
+    "connectionTemplateName": "[concat(parameters('workspaceName'),'-rdc-',uniqueString(variables('connectionContentId')))]",
+    "connectorDefinitionResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectorDefinitionName'))]",
+    "solutionContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-sl-',uniqueString(concat(variables('solutionId'),'-Solution-',variables('solutionId'),'-',variables('solutionVersion'))))]",
+    "dataConnectorContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-dc-',uniqueString(concat(variables('solutionId'),'-DataConnector-',variables('connectorDefinitionName'),'-',variables('dataConnectorVersionConnectorDefinition'))))]",
+    "resourcesDataConnectorContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-rdc-',uniqueString(concat(variables('solutionId'),'-ResourcesDataConnector-',variables('connectionContentId'),'-',variables('dataConnectorVersionConnections'))))]",
+    "solutionProvider": "Community",
+    "connectionDataConnectorName": "AWSConfigItemsConnectorUI"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspaceName'), '/', variables('tableName'))]",
+      "properties": {
+        "plan": "[variables('tablePlan')]",
+        "totalRetentionInDays": "[variables('tableTotalRetentionDays')]",
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime"
+            },
+            {
+              "name": "CaptureTime",
+              "type": "dateTime"
+            },
+            {
+              "name": "AwsAccountId",
+              "type": "string"
+            },
+            {
+              "name": "AwsRegion",
+              "type": "string"
+            },
+            {
+              "name": "ResourceType",
+              "type": "string"
+            },
+            {
+              "name": "ResourceId",
+              "type": "string"
+            },
+            {
+              "name": "Arn",
+              "type": "string"
+            },
+            {
+              "name": "AvailabilityZone",
+              "type": "string"
+            },
+            {
+              "name": "ConfigItemStatus",
+              "type": "string"
+            },
+            {
+              "name": "ConfigItemVersion",
+              "type": "string"
+            },
+            {
+              "name": "ConfigStateId",
+              "type": "long"
+            },
+            {
+              "name": "ConfigStateMd5Hash",
+              "type": "string"
+            },
+            {
+              "name": "RelatedEvents",
+              "type": "dynamic"
+            },
+            {
+              "name": "Relationships",
+              "type": "dynamic"
+            },
+            {
+              "name": "Tags",
+              "type": "dynamic"
+            },
+            {
+              "name": "Configuration",
+              "type": "dynamic"
+            },
+            {
+              "name": "SupplementaryConfiguration",
+              "type": "dynamic"
+            },
+            {
+              "name": "MessageType",
+              "type": "string"
+            },
+            {
+              "name": "SourceFile",
+              "type": "string"
+            },
+            {
+              "name": "RawItem",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]",
+        "[variables('dceId')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[variables('dceId')]",
+        "streamDeclarations": {
+          "[variables('customStreamName')]": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "CaptureTime",
+                "type": "datetime"
+              },
+              {
+                "name": "AwsAccountId",
+                "type": "string"
+              },
+              {
+                "name": "AwsRegion",
+                "type": "string"
+              },
+              {
+                "name": "ResourceType",
+                "type": "string"
+              },
+              {
+                "name": "ResourceId",
+                "type": "string"
+              },
+              {
+                "name": "Arn",
+                "type": "string"
+              },
+              {
+                "name": "AvailabilityZone",
+                "type": "string"
+              },
+              {
+                "name": "ConfigItemStatus",
+                "type": "string"
+              },
+              {
+                "name": "ConfigItemVersion",
+                "type": "string"
+              },
+              {
+                "name": "ConfigStateId",
+                "type": "long"
+              },
+              {
+                "name": "ConfigStateMd5Hash",
+                "type": "string"
+              },
+              {
+                "name": "RelatedEvents",
+                "type": "dynamic"
+              },
+              {
+                "name": "Relationships",
+                "type": "dynamic"
+              },
+              {
+                "name": "Tags",
+                "type": "dynamic"
+              },
+              {
+                "name": "Configuration",
+                "type": "dynamic"
+              },
+              {
+                "name": "SupplementaryConfiguration",
+                "type": "dynamic"
+              },
+              {
+                "name": "MessageType",
+                "type": "string"
+              },
+              {
+                "name": "SourceFile",
+                "type": "string"
+              },
+              {
+                "name": "RawItem",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "sentinelWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('customStreamName')]"
+            ],
+            "destinations": [
+              "sentinelWorkspace"
+            ],
+            "transformKql": "source | extend CaptureTime = todatetime(CaptureTime) | extend TimeGenerated = iif(isnull(CaptureTime), now(), CaptureTime)",
+            "outputStream": "[variables('customStreamName')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('solutionId'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "version": "[variables('solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('solutionName')]",
+          "sourceId": "[variables('solutionId')]"
+        },
+        "author": {
+          "name": "[variables('solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('solutionAuthor')]",
+          "tier": "Community"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('connectorDefinitionName')]",
+              "version": "[variables('dataConnectorVersionConnectorDefinition')]"
+            }
+          ]
+        },
+        "providers": [
+          "[variables('solutionProvider')]"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        },
+        "contentKind": "Solution",
+        "packageId": "[variables('solutionId')]",
+        "contentProductId": "[variables('solutionContentProductId')]",
+        "displayName": "[variables('solutionName')]",
+        "publisherDisplayName": "[variables('solutionProvider')]",
+        "descriptionHtml": "AWS Config custom API connector for Microsoft Sentinel using the Codeless Connector Framework. Endpoint and API key are provided during connector configuration.",
+        "icon": "Azure_Sentinel",
+        "firstPublishDate": "2026-06-09"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2023-11-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', variables('connectorDefinitionName'))]",
+      "location": "[parameters('location')]",
+      "kind": "Customizable",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+      ],
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[variables('connectorDefinitionName')]",
+          "title": "AWS Config (via Codeless Connector Framework)",
+          "publisher": "Community",
+          "descriptionMarkdown": "Poll a customer-specific AWS Config custom API and ingest configuration items into **AWSConfig_CL**. Enter the API endpoint and x-api-key value below, then select **Connect**.",
+          "graphQueriesTableName": "[variables('tableName')]",
+          "graphQueries": [
+            {
+              "metricName": "Total Config items received",
+              "legend": "AWS Config items",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Recent AWS Config items",
+              "query": "{{graphQueriesTableName}} | sort by TimeGenerated desc"
+            },
+            {
+              "description": "AWS Config items by resource type",
+              "query": "{{graphQueriesTableName}} | summarize Count=count() by ResourceType | sort by Count desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions are required on the Microsoft Sentinel workspace.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "AWS Config custom API endpoint",
+                "description": "The customer/environment-specific API Gateway endpoint, including the /logs path."
+              },
+              {
+                "name": "AWS Config custom API key",
+                "description": "The x-api-key value used to authenticate to the API."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect AWS Config custom API",
+              "description": "Provide the customer/environment-specific API endpoint and the API key. These values are stored on the data connector connection, not in the initial ARM deployment parameters.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API endpoint",
+                    "placeholder": "https://example.execute-api.eu-west-2.amazonaws.com/prod/logs",
+                    "type": "text",
+                    "name": "apiEndpoint",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API key",
+                    "placeholder": "x-api-key value",
+                    "type": "password",
+                    "name": "apiKey",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "name": "connectAwsConfigApi",
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "isPrimary": true
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('definitionTemplateName'), variables('dataConnectorVersionConnectorDefinition'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentPackages', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('solutionId'))]",
+        "[variables('connectorDefinitionResourceId')]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectorDefinitionName')]",
+        "displayName": "[variables('solutionName')]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectorDefinitionName')))]",
+              "properties": {
+                "parentId": "[variables('connectorDefinitionResourceId')]",
+                "contentId": "[variables('connectorDefinitionName')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                  "sourceId": "[variables('solutionId')]",
+                  "name": "[variables('solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('solutionAuthor')]",
+                  "tier": "Community"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorVersionConnections')]",
+                      "contentId": "[variables('connectionContentId')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[variables('dataConnectorContentProductId')]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectionTemplateName'), variables('dataConnectorVersionConnections'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentPackages', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('solutionId'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectionContentId')]",
+        "displayName": "AWS Config custom API connection",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnections')]",
+          "parameters": {
+            "apiEndpoint": {
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "Customer/environment-specific AWS Config API endpoint, including path /logs."
+              }
+            },
+            "apiKey": {
+              "type": "securestring",
+              "minLength": 1,
+              "metadata": {
+                "description": "x-api-key value."
+              }
+            },
+            "connectorDefinitionName": {
+              "type": "string",
+              "defaultValue": "[variables('connectorDefinitionName')]",
+              "minLength": 1
+            },
+            "workspace": {
+              "type": "string",
+              "defaultValue": "[parameters('workspaceName')]"
+            },
+            "workspaceLocation": {
+              "type": "string",
+              "defaultValue": "[parameters('location')]"
+            },
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "[reference(variables('dceId'), '2023-03-11').logsIngestion.endpoint]",
+                "dataCollectionRuleImmutableId": "[reference(variables('dcrId'), '2023-03-11').immutableId]"
+              }
+            }
+          },
+          "variables": {
+            "connectionContentId": "[variables('connectionContentId')]",
+            "connectionDataConnectorName": "[variables('connectionDataConnectorName')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "apiVersion": "2023-11-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectionDataConnectorName'))]",
+              "location": "[parameters('location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[variables('connectorDefinitionName')]",
+                "dataType": "AWSConfig_CL",
+                "isActive": true,
+                "dcrConfig": {
+                  "streamName": "Custom-AWSConfig_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiKey')]",
+                  "ApiKeyName": "x-api-key",
+                  "ApiKeyIdentifier": ""
+                },
+                "request": {
+                  "apiEndpoint": "[[parameters('apiEndpoint')]",
+                  "httpMethod": "Get",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "startTime",
+                  "endTimeAttributeName": "endTime",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageParaName": "nextToken",
+                  "nextPageTokenJsonPath": "$.nextToken",
+                  "pagingInfoPlacement": "QueryString"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.events[*]"
+                  ],
+                  "format": "json"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectionContentId')))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectionDataConnectorName'))]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectionDataConnectorName'))]",
+                "contentId": "[variables('connectionContentId')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorVersionConnections')]",
+                "source": {
+                  "sourceId": "[variables('solutionId')]",
+                  "name": "[variables('solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('solutionAuthor')]",
+                  "tier": "Community"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[variables('resourcesDataConnectorContentProductId')]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectorDefinitionName')))]",
+      "dependsOn": [
+        "[variables('connectorDefinitionResourceId')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentTemplates', parameters('workspaceName'), 'Microsoft.SecurityInsights', concat(variables('connectionTemplateName'), variables('dataConnectorVersionConnections')))]"
+      ],
+      "properties": {
+        "parentId": "[variables('connectorDefinitionResourceId')]",
+        "contentId": "[variables('connectorDefinitionName')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+        "source": {
+          "sourceId": "[variables('solutionId')]",
+          "name": "[variables('solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "[variables('solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('solutionAuthor')]",
+          "tier": "Community"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorVersionConnections')]",
+              "contentId": "[variables('connectionContentId')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "tableName": {
+      "type": "string",
+      "value": "[variables('tableName')]"
+    },
+    "streamName": {
+      "type": "string",
+      "value": "[variables('customStreamName')]"
+    },
+    "connectorDefinitionName": {
+      "type": "string",
+      "value": "[variables('connectorDefinitionName')]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(variables('dceId'), '2023-03-11').logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(variables('dcrId'), '2023-03-11').immutableId]"
+    }
+  }
+}
