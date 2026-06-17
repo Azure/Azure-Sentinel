@@ -42,15 +42,24 @@
             "metadata": {
                 "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
             }
+        },
+        "DcrWorkspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Phase 1 (Logs Ingestion API) — Full resource ID of the customer's Log Analytics workspace where DigitalShadows_V2_CL will be created. Format: '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'. The legacy WorkspaceID parameter (a GUID only) is no longer used by the ingestion pipeline."
+            }
         }
     },
-	"variables": 
+	"variables":
 		{
             "ConnectorName": "[concat('ds', uniqueString(resourceGroup().id))]",
 			"FunctionName1": "[concat('include', uniqueString(resourceGroup().id))]",
             "StorageSuffix": "[environment().suffixes.storage]",
 			"FunctionName2": "[concat('exclude', uniqueString(resourceGroup().id))]",
-            "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+            "DceName":               "[concat('ds-dce-', uniqueString(resourceGroup().id))]",
+            "DcrName":               "[concat('ds-dcr-', uniqueString(resourceGroup().id))]",
+            "DcrStreamName":         "Custom-DigitalShadows_V2_CL",
+            "MetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]"
     },
     "resources": [
         {
@@ -153,11 +162,11 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName1')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName1')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ConnectorName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ConnectorName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
                         "HighVariabilityClassifications": "[parameters('HighVariabilityClassifications')]",
                         "ClassificationFilterOperation": "include",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
+                        "DCE_URL":          "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName')), '2022-06-01').logsIngestion.endpoint]",
+                        "DCR_IMMUTABLE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName')), '2022-06-01').immutableId]",
+                        "STREAM_NAME":      "[variables('DcrStreamName')]",
                         "DigitalShadowsAccountID": "[parameters('DigitalShadowsAccountID')]",
                         "HistoricalDays": "[parameters('HistoricalDays')]",
                         "DigitalShadowsKey": "[parameters('DigitalShadowsKey')]",
@@ -230,11 +239,11 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName2')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName2')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('ConnectorName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('ConnectorName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
                         "HighVariabilityClassifications": "[parameters('HighVariabilityClassifications')]",
                         "ClassificationFilterOperation": "exclude",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
+                        "DCE_URL":          "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName')), '2022-06-01').logsIngestion.endpoint]",
+                        "DCR_IMMUTABLE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName')), '2022-06-01').immutableId]",
+                        "STREAM_NAME":      "[variables('DcrStreamName')]",
                         "DigitalShadowsAccountID": "[parameters('DigitalShadowsAccountID')]",
                         "HistoricalDays": "[parameters('HistoricalDays')]",
                         "DigitalShadowsKey": "[parameters('DigitalShadowsKey')]",
@@ -255,6 +264,81 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": { "publicNetworkAccess": "Enabled" }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DcrName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+                "streamDeclarations": {
+                    "Custom-DigitalShadows_V2_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "App",           "type": "string"   },
+                            { "name": "Title",         "type": "string"   }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('DcrWorkspaceResourceId')]",
+                            "name": "logAnalyticsDest"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams":      [ "Custom-DigitalShadows_V2_CL" ],
+                        "destinations": [ "logAnalyticsDest" ],
+                        "outputStream": "Custom-DigitalShadows_V2_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName')), variables('FunctionName1'), variables('MetricsPublisherRoleId'))]",
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules/', variables('DcrName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName1'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MetricsPublisherRoleId')]",
+                "principalId":      "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName1')), '2018-11-01', 'Full').identity.principalId]",
+                "principalType":    "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName')), variables('FunctionName2'), variables('MetricsPublisherRoleId'))]",
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules/', variables('DcrName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName2'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MetricsPublisherRoleId')]",
+                "principalId":      "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName2')), '2018-11-01', 'Full').identity.principalId]",
+                "principalType":    "ServicePrincipal"
             }
         }
     ]
