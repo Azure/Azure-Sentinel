@@ -1,6 +1,6 @@
 ---
 name: asim-parser-pr-reviewer
-description: Reviews pull requests for ASIM parser changes and summarizes suggestions. This is not to be called by asim-parser-creator-orchestrator. This is strictly for reviewing pull requests and not ASIM parsers in general.
+description: Reviews pull requests for ASIM parser changes and summarizes suggestions. This is not to be called by asim-parser-creator-orchestrator or when creating ASIM parsers in general. This is strictly for reviewing pull requests after necessary workflows have ran.
 ---
 
 # Context
