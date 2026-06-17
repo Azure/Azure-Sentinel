@@ -3557,8 +3557,17 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
             if isinstance(data_flows, list):
                 for flow in data_flows:
                     if isinstance(flow, dict):
+                        # Try both "outputStream" (legacy) and "streams" (standard)
+                        output_streams = []
                         output_stream = flow.get("outputStream")
                         if isinstance(output_stream, str):
+                            output_streams.append(output_stream)
+                        
+                        streams = flow.get("streams")
+                        if isinstance(streams, list):
+                            output_streams.extend(s for s in streams if isinstance(s, str))
+                        
+                        for output_stream in output_streams:
                             # Strip "Microsoft-" or "Custom-" prefix
                             table_name = output_stream.strip()
                             if table_name.startswith("Microsoft-"):
