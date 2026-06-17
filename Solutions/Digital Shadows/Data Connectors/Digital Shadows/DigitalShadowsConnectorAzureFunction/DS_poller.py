@@ -10,13 +10,13 @@ logger = logging.getLogger("DS_poller")
 
 class poller:
 
-    def __init__(self, function_name, ds_id, ds_key, secret, as_id, as_key, connection_string, historical_days, url):
-        """ 
-            initializes all necessary variables from other classes for polling 
+    def __init__(self, function_name, ds_id, ds_key, secret, dce_url, dcr_immutable_id, stream_name, connection_string, historical_days, url):
         """
-        
+            initializes all necessary variables from other classes for polling
+        """
+
         self.DS_obj = DS_api.api(ds_id, ds_key, secret, url)
-        self.AS_obj = AS_api.logs_api(as_id, as_key)
+        self.AS_obj = AS_api.logs_api(dce_url, dcr_immutable_id, stream_name)
         self.date = State(connection_string, function_name)
         logger.info("got inside the poller code")
         self.event = self.date.get_last_event(historical_days)
