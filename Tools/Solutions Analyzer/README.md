@@ -199,6 +199,19 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.10 - Schema reference documentation links for table pages
+
+**Schema references section added to table documentation:**
+- Each generated table page now includes a "Schema References" section with official Microsoft Learn documentation links for field/column information.
+- **Specific schema documentation** is provided for well-documented tables (e.g., SecurityAlert for security alerts, DnsEvents/DnsInventory for DNS via AMA) with dedicated reference pages.
+- **General data source schema reference** is provided for all other tables as a fallback.
+- The mapping is configurable via the `TABLE_SCHEMA_REFERENCES` dictionary in `generate_connector_docs.py`, allowing easy addition of new table-specific references.
+- Current mappings include:
+  - `SecurityAlert` → [Security Alert Schema](https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema)
+  - `DnsEvents`, `DnsInventory`, `AMA_DNS` → [DNS AMA Fields Reference](https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields)
+  - All other tables → [Data Source Schema Reference](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference) (general reference)
+- Schema References section appears in the Table of Contents for easy navigation.
+
 ### v9.9 - In-solution override flag for misclassified published connectors
 
 **Connectors with all tables filtered out no longer drop their solution from the index (`solutions_connectors_tables_mapping.csv`, `solutions-index.md`, `index.html`):**
@@ -228,8 +241,10 @@ See the script documentation for details:
 **ARM-expression table-name filter (`tables.csv`):**
 - `is_true_table_name()` now rejects ARM-template expressions captured as literal table names (strings starting with `[` or containing `parameters(`/`variables(`), so placeholders like `[parameters('PlaybookName')]_CL` and `[variables('Sentinel_LogName')]_CL` no longer leak into `tables.csv` as bogus `_CL` rows. Previously these passed the `_CL`-suffix check and were emitted as real tables.
 
-**Priority 0 dataTypes extraction for CCF v3 connectors (`connectors.csv`, `solutions_connectors_tables_mapping.csv`):**
-- Standalone CCF v3 connectors (defined in `*_ConnectorDefinition.json` files) now extract table names from their `properties.connectorUiConfig.dataTypes[].name` definitions as Priority 0 source, making this the authoritative table discovery method for such connectors. Previously, the mapper skipped the dataTypes section for standalone connectors and only applied it to main-template definitions, causing multi-table CCF v3 connectors (e.g., AlibabaCloudNetworkingConnector) to report zero tables. The fix ensures all 24 multi-table CCF v3 connectors now correctly expose their 90+ defined tables. Priority hierarchy remains: dataTypes (0) > `*_Table.json` companion files (1) > `*_DCR.json` files (2) > query analysis (3).
+**Connector table-source precedence and DCR normalization fixes (`connectors.csv`, `solutions_connectors_tables_mapping.csv`):**
+- Companion files are now authoritative for table mapping: `*_Table.json` / `*_DCR.json` are applied first, query analysis runs only when companion files are absent, and `dataTypes` is now a fallback source (instead of Priority 0). This avoids over-trusting UI declarations when explicit DCR/table companion files are present.
+- DCR extraction now treats `outputStream` as authoritative destination-table signal and uses `streams` only as fallback when `outputStream` is missing. This prevents input stream declarations from being misreported as extra ingested tables (for example Zscaler `nss_*` helper streams alongside `CommonSecurityLog`).
+- `dataTypes` fallback extraction now expands placeholders (for example `{{graphQueriesTableName}}`) before resolving table tokens, improving coverage for connectors that parameterize table names in the UI config.
 
 **Override-driven "discovered" corrections (data only):**
 - Added `not_in_solution_json=false` overrides for three published connectors that the mapper flags as "discovered" because of source-side gaps in their solutions: `MailGuard365` (solution has no `Solution_*.json` data file), `CiscoMerakiNativePoller` (absent from the `Data Connectors` list in `Solution_CiscoMeraki.json`), and `Pathlock_TDnR` (legacy root `Pathlock_TDnR.json` collides with the CCP definition in `Pathlock_TDnR_PUSH_CCP/` that the solution actually references). The overrides are an interim accuracy fix; the underlying solutions still need upstream correction (tracked in the reports folder).

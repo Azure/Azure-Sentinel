@@ -98,6 +98,22 @@ LOGIC_APPS_BUILTIN_LEARN_URLS: Dict[str, str] = {
     "apimanagement": "https://learn.microsoft.com/en-us/azure/connectors/connectors-native-azureapim",
 }
 
+# ----- Schema Reference Mappings -----
+# Maps specific table names (or table prefixes) to their official Microsoft Learn schema documentation URLs.
+# These links provide comprehensive field/column information for tables.
+TABLE_SCHEMA_REFERENCES: Dict[str, str] = {
+    # General data source schema reference (master index of all Sentinel table schemas)
+    "": "https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference",
+    
+    # Security Alert table schema
+    "SecurityAlert": "https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema",
+    
+    # DNS data via Azure Monitor Agent (AMA) - comprehensive field mapping
+    "AMA_DNS": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+    "DnsEvents": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+    "DnsInventory": "https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields",
+}
+
 # Cache file for resolved Microsoft Learn URLs of managed/custom Logic Apps connectors.
 # Persists between runs; entries are kept indefinitely (only re-probed when missing).
 _LEARN_URL_CACHE_PATH: Path = Path(__file__).parent / ".cache" / "connector_learn_urls.json"
@@ -173,6 +189,34 @@ def resolve_connector_learn_url(api_name: str, api_kind: str) -> Optional[str]:
     global _LEARN_URL_CACHE_DIRTY
     _LEARN_URL_CACHE_DIRTY = True
     return resolved
+
+
+def get_schema_references(table_name: str) -> List[Tuple[str, str]]:
+    """
+    Get schema reference documentation links for a given table.
+    
+    Returns a list of (display_name, url) tuples for schema documentation.
+    Checks for exact match first, then returns the general schema reference.
+    
+    Args:
+        table_name: Name of the table (e.g., 'SecurityAlert', 'DnsEvents')
+    
+    Returns:
+        List of (display_name, url) tuples. First item is most specific.
+    """
+    results = []
+    
+    # Check for exact table name match
+    if table_name in TABLE_SCHEMA_REFERENCES:
+        url = TABLE_SCHEMA_REFERENCES[table_name]
+        results.append((f"{table_name} Schema Reference", url))
+    
+    # Always add the general schema reference at the end
+    general_url = TABLE_SCHEMA_REFERENCES.get("", "")
+    if general_url:
+        results.append(("Data Source Schema Reference", general_url))
+    
+    return results
 
 
 # Collection method metadata: descriptions and documentation links
@@ -4916,6 +4960,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             # Build and write Table of Contents
             toc_entries = []
             _has_schema = bool(table_schemas_by_table.get(table, []))
+            _has_schema_refs = bool(get_schema_references(table))
             _has_additional_info = bool(get_doc_override('table', table, 'additional_information'))
             _has_solutions = bool(info['solutions'])
             _has_connectors = bool(info['connectors'])
@@ -4928,6 +4973,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
 
             if _has_schema:
                 toc_entries.append(("Schema", "schema"))
+            if _has_schema_refs:
+                toc_entries.append(("Schema References", "schema-references"))
             if _has_additional_info:
                 toc_entries.append(("Additional Information", "additional-information"))
             if _has_solutions:
@@ -5042,6 +5089,15 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     for col in unique_columns:
                         f.write(f"| {col['name']} | {col['type']} |\n")
                 
+                f.write("\n")
+            
+            # Schema References section - links to official documentation
+            schema_refs = get_schema_references(table)
+            if schema_refs:
+                f.write("## Schema References\n\n")
+                f.write("Official Microsoft Learn documentation for field/column information:\n\n")
+                for ref_name, ref_url in schema_refs:
+                    f.write(f"- [{ref_name}]({ref_url})\n")
                 f.write("\n")
             
             # Additional Information section from overrides
