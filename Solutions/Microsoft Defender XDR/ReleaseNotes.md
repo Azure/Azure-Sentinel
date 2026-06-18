@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                    |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
+| 3.0.15       | 15-06-2026                     | Refactor OAuth and device-code phishing hunting queries to construct login.microsoftonline.com and login.microsoftonline.us URLs via strcat() (resolves ARM-TTK 'DeploymentTemplate Must Not Contain Hardcoded Uri'); remove empty groupByAlertDetails/groupByCustomDetails arrays from PossibleWebpBufferOverflow analytic rule (resolves ARM-TTK 'Template Should Not Contain Blanks'). |
 | 3.0.14      | 09-02-2026                     | Added new **Hunting Query** Punycode chars lookalike domains.yaml.		       |
 | 3.0.13      | 22-01-2026                     | Updated Defender XDR solution with new **Hunting Queries**.				   |
 | 3.0.12      | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
