@@ -1,0 +1,269 @@
+Parser:
+  Title: Web Session ASIM filtering parser for Imperva Cloud WAF
+  Version: '0.1.0'
+  LastUpdated: Jul 11, 2025
+Product:
+  Name: Imperva Cloud WAF
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Imperva Cloud WAF Documentation
+  Link: https://docs-cybersec.thalesgroup.com/bundle/cloud-application-security/page/more/log-file-structure.htm
+Description: |
+  This ASIM filtering parser supports normalizing Imperva Cloud WAF (formerly Incapsula) SIEM integration logs from the ImpervaWAFCloud table to the ASIM Web Session normalized schema. It supports filtering by time range, source/destination IP, URL, HTTP user agent, event result details, and event result.
+  This parser was created using the agentic ASIM parser creation tool, powered by the VSCode Sentinel extension.
+ParserName: vimWebSessionImpervaCloudWAF
+EquivalentBuiltInParser: _Im_WebSession_ImpervaCloudWAF
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      ipaddr_has_any_prefix: dynamic = dynamic([]),
+      url_has_any: dynamic = dynamic([]),
+      httpuseragent_has_any: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      let EventSeverityLookup = datatable (EventOriginalSeverity_lookup: string, EventSeverity_lookup: string, ThreatCategory_lookup: string) [
+          "0",  "Informational", "",
+          "1",  "Low",           "CrossSiteScripting",
+          "3",  "Low",           "IllegalResourceAccess",
+          "4",  "Low",           "BotAccessControl",
+          "5",  "Medium",        "AttackTool",
+          "6",  "Medium",        "Malware",
+          "7",  "High",          "Backdoor",
+          "8",  "High",          "DDoS",
+          "9",  "High",          "RemoteFileInclusion",
+          "10", "High",          "RateLimiting",
+          "11", "Medium",        "CustomRule",
+          "12", "Medium",        "APISecurityViolation",
+          "13", "High",          "AccountTakeover",
+          "14", "High",          "BadBot"
+      ];
+      let DvcActionLookup = datatable (DvcAction_lookup: string, DvcAction_normalized: string, EventResult_lookup: string) [
+          "REQ_PASSED",                      "Allow",   "Success",
+          "REQ_CACHED",                      "Allow",   "Success",
+          "REQ_CACHED_FRESH",                "Allow",   "Success",
+          "REQ_BAD_REQUEST",                 "Deny",    "Failure",
+          "REQ_CHALLENGED",                  "Deny",    "Partial",
+          "REQ_BLOCKED",                     "Drop",    "Failure",
+          "REQ_BLOCKED_COOKIELESS_SESSION",  "Drop",    "Failure"
+      ];
+      ImpervaWAFCloud
+      | where not(disabled)
+      | where EventType == "SIEMintegration"
+      // -- Time filtering
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      // -- Url filtering
+      | where (array_length(url_has_any) == 0 or UrlOriginal has_any (url_has_any))
+      // -- HTTP User Agent filtering
+      | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgentOriginal has_any (httpuseragent_has_any))
+      // -- Event result details filtering
+      | where (array_length(eventresultdetails_in) == 0 or HttpStatusCode has_any (eventresultdetails_in))
+      // -- IP address filtering
+      | extend
+          temp_SrcMatch = has_any_ipv4_prefix(SrcIpAddr, src_or_any),
+          temp_DstMatch = has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
+      | extend ASimMatchingIpAddr = case(
+          array_length(src_or_any) == 0, "-",
+          temp_SrcMatch and temp_DstMatch, "Both",
+          temp_SrcMatch, "SrcIpAddr",
+          temp_DstMatch, "DstIpAddr",
+          "No match"
+      )
+      | where ASimMatchingIpAddr != "No match"
+      | project-away temp_*
+      // -- Lookups
+      | lookup EventSeverityLookup on $left.EventSeverity == $right.EventOriginalSeverity_lookup
+      | lookup DvcActionLookup on $left.DvcAction == $right.DvcAction_lookup
+      // -- Event result filtering (post-lookup)
+      | extend EventResult_computed = iif(isnotempty(EventResult_lookup), EventResult_lookup, "NA")
+      | where (eventresult == '*' or EventResult_computed =~ eventresult)
+      | extend
+          _EventStartTime = iif(
+              isnotempty(EventStartTime) and EventStartTime != "",
+              unixtime_milliseconds_todatetime(tolong(EventStartTime)),
+              TimeGenerated
+          ),
+          _EventEndTime = iif(
+              isnotempty(EventEndTime) and EventEndTime != "",
+              unixtime_milliseconds_todatetime(tolong(EventEndTime)),
+              TimeGenerated
+          )
+      | extend
+          EventCount          = int(1),
+          EventSchema         = "WebSession",
+          EventSchemaVersion  = "0.2.6",
+          EventType1          = "HTTPsession",
+          EventProduct1       = "Cloud WAF",
+          EventVendor1        = "Imperva",
+          EventOriginalType   = "SIEMintegration",
+          EventUid            = RequestId,
+          EventResultDetails  = HttpStatusCode,
+          EventOriginalSeverity = EventSeverity,
+          EventSeverity1      = iif(isnotempty(EventSeverity_lookup), EventSeverity_lookup, "Informational"),
+          EventResult         = EventResult_computed,
+          DvcOriginalAction   = DvcAction,
+          DvcAction1          = iif(isnotempty(DvcAction_normalized), DvcAction_normalized, ""),
+          Dvc                 = PoPName,
+          DvcHostname         = PoPName,
+          _DstIpAddr          = DstIpAddr,
+          _DstPortNumber      = toint(DstPortNumber),
+          DstHostname         = DstDomainHostname,
+          DstDomain           = DstDomainHostname,
+          DstDomainType       = iif(isnotempty(DstDomainHostname), "FQDN", ""),
+          DstFQDN             = DstDomainHostname,
+          _SrcIpAddr          = SrcIpAddr,
+          _SrcPortNumber      = toint(SrcPortNumber),
+          SrcGeoCountry       = Country,
+          SrcGeoCity          = City,
+          _SrcGeoLatitude     = iif(isnotempty(SrcGeoLatitude) and SrcGeoLatitude != "", toreal(SrcGeoLatitude), real(null)),
+          _SrcGeoLongitude    = iif(isnotempty(SrcGeoLongitude) and SrcGeoLongitude != "", toreal(SrcGeoLongitude), real(null)),
+          Url                 = UrlOriginal,
+          _UrlOriginal        = UrlOriginal,
+          _HttpRequestMethod  = HttpRequestMethod,
+          _HttpStatusCode     = HttpStatusCode,
+          HttpUserAgent       = HttpUserAgentOriginal,
+          HttpVersion         = iif(
+              isnotempty(NetworkApplicationProtocoVersion) and NetworkApplicationProtocoVersion != "",
+              extract(@"^(TLSv[\d\.]+)", 1, NetworkApplicationProtocoVersion),
+              ""
+          ),
+          _HttpRequestXff     = iif(isnotempty(HttpRequestXff) and HttpRequestXff != "", HttpRequestXff, ""),
+          _NetworkApplicationProtocol = iif(isnotempty(NetworkApplicationProtocol) and NetworkApplicationProtocol != "", tolower(NetworkApplicationProtocol), ""),
+          _NetworkSessionId   = NetworkSessionId,
+          ThreatCategory      = iif(isnotempty(ThreatCategory_lookup) and ThreatCategory_lookup != "", ThreatCategory_lookup, "")
+      | extend
+          _Duration           = toint(datetime_diff('millisecond', _EventEndTime, _EventStartTime)),
+          Dst                 = coalesce(DstFQDN, _DstIpAddr),
+          Src                 = _SrcIpAddr,
+          IpAddr              = _SrcIpAddr,
+          Hostname            = DstHostname,
+          SessionId           = _NetworkSessionId,
+          User                = AccountName
+      | extend
+          AdditionalFields    = iif(
+              pack,
+              bag_pack(
+                  "SiteID",           SiteID,
+                  "AccountID",        AccountID,
+                  "AccountName",      AccountName,
+                  "PostBody",         PostBody,
+                  "QueryString",      QueryString,
+                  "BrowserType",      BrowserType,
+                  "CaptchaSupport",   CaptchaSupport,
+                  "ClientApp",        ClientApp,
+                  "ClientAppSig",     ClientAppSig,
+                  "CookiesSupport",   CookiesSupport,
+                  "VisitorID",        VisitorID,
+                  "TlsVersion",       NetworkApplicationProtocoVersion
+              ),
+              dynamic(null)
+          )
+      | project
+          TimeGenerated,
+          EventCount,
+          EventStartTime      = _EventStartTime,
+          EventEndTime        = _EventEndTime,
+          EventType           = EventType1,
+          EventResult,
+          EventResultDetails,
+          EventOriginalType,
+          EventSeverity       = EventSeverity1,
+          EventOriginalSeverity,
+          EventSchema,
+          EventSchemaVersion,
+          EventProduct        = EventProduct1,
+          EventVendor         = EventVendor1,
+          EventUid,
+          Dvc,
+          DvcHostname,
+          DvcAction           = DvcAction1,
+          DvcOriginalAction,
+          Dst,
+          DstIpAddr           = _DstIpAddr,
+          DstPortNumber       = _DstPortNumber,
+          DstHostname,
+          DstDomain,
+          DstDomainType,
+          DstFQDN,
+          Src,
+          SrcIpAddr           = _SrcIpAddr,
+          SrcPortNumber       = _SrcPortNumber,
+          SrcGeoCountry,
+          SrcGeoCity,
+          SrcGeoLatitude      = _SrcGeoLatitude,
+          SrcGeoLongitude     = _SrcGeoLongitude,
+          Url,
+          UrlOriginal         = _UrlOriginal,
+          HttpRequestMethod   = _HttpRequestMethod,
+          HttpStatusCode      = _HttpStatusCode,
+          HttpUserAgent,
+          HttpVersion,
+          HttpRequestXff      = _HttpRequestXff,
+          NetworkApplicationProtocol = _NetworkApplicationProtocol,
+          NetworkSessionId    = _NetworkSessionId,
+          NetworkDuration     = _Duration,
+          ThreatCategory,
+          ASimMatchingIpAddr,
+          IpAddr,
+          Hostname,
+          SessionId,
+          Duration            = _Duration,
+          User,
+          AdditionalFields,
+          Type                = "ImpervaWAFCloud"
+  };
+  parser(
+      starttime = starttime,
+      endtime = endtime,
+      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+      ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+      url_has_any = url_has_any,
+      httpuseragent_has_any = httpuseragent_has_any,
+      eventresultdetails_in = eventresultdetails_in,
+      eventresult = eventresult,
+      disabled = disabled,
+      pack = pack
+  )
