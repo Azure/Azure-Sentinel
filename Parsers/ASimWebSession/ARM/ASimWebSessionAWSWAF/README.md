@@ -14,8 +14,8 @@ For more information, see:
 - [ASIM WebSession normalization schema reference](https://aka.ms/ASimWebSessionDoc)
 
 For the changelog, see:
-- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/CHANGELOG/ASimWebSessionAWSAWSWAF.md)
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/CHANGELOG/ASimWebSessionAWSWAF.md)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FASimWebSessionAWSAWSWAF%2FASimWebSessionAWSAWSWAF.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FASimWebSessionAWSAWSWAF%2FASimWebSessionAWSAWSWAF.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FASimWebSessionAWSWAF%2FASimWebSessionAWSWAF.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FASimWebSessionAWSWAF%2FASimWebSessionAWSWAF.json)

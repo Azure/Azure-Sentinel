@@ -1,7 +1,7 @@
 Parser:
-  Title: Web Session ASIM filtering parser for AWS Web Application Firewall
+  Title: Web Session ASIM parser for AWS Web Application Firewall
   Version: "0.1.0"
-  LastUpdated: Jun 16, 2026
+  LastUpdated: Jun 18, 2026
 Product:
   Name: AWS WAF
 Normalization:
@@ -15,65 +15,10 @@ References:
   - Title: AWS WAF Logging Documentation
     Link: https://docs.aws.amazon.com/waf/latest/developerguide/logging-fields.html
 Description: |
-  This ASIM parser supports filtering and normalizing AWS Web Application Firewall (WAF) web session logs from the AWSWAF table to the ASIM Web Session normalized schema.
-ParserName: vimWebSessionAWSAWSWAF
-EquivalentBuiltInParser: _Im_WebSession_AWSAWSWAF
-Exceptions:
-  - Field: SrcBytes
-    Warning: Missing recommended field
-    Exception: AWS WAF logs do not include request or response sizes. No byte counts are available in the WAF logs.
-  - Field: DstBytes
-    Warning: Missing recommended field
-    Exception: AWS WAF logs do not include request or response sizes. No byte counts are available in the WAF logs.
-  - Field: SrcHostname
-    Warning: Missing recommended field
-    Exception: AWS WAF identifies the client only by IP address (httpRequest.clientIp) and GeoIP country. No client hostname is reported, and the parser does not perform reverse-DNS enrichment.
-  - Field: SrcDomain
-    Warning: Missing recommended field
-    Exception: AWS WAF identifies the client only by IP address. No client domain information is reported.
-  - Field: DvcHostname
-    Warning: Missing recommended field
-    Exception: The reporting device is the AWS WAF managed cloud service, which has no host identity. The Web ACL ARN is used as the device identifier (Dvc, DvcId).
-  - Field: DvcDomain
-    Warning: Missing recommended field
-    Exception: The reporting device is the AWS WAF managed cloud service, which has no domain identity.
-  - Field: DvcIpAddr
-    Warning: Missing recommended field
-    Exception: The reporting device is the AWS WAF managed cloud service, which has no IP address identity.
-  - Field: EventResultDetails
-    Warning: Empty value in recommended field
-    Exception: Mapped from responseCodeSent, which AWS WAF populates only when a custom block response is configured. Empty for all allowed requests and for blocks using the default response.
-  - Field: DstIpAddr
-    Warning: Empty value in recommended field
-    Exception: AWS WAF does not report a destination IP address. Populated only when the HTTP Host header contains a valid IP literal (~3-5% of internet-facing traffic).
-  - Field: DstHostname
-    Warning: Empty value in recommended field
-    Exception: Empty for the rare records whose Host header is malformed or contains injection attempts; the raw value is preserved in Url and HttpHost.
+  This ASIM parser supports normalizing AWS Web Application Firewall (WAF) web session logs from the AWSWAF table to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionAWSWAF
+EquivalentBuiltInParser: _ASim_WebSession_AWSWAF
 ParserParams:
-  - Name: starttime
-    Type: datetime
-    Default: datetime(null)
-  - Name: endtime
-    Type: datetime
-    Default: datetime(null)
-  - Name: srcipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: ipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])
-  - Name: url_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: httpuseragent_has_any
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresultdetails_in
-    Type: dynamic
-    Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: "*"
   - Name: disabled
     Type: bool
     Default: false
@@ -82,16 +27,8 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-      starttime: datetime=datetime(null),
-      endtime: datetime=datetime(null),
-      srcipaddr_has_any_prefix: dynamic=dynamic([]),
-      ipaddr_has_any_prefix: dynamic=dynamic([]),
-      url_has_any: dynamic=dynamic([]),
-      httpuseragent_has_any: dynamic=dynamic([]),
-      eventresultdetails_in: dynamic=dynamic([]),
-      eventresult: string='*',
-      disabled: bool=false,
-      pack: bool=false
+      disabled:bool=false,
+      pack:bool=false
   )
   {
     //According to AWS documentation: https://docs.aws.amazon.com/waf/latest/developerguide/logging-fields.html
@@ -105,8 +42,6 @@ ParserQuery: |
     ];
     AWSWAF
     | where not(disabled)
-    | where (isnull(starttime) or TimeGenerated >= starttime)
-        and (isnull(endtime) or TimeGenerated <= endtime)
     //Mandatory common fields
     | extend
         EventCount = int(1),
@@ -114,12 +49,11 @@ ParserQuery: |
         EventEndTime = TimeGenerated,
         EventType = 'HTTPsession',
         EventVendor = 'AWS',
-        EventProduct = 'AWS WAF',
+        EventProduct = 'WAF',
         EventSchema = 'WebSession',
         EventSchemaVersion = '0.2.7'
     | extend Dvc = coalesce(WebAclId, strcat(EventVendor, '/', EventProduct))
     | lookup ActionLookup on Action
-    | where (eventresult == '*' or EventResult =~ eventresult)
     //Recommended common fields
     | extend DvcId = Dvc,
             DvcIdType = 'Other',
@@ -127,10 +61,13 @@ ParserQuery: |
     | project-rename DvcOriginalAction = Action
     // AWS WAF populates ResponseCodeSent only when a custom block response is configured; the field is empty for allowed requests and default-response blocks.
     | extend EventResultDetails = tostring(ResponseCodeSent)
-    | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in (eventresultdetails_in))
     | extend HttpStatusCode = EventResultDetails
     //HTTP session fields
     | extend parsedRequest = parse_json(HttpRequest)
+    //Network Source fields
+    | extend SrcIpAddr = tostring(parsedRequest.clientIp),
+            Src = tostring(parsedRequest.clientIp),
+            SrcGeoCountry = tostring(parsedRequest.country)
     | extend headers = iff(array_length(parsedRequest.headers) > 0, parsedRequest.headers, dynamic([{}]))
     | mv-apply header = headers on (
         summarize
@@ -140,7 +77,6 @@ ParserQuery: |
             HttpCookie = take_anyif(tostring(header.value), tostring(header.name) =~ 'Cookie'),
             HttpRequestXff = take_anyif(tostring(header.value), tostring(header.name) =~ 'X-Forwarded-For')
         )
-    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
     | extend
         scheme = tostring(parsedRequest.scheme),
         host = coalesce(tostring(parsedRequest.host), HttpHost),
@@ -157,7 +93,6 @@ ParserQuery: |
             HttpRequestMethod = tostring(parsedRequest.httpMethod),
             HttpRequestHeaderCount = toint(array_length(parsedRequest.headers)),
             UserAgent = HttpUserAgent
-    | where (array_length(url_has_any) == 0 or Url has_any (url_has_any))
     //Network session fields
     | extend NetworkApplicationProtocol = toupper(scheme),
             NetworkSessionId = tostring(parsedRequest.requestId)
@@ -169,27 +104,31 @@ ParserQuery: |
                 scheme =~ 'http', toint(80),
                 int(null)
             )
-    //Checking on host-header injection, IPv4, IPv6
-    | extend hostIsClean = host matches regex @'^[A-Za-z0-9\.\-\:\[\]_]+$'
-    | extend hostIsIp = hostIsClean and (host matches regex @'^\d{1,3}(\.\d{1,3}){3}$' or host contains ':')
-    | extend hostHasDomain = hostIsClean and not(hostIsIp) and array_length(split(host, '.')) > 1
+    // Normalize: unwrap bracketed IPv6 [::1]:443 -> ::1 ; strip :port from host:port (but not from bare IPv6)
+    | extend _hostNoPort = case(
+            host startswith '[', extract(@'^\[(.+?)\]', 1, host),                 // [IPv6] or [IPv6]:port
+            host matches regex @'^[^:]+:\d+$', tostring(split(host, ':')[0]),     // host:port  (single colon + digits)
+            host                                                                   // bare host or bare IPv6
+        )
+    | extend _hostIsIp =
+            isnotnull(parse_ipv4(_hostNoPort))
+            or (_hostNoPort contains ':' and isnotnull(parse_ipv6(_hostNoPort)))
+    | extend _hostIsIpShaped =
+            _hostIsIp
+            or _hostNoPort matches regex @'^\d{1,3}(\.\d{1,3}){3}$'   // padded/oversized dotted-quads e.g. 083.130.061.x
+    | extend _hostIsClean = _hostNoPort matches regex @'^[A-Za-z0-9\.\-\_]+$' or _hostIsIp
+    | extend _hostHasDomain = _hostIsClean and not(_hostIsIpShaped) and array_length(split(_hostNoPort, '.')) > 1
     | extend
-        DstIpAddr   = iff(isnotnull(parse_ipv4(host)), host, ''),
+        DstIpAddr   = iff(_hostIsIp, _hostNoPort, ''),          // strict: only real IPs
         DstHostname = case(
-            isnotnull(parse_ipv4(host)), host,
-            hostIsIp, '',
-            hostIsClean, tostring(split(host, '.')[0]),
+            _hostIsIp, _hostNoPort,                            // valid IP; keep
+            _hostIsIpShaped, '',                               // IP-shaped junk is blank, not a fake hostname
+            _hostIsClean, tostring(split(_hostNoPort, '.')[0]),
             ''
         ),
-        DstFQDN     = iff(hostHasDomain, host, ''),
-        DstDomain   = iff(hostHasDomain, strcat_array(array_slice(split(host, '.'), 1, -1), '.'), '')
+        DstFQDN     = iff(_hostHasDomain, _hostNoPort, ''),
+        DstDomain   = iff(_hostHasDomain, strcat_array(array_slice(split(_hostNoPort, '.'), 1, -1), '.'), '')
     | extend DstDomainType = iff(isnotempty(DstDomain), 'FQDN', '')
-    //Network Source fields
-    | extend SrcIpAddr = tostring(parsedRequest.clientIp),
-            Src = tostring(parsedRequest.clientIp),
-            SrcGeoCountry = tostring(parsedRequest.country)
-    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-    | where (array_length(ipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix))
     //Network Inspection fields
     | project-rename RuleName = TerminatingRuleId
     //Additional, non-normalized fields
@@ -242,8 +181,6 @@ ParserQuery: |
         HttpStatusCode,
         DstHostname,
         SrcIpAddr,
-        ASimMatchingIpAddr = "SrcIpAddr",
-        ASimMatchingHostname = "DstHostname",
         // -- Event optional
         EventOriginalUid,
         // -- HTTP optional
@@ -282,14 +219,6 @@ ParserQuery: |
         Type
   };
   parser(
-      starttime=starttime,
-      endtime=endtime,
-      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
-      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
-      url_has_any=url_has_any,
-      httpuseragent_has_any=httpuseragent_has_any,
-      eventresultdetails_in=eventresultdetails_in,
-      eventresult=eventresult,
       disabled=disabled,
       pack=pack
   )
