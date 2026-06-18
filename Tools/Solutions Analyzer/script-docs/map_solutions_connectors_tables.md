@@ -158,7 +158,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
 | `--skip-marketplace` | `False` | Skip Azure Marketplace availability checking |
 | `--refresh-marketplace` | `False` | Force refresh of marketplace cache (ignore cached results) |
-| `--force-refresh` | `""` | Force re-analysis of specified types, ignoring cached results. Comma-separated list of: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`. Use `all` to refresh everything, or `all-offline` to refresh all except network-dependent types. When `tables` is included, also re-runs `collect_table_info.py` with `--refresh-cache`. When `asim` is included, also re-runs `collect_asim_fields.py` with `--refresh-cache`. |
+| `--force-refresh` | `""` | Force re-analysis of specified types, ignoring cached results. Comma-separated list of: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`, `learn_docs`. Use `all` to refresh everything, or `all-offline` to refresh all except network-dependent types. When `tables` is included, also re-runs `collect_table_info.py` with `--refresh-cache`. When `asim` is included, also re-runs `collect_asim_fields.py` with `--refresh-cache`. When `learn_docs` is included, refetches the Microsoft Learn `data-connectors-reference` anchor index. |
 
 ### Example Usage
 
@@ -351,7 +351,7 @@ To avoid excessive API calls on subsequent runs, marketplace data is cached loca
 
 ### Output Fields
 
-Marketplace data adds 19 `mp_*` fields plus the legacy `is_published` and `marketplace_url` fields to [`solutions.csv`](csv/solutions.md). The `is_published` flag is also propagated to [`connectors.csv`](csv/connectors.md), [`content_items.csv`](csv/content_items.md), and the main mapping CSV.
+Marketplace data adds 19 `mp_*` fields plus the legacy `is_published` and `marketplace_url` fields to [`solutions.csv`](csv/solutions.md). The `is_published` flag is also propagated to [`connectors.csv`](csv/connectors.md), [`content_items.csv`](csv/content_items.md), and the main mapping CSV. For connectors, the propagated solution-level value is overridden to `false` when the connector is absent from a working solution definition file — see [Flagging Connectors Not in the Solution Definition as Unpublished](#flagging-connectors-not-in-the-solution-definition-as-unpublished).
 
 > Solutions without valid `publisher_id` and `offer_id` in `SolutionMetadata.json` cannot be checked and will have empty marketplace fields.
 
@@ -384,6 +384,37 @@ Connectors that have no discoverable definition files at all can be injected via
 #### Solution Membership
 
 Both mainTemplate and synthetic connectors are classified as **"In Solutions"** (i.e., `not_in_solution_json = false`), not as "Discovered". mainTemplate connectors are ARM resources defined within the solution's package template, and synthetic connectors are explicitly declared as part of a solution via the override CSV. This matches their status as formally documented solution components on Microsoft Learn.
+
+#### Skipping Solution-Package ARM Templates
+
+Some solutions commit a full **solution-package deployment template** inside their `Data Connectors/` folder (typically named `azuredeploy_*.json`). These files bundle the entire packaged solution — analytic rules, hunting queries, playbooks, workbooks, and parsers as `contentTemplates`, plus a single `contentPackages` resource — and also embed the solution's data connector(s) as ARM resources.
+
+The analyzer detects and **skips** these package templates during connector discovery (`is_solution_package_template`). Detection is name-agnostic and keys solely on the presence of a resource whose `type` ends with `contentPackages`, which never appears in a genuine standalone connector ARM template. Skipping is necessary because:
+
+- The connectors embedded in a package template are already discovered from their authoritative `*_DataConnectorDefinition.json` / `Connector_*.json` definition files.
+- The embedded ARM resources often carry a different (legacy) `title` than the standalone definition, so the title-based azuredeploy deduplication does not catch them. Mining the package template would therefore create a **phantom connector** with the wrong title and a merged/incorrect table list.
+
+> Intra-file azuredeploy deduplication: the title-based dedup also applies **within a single** `azuredeploy_*.json` file. Some wrappers emit two connector resources for the same logical connector — one whose `id` resolves to a literal value (`id_generated = false`) and one whose `id` is an unresolvable ARM expression and therefore gets a synthetic title-derived id (`id_generated = true`). When a generated-id entry shares its `title` with a literal-id entry from the same file, the generated entry is skipped (reason `azuredeploy_duplicate_skipped`). Example: Cisco Meraki's `azuredeploy_Cisco_Meraki_native_poller_connector.json` emits both the literal `CiscoMerakiNativePoller` and a title-generated `CiscoMeraki(usingRESTAPI)` — both titled "Cisco Meraki (using REST API)"; only the literal `CiscoMerakiNativePoller` is kept.
+
+Each skipped file is recorded in the issues report with reason `solution_package_template_skipped`. Note this is distinct from a genuine standalone `azuredeploy_*.json` that contains only a single `dataConnectors` resource (no `contentPackages`): those are legacy connector definitions and are still discovered normally (flagged `not_in_solution_json = true` when not listed in the Solution JSON).
+
+#### Flagging Connectors Not in the Solution Definition as Unpublished
+
+The solution definition file (`Solution_*.json`) is the authoritative list of which connectors ship to the content hub. After all rows are built, the analyzer applies a definition-authoritative publishing rule per solution:
+
+- If **at least one** of a solution's connectors is referenced by its definition file (i.e. some connector resolved to `not_in_solution_json = false`), the definition mechanism is proven to work for that solution. Any **additional** connectors found only by scanning the solution's `Data Connectors/` folder — those flagged `not_in_solution_json = true` — are **retained** but marked **`is_published = false`** for that solution association: they were discovered, they are simply not on the content hub. They are no longer dropped. The canonical `connectors.csv` record is forced to `is_published = false` only when the connector is folder-only in **every** solution it appears in; a connector documented by at least one solution stays published through that solution.
+- If **no** connector matches the definition (the solution has no definition file, or it references none of the discovered connectors), the folder scan is the only available discovery source, so a definition miss cannot be reliably distinguished from genuine absence. Those folder-discovered connectors are retained at their **solution-level marketplace** `is_published` status (not forced to `false`). This preserves behaviour for definition-less solutions and for solutions whose connectors are only ever discovered from the folder.
+
+> Definition-file discovery: the definition is normally `Data/Solution_*.json`. A few solutions use a non-standard name (e.g. `Solutions_AzureDataLake.json` (plural), `CTM360.json` (no prefix), `OpenSystems_Solution_Input.json`). When no `Solution_*.json` matches, the analyzer falls back to scanning the `Data/` folder for a **definition-shaped** JSON — one with a top-level `Name` plus at least one content array (`Data Connectors`, `Analytic Rules`, `Workbooks`, ...) — excluding generated side-cars (`system_generated_metadata.json`, `SolutionMetadata.json`). The fallback is adopted only when **exactly one** candidate is found, so a metadata look-alike can never be mistaken for the authoritative definition. This ensures the connectors of these solutions are correctly recognised as documented (`not_in_solution_json = false`) instead of appearing as folder-only "discovered" connectors.
+
+> Canonical attribution across multiple source files: a connector id can legitimately appear in several mapping rows sourced from different files — e.g. `1Password` is mapped from both the definition-referenced `1Password_API_FunctionApp.json` (documented) and a non-referenced `deployment/1Password_data_connector.json` wrapper. The per-connector `connectors.csv` record takes its `not_in_solution_json` from the first row processed for that id; to avoid a documented connector being labelled "discovered" just because an undocumented row sorted first, the canonical flag is re-asserted to `false` whenever the connector id is documented in **any** `(solution, connector)` association.
+
+This keeps the full discovered-connector inventory (nothing is deleted) while removing orphaned or superseded leftover artifacts — for example the Okta `OktaSSO_Polling` legacy `APIPolling` template under `OktaNativePollerConnector/`, when the Okta solution definition references only `OktaSSO` and `OktaSSOv2` — from the **published** count. Each folder-only `(solution, connector)` association is recorded in the issues report with reason `connector_not_in_solution_definition`.
+
+> File-name matching note: the documented-vs-folder-only check compares each connector's `Data Connectors/` file name against the file names listed in the definition. The status map is keyed by the **raw on-disk** file name, so the lookup decodes (`unquote`) the URL-encoded file name taken from the generated GitHub URL before comparing. Without this decode, any connector whose file name contains a space or parenthesis — e.g. `CEF AMA.json` (`CefAma`), `Windows Firewall.json` (`WindowsFirewall`), `template_ExtraHopReveal(x)AMA.json` — would fail the match and be wrongly marked `is_published = false` even though it **is** referenced by the definition.
+
+
+> Note: `mainTemplate` and synthetic connectors are classified `not_in_solution_json = false`, so they are never flagged by this rule. Standalone (non-solution) connectors carry an empty `not_in_solution_json` value and go through a separate code path; they are likewise unaffected.
 
 ### Collection Method Detection
 
@@ -436,6 +467,7 @@ After all patterns are detected, the final method is selected using this priorit
 |-------|-------------|
 | `collection_method` | The detected collection method (in `connectors.csv`) |
 | `collection_method_reason` | Explanation of why this method was selected |
+| `dcr_definition_files` | Semicolon-separated GitHub URLs to companion DCR files associated with the connector (for example `*_DCR.json` or `dcr.json`) |
 | `ccf_config_file` | GitHub URL to the CCF configuration file (populated for CCF and CCF Push connectors; empty for CCF Legacy) |
 | `ccf_capabilities` | Semicolon-separated list of CCF capabilities extracted from the config file or embedded pollingConfig (e.g., `APIKey;Paging;POST`) |
 
@@ -776,6 +808,20 @@ When a connector references a parser function (e.g., `ASimDns`):
 3. Analyzes the query to find actual table references (e.g., `Syslog`, `DnsEvents`)
 4. Maps the parser name to the discovered tables
 5. Replaces parser reference with actual tables in the output
+
+### Connector Table Source Priority
+
+For each connector, tables are gathered from several sources. The most authoritative source for what a connector *ingests* is its Data Collection Rule (DCR) and table-definition companion files, so the analyzer applies the following priority:
+
+1. **`dataTypes` declarations** in the connector definition.
+2. **Companion `*_Table.json` / `*_DCR.json` files** in the connector's folder (`find_companion_table_files`). The DCR's output stream (e.g., `Custom-OktaV2_CL`) and the table definition declare exactly what the connector writes to.
+3. **Query analysis** of the connector's UI/status queries (`graphQueries`, `sampleQueries`, `lastDataReceivedQuery`, connectivity criteria), including expansion of any parser functions they reference.
+
+**The DCR/Table companion files trump query analysis.** When companion `*_Table.json` / `*_DCR.json` files are present for a connector, the analyzer treats them as ground truth and **skips query analysis** (priority 3) entirely for that connector. This prevents non-ingested tables from leaking onto the connector.
+
+> **Why this matters:** Connector status queries such as `lastDataReceivedQuery` frequently call a shared parser that `union`s multiple tables, including legacy ones. For example, a CCF v2 connector whose DCR writes only `OktaV2_CL` may run a status query through a parser that unions both `OktaV2_CL` and the legacy `Okta_CL`. Without this rule, query analysis would incorrectly attach `Okta_CL` to the v2 connector. Because the connector ships an authoritative `*_DCR.json` (output stream `Custom-OktaV2_CL`) and `*_Tables.json`, query analysis is skipped and only `OktaV2_CL` is mapped.
+
+Connectors that do **not** ship companion DCR/Table files (e.g., older Azure Function connectors) continue to rely on query analysis as before.
 
 ### Table Detection Methods
 

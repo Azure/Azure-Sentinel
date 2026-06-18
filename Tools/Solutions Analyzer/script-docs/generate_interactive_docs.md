@@ -36,11 +36,15 @@ The script can be invoked standalone or is automatically called by `generate_con
 ### Python Environment
 
 - Python 3.7 or higher
-- `markdown` package (required for HTML entity page generation)
+- `mistune` package (preferred — much faster) **or** `markdown` package (fallback). Required for HTML entity-page generation.
 
 ```bash
+pip install mistune
+# or, fallback engine:
 pip install markdown
 ```
+
+HTML conversion is parallelised across CPU cores using `concurrent.futures.ProcessPoolExecutor`. Worker count defaults to `min(cpu_count, 8)`; override via the `SA_HTML_WORKERS` environment variable (set to `1` for serial execution / debugging).
 
 ### Input CSV Files
 
