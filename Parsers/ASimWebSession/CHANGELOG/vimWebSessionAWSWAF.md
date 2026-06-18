@@ -1,4 +1,4 @@
-# Changelog for ASimWebSessionAWSAWSWAF
+# Changelog for vimWebSessionAWSWAF
 
 ## Version 0.1.0
 
