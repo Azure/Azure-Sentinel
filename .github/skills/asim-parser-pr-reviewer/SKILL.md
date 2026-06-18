@@ -68,13 +68,7 @@ This parser adds filtering parameters to improve query efficiency by reducing th
 
 You have already reviewed the ASim (parameter-less) version above. Do NOT repeat issues already identified in that review. Focus only on the filtering logic specific to this vim parser.
 
-Here are the filtering parameters defined in ParserParams:
-
-| Name | Type | Default |
-|------|------|---------|
-<parserYamlFile.ParserParams>
-
-These are the ONLY filter parameters available. The query should use these parameters to filter rows as early as possible.
+From the vim parser yaml file, extract `ParserParams` from it. The query should use these parameters to filter rows as early as possible.
 
 **Important:** Some filter parameters may not have a matching column in the source data. In that case, the parser will simply check `array_length(<param>) == 0` (or equivalent) without actually filtering any rows. This is correct and expected — do NOT flag these as issues. Only flag a parameter as unused if it is completely absent from the query.
 
