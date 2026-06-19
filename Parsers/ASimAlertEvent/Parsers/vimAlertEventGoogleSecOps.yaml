@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM filtering parser for Google SecOps Detection Alerts
   Version: '0.1.0'
-  LastUpdated: Jun 05, 2026
+  LastUpdated: Jun 19, 2026
 Product:
   Name: Google SecOps
 Normalization:
@@ -51,6 +51,9 @@ ParserParams:
     Type: dynamic
     Default: dynamic([])
   - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
     Type: bool
     Default: false
 ParserQuery: |
@@ -103,7 +106,9 @@ ParserQuery: |
       threatcategory_has_any: dynamic=dynamic([]),
       alertverdict_has_any: dynamic=dynamic([]),
       eventseverity_has_any: dynamic=dynamic([]),
-      disabled: bool=false) {
+      disabled: bool=false,
+      pack: bool=false
+    ) {
     DetectionAlerts_CL
     | where not(disabled)
     | where (isnull(starttime) or TimeGenerated >= starttime)
@@ -213,8 +218,7 @@ ParserQuery: |
     | extend IndicatorType = coalesce(IndicatorType, "Ip")
     //  User fields 
     | extend UsernameType = _ASIM_GetUsernameType(Username)
-    //  AttackTactics / AttackTechniques 
-    //  AttackTactics / AttackTechniques 
+    //  AttackTactics / AttackTechniques
     | mv-apply rl = rule_labels on (
         summarize
             AttackTactics = anyif(tostring(rl.value), rl.key == "mitre_attack_tactic"),
@@ -248,16 +252,20 @@ ParserQuery: |
         ThreatLastReportedTime  = threat_last_ts,
         Url                     = threat_url
     //  AdditionalFields bag
-    | extend AdditionalFields = bag_pack(
-        "ruleId",                 rule_id,
-        "ruleVersion",            rule_version,
-        "ruleType",               rule_type,
-        "ruleLabels",             rule_labels,
-        "detectionFields",        detect_fields,
-        "outcomes",               outcomes,
-        "variables",              variables,
-        "detectionTimingDetails", detect_timing,
-        "latencyMetrics",         latency_metrics)
+    | extend AdditionalFields = iff (
+        pack,
+        bag_pack(
+          "ruleId",                 rule_id,
+          "ruleVersion",            rule_version,
+          "ruleType",               rule_type,
+          "ruleLabels",             rule_labels,
+          "detectionFields",        detect_fields,
+          "outcomes",               outcomes,
+          "variables",              variables,
+          "detectionTimingDetails", detect_timing,
+          "latencyMetrics",         latency_metrics),
+        dynamic([])
+      )
     //  Aliases
     | extend
         AlertId          = EventUid,
@@ -330,5 +338,6 @@ ParserQuery: |
       threatcategory_has_any   = threatcategory_has_any,
       alertverdict_has_any     = alertverdict_has_any,
       eventseverity_has_any    = eventseverity_has_any,
-      disabled                 = disabled
+      disabled                 = disabled,
+      pack = pack
   )

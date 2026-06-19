@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM parser for Google SecOps Detection Alerts
   Version: '0.1.0'
-  LastUpdated: Jun 05, 2026
+  LastUpdated: Jun 19, 2026
 Product:
   Name: Google SecOps
 Normalization:
@@ -21,6 +21,9 @@ ParserName: ASimAlertEventGoogleSecOps
 EquivalentBuiltInParser: _ASim_AlertEvent_GoogleSecOps
 ParserParams:
   - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
     Type: bool
     Default: false
 ParserQuery: |
@@ -62,7 +65,7 @@ ParserQuery: |
     "URL",         "Url",
     "PROCESS",     "Process"
   ];
-  let parser = (disabled: bool=false) {
+  let parser = (disabled: bool=false, pack: bool=false) {
     DetectionAlerts_CL
     | where not(disabled)
     //  Expand detection array (one row per detection element) 
@@ -154,7 +157,7 @@ ParserQuery: |
                                                      "Unknown")
     //  IndicatorType
     | lookup IndicatorTypeLookup on entity_type_raw
-    | extend IndicatorType = coalesce(IndicatorType, "Ip")
+    | extend IndicatorType = coalesce(IndicatorType, "")
     // Hostname helper function
     | extend Hostname = tostring(coalesce(
                 variables.principal_hostname.value,
@@ -163,7 +166,7 @@ ParserQuery: |
     | invoke _ASIM_ResolveDvcFQDN("Hostname")
     //  User fields 
     | extend UsernameType = _ASIM_GetUsernameType(Username)
-        //  AttackTactics / AttackTechniques 
+    //  AttackTactics / AttackTechniques
     | mv-apply rl = rule_labels on (
         summarize
             AttackTactics = anyif(tostring(rl.value), rl.key == "mitre_attack_tactic"),
@@ -195,17 +198,22 @@ ParserQuery: |
         ThreatLastReportedTime  = threat_last_ts,
         Url                   = threat_url
     //  AdditionalFields bag
-    | extend AdditionalFields = bag_pack(
-        "ruleId",                 rule_id,
-        "ruleVersion",            rule_version,
-        "ruleType",               rule_type,
-        "ruleLabels",             rule_labels,
-        "detectionFields",        detect_fields,
-        "outcomes",               outcomes,
-        "variables",              variables,
-        "detectionTimingDetails", detect_timing,
-        "latencyMetrics",         latency_metrics,
-        "collectionElements",     collection_arr)
+    | extend AdditionalFields = iff (
+      pack,
+      bag_pack(
+          "ruleId",                 rule_id,
+          "ruleVersion",            rule_version,
+          "ruleType",               rule_type,
+          "ruleLabels",             rule_labels,
+          "detectionFields",        detect_fields,
+          "outcomes",               outcomes,
+          "variables",              variables,
+          "detectionTimingDetails", detect_timing,
+          "latencyMetrics",         latency_metrics,
+          "collectionElements",     collection_arr
+        ),
+      dynamic([])
+    )
     //  Aliases
     | extend
         AlertId          = EventUid,
@@ -267,4 +275,4 @@ ParserQuery: |
         User,
         Rule
   };
-  parser(disabled = disabled)
+  parser(disabled = disabled, pack = pack)
