@@ -8,7 +8,7 @@ import logging
 from .utils import ParseDurationInput, parse_duration_to_seconds
 
 # Constants
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 
 class Config:
