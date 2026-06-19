@@ -40,12 +40,12 @@ Look for entries with values `ASimSchemaTester` and `ASimDataTester` in the resu
 
 - **If both functions exist** — skip the YAML fetch and inline function definition in Steps 1 and 2. Call the functions directly (see simplified queries below).
 - **If either function is missing** — deploy the tester ARM templates to the workspace before proceeding:
-
   1. Download the ARM template JSON files:
      - https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/ASIM/dev/ASimTester/ASimSchemaTester.json
      - https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/ASIM/dev/ASimTester/ASimDataTester.json
 
   2. Use the `az-cli-command-runner` skill to deploy each template:
+
      ```
      az deployment group create --resource-group <resourceGroup> --template-file <templateFilePath> --parameters Workspace=<workspaceName> WorkspaceRegion=<location>
      ```
