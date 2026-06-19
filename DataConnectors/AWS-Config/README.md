@@ -1,4 +1,4 @@
-# AWS Config Microsoft Sentinel Connector
+# Amazon Web Services Config Microsoft Sentinel Connector
 
 ## Introduction
 
@@ -10,6 +10,19 @@ The connector stores data in the following custom table:
 
 ```text
 AWSConfig_CL
+```
+
+## End-to-end data flow
+
+```text
+AWS Config
+-> SNS Topic
+-> Lambda Ingest Function
+-> DynamoDB Table
+-> API Gateway /logs Endpoint
+-> Microsoft Sentinel CCF RestApiPoller
+-> Data Collection Rule
+-> AWSConfig_CL
 ```
 
 ## Configuration process
@@ -28,6 +41,107 @@ At a high level, the template does the following:
 8. Creates CloudWatch log groups for the Lambda functions.
 
 When the deployment is complete, the CloudFormation stack outputs the API endpoint that must be entered in the Microsoft Sentinel data connector page.
+
+## Key limitations
+
+### The solution is regional
+
+AWS Config is a regional service. Therefore, this solution is deployed per AWS account and per AWS region.
+
+For London, use:
+
+```text
+Region: eu-west-2
+```
+
+Example:
+
+```text
+AWS Account 123456789 / eu-west-2 = 1 CloudFormation deployment
+AWS Account 123456789 / eu-west-1 = 1 CloudFormation deployment
+```
+
+For multi-account or multi-region environments, deploy the CloudFormation template in each required account and region, or use AWS StackSets.
+
+### The AWS Config S3 bucket must be preserved
+
+AWS Config normally already has a delivery channel with an S3 bucket.
+
+The S3 bucket may have an auto-generated name, for example:
+
+```text
+config-bucket-123456789
+```
+
+This is expected.
+
+Do not replace or manually change the S3 bucket name unless AWS Config is intentionally being reconfigured.
+
+The correct approach is:
+
+```text
+Keep the existing AWS Config S3 bucket.
+Add the SNS topic created by the CloudFormation stack.
+```
+
+### SNS topic is mandatory
+
+AWS Config must be configured with both:
+
+```text
+S3 bucket
+SNS topic
+```
+
+If AWS Config has only S3 configured, logs may be delivered to S3, but the Lambda function will not be triggered.
+
+Bad configuration:
+
+```json
+{
+  "name": "default",
+  "s3BucketName": "config-bucket-123456789"
+}
+```
+
+Correct configuration:
+
+```json
+{
+  "name": "default",
+  "s3BucketName": "config-bucket-123456789",
+  "snsTopicARN": "arn:aws:sns:eu-west-2:123456789:sentinel-config-notifications"
+}
+```
+
+### The API endpoint must include `/logs`
+
+The Microsoft Sentinel connector must use the API Gateway `/logs` endpoint.
+
+Correct:
+
+```text
+https://xxxx.execute-api.eu-west-2.amazonaws.com/prod/logs
+```
+
+Incorrect:
+
+```text
+https://xxxx.execute-api.eu-west-2.amazonaws.com/prod
+```
+
+### Sentinel authenticates with an API key
+
+The connector does not use AWS AssumeRole.
+
+Microsoft Sentinel polls the API Gateway endpoint using:
+
+```text
+Header name: x-api-key
+Header value: API key
+```
+
+The API key entered in Sentinel must match the API key configured in AWS API Gateway.
 
 ## Template prerequisites
 
@@ -212,6 +326,460 @@ AWSConfig_CL
 | sort by Count desc
 ```
 
+## Required values for troubleshooting
+
+Before starting troubleshooting, confirm these values:
+
+- AWS Region
+- CloudFormation Stack Name
+- AWS Account ID
+- AWS Config S3 Bucket
+- SNS Topic ARN
+- API Endpoint
+- API Key
+- Microsoft Sentinel Workspace
+- Microsoft Sentinel Table
+
+Example values:
+
+```text
+AWS Region: eu-west-2
+Stack Name: AWS-rnd-config
+AWS Account ID: 123456789
+S3 Bucket: config-bucket-123456789
+SNS Topic: arn:aws:sns:eu-west-2:123456789:sentinel-config-notifications
+API Endpoint: https://xxxx.execute-api.eu-west-2.amazonaws.com/prod/logs
+Sentinel Table: AWSConfig_CL
+```
+
+## AWS validation and troubleshooting
+
+### Step 1 - Set variables
+
+Run this in AWS CloudShell:
+
+```bash
+REGION="eu-west-2"
+STACK_NAME="AWS-rnd-config"
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+echo "REGION=$REGION"
+echo "STACK_NAME=$STACK_NAME"
+echo "ACCOUNT_ID=$ACCOUNT_ID"
+```
+
+Expected output example:
+
+```text
+REGION=eu-west-2
+STACK_NAME=AWS-rnd-config
+ACCOUNT_ID=123456789
+```
+
+### Step 2 - Check AWS Config recorder status
+
+```bash
+aws configservice describe-configuration-recorder-status \
+  --region $REGION
+```
+
+Expected values:
+
+```text
+"recording": true
+"lastStatus": "SUCCESS"
+```
+
+If the recorder is not running, start it:
+
+```bash
+aws configservice start-configuration-recorder \
+  --region $REGION \
+  --configuration-recorder-name default
+```
+
+### Step 3 - Check AWS Config delivery channel
+
+```bash
+aws configservice describe-delivery-channels \
+  --region $REGION
+```
+
+If the output has only `s3BucketName`, then SNS is missing.
+
+Example of missing SNS:
+
+```json
+{
+  "DeliveryChannels": [
+    {
+      "name": "default",
+      "s3BucketName": "config-bucket-123456789"
+    }
+  ]
+}
+```
+
+Expected output must include both:
+
+```json
+{
+  "DeliveryChannels": [
+    {
+      "name": "default",
+      "s3BucketName": "config-bucket-123456789",
+      "snsTopicARN": "arn:aws:sns:eu-west-2:123456789:sentinel-config-notifications"
+    }
+  ]
+}
+```
+
+### Step 4 - Save the existing AWS Config S3 bucket
+
+Do not type the bucket name manually. Read it directly from AWS Config:
+
+```bash
+CONFIG_BUCKET=$(aws configservice describe-delivery-channels \
+  --region $REGION \
+  --query "DeliveryChannels[0].s3BucketName" \
+  --output text)
+
+echo "CONFIG_BUCKET=$CONFIG_BUCKET"
+```
+
+Expected example:
+
+```text
+CONFIG_BUCKET=config-bucket-123456789
+```
+
+This bucket must be preserved.
+
+### Step 5 - Get the SNS topic from CloudFormation
+
+```bash
+TOPIC_ARN=$(aws cloudformation describe-stacks \
+  --region $REGION \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='ConfigNotificationTopicArn'].OutputValue | [0]" \
+  --output text)
+
+echo "TOPIC_ARN=$TOPIC_ARN"
+```
+
+Expected example:
+
+```text
+TOPIC_ARN=arn:aws:sns:eu-west-2:123456789:sentinel-config-notifications
+```
+
+If the output is empty or `None`, list all CloudFormation outputs:
+
+```bash
+aws cloudformation describe-stacks \
+  --region $REGION \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[*].[OutputKey,OutputValue]" \
+  --output table
+```
+
+### Step 6 - Add SNS to the AWS Config delivery channel
+
+This is the most important post-deployment step.
+
+```bash
+aws configservice put-delivery-channel \
+  --region $REGION \
+  --delivery-channel name=default,s3BucketName=$CONFIG_BUCKET,snsTopicARN=$TOPIC_ARN
+```
+
+Validate again:
+
+```bash
+aws configservice describe-delivery-channels \
+  --region $REGION
+```
+
+Expected result must include:
+
+```text
+s3BucketName
+snsTopicARN
+```
+
+### Step 7 - Confirm SNS subscription to Lambda
+
+```bash
+aws sns list-subscriptions-by-topic \
+  --region $REGION \
+  --topic-arn $TOPIC_ARN
+```
+
+Expected result:
+
+```text
+Protocol: lambda
+Endpoint: arn:aws:lambda:eu-west-2:123456789:function:sentinel-config-ingest
+```
+
+If the subscription is missing, create it:
+
+```bash
+aws sns subscribe \
+  --region $REGION \
+  --topic-arn $TOPIC_ARN \
+  --protocol lambda \
+  --notification-endpoint arn:aws:lambda:$REGION:$ACCOUNT_ID:function:sentinel-config-ingest
+```
+
+Then allow SNS to invoke the Lambda function:
+
+```bash
+aws lambda add-permission \
+  --region $REGION \
+  --function-name sentinel-config-ingest \
+  --statement-id AllowExecutionFromSNSConfigTopic \
+  --action lambda:InvokeFunction \
+  --principal sns.amazonaws.com \
+  --source-arn $TOPIC_ARN
+```
+
+If this error appears, it is acceptable:
+
+```text
+ResourceConflictException: The statement id already exists
+```
+
+It means the permission already exists.
+
+## End-to-end test
+
+### Step 1 - Trigger a simple AWS Config change
+
+This test adds a tag to the default Security Group.
+
+```bash
+SG_ID=$(aws ec2 describe-security-groups \
+  --region $REGION \
+  --filters Name=group-name,Values=default \
+  --query "SecurityGroups[0].GroupId" \
+  --output text)
+
+echo "Testing with Security Group: $SG_ID"
+
+aws ec2 create-tags \
+  --region $REGION \
+  --resources $SG_ID \
+  --tags Key=SentinelAWSConfigTest,Value=$(date -u +%Y%m%dT%H%M%SZ)
+```
+
+Wait 2-5 minutes.
+
+### Step 2 - Check ingest Lambda logs
+
+```bash
+aws logs tail /aws/lambda/sentinel-config-ingest \
+  --region $REGION \
+  --since 15m
+```
+
+Expected result:
+
+```text
+New Lambda invocation logs should appear.
+```
+
+If no logs appear, check:
+
+- AWS Config delivery channel includes `snsTopicARN`.
+- SNS topic has Lambda subscription.
+- Lambda invoke permission exists.
+- The test was performed in the correct region.
+- AWS Config recorder is running.
+
+### Step 3 - Check DynamoDB
+
+```bash
+aws dynamodb scan \
+  --region $REGION \
+  --table-name SentinelConfigLogs \
+  --select COUNT
+```
+
+Expected result:
+
+```text
+The count should increase after the test event.
+```
+
+If the count does not increase but Lambda logs exist, check Lambda errors and DynamoDB permissions.
+
+### Step 4 - Get the API endpoint
+
+Use this command to get the API URL from the CloudFormation stack output:
+
+```bash
+API_URL=$(aws cloudformation describe-stacks \
+  --region $REGION \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue | [0]" \
+  --output text)
+
+echo $API_URL
+```
+
+Expected format:
+
+```text
+https://xxxx.execute-api.eu-west-2.amazonaws.com/prod/logs
+```
+
+If the command returns `None`, list all stack outputs:
+
+```bash
+aws cloudformation describe-stacks \
+  --region $REGION \
+  --stack-name $STACK_NAME \
+  --query "Stacks[0].Outputs[*].[OutputKey,OutputValue]" \
+  --output table
+```
+
+If `/logs` is missing, add it manually when configuring the Sentinel connector.
+
+### Step 5 - Set the API key
+
+If the API key is already known:
+
+```bash
+API_KEY="<paste-api-key-here>"
+```
+
+If the API key must be retrieved from AWS:
+
+```bash
+aws apigateway get-api-keys \
+  --region $REGION \
+  --include-values \
+  --query "items[].[name,value]" \
+  --output table
+```
+
+Then set:
+
+```bash
+API_KEY="<retrieved-api-key-value>"
+```
+
+### Step 6 - Test the API directly
+
+```bash
+START=$(date -u -d '30 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
+END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+curl -sS -H "x-api-key: $API_KEY" \
+"$API_URL?startTime=$START&endTime=$END" | jq '.events | length'
+```
+
+Expected result:
+
+```text
+1
+```
+
+or more.
+
+If the result is `0`, try a wider time window:
+
+```bash
+START=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+curl -sS -H "x-api-key: $API_KEY" \
+"$API_URL?startTime=$START&endTime=$END" | jq '.events | length'
+```
+
+Common API errors:
+
+| Error | Meaning |
+|---|---|
+| `Forbidden` | Wrong API key or API key is not attached to the usage plan. |
+| `Missing Authentication Token` | Wrong endpoint, usually missing `/logs`. |
+
+### Step 7 - Check query Lambda logs
+
+```bash
+aws logs tail /aws/lambda/sentinel-config-query \
+  --region $REGION \
+  --since 30m
+```
+
+If logs appear, the API is being called.
+
+The calls may come from either:
+
+- Manual `curl` testing.
+- Microsoft Sentinel CCF polling.
+
+## Microsoft Sentinel validation
+
+### Step 1 - Check Sentinel connector configuration
+
+Run this in Azure Cloud Shell:
+
+```bash
+SUB="<azure-subscription-id>"
+RG="<azure-resource-group>"
+WS="<log-analytics-workspace>"
+
+az account set --subscription "$SUB"
+
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WS/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2023-11-01-preview" \
+  --query "value[].{name:name,kind:kind,isActive:properties.isActive,dataType:properties.dataType,apiEndpoint:properties.request.apiEndpoint,streamName:properties.dcrConfig.streamName}" \
+  -o table
+```
+
+Expected values:
+
+```text
+Kind: RestApiPoller
+IsActive: true
+DataType: AWSConfig_CL
+ApiEndpoint: https://xxxx.execute-api.eu-west-2.amazonaws.com/prod/logs
+StreamName: Custom-AWSConfig_CL
+```
+
+If the endpoint is incorrect, disconnect and reconnect the connector with the correct `/logs` endpoint.
+
+### Step 2 - Check the Sentinel table
+
+Run in Log Analytics:
+
+```kql
+AWSConfig_CL
+| where TimeGenerated > ago(4h)
+| sort by TimeGenerated desc
+```
+
+Summary view:
+
+```kql
+AWSConfig_CL
+| where TimeGenerated > ago(4h)
+| summarize Count=count(), LastSeen=max(TimeGenerated) by AwsAccountId, AwsRegion, ResourceType
+| sort by LastSeen desc
+```
+
+If unsure whether data landed in another table:
+
+```kql
+search *
+| where TimeGenerated > ago(4h)
+| where $table has "AWS" or $table has "Config"
+| summarize Count=count(), Last=max(TimeGenerated) by $table
+```
+
 ## Troubleshooting
 
 ### No data appears in Microsoft Sentinel
@@ -259,6 +827,124 @@ If `CreateSnsTopic=true`, the template creates the SNS topic and subscribes the 
 
 If `CreateSnsTopic=false`, confirm that AWS Config is already publishing to the existing SNS topic provided in `ExistingSnsTopicArn`.
 
+## Troubleshooting decision guide
+
+### Scenario 1 - AWS Config has only S3 and no SNS
+
+Symptom:
+
+```json
+{
+  "s3BucketName": "config-bucket-123456789"
+}
+```
+
+Cause:
+
+```text
+AWS Config is not notifying the Lambda function.
+```
+
+Fix:
+
+```bash
+aws configservice put-delivery-channel \
+  --region $REGION \
+  --delivery-channel name=default,s3BucketName=$CONFIG_BUCKET,snsTopicARN=$TOPIC_ARN
+```
+
+### Scenario 2 - No ingest Lambda logs
+
+Check:
+
+```bash
+aws logs tail /aws/lambda/sentinel-config-ingest \
+  --region $REGION \
+  --since 15m
+```
+
+Likely causes:
+
+- SNS is not configured in AWS Config delivery channel.
+- SNS topic has no Lambda subscription.
+- Lambda permission for SNS is missing.
+- Wrong AWS region.
+- No new AWS Config event was generated.
+
+### Scenario 3 - Lambda logs exist but DynamoDB count does not increase
+
+Check:
+
+```bash
+aws dynamodb scan \
+  --region $REGION \
+  --table-name SentinelConfigLogs \
+  --select COUNT
+```
+
+Likely causes:
+
+- Lambda processing error.
+- DynamoDB permission issue.
+- Unexpected AWS Config message format.
+
+### Scenario 4 - DynamoDB count increases but API returns 0
+
+Check API with a wider time window:
+
+```bash
+START=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+curl -sS -H "x-api-key: $API_KEY" \
+"$API_URL?startTime=$START&endTime=$END" | jq '.events | length'
+```
+
+Likely causes:
+
+- Wrong time window.
+- Event is older than the connector polling window.
+- Query Lambda filtering issue.
+
+### Scenario 5 - API returns events but Sentinel has no logs
+
+Likely causes:
+
+- Sentinel connector is not connected.
+- Wrong API endpoint in Sentinel.
+- Wrong API key in Sentinel.
+- DCR or table mapping issue.
+- CCF polling issue.
+
+Check Sentinel connector:
+
+```bash
+az rest --method get \
+  --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WS/providers/Microsoft.SecurityInsights/dataConnectors?api-version=2023-11-01-preview" \
+  --query "value[].{name:name,kind:kind,isActive:properties.isActive,dataType:properties.dataType,apiEndpoint:properties.request.apiEndpoint,streamName:properties.dcrConfig.streamName}" \
+  -o table
+```
+
+## Final operational checklist
+
+Before confirming the connector is operational, verify:
+
+- [ ] AWS Config recorder is running.
+- [ ] AWS Config delivery channel has the existing S3 bucket.
+- [ ] AWS Config delivery channel also has `snsTopicARN`.
+- [ ] `snsTopicARN` points to `sentinel-config-notifications`.
+- [ ] SNS topic has Lambda subscription to `sentinel-config-ingest`.
+- [ ] Lambda permission allows SNS invocation.
+- [ ] A new AWS Config change triggers ingest Lambda logs.
+- [ ] DynamoDB count increases after the test event.
+- [ ] API endpoint includes `/prod/logs`.
+- [ ] API key works with `curl`.
+- [ ] API returns one or more events.
+- [ ] Sentinel connector is active.
+- [ ] Sentinel connector uses the correct API endpoint.
+- [ ] Sentinel connector uses the correct API key.
+- [ ] `AWSConfig_CL` receives logs.
+
 ## Advanced usage
 
 The CloudFormation template supports the following parameters:
@@ -295,3 +981,23 @@ aws cloudformation delete-stack \
 ```
 
 If the stack created the SNS topic and AWS Config was configured to use it, update the AWS Config delivery channel as needed before or after deleting the stack.
+
+## Client summary
+
+The connector is operational when a test AWS Config change is successfully processed through the full pipeline:
+
+```text
+AWS Config change
+-> SNS notification
+-> Lambda ingest function
+-> DynamoDB
+-> API Gateway /logs
+-> Microsoft Sentinel CCF
+-> AWSConfig_CL
+```
+
+The most important post-deployment requirement is:
+
+```text
+Preserve the existing AWS Config S3 bucket and add the CloudFormation-created SNS topic to the AWS Config delivery channel.
+```
