@@ -14,10 +14,10 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 - **Filter by collection method** — find all AMA / CCF / CCF Push / Azure Function / MMA / REST / Native connectors (e.g. for migration planning).
 - **Identify legacy ingestion** — query `is_clv1 == true` or `ingestion_api == "HTTP Data Collector API"` to find connectors that should be migrated to DCR/Log Ingestion API.
 - **CCF feature audit** — use `ccf_capabilities` to find connectors using paging, OAuth2, push mode, etc.
-- **Marketplace publication status** — `is_published` indicates whether the parent solution is live on Azure Marketplace.
+- **Content-hub publication status** — `is_published` indicates whether the connector ships to the content hub: `true` when the parent solution is live on Azure Marketplace *and* the connector is referenced by the solution definition file; `false` for connectors discovered only in the `Data Connectors` folder but absent from the solution's `Solution_*.json` (they are retained for inventory but are not on the content hub).
 - **Source-data filtering** — `filter_fields`, `event_vendor`, `event_product` reveal which vendor/product/event-class each connector targets.
 - **Deprecation tracking** — `is_deprecated` + `deprecation_date` for clean-up planning.
-- **Discovered vs declared** — `not_in_solution_json == true` flags connectors found via mainTemplate fallback or file scan that aren't listed in the Solution JSON.
+- **Discovered vs declared** — `not_in_solution_json == true` flags connectors found via mainTemplate fallback or file scan that aren't listed in the Solution JSON. When the parent solution ships a working definition that references other connectors, such folder-only connectors are also forced to `is_published == false` (not on the content hub).
 - **Kusto upload** — uploaded as `solution_analyzer_connectors_lookup` by `upload_to_kusto.py`.
 
 ## Columns
@@ -43,12 +43,14 @@ Connector metadata for every Microsoft Sentinel data connector discovered in the
 | `solution_name` | Parent solution name | Solution folder |
 | `is_deprecated` | `true` if title contains `[DEPRECATED]`, JSON `availability.status` is `0`, or the parent solution is deprecated | Pattern + inheritance |
 | `deprecation_date` | Date string extracted from description when deprecated | Regex extraction; overridable |
-| `is_published` | `true` if the parent solution is published on Azure Marketplace | Marketplace API |
+| `is_published` | `true` if the connector ships to the content hub — parent solution published on Azure Marketplace **and** the connector referenced by the solution definition file. Forced to `false` for folder-only connectors that are absent from a working `Solution_*.json` (retained for inventory, not on the content hub) | Marketplace API + definition-file check |
+| `dcr_definition_files` | Semicolon-separated GitHub URLs to companion DCR files associated with the connector (for example `*_DCR.json` or `dcr.json`) | File system scan |
 | `ccf_config_file` | GitHub URL to the CCF poller/push config file (CCF / CCF Push only; empty for CCF Legacy) | File system scan |
 | `ccf_capabilities` | Semicolon-separated CCF capabilities (auth type, paging, POST, push, etc.) | Parsed from CCF config JSON |
 | `ingestion_api` | `Log Ingestion API`, `HTTP Data Collector API`, `Undetermined`, or empty (CCF/Native are platform-managed) | Multi-rule detection |
 | `ingestion_api_reason` | Human-readable explanation of how `ingestion_api` was determined | Computed |
 | `is_clv1` | `true` if any of the connector's tables use the legacy Custom Log V1 schema | CLv1 detection |
+| `learn_doc_url` | Deep-link to the connector's section on the Microsoft Learn [`data-connectors-reference`](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) page (e.g. `…#cisco-secure-endpoint-via-codeless-connector-framework`). Populated when the connector's title slugifies (GitHub-style) to an existing `<a name="…">` anchor on that page, with `[Recommended]` / `[Preview]` prefixes and trailing `(Preview)` markers stripped. Empty when no anchor matches. | Anchor scrape of Learn page, cached as `data_connectors_reference_anchors.json` |
 
 ## Related CSVs
 

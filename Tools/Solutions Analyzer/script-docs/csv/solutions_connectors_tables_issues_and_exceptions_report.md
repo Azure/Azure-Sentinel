@@ -40,6 +40,8 @@ Issues report listing every exception or warning encountered while parsing conne
 | `table_detection_failed` | Tables detected but validation failed | Connector excluded |
 | `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
 | `missing_solution_metadata` | Solution has connectors but no `SolutionMetadata.json` | Solution appears with empty metadata fields |
+| `solution_package_template_skipped` | A full solution-package ARM template (contains a `contentPackages` resource) was found in the `Data Connectors` folder and skipped during connector discovery | File ignored as a connector source; its connectors are discovered from their own definition files |
+| `connector_not_in_solution_definition` | A connector discovered only by scanning the solution's `Data Connectors` folder is not referenced by the solution definition file (`Solution_*.json`), and the solution has at least one other connector that IS referenced (so the definition is authoritative) | The connector's association with this solution is dropped: its mapping rows are removed and it is removed from `connectors.csv` if it no longer appears in any retained row |
 
 ## Related CSVs
 
