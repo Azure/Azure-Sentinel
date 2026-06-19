@@ -189,6 +189,48 @@ jobs:
               log('success', 'No modifications to asimParsersTest folder detected');
             }
 
+      - name: Enforce allowed file types for fork PRs
+        if: github.event.pull_request.head.repo.fork == true
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            // Only data/definition files are allowed from forks. Executable or
+            // script files (.ps1, .py, .sh, .js, etc.) must never be accepted
+            // because the Azure-authenticated jobs consume PR content directly.
+            const ALLOWED_EXTENSIONS = ['.yaml', '.yml', '.json', '.csv', '.md'];
+
+            log('info', 'Validating that fork PR only contains allowed file types...');
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const disallowed = files
+              .filter(f => f.status !== 'removed')
+              .map(f => f.filename)
+              .filter(name => {
+                const lower = name.toLowerCase();
+                return !ALLOWED_EXTENSIONS.some(ext => lower.endsWith(ext));
+              });
+
+            if (disallowed.length > 0) {
+              log('error', 'Fork PR contains file types that are not allowed for automated testing.');
+              log('error', `Allowed extensions: ${ALLOWED_EXTENSIONS.join(', ')}`);
+              log('error', 'Disallowed files detected:');
+              disallowed.forEach(f => console.log(`  - ${f}`));
+              core.setFailed('Fork PR contains disallowed file types (e.g. executable scripts)');
+            } else {
+              log('success', `All ${files.length} changed file(s) use allowed extensions`);
+            }
+
       - name: Comment on fork PR for approval guidance
         if: |
           always() && 
@@ -334,9 +376,10 @@ jobs:
           # Execute the script
           python "$filePath"
   Run-ASim-Sample-Data-Ingest:
-    needs: Run-ASim-TemplateValidation
+    needs: [security-gate, Run-ASim-TemplateValidation]
     name: Run ASim Sample Data Ingestion
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        github.event.action == 'labeled')
     runs-on: ubuntu-latest
@@ -398,9 +441,10 @@ jobs:
           # Execute the script
           python "$filePath" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
-    needs: Run-ASim-Sample-Data-Ingest
+    needs: [security-gate, Run-ASim-Sample-Data-Ingest]
     name: Run ASim Schema and Data tests
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        github.event.action == 'labeled')
     runs-on: ubuntu-latest
@@ -465,8 +509,12 @@ jobs:
             & $filePath
           azPSVersion: "latest"
   Run-ASim-Parser-Filtering-Tests:
-    needs: Run-ASim-Sample-Data-Ingest
+    needs: [security-gate, Run-ASim-Sample-Data-Ingest]
     name: Run ASim Parser Filtering tests
+    if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       github.event.action == 'labeled')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
