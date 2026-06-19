@@ -1,6 +1,8 @@
 ---
 name: asim-parser-create-parameter-parser
 description: This creates the parameterized version of the ASIM schema parser. You should already have the parameter-less version of the parser to help facilitate the parameter parser creation.
+requiredSkills:
+  - log-analytics-workspace-queryer
 ---
 
 # Prerequisites
@@ -26,4 +28,4 @@ For information about add filters to the parser, look up the documentation here:
 The purpose of the parameters and filters is to improve efficiency of the parser by allowing it to focus on specific data sets and reduce the amount of data that needs to be processed. Filters (or where statements) are added in the beginning of the KQL query.
 
 ## Ensure that the KQL query runs without syntax errors
-Before finalizing the parser, run the KQL query in the Log Analytics workspace to ensure it executes without syntax errors. This step is crucial to validate that the parser is correctly formed and will function as expected when deployed.
+Before finalizing the parser, use the `log-analytics-workspace-queryer` skill to run the KQL query in the Log Analytics workspace to ensure it executes without syntax errors. This step is crucial to validate that the parser is correctly formed and will function as expected when deployed.

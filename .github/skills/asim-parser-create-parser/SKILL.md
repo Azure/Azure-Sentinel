@@ -1,6 +1,8 @@
 ---
 name: asim-parser-create-parser
 description: This starts the process of creating a new ASIM schema parser by generating the initial version of the parser based on the requirements gathered. Use this skill when you have gathered all necessary information for the new ASIM parser and are ready to create the initial version of the parser.
+requiredSkills:
+  - log-analytics-workspace-queryer
 ---
 
 # Prerequisites
@@ -10,7 +12,7 @@ Before creating the initial version of a new ASIM parser, ensure you have gather
 3. The target ASIM schema.
 
 ## Step 1: Data sampling
-Query from the source table to get a sample of the data.
+Query from the source table to get a sample of the data. Use the `log-analytics-workspace-queryer` skill for all KQL queries in this step.
 1. Determine the source table schema with this KQL query: `<tableName> | getschema`. This will give you the column names and data types of the source data, which you can use to map to the ASIM schema.
 2. Determine how many rows of data there are with this KQL query: `<tableName> | count`.
 3. From the number of rows available in the source table, run this KQL query: `<tableName> | take <minimum of rows found or 2000>`. Take as many rows as possible to get a representative sample. Analyze the rows to identify unique values in important columns that will need to be mapped to the ASIM schema. This will help you understand the transformations needed in the parser.
@@ -24,7 +26,7 @@ For details about the different fields, use the Learn Microsoft documentation li
 
 For more information about developing parsers: https://learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers
 
-Do not use existing parsers as a reference. Each parser should be built from the ground up based on the source data and the target ASIM schema. This ensures parsers follow best practices and are optimized for performance.
+**Do not use existing parsers as a reference**, even if you are in the Azure-Sentinel repository. Each parser should be built from the ground up based on the source data and the target ASIM schema. This ensures parsers follow best practices and are optimized for performance. Create a kql file and not a yaml file.
 
 ## Step 3: Parser development guidelines
 Parsers are KQL functions that follow a clear flow: **Filter → Parse → Map**.
@@ -62,4 +64,4 @@ Even though this is the parameter-less version, include the following parameters
 ## Step 4: Finalize and save
 1. **Save** the KQL query in a `.kql` file. The file name must be prefixed with `ASim`, followed by the schema name, event vendor, and event product. For example: `ASimNetworkSessionCiscoASA.kql`. This naming convention is a strict requirement.
 
-2. **Verify** the KQL query runs without syntax errors by executing it in the Log Analytics workspace. This step is crucial to validate that the parser is correctly formed and will function as expected when deployed.
+2. **Verify** the KQL query runs without syntax errors by using the `log-analytics-workspace-queryer` skill to execute it in the Log Analytics workspace. This step is crucial to validate that the parser is correctly formed and will function as expected when deployed.

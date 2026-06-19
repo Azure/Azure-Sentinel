@@ -1,6 +1,9 @@
 ---
 name: asim-parser-la-deployer
 description: Gets the ASIM parser of interest and deploys it to the customer's LA workspace.
+requiredSkills:
+  - az-cli-command-runner
+  - log-analytics-workspace-queryer
 ---
 
 # Context
@@ -12,10 +15,10 @@ You will use the az cli to deploy the ASIM parser to the customer's LA workspace
 - **ASIM parser files to deploy** — Typically two files: the parameter-less parser (`ASim<Schema><Vendor><Product>.kql`) and the parameterized parser (`vim<Schema><Vendor><Product>.kql`). Each file requires its own deployment.
 
 ## Step 1: Verify Azure CLI authentication
-Run `az account show` to verify the user is authenticated. If this fails, ask the user to run `az login` before continuing.
+Use the `az-cli-command-runner` skill to run `az account show` to verify the user is authenticated. If this fails, ask the user to run `az login` before continuing.
 
 ## Step 2: Query for workspace information
-Use the following CLI command to get the workspace name, resource group, and location needed for deployment:
+Use the `az-cli-command-runner` skill to run the following CLI command to get the workspace name, resource group, and location needed for deployment:
 ```powershell
 az monitor log-analytics workspace list --query "[?customerId=='<workspaceId>'].{name:name, resourceGroup:resourceGroup, location:location, id:id}" -o json 2>&1
 ```
@@ -88,7 +91,7 @@ An example ARM template with two parser resources:
 ```
 
 ## Step 4: Deploy the parser
-Deploy the ARM template using the following command:
+Use the `az-cli-command-runner` skill to deploy the ARM template using the following command:
 
 ```powershell
 az deployment group create --resource-group <resourceGroup> --template-file <templateFilePath> --parameters Workspace=<workspaceName> WorkspaceRegion=<location>
