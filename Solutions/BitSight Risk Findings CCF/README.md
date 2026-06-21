@@ -36,7 +36,8 @@ The connector brings targeted BitSight finding data into Microsoft Sentinel for 
 
 Only **WARN** and **BAD** findings are ingested. **FAIR** findings can be added later by modifying the DCR `transformKql` filter.
 
-Publisher: **Microsoft Sentinel Community**.
+Publisher: **Microsoft Security Community**.
+Author: ** Konstantinos Lianos**
 
 ## Package contents
 
@@ -50,15 +51,14 @@ Publisher: **Microsoft Sentinel Community**.
 1. A Microsoft Sentinel-enabled Log Analytics workspace.
 2. A valid BitSight API token with access to the target company.
 3. The BitSight **company GUID** to monitor.
-4. An **existing Data Collection Endpoint (DCE)** in the same workspace region.
 
-### Important DCE note
+No Data Collection Endpoint (DCE) needs to be created in advance — see the note below.
 
-This template does **not** create a DCE resource. Instead, the DCR references an existing DCE through `dataCollectionEndpointId`. The current template assumes the DCE resource ID format below:
+### Data Collection Endpoint (DCE)
 
-`/subscriptions/{subscription}/resourceGroups/{resourceGroupName}/providers/Microsoft.Insights/dataCollectionEndpoints/{workspace}`
+You do **not** need to create a DCE manually. When you connect the connector, Microsoft Sentinel automatically provisions a shared Data Collection Endpoint for the workspace (named `ASI-<workspaceId>`) and associates it with the DCR. The DCR carries a `dataCollectionEndpointId` reference that the platform resolves during connection.
 
-If your DCE has a different name, update the `dataCollectionEndpointId` value in the template before deployment.
+If, in your environment, you intend to point the DCR at a specific pre-existing DCE instead, update the `dataCollectionEndpointId` value in the template before deployment.
 
 ## Deployment
 
@@ -104,35 +104,29 @@ The connector package includes the resources required for data ingestion:
 - The DCR `BitsightDCR`
 - One `RestApiPoller` data connector connection
 
-### Not created by this template
+### Provisioned automatically by Microsoft Sentinel
 
-- A Data Collection Endpoint (DCE)
-
-An existing DCE is required and must be reachable through the `dataCollectionEndpointId` referenced by the DCR.
+- The Data Collection Endpoint (DCE), created when the connector is connected (`ASI-<workspaceId>`).
 
 ## How it works
 
-- **Authentication**  
-  The connector uses BitSight API token authentication and sends it through the poller authentication configuration as a Basic authorization header.
+- **Authentication**
+  The connector uses BitSight API token authentication and sends it through the poller authentication configuration as a Basic authorization header (the token as the username, with an empty password).
 
-- **Endpoint**  
+- **Endpoint**
   The connector calls:
 
   `GET https://api.bitsighttech.com/ratings/v1/companies/{companyGuid}/findings`
 
   for the configured company.
 
-- **Time window**  
-  Incremental polling uses:
-  - `last_seen_gte`
-  - `last_seen_lte`
+- **Polling**
+  Each poll retrieves the **current set of findings** for the configured company and pages through all results using the `$.links.next` link header. The connector does **not** apply a `last_seen` time-window filter. BitSight findings represent current state rather than a time-ordered event stream, and a rolling window keyed on `last_seen` would miss findings that were not re-observed inside the window. Repeated findings across polls are collapsed downstream by the hunting queries using `arg_max(TimeGenerated, *) by finding_uid`.
 
-  with a one-day (`1440` minute) polling window and `yyyy-MM-dd` formatting.
+- **Response parsing and paging**
+  Findings are read from the `$.results` array of the BitSight response body, and paging follows the `$.links.next` value.
 
-- **Response parsing and paging**  
-  Findings are read from the BitSight response body and paging follows the `$.links.next` value.
-
-- **Normalization and filtering**  
+- **Normalization and filtering**
   The DCR transform:
   - derives `normalized_risk_state`
   - filters findings to `warn` and `bad`
@@ -151,3 +145,36 @@ Quick checks:
 BitsightRiskFindings_CL
 | take 10
 ```
+
+```kusto
+// Current deduplicated WARN/BAD findings
+BitsightRiskFindings_CL
+| summarize arg_max(TimeGenerated, *) by finding_uid
+| where normalized_risk_state in ('warn','bad')
+| order by TimeGenerated desc
+```
+
+If no data appears after a polling cycle, enable Sentinel **Health Monitoring** diagnostic settings (DataConnectors) and inspect connector polling status:
+
+```kusto
+SentinelHealth
+| where SentinelResourceType == "Data connector"
+| where SentinelResourceName has "BitSight"
+| order by TimeGenerated desc
+```
+
+## Notes and limitations
+
+- **WARN/BAD only.** Only `warn` and `bad` findings are ingested. To include `fair` findings, edit the `where normalized_risk_state in ('warn','bad')` line in the DCR `transformKql`.
+
+- **Risk-vector scope.** Ingestion is limited to the ten risk vectors listed under [Description](#description) via the `where rv in (...)` filter in the transform. Add or remove vectors there as needed.
+
+- **One company per connection.** Each `RestApiPoller` connection ingests findings for a single company GUID. Create additional connections for additional companies.
+
+- **Full-set polling.** Because no time-window filter is applied, each poll re-ingests the current findings set. The raw `BitsightRiskFindings_CL` table therefore accumulates repeated rows over time; queries de-duplicate with `arg_max(TimeGenerated, *) by finding_uid`. Factor this into ingestion-volume expectations, especially if polling frequently or monitoring large finding sets.
+
+- **Company identity columns.** BitSight's per-company findings payload does not always echo the company identity inside each finding, so `company_guid` and `company_name` may be empty and `finding_uid` may begin with a leading colon. Risk-vector, severity, and state data are unaffected.
+
+- **Analytic rule.** The bundled analytic rule ships disabled by default; enable it after confirming data flow.
+
+- **Packaging validation.** When packaged with the Azure-Sentinel V3 tool, the arm-ttk test `IDs Should Be Derived From ResourceIDs` reports the auto-generated `id` and `contentProductId` properties. These values are produced by the packaging tool, not authored in the solution source, and are a documented, accepted false positive (see the V3 packaging README). There is no functional impact.
