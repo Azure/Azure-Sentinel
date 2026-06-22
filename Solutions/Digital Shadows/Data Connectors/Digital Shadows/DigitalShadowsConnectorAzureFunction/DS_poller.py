@@ -1,12 +1,68 @@
 """ polls data from DS to azure logs """
-import logging
-from . import DS_api
-from . import AS_api
-from .state_serializer import State
+import datetime
 import json
-from . import constant
+import logging
+
+from . import AS_api
+from . import DS_api
+from .state_serializer import State
 
 logger = logging.getLogger("DS_poller")
+
+
+def _stringify(value):
+    """Coerce a SearchLight field value to a string suitable for a DCR
+    string column. Lists/dicts are JSON-serialised; None becomes ''."""
+    if value is None:
+        return ''
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, separators=(',', ':'))
+    return str(value)
+
+
+def _build_v2_row(alert_or_incident, triage_item, app, is_incident, comments):
+    """Map raw SearchLight fields → DigitalShadows_V2_CL columns.
+
+    The single SearchLight `id` field is routed to IncidentId (real) or
+    AlertId (string) by *context* — i.e. which call site invoked this — to
+    avoid per-value typing logic in the DCR's transformKql.
+    """
+    risk_assessment = alert_or_incident.get('risk-assessment') or {}
+
+    row = {
+        'TimeGenerated':           datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'App':                      _stringify(app),
+        'Title':                    _stringify(alert_or_incident.get('title')),
+        'TimeRaised':               _stringify(alert_or_incident.get('raised')),
+        'TimeUpdated':              _stringify(alert_or_incident.get('updated')),
+        'Classification':           _stringify(alert_or_incident.get('classification')),
+        'RiskLevel':                _stringify(alert_or_incident.get('risk-level')),
+        'RiskAssessmentRiskLevel':  _stringify(risk_assessment.get('risk-level') if isinstance(risk_assessment, dict) else None),
+        'GreyMatterLink':           _stringify(alert_or_incident.get('gm_link')),
+        'Assets':                   _stringify(alert_or_incident.get('assets')),
+        'Description':              _stringify(alert_or_incident.get('description')),
+        'ImpactDescription':        _stringify(alert_or_incident.get('impact_description')),
+        'Mitigation':               _stringify(alert_or_incident.get('mitigation')),
+        'RiskFactors':              _stringify(alert_or_incident.get('risk_factors')),
+        'Comments':                 _stringify(comments),
+        'PortalId':                 _stringify(alert_or_incident.get('portal_id')),
+        'Status':                   _stringify(triage_item.get('state')),
+        'TriageId':                 _stringify(triage_item.get('id')),
+        'TriageRaisedTime':         _stringify(triage_item.get('raised')),
+        'TriageUpdatedTime':        _stringify(triage_item.get('updated')),
+    }
+
+    raw_id = alert_or_incident.get('id')
+    if is_incident:
+        try:
+            row['IncidentId'] = float(raw_id) if raw_id is not None else None
+        except (TypeError, ValueError):
+            row['IncidentId'] = None
+    else:
+        row['AlertId'] = _stringify(raw_id)
+
+    return row
+
 
 class poller:
 
@@ -39,14 +95,16 @@ class poller:
         return res
 
 
-    def post_azure(self, alerts_and_incidents, triage_items, app):
-        """
-            posts to azure after appending triage information on it
+    def post_azure(self, alerts_and_incidents, triage_items, app, is_incident):
+        """Pair alerts/incidents with their triage items, build V2-schema rows
+        for each, and POST the batch via the Logs Ingestion API.
+
+        `is_incident` decides whether the SearchLight `id` lands in
+        IncidentId (numeric) or AlertId (string) — see _build_v2_row.
         """
 
         data = {}
         for item in triage_items:
-            # Getting all the present triage items into the data dict
             if 'alert-id' in item['source'] and item['source']['alert-id'] is not None:
                 data[item['source']['alert-id']] = [item, None]
             elif 'incident-id' in item['source'] and item['source']['incident-id'] is not None:
@@ -55,47 +113,33 @@ class poller:
                 raise Exception(f'Triage item missing expected source ID field: {item}')
 
         for item in alerts_and_incidents:
-            # Replacing None in the list with the incident/alert corresponding to respective triage item. 
             if item['id'] in data:
                 data[item['id']][1] = item
             else:
                 raise Exception(f'No matching triage item found for alert/incident: {item}')
 
+        rows = []
         for triage_item, alert_or_incident in data.values():
-            # validate we actually have an alert/incident before proceeding
             if not alert_or_incident:
                 raise Exception(f'Triage item had no matching alert/incident data: {triage_item}')
-            alert_or_incident['status'] = triage_item['state']
-            alert_or_incident['triage_id'] = triage_item['id']
-            alert_or_incident['triage_raised_time'] = triage_item['raised']
-            alert_or_incident['triage_updated_time'] = triage_item['updated']
-            
-            #creating a custom json data to post into azure
-            azure_obj = {
-                **alert_or_incident,
-                'status': triage_item['state'],
-                'triage_id': triage_item['id'],
-                'triage_raised_time': triage_item['raised'],
-                'triage_updated_time': triage_item['updated'],
-                'comments': [],
-                'app': app
-            }
 
             comment_data = self.DS_obj.get_triage_comments(triage_item['id'])
-
+            comments = []
             for comment in comment_data:
                 if 'content' not in comment:
                     continue
                 uname = comment['user']['name'] if comment['user'] and 'name' in comment['user'] else None
-                azure_obj['comments'].append({
+                comments.append({
                     'user_name': uname,
                     'content': comment['content'],
                     'id': comment['id'],
                     'created': comment['created']
                 })
 
+            rows.append(_build_v2_row(alert_or_incident, triage_item, app, is_incident, comments))
 
-            self.AS_obj.post_data(json.dumps(azure_obj), constant.LOG_NAME)
+        if rows:
+            self.AS_obj.post_data(json.dumps(rows))
 
     def get_last_polled_triage_items(self, triage_ids, state_serializer_obj):
         """ 
@@ -198,9 +242,9 @@ class poller:
                             response_alert = self.DS_obj.get_alerts(alert_ids)
                             
                         if inc_triage_items:
-                            self.post_azure(response_inc, inc_triage_items, classification_filter_operation)
+                            self.post_azure(response_inc, inc_triage_items, classification_filter_operation, is_incident=True)
                         if alert_triage_items:
-                            self.post_azure(response_alert, alert_triage_items, classification_filter_operation)
+                            self.post_azure(response_alert, alert_triage_items, classification_filter_operation, is_incident=False)
             else:
                 logger.info("No new events found.")
                 max_event_num = self.event
