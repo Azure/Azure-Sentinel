@@ -43,14 +43,12 @@ query: |
     | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
-             SamKey = tolower(strcat(AccountDomain, "\\", AccountName)),
-             NameKey = tolower(AccountName);
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize key variants into one joinable user key.
   let HybridUsers =
     union isfuzzy=true
       (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
   // Keep latest hybrid or Entra-joined endpoint inventory.
   let HybridDevicesRaw =
     DeviceInfo
@@ -66,9 +64,10 @@ query: |
   // Identify suspicious remote execution patterns on endpoints.
   let RemoteExec =
     _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
-    | extend ParentProcess = tolower(coalesce(ActingProcessName, ActingProcessFilename, ActingProcessFileOriginalName)),
+    | where EventType =~ "ProcessCreated"
+    | extend ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName)),
              ParentOriginal = tolower(ActingProcessFileOriginalName),
-             ChildProcess = tolower(TargetProcessName),
+             ChildProcess = tolower(coalesce(TargetProcessFilename, TargetProcessFileOriginalName)),
              ChildCommandLine = tostring(TargetProcessCommandLine),
              UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
              DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname)),
@@ -84,10 +83,9 @@ query: |
   let CloudUserSignins =
     _Im_Authentication(starttime=StartTime, endtime=(EndTime + 1d))
     | where EventResult in~ ("Success", "Partial")
-    | where ActorScope has "Azure" or TargetUserScope has "Azure" or EventProduct has_any ("Azure AD", "Entra", "AAD")
-    | where EventSubType has_any ("Service", "RemoteService", "AssumeRole")
-      or LogonMethod has_any ("OAuth", "Token", "NonInteractive")
-      or LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+    | where EventProduct =~ "Microsoft Entra ID"
+    | where LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+      or LogonMethod in~ ("Service Principal", "Managed Identity", "Username & Password", "Multi factor authentication", "Passwordless", "PKI")
     | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
              CloudIP = tostring(SrcIpAddr),
              AppName = tostring(TargetAppName)
@@ -108,7 +106,7 @@ query: |
     by ExecTime, HybridDeviceName, JoinType, SourceIP, ParentProcess,
        ChildProcess, ChildCommandLine, HybridUPN, HybridSam,
        BlastRadius, CriticalityLevel
-  | extend Confidence = iff(BlastRadius == "High" or CriticalityLevel >= 3, "High", "Medium")
+  | extend Confidence = iff(BlastRadius =~ "high" or CriticalityLevel >= 3, "High", "Medium")
   | extend TimeGenerated = ExecTime
   | order by TimeGenerated desc
 entityMappings:

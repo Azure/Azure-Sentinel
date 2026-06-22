@@ -41,19 +41,18 @@ query: |
     | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
-             SamKey = tolower(strcat(AccountDomain, "\\", AccountName)),
-             NameKey = tolower(AccountName);
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize key variants into one join key.
   let HybridUsers =
     union isfuzzy=true
       (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(NameKey) | project UserKey = NameKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
   // Identify likely Entra Connect/sync hosts from process telemetry.
   let SyncHosts =
     _Im_ProcessEvent(starttime=BaselineStart, endtime=BaselineEnd)
-    | extend ProcessName = tolower(TargetProcessName),
-             ParentProcess = tolower(ActingProcessName),
+    | where EventType =~ "ProcessCreated"
+    | extend ProcessName = tolower(coalesce(TargetProcessFilename, TargetProcessFileOriginalName)),
+             ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName)),
              DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname))
     | where ProcessName in~ (SyncProcesses) or ParentProcess in~ (SyncProcesses)
     | where isnotempty(DeviceJoinKey)
@@ -65,7 +64,7 @@ query: |
       (
         _Im_Authentication(starttime=StartTime, endtime=EndTime)
         | where EventResult in~ ("Success", "Partial")
-        | where EventSubType =~ "RemoteInteractive" or LogonMethod has "RDP" or LogonProtocol has "RDP"
+        | where EventSubType =~ "RemoteInteractive"
         | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
                  DeviceJoinKey = tolower(coalesce(TargetDvcId, DvcId, TargetFQDN, DvcHostname)),
                  SourceIP = tostring(SrcIpAddr),
@@ -76,7 +75,8 @@ query: |
       ),
       (
         _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
-        | extend ParentProcess = tolower(coalesce(ActingProcessName, ActingProcessFilename, ActingProcessFileOriginalName)),
+        | where EventType =~ "ProcessCreated"
+        | extend ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName, ActingProcessName)),
                  ParentOriginal = tolower(ActingProcessFileOriginalName),
                  ChildCommandLine = tostring(TargetProcessCommandLine),
                  UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
@@ -111,7 +111,7 @@ query: |
               Operations = make_set(OperationText, 15)
     by ActivityTime, SyncHostName, ActivityType, SourceIP,
        HybridUPN, HybridSam, BlastRadius, CriticalityLevel, Evidence
-  | extend Confidence = iff(BlastRadius == "High" or CriticalityLevel >= 3, "High", "Medium")
+  | extend Confidence = iff(BlastRadius =~ "high" or CriticalityLevel >= 3, "High", "Medium")
   | extend TimeGenerated = ActivityTime
   | order by TimeGenerated desc
 entityMappings:
