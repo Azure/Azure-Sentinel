@@ -59,6 +59,44 @@ jobs:
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
     steps:
+      - name: Verify approver has write access (fork + SafeToRun)
+        # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
+        # Only collaborators can add labels, but a triage-only account could still apply
+        # SafeToRun; this rejects anyone without write/maintain/admin from approving a
+        # fork PR test run that uses the canary Azure credentials. Failing here fails the
+        # whole security-gate job, so every downstream (needs: security-gate) job is skipped.
+        if: |
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'SafeToRun'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            const approver = context.payload.sender.login;
+            log('info', `Validating approver permissions for @${approver}`);
+
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: approver,
+            });
+
+            // Legacy `permission` maps maintain->write and triage->read, so this
+            // allowlist authorizes admin/maintain/write and rejects triage/read/none.
+            const allowed = ['admin', 'maintain', 'write'];
+            log('info', `@${approver} permission level: ${perm.permission}`);
+
+            if (!allowed.includes(perm.permission)) {
+              core.setFailed(`@${approver} lacks write access (has '${perm.permission}') and is not authorized to approve fork PR test runs`);
+            } else {
+              log('success', `@${approver} is authorized to approve fork PR test runs`);
+            }
+
       - name: Check if PR needs approval
         id: check-approval
         run: |
@@ -364,9 +402,6 @@ jobs:
       (github.event.pull_request.head.repo.fork == false ||
        github.event.action == 'labeled')
     runs-on: ubuntu-latest
-    # SECURITY: bind OIDC/secret access to a protected GitHub Environment (required reviewers)
-    # so platform-enforced approval gates the canary credentials in addition to the SafeToRun label.
-    environment: asim-canary
     permissions:
       id-token: write
       contents: read
@@ -436,9 +471,6 @@ jobs:
       (github.event.pull_request.head.repo.fork == false ||
        github.event.action == 'labeled')
     runs-on: ubuntu-latest
-    # SECURITY: bind OIDC/secret access to a protected GitHub Environment (required reviewers)
-    # so platform-enforced approval gates the canary credentials in addition to the SafeToRun label.
-    environment: asim-canary
     permissions:
       id-token: write
       contents: read
@@ -513,9 +545,6 @@ jobs:
       (github.event.pull_request.head.repo.fork == false ||
        github.event.action == 'labeled')
     runs-on: ubuntu-latest
-    # SECURITY: bind OIDC/secret access to a protected GitHub Environment (required reviewers)
-    # so platform-enforced approval gates the canary credentials in addition to the SafeToRun label.
-    environment: asim-canary
     permissions:
       id-token: write
       contents: read
