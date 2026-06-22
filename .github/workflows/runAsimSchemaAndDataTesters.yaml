@@ -50,14 +50,6 @@ jobs:
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
     steps:
-      - name: Checkout pull request branch
-        if: github.event.pull_request != null
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          fetch-depth: 0
-
       - name: Check if PR needs approval
         id: check-approval
         run: |
@@ -166,35 +158,36 @@ jobs:
 
       - name: Prevent fork modifications to test infrastructure
         if: github.event.pull_request.head.repo.fork == true
-        shell: bash
-        run: |
-          set -euo pipefail
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
 
-          log_info() { echo "ℹ️  $1"; }
-          log_error() { echo "❌ $1"; }
-          log_success() { echo "✅ $1"; }
+            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
 
-          log_info "Checking for modifications to asimParsersTest folder in fork PR..."
+            // Paginate through all changed files in the PR
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
 
-          # We are currently checked out at the fork's HEAD SHA (actions/checkout did that).
-          # Add the base repo as a remote and fetch the base branch, so we can diff reliably.
-          git remote remove upstream 2>/dev/null || true
-          git remote add upstream "https://github.com/${{ github.repository }}.git"
+            const forbiddenFiles = files
+              .map(f => f.filename)
+              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
 
-          log_info "Fetching base branch ${{ github.event.pull_request.base.ref }} from upstream..."
-          git fetch --no-tags --prune upstream "${{ github.event.pull_request.base.ref }}"
-
-          # Diff base branch (FETCH_HEAD) -> current HEAD (fork head)
-          modified_files="$(git diff --name-only "FETCH_HEAD...HEAD")"
-
-          if echo "$modified_files" | grep -E "\.script/tests/asimParsersTest/" > /dev/null; then
-            log_error "Fork PRs cannot modify the asimParsersTest test infrastructure folder"
-            log_error "Modified test files detected:"
-            echo "$modified_files" | grep "\.script/tests/asimParsersTest/" | sed 's/^/  - /'
-            exit 1
-          fi
-
-          log_success "No modifications to asimParsersTest folder detected"
+            if (forbiddenFiles.length > 0) {
+              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
+              log('error', 'Modified test files detected:');
+              forbiddenFiles.forEach(f => console.log(`  - ${f}`));
+              core.setFailed('Fork PR modifies protected test infrastructure files');
+            } else {
+              log('success', 'No modifications to asimParsersTest folder detected');
+            }
 
       - name: Comment on fork PR for approval guidance
         if: |

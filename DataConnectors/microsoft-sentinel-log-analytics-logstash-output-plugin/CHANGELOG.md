@@ -1,3 +1,9 @@
+## 2.3.0
+- Added optional Id configuration value for telemetry.
+- Added DCR stream to sent-batches logging.
+- Enabled functionality with logstash 9.4.
+- Bumped dependency versions for external libraries (azure-sdk-bom, logback, slf4j, Netty).
+
 ## 2.2.1
 - Adds info-level logging line when batches are successfully sent.
 
