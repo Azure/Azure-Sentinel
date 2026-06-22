@@ -29,9 +29,10 @@ if ($resp.StatusCode -eq 200) {
     $tables = ($resp.Content | ConvertFrom-Json).tables
     $columns = $tables[0].columns
     $rows = $tables[0].rows
-    if ($rows.Count -gt 500) {
-        Write-Host "Showing first 100 of $($rows.Count) rows."
-        $rows = $rows | Select-Object -First 500
+    $rowLimit = 500
+    if ($rows.Count -gt $rowLimit) {
+        Write-Host "Showing first $rowLimit of $($rows.Count) rows."
+        $rows = $rows | Select-Object -First $rowLimit
     }
     $rows | ForEach-Object {
         $row = $_

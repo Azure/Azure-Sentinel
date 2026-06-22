@@ -50,6 +50,11 @@ if (-not $isAllowed) {
 }
 
 # Check for dangerous patterns
+if ($trimmed -match "[\r\n]") {
+    Write-Error "Command must be a single line. Newline characters are not allowed."
+    exit 1
+}
+
 foreach ($pattern in $dangerousPatterns) {
     if ($trimmed -match $pattern) {
         Write-Error "Command contains disallowed shell operators or patterns."
