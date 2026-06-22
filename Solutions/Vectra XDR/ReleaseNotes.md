@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                             |
 |-------------|--------------------------------|----------------------------------------------------------------|
+| 3.3.1       | 17-06-2026                     | Added Playbooks, Workbooks, Anlaytic rules, Migrated function app based data connector to CCF based data connector |
 | 3.3.0       | 29-10-2025                     | Added Playbooks, Vectra API version update and Log ingestion API support |
 | 3.2.0       | 01-08-2024                     | Added Playbooks, Analytic rules and updated Data Connector and Workbook |
 | 3.1.1       | 03-04-2024                     | Repackaged for parser issue fix on reinstall                   |
