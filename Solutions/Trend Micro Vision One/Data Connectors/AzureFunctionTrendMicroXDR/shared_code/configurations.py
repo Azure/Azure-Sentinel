@@ -18,7 +18,7 @@ XDR_HOSTS = {
     'uk': 'https://api.uk.xdr.trendmicro.com',
     'ca': 'https://api.ca.xdr.trendmicro.com',
     'za': 'https://api.za.xdr.trendmicro.com',
-    'id': 'https://api.id.xdr.trendmicro.com', 
+    'id': 'https://api.id.xdr.trendmicro.com',
 }
 
 
