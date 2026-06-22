@@ -7,6 +7,57 @@ from ..SharedCode import consts
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import Utils
 from ..SharedCode.cofense_intelligence_exception import CofenseIntelligenceException
+import urllib.parse
+import socket
+import ipaddress
+
+
+def _is_address_private(hostname: str) -> bool:
+    """Resolve hostname and check if any resolved IP is private/local.
+
+    Returns True if any address is in a private, loopback or link-local range.
+    If resolution fails, be conservative and treat as not private (fail open is dangerous).
+    """
+    try:
+        # If hostname is an IP literal, check directly
+        try:
+            ip = ipaddress.ip_address(hostname)
+            return ip.is_private or ip.is_loopback or ip.is_link_local
+        except ValueError:
+            # Not an IP literal; resolve DNS
+            infos = socket.getaddrinfo(hostname, None)
+            for family, _, _, _, sockaddr in infos:
+                addr = sockaddr[0]
+                try:
+                    ip = ipaddress.ip_address(addr)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local:
+                        return True
+                except ValueError:
+                    continue
+    except Exception:
+        # If DNS resolution fails for any reason, be conservative and disallow the host by marking as private
+        return True
+    return False
+
+
+def _is_allowed_cofense_host(hostname: str) -> bool:
+    """Allow only hosts that belong to configured Cofense base url.
+
+    This enforces an allowlist: the request host must be the same as or a subdomain
+    of the configured COFENSE_BASE_URL host.
+    """
+    if not hostname:
+        return False
+    try:
+        base_host = urllib.parse.urlparse(consts.COFENSE_BASE_URL).hostname
+        if not base_host:
+            return False
+        # Exact match or subdomain
+        hostname = hostname.lower()
+        base_host = base_host.lower()
+        return hostname == base_host or hostname.endswith("." + base_host)
+    except Exception:
+        return False
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -24,17 +75,67 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         utils_obj = Utils(consts.DOWNLOAD_THREAT_REPORTS)
         utils_obj.validate_params()
         proxy = utils_obj.create_proxy()
+
+        # Validate input URL -- do NOT accept arbitrary user-supplied destinations.
         url = req.params.get("url")
-        splitted_url = url.rsplit("/", 1)
-        file_format = splitted_url[1]
-        level_two_split = splitted_url[0].rsplit("/", 1)
-        file_name = level_two_split[1]
+        if not url:
+            return func.HttpResponse("Missing 'url' parameter.", status_code=400)
+
+        parsed = urllib.parse.urlparse(url)
+        # Only allow HTTPS
+        if parsed.scheme.lower() != "https":
+            return func.HttpResponse("Only HTTPS destinations are allowed.", status_code=400)
+
+        hostname = parsed.hostname
+        if not hostname:
+            return func.HttpResponse("Invalid URL provided.", status_code=400)
+
+        # Enforce allowlist: only Cofense configured base host (or its subdomains) are permitted
+        if not _is_allowed_cofense_host(hostname):
+            applogger.error(
+                "{}(method={}) : {} : Rejected download request. Destination not in allowlist: {}".format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    consts.DOWNLOAD_THREAT_REPORTS,
+                    hostname,
+                )
+            )
+            return func.HttpResponse(
+                "Destination host is not allowed.", status_code=403
+            )
+
+        # Prevent requests to private/local addresses
+        if _is_address_private(hostname):
+            applogger.error(
+                "{}(method={}) : {} : Rejected download request. Destination resolves to private/local address: {}".format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    consts.DOWNLOAD_THREAT_REPORTS,
+                    hostname,
+                )
+            )
+            return func.HttpResponse(
+                "Destination resolves to a private or local address and is not allowed.",
+                status_code=403,
+            )
+
+        # Extract filename and format from path safely
+        path_parts = parsed.path.rsplit("/", 1)
+        if len(path_parts) < 2 or not path_parts[1]:
+            return func.HttpResponse("Invalid file path in URL.", status_code=400)
+        file_format = path_parts[1]
+        level_two_split = path_parts[0].rsplit("/", 1)
+        file_name = level_two_split[1] if len(level_two_split) > 1 else level_two_split[0]
+
+        # Make the request but DO NOT follow redirects automatically to avoid leaking credentials
         response = requests.get(
             url=url,
             auth=(consts.COFENSE_USERNAME, consts.COFENSE_PASSWORD),
             timeout=10,
             proxies=proxy,
+            allow_redirects=False,
         )
+
         if response.status_code == 200:
             applogger.info(
                 "{}(method={}) : {} : Request Success : threat id - {}.".format(
