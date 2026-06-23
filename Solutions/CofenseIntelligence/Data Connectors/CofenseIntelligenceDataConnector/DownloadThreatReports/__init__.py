@@ -8,6 +8,7 @@ from ..SharedCode.logger import applogger
 from ..SharedCode.utils import Utils
 from ..SharedCode.cofense_intelligence_exception import CofenseIntelligenceException
 import urllib.parse
+import re
 import socket
 import ipaddress
 
@@ -88,7 +89,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         # Construct the trusted Cofense URL server-side using the configured base URL
         base = consts.COFENSE_BASE_URL.rstrip('/')
-        url = f"{base}/{threat_id}/{file_format}"
+        # Percent-encode threat_id as a single path segment to prevent path traversal or injected query/fragment
+        safe_threat_id = urllib.parse.quote(threat_id, safe='')
+        url = f"{base}/{safe_threat_id}/{file_format}"
         parsed = urllib.parse.urlparse(url)
 
         # Safety checks on the constructed URL
@@ -125,8 +128,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=403,
             )
 
-        # File name for logging and content-disposition
-        file_name = threat_id
+        # File name for logging and content-disposition (sanitize to filesystem-safe token)
+        file_name = re.sub(r"[^0-9A-Za-z._-]", "_", threat_id)
 
         # Make the authenticated request to the trusted Cofense URL but DO NOT follow redirects
         response = requests.get(
