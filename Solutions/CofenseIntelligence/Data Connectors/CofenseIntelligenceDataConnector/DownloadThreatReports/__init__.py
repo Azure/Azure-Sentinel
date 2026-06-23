@@ -76,58 +76,59 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         utils_obj.validate_params()
         proxy = utils_obj.create_proxy()
 
-        # Validate input URL -- do NOT accept arbitrary user-supplied destinations.
-        url = req.params.get("url")
-        if not url:
-            return func.HttpResponse("Missing 'url' parameter.", status_code=400)
+        # Prefer accepting a threat/report ID rather than a full URL to avoid SSRF.
+        # Acceptable params: 'id' or 'threat_id' (report identifier). Optional: 'format' ('pdf' or 'html').
+        threat_id = req.params.get("id") or req.params.get("threat_id") or req.params.get("report_id")
+        if not threat_id:
+            return func.HttpResponse("Missing 'id' (threat/report identifier) parameter.", status_code=400)
 
+        file_format = (req.params.get("format") or "pdf").lower()
+        if file_format not in ("pdf", "html"):
+            return func.HttpResponse("Invalid format. Supported: pdf, html.", status_code=400)
+
+        # Construct the trusted Cofense URL server-side using the configured base URL
+        base = consts.COFENSE_BASE_URL.rstrip('/')
+        url = f"{base}/{threat_id}/{file_format}"
         parsed = urllib.parse.urlparse(url)
-        # Only allow HTTPS
+
+        # Safety checks on the constructed URL
         if parsed.scheme.lower() != "https":
-            return func.HttpResponse("Only HTTPS destinations are allowed.", status_code=400)
+            applogger.error(
+                "{}(method={}) : {} : Configured COFENSE_BASE_URL is not HTTPS: {}".format(
+                    consts.LOGS_STARTS_WITH, __method_name, consts.DOWNLOAD_THREAT_REPORTS, consts.COFENSE_BASE_URL
+                )
+            )
+            return func.HttpResponse("Server misconfiguration: COFENSE_BASE_URL must be HTTPS.", status_code=500)
 
         hostname = parsed.hostname
         if not hostname:
-            return func.HttpResponse("Invalid URL provided.", status_code=400)
+            return func.HttpResponse("Invalid configured Cofense base URL.", status_code=500)
 
-        # Enforce allowlist: only Cofense configured base host (or its subdomains) are permitted
+        # As a final safety check, ensure the constructed hostname matches expected Cofense host
         if not _is_allowed_cofense_host(hostname):
             applogger.error(
-                "{}(method={}) : {} : Rejected download request. Destination not in allowlist: {}".format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    consts.DOWNLOAD_THREAT_REPORTS,
-                    hostname,
+                "{}(method={}) : {} : Configured COFENSE_BASE_URL host not allowed: {}".format(
+                    consts.LOGS_STARTS_WITH, __method_name, consts.DOWNLOAD_THREAT_REPORTS, hostname
                 )
             )
-            return func.HttpResponse(
-                "Destination host is not allowed.", status_code=403
-            )
+            return func.HttpResponse("Server misconfiguration: unexpected Cofense host.", status_code=500)
 
-        # Prevent requests to private/local addresses
+        # Prevent requests to private/local addresses (defense-in-depth even for constructed URL)
         if _is_address_private(hostname):
             applogger.error(
-                "{}(method={}) : {} : Rejected download request. Destination resolves to private/local address: {}".format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    consts.DOWNLOAD_THREAT_REPORTS,
-                    hostname,
+                "{}(method={}) : {} : Rejected download request. Constructed destination resolves to private/local address: {}".format(
+                    consts.LOGS_STARTS_WITH, __method_name, consts.DOWNLOAD_THREAT_REPORTS, hostname
                 )
             )
             return func.HttpResponse(
-                "Destination resolves to a private or local address and is not allowed.",
+                "Constructed destination resolves to a private or local address and is not allowed.",
                 status_code=403,
             )
 
-        # Extract filename and format from path safely
-        path_parts = parsed.path.rsplit("/", 1)
-        if len(path_parts) < 2 or not path_parts[1]:
-            return func.HttpResponse("Invalid file path in URL.", status_code=400)
-        file_format = path_parts[1]
-        level_two_split = path_parts[0].rsplit("/", 1)
-        file_name = level_two_split[1] if len(level_two_split) > 1 else level_two_split[0]
+        # File name for logging and content-disposition
+        file_name = threat_id
 
-        # Make the request but DO NOT follow redirects automatically to avoid leaking credentials
+        # Make the authenticated request to the trusted Cofense URL but DO NOT follow redirects
         response = requests.get(
             url=url,
             auth=(consts.COFENSE_USERNAME, consts.COFENSE_PASSWORD),
