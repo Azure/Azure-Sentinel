@@ -4,27 +4,33 @@ import subprocess
 import sqlite3
 import os
 import re
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from urllib.parse import urlparse
+import html
 
 app = Flask(__name__)
 
 
-# FIX: Enable TLS verification and validate URL against allowlist
-ALLOWED_DOMAINS = ["api.example.com", "data.example.com"]
+# FIX: Construct URL internally using only user-provided path parameter, not full URL
+ALLOWED_ENDPOINTS = {
+    "users": "https://api.example.com/users",
+    "data": "https://api.example.com/data",
+    "status": "https://api.example.com/status",
+}
 
 
 @app.route("/fetch")
 def fetch_data():
-    url = request.args.get("url")
-    parsed = urlparse(url)
-    if parsed.hostname not in ALLOWED_DOMAINS:
-        return "Domain not allowed", 403
+    endpoint = request.args.get("endpoint")
+    if endpoint not in ALLOWED_ENDPOINTS:
+        return "Endpoint not allowed", 403
+    url = ALLOWED_ENDPOINTS[endpoint]
     response = requests.get(url, verify=True, timeout=30)
-    return response.text
+    sanitized = html.escape(response.text)
+    return sanitized, 200, {"Content-Type": "text/plain"}
 
 
-# FIX: Use parameterized arguments instead of shell=True with string concatenation
+# FIX: Use parameterized arguments instead of shell=True
 @app.route("/ping")
 def ping_host():
     host = request.args.get("host")
@@ -35,7 +41,7 @@ def ping_host():
     return result.stdout.decode()
 
 
-# FIX: Use parameterized query instead of string concatenation
+# FIX: Use parameterized query
 @app.route("/user")
 def get_user():
     user_id = request.args.get("id")
@@ -53,7 +59,7 @@ def hash_data():
     return result
 
 
-# FIX: Load credentials from environment variables instead of hardcoding
+# FIX: Load credentials from environment variables
 @app.route("/connect")
 def connect_service():
     api_key = os.environ.get("API_KEY")
@@ -65,7 +71,7 @@ def connect_service():
         verify=True,
         timeout=30,
     )
-    return response.text
+    return jsonify({"status": response.status_code})
 
 
 # FIX: Do not log sensitive data
