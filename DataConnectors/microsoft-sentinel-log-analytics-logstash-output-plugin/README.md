@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.  
 
-Plugin version: v2.2.1  
-Released on: 2026-05-27  
+Plugin version: v2.3.0  
+Released on: 2026-06-17  
 
 This plugin is currently in development and is free to use. We request and appreciate feedback from users.  
 
@@ -19,7 +19,7 @@ This plugin is currently in development and is free to use. We request and appre
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.  
 
-The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.2.1-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin/versions/2.3.0-java). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.  
 
 If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).  
 
@@ -32,6 +32,7 @@ Microsoft Sentinel's Logstash output plugin supports the following versions
 - 9.1.10 (NOTE: this version requires a security update, according to Logstash!)  
 - 9.2.4 - 9.2.5 (NOTE: these versions require a security update, according to Logstash! [Security Update](https://discuss.elastic.co/t/logstash-8-19-14-9-2-8-9-3-3-security-update-esa-2026-29/385816))  
 - 9.3.3
+- 9.4.0
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)  
 
@@ -222,6 +223,7 @@ A complete `logstash.conf` using client secret auth with a Beats input:
 | `batcher_workers_count` | *(auto)* | Number of batcher threads |  
 | `sender_workers_count` | *(auto)* | Number of sender threads |  
 | `unifier_workers_count` | *(auto)* | Number of unifier threads |  
+| `id` | `None` | A custom identification tag to be added to sent-batches logs |  
 
 ## Known issues
  
