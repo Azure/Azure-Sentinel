@@ -37,17 +37,19 @@ query: |
   // Build latest hybrid identity keys to unify cloud and endpoint telemetry.
   let HybridUsersRaw =
     IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
     | where Timestamp between (BaselineStart .. BaselineEnd)
-    | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize user key variants into one joinable identity key.
   let HybridUsers =
     union isfuzzy=true
-      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
   // Keep latest hybrid or Entra-joined devices as on-prem movement targets.
   let HybridDevicesRaw =
     DeviceInfo
@@ -122,9 +124,9 @@ query: |
               EvidenceSet = make_set(Evidence, 15),
               Apps = make_set(AppName, 10),
               ClientApps = make_set(ClientApp, 10)
-    by SigninTime, CloudIP, HybridUPN, HybridSam, BlastRadius,
-       CriticalityLevel, MovementType
-  | extend Confidence = iff(BlastRadius =~ "high" or CriticalityLevel >= 3 or MovementCount >= 2, "High", "Medium")
+     by SigninTime, CloudIP, HybridUPN, HybridSam, BlastRadius,
+       MovementType
+    | extend Confidence = iff(BlastRadius =~ "high", "High", "Medium")
   | extend TimeGenerated = SigninTime
   | order by TimeGenerated desc
 entityMappings:

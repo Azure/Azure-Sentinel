@@ -36,17 +36,19 @@ query: |
   // Build latest hybrid identity keys for correlation.
   let HybridUsersRaw =
     IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
     | where Timestamp between (BaselineStart .. BaselineEnd)
-    | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize key variants into one join key.
   let HybridUsers =
     union isfuzzy=true
-      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
   // Identify likely Entra Connect/sync hosts from process telemetry.
   let SyncHosts =
     _Im_ProcessEvent(starttime=BaselineStart, endtime=BaselineEnd)
@@ -69,8 +71,7 @@ query: |
                  DeviceJoinKey = tolower(coalesce(TargetDvcId, DvcId, TargetFQDN, DvcHostname)),
                  SourceIP = tostring(SrcIpAddr),
                  ActivityType = "RDP"
-        | where isnotempty(UserKey)
-        | where isnotempty(DeviceJoinKey)
+        | where isnotempty(UserKey) and isnotempty(DeviceJoinKey)
         | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = tostring(coalesce(EventSubType, LogonMethod, LogonProtocol))
       ),
       (
@@ -84,8 +85,7 @@ query: |
                  SourceIP = tostring(DvcIpAddr),
                  ActivityType = "RemoteExec"
         | where ParentProcess in~ (RemoteParents) or ParentOriginal in~ (RemoteParents)
-        | where isnotempty(UserKey)
-        | where isnotempty(DeviceJoinKey)
+        | where isnotempty(UserKey) and isnotempty(DeviceJoinKey) 
         | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = ChildCommandLine
       );
   // Gather high-risk Entra audit activity performed by identities.
@@ -110,8 +110,8 @@ query: |
               ActorIPs = make_set(ActorIP, 10),
               Operations = make_set(OperationText, 15)
     by ActivityTime, SyncHostName, ActivityType, SourceIP,
-       HybridUPN, HybridSam, BlastRadius, CriticalityLevel, Evidence
-  | extend Confidence = iff(BlastRadius =~ "high" or CriticalityLevel >= 3, "High", "Medium")
+      HybridUPN, HybridSam, BlastRadius, Evidence
+    | extend Confidence = iff(BlastRadius =~ "high", "High", "Medium")
   | extend TimeGenerated = ActivityTime
   | order by TimeGenerated desc
 entityMappings:

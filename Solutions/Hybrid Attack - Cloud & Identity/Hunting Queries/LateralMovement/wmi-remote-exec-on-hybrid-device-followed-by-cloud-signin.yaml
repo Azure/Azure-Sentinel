@@ -38,17 +38,19 @@ query: |
   // Build latest hybrid identity keys for robust joins.
   let HybridUsersRaw =
     IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
     | where Timestamp between (BaselineStart .. BaselineEnd)
-    | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize key variants into one joinable user key.
   let HybridUsers =
     union isfuzzy=true
-      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
   // Keep latest hybrid or Entra-joined endpoint inventory.
   let HybridDevicesRaw =
     DeviceInfo
@@ -104,9 +106,9 @@ query: |
               CloudIPs = make_set(CloudIP, 10),
               CorrelationIds = make_set(CorrelationId, 10)
     by ExecTime, HybridDeviceName, JoinType, SourceIP, ParentProcess,
-       ChildProcess, ChildCommandLine, HybridUPN, HybridSam,
-       BlastRadius, CriticalityLevel
-  | extend Confidence = iff(BlastRadius =~ "high" or CriticalityLevel >= 3, "High", "Medium")
+      ChildProcess, ChildCommandLine, HybridUPN, HybridSam,
+      BlastRadius
+    | extend Confidence = iff(BlastRadius =~ "high", "High", "Medium")
   | extend TimeGenerated = ExecTime
   | order by TimeGenerated desc
 entityMappings:

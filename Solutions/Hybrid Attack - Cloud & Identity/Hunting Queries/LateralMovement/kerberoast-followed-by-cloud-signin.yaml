@@ -33,17 +33,19 @@ query: |
   // Build latest hybrid identity keys for reliable cross-source correlation.
   let HybridUsersRaw =
     IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
     | where Timestamp between (BaselineStart .. BaselineEnd)
-    | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize multiple account key formats into one joinable user key.
   let HybridUsers =
     union isfuzzy=true
-      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel, AccountObjectId);
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, AccountObjectId),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, AccountObjectId);
   // Detect potential Kerberoast behavior as a burst of RC4-encrypted Kerberos service ticket requests (4769).
   let KerberoastBurst =
     SecurityEvent
@@ -94,7 +96,7 @@ query: |
               ServiceSet = any(ServiceSet),
               SourceIP = any(SourceIPs)
     by FirstKerberoast, LastKerberoast, KerberoastEvents, DistinctServices,
-      HybridUPN, HybridSam, BlastRadius, CriticalityLevel, AccountObjectId
+      HybridUPN, HybridSam, BlastRadius, AccountObjectId
   | extend TimeGenerated = FirstKerberoast
   | order by TimeGenerated desc
 entityMappings:

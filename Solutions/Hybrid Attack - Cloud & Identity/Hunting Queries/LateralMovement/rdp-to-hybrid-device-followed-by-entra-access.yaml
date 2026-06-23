@@ -32,29 +32,31 @@ query: |
   // Build latest hybrid identity keys for cross-platform joins.
   let HybridUsersRaw =
     IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
     | where Timestamp between (BaselineStart .. BaselineEnd)
-    | where IdentityEnvironment =~ "Hybrid"
-    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius, CriticalityLevel
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
     | summarize arg_max(Timestamp, *) by AccountObjectId
     | extend UPNKey = tolower(AccountUpn),
              SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
   // Normalize identity keys to one join key.
   let HybridUsers =
     union isfuzzy=true
-      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel),
-      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius, CriticalityLevel);
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
   // Keep latest hybrid or Entra-joined devices likely to bridge cloud and on-prem.
   let HybridDevicesRaw =
     DeviceInfo
     | where TimeGenerated between (BaselineStart .. BaselineEnd)
-    | project TimeGenerated, DeviceId, DeviceName, JoinType, AadDeviceId, DeviceObjectId, IsAzureADJoined
+    | project TimeGenerated, DeviceId, DeviceName, JoinType, AadDeviceId, IsAzureADJoined
     | summarize arg_max(TimeGenerated, *) by DeviceId
     | where IsAzureADJoined == true or tostring(JoinType) has_any ("Hybrid", "Azure AD", "Entra")
-    | project DeviceId, HybridDeviceName = DeviceName, JoinType, AadDeviceId, DeviceObjectId, IsAzureADJoined;
+    | project DeviceId, HybridDeviceName = DeviceName, JoinType, AadDeviceId, IsAzureADJoined;
   let HybridDevices =
     union isfuzzy=true
-      (HybridDevicesRaw | where isnotempty(DeviceId) | project DeviceJoinKey = tolower(DeviceId), HybridDeviceName, JoinType, AadDeviceId, DeviceObjectId, IsAzureADJoined),
-      (HybridDevicesRaw | where isnotempty(HybridDeviceName) | project DeviceJoinKey = tolower(HybridDeviceName), HybridDeviceName, JoinType, AadDeviceId, DeviceObjectId, IsAzureADJoined);
+      (HybridDevicesRaw | where isnotempty(DeviceId) | project DeviceJoinKey = tolower(DeviceId), HybridDeviceName, JoinType, AadDeviceId, IsAzureADJoined),
+      (HybridDevicesRaw | where isnotempty(HybridDeviceName) | project DeviceJoinKey = tolower(HybridDeviceName), HybridDeviceName, JoinType, AadDeviceId, IsAzureADJoined);
   // Identify successful RDP logons by candidate hybrid identities.
   let RdpSessions =
     _Im_Authentication(starttime=StartTime, endtime=EndTime)
@@ -94,8 +96,8 @@ query: |
               CloudIPs = make_set(CloudIP, 10),
               CorrelationIds = make_set(CorrelationId, 10)
     by RdpTime, HybridDeviceName, JoinType, SourceIP, IsLocalAdmin,
-       HybridUPN, HybridSam, BlastRadius, CriticalityLevel, InitiatorUPN
-  | extend Confidence = iff(IsLocalAdmin == true or BlastRadius =~ "high" or CriticalityLevel >= 3, "High", "Medium")
+      HybridUPN, HybridSam, BlastRadius, InitiatorUPN
+  | extend Confidence = iff(IsLocalAdmin == true or BlastRadius =~ "high", "High", "Medium")
   | extend TimeGenerated = RdpTime
   | order by TimeGenerated desc
 entityMappings:
