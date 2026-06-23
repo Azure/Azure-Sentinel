@@ -2,67 +2,81 @@ import requests
 import hashlib
 import subprocess
 import sqlite3
+import os
+import re
 from flask import Flask, request
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 
 
-# CWE-295: Disabled TLS certificate verification
+# FIX: Enable TLS verification and validate URL against allowlist
+ALLOWED_DOMAINS = ["api.example.com", "data.example.com"]
+
+
 @app.route("/fetch")
 def fetch_data():
     url = request.args.get("url")
-    response = requests.get(url, verify=False)
+    parsed = urlparse(url)
+    if parsed.hostname not in ALLOWED_DOMAINS:
+        return "Domain not allowed", 403
+    response = requests.get(url, verify=True, timeout=30)
     return response.text
 
 
-# CWE-78: OS Command Injection
+# FIX: Use parameterized arguments instead of shell=True with string concatenation
 @app.route("/ping")
 def ping_host():
     host = request.args.get("host")
-    result = subprocess.run("ping -c 4 " + host, shell=True, capture_output=True)
+    valid_host_pattern = re.compile(r"^[a-zA-Z0-9.-]+$")
+    if not host or not valid_host_pattern.match(host):
+        return "Invalid host", 400
+    result = subprocess.run(["ping", "-c", "4", host], capture_output=True)
     return result.stdout.decode()
 
 
-# CWE-89: SQL Injection
+# FIX: Use parameterized query instead of string concatenation
 @app.route("/user")
 def get_user():
     user_id = request.args.get("id")
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE id = '" + user_id + "'")
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     return str(cursor.fetchall())
 
 
-# CWE-327: Use of weak cryptographic algorithm
+# FIX: Use SHA-256 instead of MD5
 @app.route("/hash")
 def hash_data():
     data = request.args.get("data")
-    result = hashlib.md5(data.encode()).hexdigest()
+    result = hashlib.sha256(data.encode()).hexdigest()
     return result
 
 
-# CWE-798: Hardcoded credentials
-API_KEY = "sk-1234567890abcdef"
-DB_PASSWORD = "SuperSecret123!"
-
-
+# FIX: Load credentials from environment variables instead of hardcoding
 @app.route("/connect")
 def connect_service():
+    api_key = os.environ.get("API_KEY")
+    if not api_key:
+        return "API key not configured", 500
     response = requests.post(
         "https://api.example.com/data",
-        headers={"Authorization": "Bearer " + API_KEY},
-        verify=False,
+        headers={"Authorization": "Bearer " + api_key},
+        verify=True,
+        timeout=30,
     )
     return response.text
 
 
-# CWE-312: Cleartext logging of sensitive data
+# FIX: Do not log sensitive data
 @app.route("/login")
 def login():
     password = request.args.get("password")
-    print("User login attempt with password: " + password)
+    if not password:
+        return "Password required", 400
+    print("User login attempt received")
     return "OK"
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
