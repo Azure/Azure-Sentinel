@@ -1,0 +1,110 @@
+// =====================================================================
+// Contoso Script Execution Investigator — Investigation Queries
+// Workspace: ContosoSOC
+// These mirror the steps in agent/agent-instructions.yaml so you can
+// dry-run them in Data lake exploration before wiring up the agent.
+// Replace {{AlertId}} with the literal value (e.g., 'ALERT-001').
+// =====================================================================
+
+// ---------- Step A: Resolve the alert ----------
+Contoso_ScriptExecutionAlert_KQL_CL
+| where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+| project TimeGenerated, AlertId, DeviceId, DeviceName, ProcessGuid, ScriptInterpreter, DecodedContent, Severity;
+
+
+// ---------- Step B: Full process lineage (upward + downward) ----------
+let alertGuid = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project ProcessGuid);
+let rootGuid = toscalar(
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and ProcessGuid == alertGuid
+    | take 1 | project RootProcessGuid);
+Contoso_ProcessLineage_KQL_CL
+| where TimeGenerated > ago(24h) and RootProcessGuid == rootGuid
+| order by LineageDepth asc, TimeGenerated asc
+| project TimeGenerated, LineageDepth, ProcessName, CommandLine, ProcessGuid, ParentProcessGuid, AccountUpn, SignerStatus, LineageChain;
+
+
+// ---------- Step C: Upward correlation — entry vector (PHISH path) ----------
+let alertGuid = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project ProcessGuid);
+let alertTime = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project TimeGenerated);
+let upn = toscalar(
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and ProcessGuid == alertGuid
+    | take 1 | project AccountUpn);
+EmailEvents
+| where TimeGenerated > ago(24h)
+    and RecipientEmailAddress == upn
+    and TimeGenerated between (datetime_add('minute', -30, alertTime) .. alertTime)
+| project TimeGenerated, SenderFromAddress, Subject, AttachmentCount, ThreatTypes, DeliveryAction;
+
+
+// ---------- Step D: Downward correlation — blast radius ----------
+let alertGuid = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project ProcessGuid);
+let rootGuid = toscalar(
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and ProcessGuid == alertGuid
+    | take 1 | project RootProcessGuid);
+let descendants =
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and RootProcessGuid == rootGuid
+    | project ProcessGuid;
+DeviceNetworkEvents
+| where TimeGenerated > ago(24h)
+    and InitiatingProcessUniqueId in (descendants)
+| summarize Hits=count(), Hosts=dcount(RemoteIP) by RemoteUrl, RemotePort, ActionType
+| top 20 by Hits;
+
+
+// ---------- Step D2: In-memory detections on descendants ----------
+let alertGuid = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project ProcessGuid);
+let rootGuid = toscalar(
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and ProcessGuid == alertGuid
+    | take 1 | project RootProcessGuid);
+let descendants =
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and RootProcessGuid == rootGuid
+    | project ProcessGuid;
+Contoso_FilelessDetection_KQL_CL
+| where TimeGenerated > ago(24h) and ProcessGuid in (descendants)
+| project TimeGenerated, DetectionName, Severity, MitreTechniqueId, Confidence;
+
+
+// ---------- Single-pane "smoke test" — full chain in one row per descendant ----------
+let alertGuid = toscalar(
+    Contoso_ScriptExecutionAlert_KQL_CL
+    | where TimeGenerated > ago(24h) and AlertId == 'ALERT-001'
+    | take 1 | project ProcessGuid);
+let rootGuid = toscalar(
+    Contoso_ProcessLineage_KQL_CL
+    | where TimeGenerated > ago(24h) and ProcessGuid == alertGuid
+    | take 1 | project RootProcessGuid);
+Contoso_ProcessLineage_KQL_CL
+| where TimeGenerated > ago(24h) and RootProcessGuid == rootGuid
+| join kind=leftouter (
+    EmailEvents
+    | where TimeGenerated > ago(24h)
+    | project EmailTime=TimeGenerated, RecipientEmailAddress, Subject, ThreatTypes
+  ) on $left.AccountUpn == $right.RecipientEmailAddress
+| join kind=leftouter (
+    DeviceNetworkEvents
+    | where TimeGenerated > ago(24h)
+    | project NetTime=TimeGenerated, InitiatingProcessUniqueId, RemoteUrl, RemotePort, ActionType
+  ) on $left.ProcessGuid == $right.InitiatingProcessUniqueId
+| project TimeGenerated, LineageDepth, DeviceName, AccountUpn, ProcessName, Subject, ThreatTypes, RemoteUrl, RemotePort, SignerStatus
+| order by LineageDepth asc, TimeGenerated asc;

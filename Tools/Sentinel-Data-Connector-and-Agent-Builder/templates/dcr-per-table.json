@@ -1,0 +1,119 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_description": "Generic per-table Data Collection Rule for the Sentinel Data Connector and Agent Builder ingestion pipeline. One deployment per custom *_CL table. Uses the Logs Ingestion API model: streamDeclarations[<streamName>] -> Log Analytics workspace via a Data Collection Endpoint. The orchestrator (scripts/Invoke-SampleDataIngestion.ps1) reads schemas/<table>.json and invokes this template once per table.",
+    "_phase": "Phase 3 — DCE/DCR + Logs Ingestion API redesign",
+    "_compatibility": "az CLI deployment group / management group / subscription scope (this file: resourceGroup scope). ARM language built-ins only — no Bicep, no languageVersion 2.0 — for max compatibility with az deployment group create."
+  },
+  "parameters": {
+    "dcrName": {
+      "type": "string",
+      "metadata": {
+        "description": "DCR resource name. Convention: dcr-<tableNameLower> (e.g. dcr-lightningtier0nodes-cl)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region. Must match the workspace and DCE region."
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Full resourceId of the destination Log Analytics workspace."
+      }
+    },
+    "dceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Full resourceId of the Data Collection Endpoint that fronts the Logs Ingestion API."
+      }
+    },
+    "streamName": {
+      "type": "string",
+      "metadata": {
+        "description": "Inbound DCR stream name (the one the orchestrator POSTs to via Logs Ingestion API). Always Custom-<TableName>, even when the destination is a native table — Azure requires inbound streams declared on a customer DCR to use the 'Custom-' prefix."
+      }
+    },
+    "outputStreamName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Destination outputStream. For custom *_CL tables, leave empty (defaults to streamName, which routes to the matching Custom-<Table>_CL). For LIA-supported native tables (CommonSecurityLog, Syslog, SecurityEvent, etc.) set to 'Microsoft-<NativeTableName>' so the DCR routes the inbound stream into the platform-owned native table instead of creating a Custom-<Table>_CL destination. See https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables for the supported list."
+      }
+    },
+    "columns": {
+      "type": "array",
+      "metadata": {
+        "description": "Array of {name, type} objects. type must be one of: string, datetime, int, long, real, bool, dynamic. Read from schemas/<TableName>.json."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Resource tags applied to the DCR."
+      }
+    }
+  },
+  "variables": {
+    "destinationName":     "[concat('la-', uniqueString(parameters('workspaceResourceId')))]",
+    "effectiveOutputStream": "[if(empty(parameters('outputStreamName')), parameters('streamName'), parameters('outputStreamName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dcrName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "dataCollectionEndpointId": "[parameters('dceResourceId')]",
+        "streamDeclarations": "[createObject(parameters('streamName'), createObject('columns', parameters('columns')))]",
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('workspaceResourceId')]",
+              "name": "[variables('destinationName')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[parameters('streamName')]"
+            ],
+            "destinations": [
+              "[variables('destinationName')]"
+            ],
+            "outputStream": "[variables('effectiveOutputStream')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dcrId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2023-03-11').immutableId]"
+    },
+    "logsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(parameters('dceResourceId'), '2023-03-11', 'Full').properties.logsIngestion.endpoint]"
+    },
+    "streamName": {
+      "type": "string",
+      "value": "[parameters('streamName')]"
+    },
+    "outputStream": {
+      "type": "string",
+      "value": "[variables('effectiveOutputStream')]"
+    }
+  }
+}
