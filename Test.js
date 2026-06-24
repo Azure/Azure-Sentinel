@@ -77,7 +77,9 @@ app.get("/file", (req, res) => {
     return;
   }
   const baseDir = path.join(__dirname, "public");
-  const sanitizedPath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, "");
+  const sanitizedPath = path
+    .normalize(filePath)
+    .replace(/^(\.\.(\/|\\|$))+/, "");
   const resolvedPath = path.join(baseDir, sanitizedPath);
   if (!resolvedPath.startsWith(baseDir)) {
     res.status(403).send("Access denied");
@@ -128,8 +130,12 @@ app.get("/fetch", (req, res) => {
   const url = ALLOWED_ENDPOINTS[endpoint];
   https.get(url, (response) => {
     let data = "";
-    response.on("data", (chunk) => { data += chunk; });
-    response.on("end", () => { res.type("text/plain").send(data); });
+    response.on("data", (chunk) => {
+      data += chunk;
+    });
+    response.on("end", () => {
+      res.type("text/plain").send(data);
+    });
   });
 });
 
