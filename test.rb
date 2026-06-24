@@ -27,7 +27,7 @@ end
 # CWE-918: Server-Side Request Forgery (SSRF)
 get '/fetch' do
   url = params[:url]
-  content = URI.open(url).read
+ content = URI.parse(url).open.read
   content
 end
 
