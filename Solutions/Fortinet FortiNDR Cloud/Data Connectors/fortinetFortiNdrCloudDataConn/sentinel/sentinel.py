@@ -4,23 +4,17 @@ import os
 from datetime import datetime, timezone
 
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
-from azure.identity import ClientSecretCredential
+from azure.identity import ManagedIdentityCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
 try:
-    AZURE_TENANT_ID = (os.environ.get("TENANT_ID") or "").strip()
-    AZURE_CLIENT_ID = (os.environ.get("CLIENT_ID") or "").strip()
-    AZURE_CLIENT_SECRET = (os.environ.get("CLIENT_SECRET") or "").strip()
     AZURE_ENDPOINT = (os.environ.get("DceUri") or "").strip()
 
     logging.info("Initializing Azure Global Clients at startup.")
 
     # (Assuming AZURE_CLIENT_ID, etc. are defined above or pulled from os.environ)
-    GLOBAL_CREDS = ClientSecretCredential(
-        client_id=AZURE_CLIENT_ID,
-        client_secret=AZURE_CLIENT_SECRET,
-        tenant_id=AZURE_TENANT_ID,
-    )
+
+    GLOBAL_CREDS = ManagedIdentityCredential()
 
     GLOBAL_CLIENT = LogsIngestionClient(
         endpoint=AZURE_ENDPOINT,
