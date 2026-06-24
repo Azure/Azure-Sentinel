@@ -1,24 +1,36 @@
 const express = require("express");
 const mysql = require("mysql");
 const path = require("path");
+const crypto = require("crypto");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 
-// CWE-798: Hardcoded credentials
+// FIX CWE-798: Rate limiting to prevent brute force
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(limiter);
+
+// FIX CWE-798: Load credentials from environment variables
 const connection = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "password",
-  database: "testdb",
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
 connection.connect();
 
-// CWE-89: SQL Injection - string concatenation instead of parameterized query
+// FIX CWE-89: Use parameterized query to prevent SQL Injection
 app.get("/user", (req, res) => {
   const id = req.query.id;
-  const query = "SELECT * FROM users WHERE id = '" + id + "'";
-  connection.query(query, (err, results) => {
+  const query = "SELECT * FROM users WHERE id = ?";
+  connection.query(query, [id], (err, results) => {
     if (err) {
       res.status(500).send("Error");
       return;
@@ -27,20 +39,42 @@ app.get("/user", (req, res) => {
   });
 });
 
-// CWE-78: OS Command Injection - using exec with unsanitized input
+// FIX CWE-78: Use execFile with input validation to prevent Command Injection
 app.get("/exec", (req, res) => {
-  const { exec } = require("child_process");
-  const cmd = req.query.cmd;
-  exec("ping -c 4 " + cmd, (err, stdout) => {
+  const { execFile } = require("child_process");
+  const host = req.query.cmd;
+  const validHostPattern = /^[a-zA-Z0-9.-]+$/;
+  if (!host || !validHostPattern.test(host)) {
+    res.status(400).send("Invalid host");
+    return;
+  }
+  execFile("ping", ["-c", "4", host], (err, stdout) => {
+    if (err) {
+      res.status(500).send("Command failed");
+      return;
+    }
     res.send(stdout);
   });
 });
 
-// CWE-22: Path Traversal - no base directory check
+// FIX CWE-22: Validate resolved path stays within base directory
 app.get("/file", (req, res) => {
   const fs = require("fs");
   const filePath = req.query.path;
-  fs.readFile(filePath, "utf8", (err, data) => {
+  if (!filePath) {
+    res.status(400).send("Path required");
+    return;
+  }
+  const baseDir = path.resolve(__dirname, "public");
+  const resolvedPath = path.resolve(baseDir, filePath);
+  if (
+    !resolvedPath.startsWith(baseDir + path.sep) &&
+    resolvedPath !== baseDir
+  ) {
+    res.status(403).send("Access denied");
+    return;
+  }
+  fs.readFile(resolvedPath, "utf8", (err, data) => {
     if (err) {
       res.status(404).send("File not found");
       return;
@@ -49,39 +83,63 @@ app.get("/file", (req, res) => {
   });
 });
 
-// CWE-79: Reflected XSS - unsanitized user input in HTML response
+// FIX CWE-79: Escape user input to prevent XSS
 app.get("/greet", (req, res) => {
-  const name = req.query.name;
-  res.send("<h1>Hello, " + name + "!</h1>");
+  const name = req.query.name || "";
+  const escapedName = name
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+  res.send("<h1>Hello, " + escapedName + "!</h1>");
 });
 
-// CWE-918: SSRF - fetching arbitrary user-supplied URL
+// FIX CWE-918: Use allowlist to prevent SSRF
+const ALLOWED_ENDPOINTS = {
+  users: "https://api.example.com/users",
+  data: "https://api.example.com/data",
+  status: "https://api.example.com/status",
+};
+
 app.get("/fetch", (req, res) => {
-  const http = require("http");
-  const url = req.query.url;
-  http.get(url, (response) => {
+  const https = require("https");
+  const endpoint = req.query.endpoint;
+  if (!endpoint || !ALLOWED_ENDPOINTS[endpoint]) {
+    res.status(403).send("Endpoint not allowed");
+    return;
+  }
+  const url = ALLOWED_ENDPOINTS[endpoint];
+  https.get(url, (response) => {
     let data = "";
     response.on("data", (chunk) => {
       data += chunk;
     });
     response.on("end", () => {
-      res.send(data);
+      res.type("text/plain").send(data);
     });
   });
 });
 
-// CWE-327: Weak hashing - using MD5
+// FIX CWE-327: Use SHA-256 instead of MD5
 app.get("/hash", (req, res) => {
-  const crypto = require("crypto");
   const data = req.query.data;
-  const hash = crypto.createHash("md5").update(data).digest("hex");
+  if (!data) {
+    res.status(400).send("Data required");
+    return;
+  }
+  const hash = crypto.createHash("sha256").update(data).digest("hex");
   res.send(hash);
 });
 
-// CWE-532: Logging sensitive data
+// FIX CWE-532: Do not log sensitive data
 app.get("/login", (req, res) => {
   const password = req.query.password;
-  console.log("Login attempt with password: " + password);
+  if (!password) {
+    res.status(400).send("Password required");
+    return;
+  }
+  console.log("User login attempt received");
   res.send("OK");
 });
 
