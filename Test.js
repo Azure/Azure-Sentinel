@@ -6,7 +6,9 @@ const rateLimit = require("express-rate-limit");
 
 const app = express();
 
-// FIX CWE-798: Rate limiting to prevent brute force
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -16,7 +18,6 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// FIX CWE-798: Load credentials from environment variables
 const connection = mysql.createConnection({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER,
@@ -26,7 +27,7 @@ const connection = mysql.createConnection({
 
 connection.connect();
 
-// FIX CWE-89: Use parameterized query to prevent SQL Injection
+// FIX CWE-89: Parameterized query
 app.get("/user", (req, res) => {
   const id = req.query.id;
   const query = "SELECT * FROM users WHERE id = ?";
@@ -39,7 +40,7 @@ app.get("/user", (req, res) => {
   });
 });
 
-// FIX CWE-78: Use execFile with input validation to prevent Command Injection
+// FIX CWE-78: execFile + input validation
 app.get("/exec", (req, res) => {
   const { execFile } = require("child_process");
   const host = req.query.cmd;
@@ -57,7 +58,7 @@ app.get("/exec", (req, res) => {
   });
 });
 
-// FIX CWE-22: Validate resolved path stays within base directory
+// FIX CWE-22: Reject traversal sequences, validate resolved path
 app.get("/file", (req, res) => {
   const fs = require("fs");
   const filePath = req.query.path;
@@ -65,12 +66,16 @@ app.get("/file", (req, res) => {
     res.status(400).send("Path required");
     return;
   }
-  const baseDir = path.resolve(__dirname, "public");
-  const resolvedPath = path.resolve(baseDir, filePath);
-  if (
-    !resolvedPath.startsWith(baseDir + path.sep) &&
-    resolvedPath !== baseDir
-  ) {
+  if (filePath.includes("..") || path.isAbsolute(filePath)) {
+    res.status(403).send("Access denied");
+    return;
+  }
+  const baseDir = path.join(__dirname, "public");
+  const sanitizedPath = path
+    .normalize(filePath)
+    .replace(/^(\.\.(\/|\\|$))+/, "");
+  const resolvedPath = path.join(baseDir, sanitizedPath);
+  if (!resolvedPath.startsWith(baseDir)) {
     res.status(403).send("Access denied");
     return;
   }
@@ -83,7 +88,7 @@ app.get("/file", (req, res) => {
   });
 });
 
-// FIX CWE-79: Escape user input to prevent XSS
+// FIX CWE-79: HTML-escape user input
 app.get("/greet", (req, res) => {
   const name = req.query.name || "";
   const escapedName = name
@@ -95,7 +100,7 @@ app.get("/greet", (req, res) => {
   res.send("<h1>Hello, " + escapedName + "!</h1>");
 });
 
-// FIX CWE-918: Use allowlist to prevent SSRF
+// FIX CWE-918: Allowlist for endpoints
 const ALLOWED_ENDPOINTS = {
   users: "https://api.example.com/users",
   data: "https://api.example.com/data",
@@ -121,7 +126,7 @@ app.get("/fetch", (req, res) => {
   });
 });
 
-// FIX CWE-327: Use SHA-256 instead of MD5
+// FIX CWE-327: Use SHA-256
 app.get("/hash", (req, res) => {
   const data = req.query.data;
   if (!data) {
@@ -132,9 +137,9 @@ app.get("/hash", (req, res) => {
   res.send(hash);
 });
 
-// FIX CWE-532: Do not log sensitive data
-app.get("/login", (req, res) => {
-  const password = req.query.password;
+// FIX CWE-598: Use POST for sensitive data, do not log passwords
+app.post("/login", (req, res) => {
+  const password = req.body.password;
   if (!password) {
     res.status(400).send("Password required");
     return;
