@@ -27,9 +27,12 @@ const connection = mysql.createConnection({
 
 connection.connect();
 
-// FIX CWE-89: Parameterized query
 app.get("/user", (req, res) => {
   const id = req.query.id;
+  if (!id || typeof id !== "string") {
+    res.status(400).send("Invalid id");
+    return;
+  }
   const query = "SELECT * FROM users WHERE id = ?";
   connection.query(query, [id], (err, results) => {
     if (err) {
@@ -40,12 +43,15 @@ app.get("/user", (req, res) => {
   });
 });
 
-// FIX CWE-78: execFile + input validation
 app.get("/exec", (req, res) => {
   const { execFile } = require("child_process");
   const host = req.query.cmd;
+  if (!host || typeof host !== "string") {
+    res.status(400).send("Invalid input");
+    return;
+  }
   const validHostPattern = /^[a-zA-Z0-9.-]+$/;
-  if (!host || !validHostPattern.test(host)) {
+  if (!validHostPattern.test(host)) {
     res.status(400).send("Invalid host");
     return;
   }
@@ -58,12 +64,11 @@ app.get("/exec", (req, res) => {
   });
 });
 
-// FIX CWE-22: Reject traversal sequences, validate resolved path
 app.get("/file", (req, res) => {
   const fs = require("fs");
   const filePath = req.query.path;
-  if (!filePath) {
-    res.status(400).send("Path required");
+  if (!filePath || typeof filePath !== "string") {
+    res.status(400).send("Invalid path");
     return;
   }
   if (filePath.includes("..") || path.isAbsolute(filePath)) {
@@ -88,9 +93,12 @@ app.get("/file", (req, res) => {
   });
 });
 
-// FIX CWE-79: HTML-escape user input
 app.get("/greet", (req, res) => {
   const name = req.query.name || "";
+  if (typeof name !== "string") {
+    res.status(400).send("Invalid input");
+    return;
+  }
   const escapedName = name
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -100,7 +108,6 @@ app.get("/greet", (req, res) => {
   res.send("<h1>Hello, " + escapedName + "!</h1>");
 });
 
-// FIX CWE-918: Allowlist for endpoints
 const ALLOWED_ENDPOINTS = {
   users: "https://api.example.com/users",
   data: "https://api.example.com/data",
@@ -110,7 +117,11 @@ const ALLOWED_ENDPOINTS = {
 app.get("/fetch", (req, res) => {
   const https = require("https");
   const endpoint = req.query.endpoint;
-  if (!endpoint || !ALLOWED_ENDPOINTS[endpoint]) {
+  if (
+    !endpoint ||
+    typeof endpoint !== "string" ||
+    !ALLOWED_ENDPOINTS[endpoint]
+  ) {
     res.status(403).send("Endpoint not allowed");
     return;
   }
@@ -126,10 +137,9 @@ app.get("/fetch", (req, res) => {
   });
 });
 
-// FIX CWE-327: Use SHA-256
 app.get("/hash", (req, res) => {
   const data = req.query.data;
-  if (!data) {
+  if (!data || typeof data !== "string") {
     res.status(400).send("Data required");
     return;
   }
@@ -137,10 +147,9 @@ app.get("/hash", (req, res) => {
   res.send(hash);
 });
 
-// FIX CWE-598: Use POST for sensitive data, do not log passwords
 app.post("/login", (req, res) => {
   const password = req.body.password;
-  if (!password) {
+  if (!password || typeof password !== "string") {
     res.status(400).send("Password required");
     return;
   }
