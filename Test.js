@@ -29,7 +29,7 @@ connection.connect();
 
 app.get("/user", (req, res) => {
   const id = req.query.id;
-  if (!id || typeof id !== "string") {
+  if (!id || Array.isArray(id)) {
     res.status(400).send("Invalid id");
     return;
   }
@@ -46,7 +46,7 @@ app.get("/user", (req, res) => {
 app.get("/exec", (req, res) => {
   const { execFile } = require("child_process");
   const host = req.query.cmd;
-  if (!host || typeof host !== "string") {
+  if (!host || Array.isArray(host)) {
     res.status(400).send("Invalid input");
     return;
   }
@@ -66,19 +66,18 @@ app.get("/exec", (req, res) => {
 
 app.get("/file", (req, res) => {
   const fs = require("fs");
-  const filePath = req.query.path;
-  if (!filePath || typeof filePath !== "string") {
+  const rawPath = req.query.path;
+  if (!rawPath || Array.isArray(rawPath)) {
     res.status(400).send("Invalid path");
     return;
   }
+  const filePath = String(rawPath);
   if (filePath.includes("..") || path.isAbsolute(filePath)) {
     res.status(403).send("Access denied");
     return;
   }
   const baseDir = path.join(__dirname, "public");
-  const sanitizedPath = path
-    .normalize(filePath)
-    .replace(/^(\.\.(\/|\\|$))+/, "");
+  const sanitizedPath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, "");
   const resolvedPath = path.join(baseDir, sanitizedPath);
   if (!resolvedPath.startsWith(baseDir)) {
     res.status(403).send("Access denied");
@@ -94,11 +93,12 @@ app.get("/file", (req, res) => {
 });
 
 app.get("/greet", (req, res) => {
-  const name = req.query.name || "";
-  if (typeof name !== "string") {
+  const rawName = req.query.name;
+  if (!rawName || Array.isArray(rawName)) {
     res.status(400).send("Invalid input");
     return;
   }
+  const name = String(rawName);
   const escapedName = name
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -117,33 +117,29 @@ const ALLOWED_ENDPOINTS = {
 app.get("/fetch", (req, res) => {
   const https = require("https");
   const endpoint = req.query.endpoint;
-  if (
-    !endpoint ||
-    typeof endpoint !== "string" ||
-    !ALLOWED_ENDPOINTS[endpoint]
-  ) {
+  if (!endpoint || Array.isArray(endpoint)) {
+    res.status(403).send("Endpoint not allowed");
+    return;
+  }
+  if (!ALLOWED_ENDPOINTS[endpoint]) {
     res.status(403).send("Endpoint not allowed");
     return;
   }
   const url = ALLOWED_ENDPOINTS[endpoint];
   https.get(url, (response) => {
     let data = "";
-    response.on("data", (chunk) => {
-      data += chunk;
-    });
-    response.on("end", () => {
-      res.type("text/plain").send(data);
-    });
+    response.on("data", (chunk) => { data += chunk; });
+    response.on("end", () => { res.type("text/plain").send(data); });
   });
 });
 
 app.get("/hash", (req, res) => {
   const data = req.query.data;
-  if (!data || typeof data !== "string") {
+  if (!data || Array.isArray(data)) {
     res.status(400).send("Data required");
     return;
   }
-  const hash = crypto.createHash("sha256").update(data).digest("hex");
+  const hash = crypto.createHash("sha256").update(String(data)).digest("hex");
   res.send(hash);
 });
 
