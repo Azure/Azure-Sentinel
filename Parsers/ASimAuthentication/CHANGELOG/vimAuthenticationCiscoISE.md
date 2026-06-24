@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-06-24) Update parser to extract EventOriginalType from SyslogMessage if the initial formatting differs from 10 digits
+- (2026-06-24) Update parser to extract EventOriginalType from SyslogMessage if the initial formatting differs from 10 digits - [PR #14554](https://github.com/Azure/Azure-Sentinel/pull/14554)
 
 ## Version 0.1.1
 
