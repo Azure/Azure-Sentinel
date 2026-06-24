@@ -7,8 +7,6 @@
 - Enabled functionality with logstash 9.4.
 - Added optional Id configuration value for telemetry.
 - Added DCR stream to sent-batches logging.
-
-## 2.2.2
 - Bumped dependency versions for external libraries (azure-sdk-bom, logback, slf4j, Netty).
 
 ## 2.2.1
