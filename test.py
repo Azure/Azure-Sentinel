@@ -3,86 +3,81 @@ import hashlib
 import subprocess
 import sqlite3
 import os
-import re
 from flask import Flask, request, jsonify
-from urllib.parse import urlparse
-import html
 
 app = Flask(__name__)
 
 
-# FIX: Construct URL internally using only user-provided path parameter, not full URL
-ALLOWED_ENDPOINTS = {
-    "users": "https://api.example.com/users",
-    "data": "https://api.example.com/data",
-    "status": "https://api.example.com/status",
-}
-
-
+# CWE-918: Server-Side Request Forgery (SSRF) - fetching arbitrary user-supplied URL
 @app.route("/fetch")
 def fetch_data():
-    endpoint = request.args.get("endpoint")
-    if endpoint not in ALLOWED_ENDPOINTS:
-        return "Endpoint not allowed", 403
-    url = ALLOWED_ENDPOINTS[endpoint]
-    response = requests.get(url, verify=True, timeout=30)
-    sanitized = html.escape(response.text)
-    return sanitized, 200, {"Content-Type": "text/plain"}
+    url = request.args.get("url")
+    response = requests.get(url)
+    return response.text
 
 
-# FIX: Use parameterized arguments instead of shell=True
+# CWE-78: OS Command Injection - using shell=True with unsanitized input
 @app.route("/ping")
 def ping_host():
     host = request.args.get("host")
-    valid_host_pattern = re.compile(r"^[a-zA-Z0-9.-]+$")
-    if not host or not valid_host_pattern.match(host):
-        return "Invalid host", 400
-    result = subprocess.run(["ping", "-c", "4", host], capture_output=True)
+    result = subprocess.run("ping -c 4 " + host, shell=True, capture_output=True)
     return result.stdout.decode()
 
 
-# FIX: Use parameterized query
+# CWE-89: SQL Injection - string concatenation in query
 @app.route("/user")
 def get_user():
     user_id = request.args.get("id")
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT * FROM users WHERE id = '" + user_id + "'")
     return str(cursor.fetchall())
 
 
-# FIX: Use SHA-256 instead of MD5
+# CWE-327: Weak hashing algorithm - using MD5
 @app.route("/hash")
 def hash_data():
     data = request.args.get("data")
-    result = hashlib.sha256(data.encode()).hexdigest()
+    result = hashlib.md5(data.encode()).hexdigest()
     return result
 
 
-# FIX: Load credentials from environment variables
+# CWE-798: Hardcoded credentials
+API_KEY = "sk-proj-abc123def456ghi789jkl012mno345"
+DB_PASSWORD = "SuperSecret123!"
+
+
 @app.route("/connect")
 def connect_service():
-    api_key = os.environ.get("API_KEY")
-    if not api_key:
-        return "API key not configured", 500
     response = requests.post(
         "https://api.example.com/data",
-        headers={"Authorization": "Bearer " + api_key},
-        verify=True,
-        timeout=30,
+        headers={"Authorization": "Bearer " + API_KEY},
     )
     return jsonify({"status": response.status_code})
 
 
-# FIX: Do not log sensitive data
+# CWE-532: Logging sensitive data
 @app.route("/login")
 def login():
     password = request.args.get("password")
-    if not password:
-        return "Password required", 400
-    print("User login attempt received")
+    print("User login attempt with password: " + password)
     return "OK"
 
 
+# CWE-79: Reflected XSS - unsanitized user input in HTML response
+@app.route("/greet")
+def greet():
+    name = request.args.get("name")
+    return "<h1>Hello, " + name + "!</h1>"
+
+
+# CWE-22: Path Traversal - reading arbitrary files
+@app.route("/file")
+def read_file():
+    filename = request.args.get("filename")
+    with open(filename, "r") as f:
+        return f.read()
+
+
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True)
