@@ -1,0 +1,117 @@
+id: 68adb008-8ade-469d-a88c-60672a063194
+name: Threat Intelligence Matched IP on Network Appliance Traffic
+description: |
+  Hunts for CommonSecurityLog events from 3P network appliances (Fortinet, Palo Alto, Ivanti,
+  SonicWall, Cisco, Check Point) where the source or destination IP matches an active threat
+  intelligence indicator — covering both inbound attacker access and outbound C2 callbacks
+  from a compromised device.
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - InitialAccess
+  - CommandAndControl
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1133
+  - T1071
+  - T1583.003
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  // Active, non-expired TI indicators — IP type, medium+ confidence
+  let TIIPs =
+      ThreatIntelIndicators
+      | where IsActive == true
+      | where IsDeleted == false 
+      | where ValidUntil > now()
+      // Include medium+ confidence OR feeds that don't set confidence (null/0)
+      | where Confidence >= 50 or isnull(Confidence) or Confidence == 0
+      | where ObservableKey in ("ipv4-addr:value", "network-traffic:src_ref.value", "network-traffic:dst_ref.value")
+      | where isnotempty(ObservableValue)
+      | summarize
+          MaxConfidence = max(Confidence),
+          Tags          = take_any(Tags)
+        by TI_IP = ObservableValue;
+  let ApplianceVendors = dynamic([
+      "Fortinet", "Palo Alto Networks", "Ivanti", "Pulse Secure",
+      "SonicWall", "Cisco", "Check Point", "Juniper", "F5", "Citrix"]);
+  // Direction 1: Inbound — attacker-controlled IP connecting to/through appliance
+  let InboundTIHits =
+      CommonSecurityLog
+      | where TimeGenerated between (starttime .. endtime)
+      | where DeviceVendor in~ (ApplianceVendors)
+      | where isnotempty(SourceIP)
+      | where SourceIP !in ("127.0.0.1", "::1", "0.0.0.0")
+      | join kind=inner TIIPs on $left.SourceIP == $right.TI_IP
+      | project
+          EventTime           = TimeGenerated,
+          Direction           = "Inbound — attacker to appliance",
+          TI_IP               = SourceIP,
+          CounterpartIP       = DestinationIP,
+          DeviceVendor,
+          DeviceProduct,
+          Activity,
+          DeviceAction,
+          SourceUserName,
+          DestinationUserName,
+          SourcePort,
+          DestinationPort,
+          ApplicationProtocol,
+          Message,
+          Computer,
+          MaxConfidence,
+          Tags;
+  // Direction 2: Outbound — appliance beaconing to TI-matched C2 destination
+  let OutboundTIHits =
+      CommonSecurityLog
+      | where TimeGenerated between (starttime .. endtime)
+      | where DeviceVendor in~ (ApplianceVendors)
+      | where isnotempty(DestinationIP)
+      | where DestinationIP !in ("127.0.0.1", "::1", "0.0.0.0")
+      | join kind=inner TIIPs on $left.DestinationIP == $right.TI_IP
+      | project
+          EventTime           = TimeGenerated,
+          Direction           = "Outbound — appliance to C2",
+          TI_IP               = DestinationIP,
+          CounterpartIP       = SourceIP,
+          DeviceVendor,
+          DeviceProduct,
+          Activity,
+          DeviceAction,
+          SourceUserName,
+          DestinationUserName,
+          SourcePort,
+          DestinationPort,
+          ApplicationProtocol,
+          Message,
+          Computer,
+          MaxConfidence,
+          Tags;
+  // Combine both directions
+  union InboundTIHits, OutboundTIHits
+  | extend SignalStrength = case(
+      Direction startswith "Outbound" and MaxConfidence >= 75, "High — appliance C2 callback, high-confidence TI",
+      Direction startswith "Inbound"  and MaxConfidence >= 75, "High — known attacker IP on appliance, high-confidence TI",
+      MaxConfidence >= 50,                                     "Medium — TI match, medium confidence",
+      "Low — review TI source quality")
+  | sort by MaxConfidence desc, EventTime desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_IP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CounterpartIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+version: 1.0.0

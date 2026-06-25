@@ -1,0 +1,114 @@
+id: 470f2af8-2b5d-41d4-9be6-686da24f370a
+name: Suspicious OAuth App Consent Granting Sensitive Permissions
+description: Identifies OAuth app consent grants where sensitive permissions (mail, file, directory access) were granted to an unrecognized or anonymous application, which may indicate consent phishing or unauthorized app registration used for data exfiltration.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1528
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let sensitivePermissions = dynamic([
+      "Mail.Read", "Mail.ReadWrite", "Mail.Read.All", "Mail.ReadWrite.All",
+      "Mail.Send", "Mail.Send.Shared",
+      "Files.Read.All", "Files.ReadWrite.All",
+      "Sites.Read.All", "Sites.ReadWrite.All",
+      "MailboxSettings.Read", "Contacts.Read",
+      "User.Read.All", "Directory.Read.All"]);
+  let knownLegitApps = dynamic([
+      "Microsoft Graph Command Line Tools",
+      "Microsoft Graph PowerShell",
+      "Microsoft Graph PowerShell (Preview)",
+      "Graph Explorer",
+      "Graph explorer (official site)",
+      "Microsoft Services Backup",
+      "Microsoft 365",
+      "Phish Alert Button (US)",
+      "Phish Alert Button (US) (N)",
+      "PhishAlarm for Exchange (AP)",
+      "Composio - Outlook",
+      "Zapier Outlook",
+      "ClickUp (Email Integration)",
+      "monday.com",
+      "Salesforce Inbox",
+      "PnP PowerShell",
+      "PnP Powershell"]);
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName in (
+      "Consent to application",
+      "Add delegated permission grant",
+      "Add app role assignment to service principal")
+  | where Result =~ "success"
+  | extend ActorUPN       = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | mv-expand ModifiedProp = TargetResources[0].modifiedProperties
+  | extend PropName     = tostring(ModifiedProp.displayName)
+  | extend PropNewValue = trim('"', tostring(ModifiedProp.newValue))
+  | summarize
+      ConsentTime=min(TimeGenerated),
+      ActorUPN=any(ActorUPN),
+      ActorIPAddress=any(ActorIPAddress),
+      AppName=anyif(tostring(TargetResources[0].displayName), OperationName == "Consent to application"),
+      SPNameFromProp=anyif(PropNewValue, PropName == "ServicePrincipal.DisplayName" and isnotempty(PropNewValue)),
+      SPObjectId=anyif(PropNewValue, PropName == "ServicePrincipal.ObjectID"),
+      SPAppId=anyif(PropNewValue, PropName == "ServicePrincipal.AppId"),
+      GrantedScopes=anyif(PropNewValue, PropName == "DelegatedPermissionGrant.Scope"),
+      GrantedAppRole=anyif(PropNewValue, PropName == "AppRole.Value"),
+      ConsentOnBehalfOfAll=anyif(PropNewValue, PropName == "ConsentContext.OnBehalfOfAll"),
+      OperationNames=make_set(OperationName)
+    by CorrelationId
+  | extend AppName = coalesce(AppName, SPNameFromProp, SPObjectId)
+  | where AppName !in~ (knownLegitApps)
+  | extend AllPermissions = split(trim(" ", strcat(GrantedScopes, " ", GrantedAppRole)), " ")
+  | extend GrantedSensitivePerms = set_intersect(AllPermissions, sensitivePermissions)
+  | where array_length(GrantedSensitivePerms) > 0
+  | extend IsAdminConsent    = OperationNames has "Add app role assignment to service principal" or ConsentOnBehalfOfAll == "True"
+  | extend SensitivePermCount = array_length(GrantedSensitivePerms)
+  | summarize
+      FirstConsentTime=min(ConsentTime),
+      LastConsentTime=max(ConsentTime),
+      ActorUPN=any(ActorUPN),
+      ActorIPAddress=any(ActorIPAddress),
+      AppName=any(AppName),
+      SPAppId=any(SPAppId),
+      GrantedScopes=any(GrantedScopes),
+      GrantedSensitivePerms=any(GrantedSensitivePerms),
+      SensitivePermCount=max(SensitivePermCount),
+      IsAdminConsent=max(toint(IsAdminConsent)),
+      ConsentCount=count()
+    by SPObjectId
+  | extend IsAdminConsent    = tobool(IsAdminConsent)
+  | extend IsAppNameGuid     = AppName matches regex @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+  | extend HasFullControl    = GrantedScopes has "FullControl"
+  | extend NoActorUPN        = isempty(ActorUPN)
+  | extend AccountName       = tostring(split(ActorUPN, "@")[0])
+  | extend AccountUPNSuffix  = tostring(split(ActorUPN, "@")[1])
+  | extend RiskScore = toint(IsAppNameGuid) + toint(HasFullControl) + toint(NoActorUPN) + toint(SensitivePermCount > 5)
+  | where SensitivePermCount >= 3 or RiskScore > 0
+  | project FirstConsentTime, LastConsentTime, AppName, SPAppId, SPObjectId, ActorUPN, ActorIPAddress,
+            AccountName, AccountUPNSuffix,
+            GrantedSensitivePerms, SensitivePermCount, IsAdminConsent, HasFullControl,
+            IsAppNameGuid, NoActorUPN, ConsentCount, RiskScore
+  | order by RiskScore desc, SensitivePermCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppName
+version: 1.0.0

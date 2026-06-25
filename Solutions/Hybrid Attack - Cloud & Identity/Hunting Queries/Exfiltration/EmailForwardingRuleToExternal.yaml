@@ -1,0 +1,54 @@
+id: e8c2d54d-908e-4e20-b930-8dfb865d0b71
+name: Email Forwarding Rule Created to External Address
+description: Identifies inbox forwarding rules created to redirect or forward email to an external address outside the organization, which may indicate an attacker using cloud app permissions to establish persistent mail collection for long-term data exfiltration.
+requiredDataConnectors:
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - CloudAppEvents
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114.003
+  - T1567
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let orgDomains = dynamic(["contoso.com", "contoso.onmicrosoft.com"]); // Replace with your organization's domains
+  CloudAppEvents
+  | where TimeGenerated between (starttime .. endtime)
+  | where ActionType in ("New-InboxRule", "Set-InboxRule", "Set-Mailbox")
+  | extend UserUPN  = tostring(RawEventData.UserId)
+  | extend ClientIP = tostring(RawEventData.ClientIP)
+  | mv-expand Param = RawEventData.Parameters
+  | extend ParamName  = tostring(Param.Name)
+  | extend ParamValue = tostring(Param.Value)
+  | where ParamName in (
+      "ForwardTo", "ForwardAsAttachmentTo",
+      "RedirectTo", "ForwardingSmtpAddress",
+      "ForwardingAddress", "DeliverToMailboxAndForward")
+  | where isnotempty(ParamValue) and ParamValue !~ "False"
+  | summarize
+      FirstSeen=min(TimeGenerated),
+      LastSeen=max(TimeGenerated),
+      ActionTypes=make_set(ActionType),
+      ClientIPs=make_set(ClientIP)
+    by UserUPN, ParamName, ForwardingAddress=ParamValue
+  | extend ForwardingDomain = tostring(split(ForwardingAddress, "@")[1])
+  | extend IsExternalForward = isnotempty(ForwardingDomain)
+      and not(orgDomains has tolower(ForwardingDomain))
+      and ForwardingAddress !~ "False"
+  | where IsExternalForward == true
+  | extend AccountName      = tostring(split(UserUPN, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUPN, "@")[1])
+  | project FirstSeen, LastSeen, UserUPN, AccountName, AccountUPNSuffix, ForwardingAddress,
+            ForwardingDomain, ParamName, ActionTypes, ClientIPs
+  | order by FirstSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 1.0.0
