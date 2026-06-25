@@ -1,0 +1,40 @@
+id: 3b3eb1cd-578d-4198-9b7a-bd7253b0dc9f
+name: Vaikora - Quarantine rate spike
+description: |
+  Identifies an abnormal spike in Vaikora for O365 quarantine volume for a tenant. Fires when the hourly count exceeds three times the rolling 7-day baseline, signaling a targeted campaign or model surge worth admin review.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VaikoraO365
+    dataTypes:
+      - VaikoraO365_Quarantine_CL
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let baseline = VaikoraO365_Quarantine_CL
+    | where TimeGenerated between (ago(7d) .. ago(1h))
+    | summarize HourlyCount = count() by bin(TimeGenerated, 1h), TenantId_s
+    | summarize AvgHourlyCount = avg(HourlyCount) by TenantId_s;
+  VaikoraO365_Quarantine_CL
+  | where TimeGenerated >= ago(1h)
+  | summarize RecentCount = count() by TenantId_s
+  | join kind=inner baseline on TenantId_s
+  | where RecentCount > (AvgHourlyCount * 3.0)
+  | where RecentCount >= 10
+  | project TimeGenerated = now(), TenantId = TenantId_s, RecentCount, AvgHourlyCount, RatioOverBaseline = (RecentCount / AvgHourlyCount)
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: TenantId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vaikora-O365 quarantine spike on tenant {{TenantId}}"
+  alertDescriptionFormat: "Quarantine count for the last hour is {{RecentCount}}, which is more than three times the 7-day baseline of {{AvgHourlyCount}}."
+version: 1.0.0
+kind: Scheduled
