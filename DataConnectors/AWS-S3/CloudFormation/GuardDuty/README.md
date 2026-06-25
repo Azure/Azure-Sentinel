@@ -26,13 +26,13 @@
 Fill in the following parameters:
 
 - **Stack name**: Enter a name for the stack.  
-- **AWSRoleName**: Enter the IAM role name (the name must start with `OIDC_XXXXX`).  
+- **AwsRoleName**: Enter the IAM role name (the name must start with `OIDC_`).  
 - **GuardDutyBucketName**: Enter the name of the S3 bucket to be used.  
-  - If you already have a generic S3 bucket or wish to use another existing bucket, enter its name here.  
-- **BucketName**: Set to `false` if you are using an existing S3 bucket (leave as `true` if a new bucket should be created).  
+  - If you already have a generic S3 bucket or wish to use another existing bucket, enter its name here and set **CreateNewBucket** to `false`.  
+- **CreateNewBucket**: Leave as `true` to let the stack create and configure the S3 bucket, or set to `false` if you are using an existing bucket (you will configure its bucket policy, encryption, and event notifications manually).  
 - **GuardDutyKmsAliasName**: Alias name (without the `alias/` prefix) for the new KMS key that will encrypt GuardDuty findings.  
 - **SentinelSQSQueueName**: Enter the name of the Amazon SQS queue.  
-- **LogFileSuffix**: S3 object key suffix for GuardDuty exported findings used in the notification filter (must be `.gz` by default).  
+- **LogFileSuffix**: S3 object key suffix for GuardDuty exported findings used in the notification filter (default `.gz`).  
 - **SentinelWorkspaceId**: Enter the **Workspace ID** from the Azure Log Analytics workspace page:  
   - In the Azure portal, go to **Log Analytics workspace → Overview** and copy the **Workspace ID**.
 

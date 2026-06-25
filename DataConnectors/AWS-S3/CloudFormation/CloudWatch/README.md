@@ -40,9 +40,8 @@
 Fill in the following parameters:
 
 - **Stack name**: Enter a name for the stack.  
-- **SentinelRoleName**: Enter the IAM role name (the name must start with `OIDC_XXXXX`).  
-- **CloudWatchBucketName**: Enter the name of the S3 bucket to be used.  
-  - If you already have a generic S3 bucket or wish to use another existing bucket, enter its name here.  
+- **SentinelRoleName**: Enter the IAM role name (the name must start with `OIDC_`).  
+- **CloudWatchBucketName**: Enter the name of the S3 bucket that will store the exported CloudWatch logs. This template creates a new bucket with this name, so the name must be globally unique and must not already exist.  
 - **CloudWatchSQSQueueName**: Enter the name of the Amazon SQS queue.  
 - **SentinelWorkspaceId**: Enter the **Workspace ID** from the Azure Log Analytics workspace page:  
   - In the Azure portal, go to **Log Analytics workspace → Overview** and copy the **Workspace ID**.
@@ -59,10 +58,12 @@ Fill in the following parameters:
 
 - **Stack name**: Enter a name for the stack.  
 - **EnvironmentName**: Enter the environment name used in resource names.  
+- **CloudWatchBucketName**: Enter the name of the S3 bucket where the exporter Lambda writes CloudWatch logs — use the same bucket name you provided for Template 2.  
 - **LambdaRoleName**: Enter the name of the IAM role used by the CloudWatch exporter Lambda.  
 - **ExporterLambdaName**: Enter the name of the CloudWatch export Lambda function.  
-- **LamdaScheduleMinutes**: How often (in minutes) to run the exporter Lambda (leave the default **15** minutes).  
-- **LambdaWindowMinutes**: How many minutes of logs to export each run (rolling window) (leave the default **15** minutes).
+- **LambdaScheduleMinutes**: How often (in minutes) to run the exporter Lambda (leave the default **15** minutes).  
+- **LambdaWindowMinutes**: How many minutes of logs to export each run (rolling window) (leave the default **15** minutes).  
+- **LogGroupPrefixes** *(optional)*: Comma-separated list of CloudWatch log group name prefixes to export (for example `/aws/lambda/,/aws/rds/`). Leave empty to export **all** log groups, which is not recommended in large accounts.
 
 ![image7](images/Picture7.png)
 

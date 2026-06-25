@@ -38,13 +38,13 @@
 Fill in the following parameters:
 
 - **Stack name**: Enter a name for the stack.  
-- **AWSRoleName**: Enter the IAM role name (the name must start with `OIDC_XXXXX`).  
-- **GuardDutyBucketName**: Enter the name of the S3 bucket to be used.  
-  - If you already have a generic S3 bucket or want to use an existing bucket, enter its name here.  
-- **BucketName**: Set to `false` if you are using an existing S3 bucket (leave as `true` if a new bucket should be created).  
-- **CloudTrail-TrailName**: Name of the existing CloudTrail trail that delivers logs to the S3 bucket.  
-- **SentinelSQSQueueName**: Enter the name of the Amazon SQS queue.  
-- **LogFileSuffix**: S3 object key suffix for CloudTrail exported findings used in the notification filter (must be `.gz` as the default).  
+- **AwsRoleName**: Enter the IAM role name (the name must start with `OIDC_`).  
+- **LogBucketName**: Enter the name of the S3 bucket where CloudTrail will write logs and from which Microsoft Sentinel will read.  
+  - If you want to use an existing bucket, enter its name here and set **CreateNewBucket** to `false`.  
+- **CreateNewBucket**: Leave as `true` to let the stack create and configure the S3 bucket, or set to `false` if you are using an existing bucket (you will configure its bucket policy and event notifications manually).  
+- **CloudTrailTrailName**: Name of the existing CloudTrail trail that delivers logs to the S3 bucket (for example, `management-events`).  
+- **SentinelSQSQueueName**: Enter the name of the Amazon SQS queue that will receive S3 event notifications for CloudTrail log objects.  
+- **LogFileSuffix**: S3 object key suffix for CloudTrail log files used in the notification filter (default `.gz`).  
 - **SentinelWorkspaceId**: Enter the Workspace ID from the Azure Log Analytics workspace page:  
   - In the Azure portal, go to **Log Analytics workspace → Overview** and copy the **Workspace ID**.
 
