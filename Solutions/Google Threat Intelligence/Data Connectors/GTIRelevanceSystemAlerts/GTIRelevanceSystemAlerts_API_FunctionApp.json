@@ -1,0 +1,133 @@
+{
+    "id": "GoogleThreatIntelligenceRelevanceSystemAlertsAPI",
+    "title": "Google Threat Intelligence Relevance System Alerts",
+    "publisher": "Google",
+    "descriptionMarkdown": "The [Google Threat Intelligence (virustotal)](https://www.virustotal.com) data connector ingests GTI Relevance System Alerts into Microsoft Sentinel. The connector polls the GTI Relevance System Alerts API on a configurable schedule and stores Relevance System Alerts data in the RelevanceSystemAlerts_CL custom table, enabling security analysts to investigate threats, correlate incidents, and respond to intelligence-driven alerts within the Sentinel workspace.",
+    "graphQueries": [
+        {
+            "metricName": "Total GTI alerts received",
+            "legend": "RelevanceSystemAlerts_CL",
+            "baseQuery": "RelevanceSystemAlerts_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All GTI Alerts (latest first)",
+            "query": "RelevanceSystemAlerts_CL\n| sort by TimeGenerated desc"
+        },
+        {
+            "description": "GTI Alerts by severity",
+            "query": "RelevanceSystemAlerts_CL\n| extend severity = coalesce(severityAnalysis_severityLevel, detail_dataLeak_severity, detail_insiderThreat_severity, detail_initialAccessBroker_severity)\n| summarize count() by severity\n| sort by count_ desc"
+        },
+        {
+            "description": "GTI Alerts by state",
+            "query": "RelevanceSystemAlerts_CL\n| summarize count() by state\n| sort by count_ desc"
+        },
+        {
+            "description": "High and critical priority GTI Alerts",
+            "query": "RelevanceSystemAlerts_CL\n| where priorityAnalysis_priorityLevel in ('PRIORITY_LEVEL_HIGH', 'PRIORITY_LEVEL_CRITICAL')\n| project TimeGenerated, displayName, state, priorityAnalysis_priorityLevel, severityAnalysis_severityLevel, detail_detailType\n| sort by TimeGenerated desc"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "RelevanceSystemAlerts_CL",
+            "lastDataReceivedQuery": "RelevanceSystemAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "RelevanceSystemAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Azure Subscription",
+                "description": "An Azure Subscription with owner role is required to register an application in Microsoft Entra ID and assign the contributor role to the app in the resource group."
+            },
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "Google Threat Intelligence API Key",
+                "description": "A Google Threat Intelligence API key and project ID are required. See the [GTI documentation](https://gtidocs.virustotal.com/docs/how-get-gti-api-keys) to learn how to obtain an API key."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses an Azure Function App (Timer Trigger, Python 3.12) to poll the Google Threat Intelligence Alerts API on a configurable schedule and ingest GTI Relevance System Alerts into the RelevanceSystemAlerts_CL custom table in Microsoft Sentinel. This may result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+        },
+        {
+            "title": "",
+            "description": "**STEP 1 - Obtain Google Threat Intelligence API Credentials**\n\n1. Log in to the [Google Threat Intelligence portal (virustotal)](https://www.virustotal.com).\n2. Navigate to your GTI project settings and copy the **Project ID**.\n3. Generate an **API Key** for your project and copy it securely.\n"
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - App Registration steps for the Application in Microsoft Entra ID**\n\nThis integration requires an App registration in the Azure portal. Follow the steps in this section to create a new application in Microsoft Entra ID:\n1. Sign in to the [Azure portal](https://portal.azure.com/).\n2. Search for and select **Microsoft Entra ID**.\n3. Under **Manage**, select **App registrations > New registration**.\n4. Enter a display **Name** for your application (e.g. RelevanceSystemAlertsSentinelConnector).\n5. Select **Register** to complete the initial app registration.\n6. When registration finishes, the Azure portal displays the app registration's Overview pane. Copy the **Application (client) ID** and **Directory (Tenant) ID** — these are required as configuration parameters.\n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 3 - Add a client secret for the application in Microsoft Entra ID**\n\nSometimes called an application password, a client secret is a string value required for the connector. Follow the steps in this section to create a new Client Secret:\n1. In the Azure portal, in **App registrations**, select your application.\n2. Select **Certificates & secrets > Client secrets > New client secret**.\n3. Add a description for your client secret.\n4. Select an expiration for the secret or specify a custom lifetime. Limit is 24 months.\n5. Select **Add**.\n6. *Record the secret's value for use as the AzureClientSecret parameter. This secret value is never displayed again after you leave this page.*\n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 4 - Get the Object ID of your application in Microsoft Entra ID**\n\nAfter creating your app registration, follow the steps in this section to get the Object ID:\n1. Go to **Microsoft Entra ID**.\n2. Select **Enterprise applications** from the left menu.\n3. Find your newly created application in the list (search by the name you provided).\n4. Click on the application.\n5. On the overview page, copy the **Object ID**. This is the **AzureEntraObjectID** needed for the ARM template role assignment.\n"
+        },
+        {
+            "title": "",
+            "description": "**STEP 5 - Deploy the connector and the associated Azure Function App**\n\n"
+        },
+        {
+            "title": "Azure Resource Manager (ARM) Template",
+            "description": "Use this method for automated deployment of the GTI Relevance System Alerts connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-GTIRelevanceSystemAlerts-azuredeploy) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-GTIRelevanceSystemAlerts-azuredeploy-gov)\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**. \n3. Enter the below information: \n\n\t a. **FunctionName** - Enter a unique name for the Azure Function App (maximum 11 characters). Example: `GTIRSAlerts`\n\n\t b. **Location** - Azure region for the Function App and supporting resources. Defaults to the resource group location. Example: `eastus`\n\n\t c. **WorkspaceName** - Enter the Microsoft Sentinel Log Analytics workspace name. Example: `MyWorkspace`\n\n\t d. **AppInsightsWorkspaceResourceID** - Enter the fully qualified resource ID of the Log Analytics workspace for Application Insights. Format: `/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}`\n\n\t e. **AzureTenantID** - Enter the Azure Tenant (Directory) ID obtained in STEP 2. Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`\n\n\t f. **AzureClientID** - Enter the Application (Client) ID obtained in STEP 2. Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`\n\n\t g. **AzureClientSecret** - Enter the client secret value obtained in STEP 3.\n\n\t h. **AzureEntraObjectID** - Enter the Object ID of your Microsoft Entra app obtained in STEP 4. Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`\n\n\t i. **GTIProjectId** - Enter the Google Threat Intelligence project ID obtained in STEP 1. Example: `my-gti-project-id`. See the [GTI documentation](https://docs.cloud.google.com/threat-intelligence/guides/get-started) to learn how to get started.\n\n\t j. **GTIApiKey** - Enter the Google Threat Intelligence API key obtained in STEP 1.\n\n\t k. **GTIRelevanceSystemAlertsTableName** - Enter the name of the custom table for GTI Relevance System Alerts. The `_CL` suffix is appended automatically. **Maximum 52 characters** (the `_CL` suffix counts toward the Log Analytics 57-character table name limit). Default: `RelevanceSystemAlerts`\n\n\t l. **StartDate** - (Optional) Enter the start datetime in `yyyy-mm-ddTHH:MM:SS[.fff]Z` format. Example: `2026-05-20T15:43:51Z`. Must be a past date. If not provided, data from the last 7 days will be fetched.\n\n\t m. **GTIFilterExpression** - (Optional) Enter a GTI API filter expression to narrow which alerts are ingested. Example: `state = \"NEW\"`. Any `audit.update_time` condition will be automatically removed — the connector manages that filter internally. Your expression is combined with the checkpoint filter using `AND`.\n\n\t n. **Schedule** - Enter a valid Quartz Cron expression for the timer trigger schedule. Default: `0 */10 * * * *` (every 10 minutes).\n\n\t o. **LogLevel** - Set the log level for the Function App. Allowed values: `Debug`, `Info`, `Warning`, `Error`. Default: `Info`.\n\n\t p. **KeyVaultName** - Enter name of keyvault where tokens will be stored.\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
+        },
+        {
+            "title": "",
+            "description": "**STEP 6 - Create a Keyvault**\n\n Follow these instructions to create a new Keyvault.\n 1. In the Azure portal, Go to **Key vaults** and click on Create.\n 2. Select Subscription, Resource Group and provide unique name of keyvault."
+        },
+        {
+            "title": "",
+            "description": "**STEP 7 - Create Access Policy in Keyvault**\n\n Follow these instructions to create access policy in Keyvault.\n 1. Go to keyvaults, select your keyvault, go to Access policies on left side panel, click on create.\n 2. Select all keys & secrets permissions. Click next.\n 3. In the principal section, search for the function app name which was deployed in STEP - 5. Click next.\n\n **Note:** Ensure the Permission model in the Access Configuration of Key Vault is set to **'Vault access policy'**"
+        },
+        {
+            "title": "",
+            "description": "**STEP 8 - Verify Data Ingestion**\n\nAfter deployment, verify that data is being ingested into Microsoft Sentinel:\n1. Navigate to **Microsoft Sentinel** → **Logs**.\n2. Run the following query:\n\n```kql\nRelevanceSystemAlerts_CL\n| sort by TimeGenerated desc\n| limit 10\n```\n\n3. Data should appear within **5–10 minutes** of the first function execution.\n4. The connector status on the **Data connectors** page shows **Connected** once data has been received within the last 30 days."
+        },
+        {
+            "title": "",
+            "description": "**Troubleshooting**\n\n**Connector shows Disconnected**\n- Verify the Function App is running: Azure Portal → Function App → Overview → Status should be **Running**.\n- Confirm data has been ingested within the last 30 days.\n- Review Application Insights logs for errors.\n\n**Authentication errors (401 / 403)**\n- Verify **AzureClientID**, **AzureClientSecret**, and **AzureTenantID** are correct in Function App → Configuration → Application settings.\n- Ensure the client secret has not expired.\n- Confirm the App Registration has sufficient permissions.\n\n**No data in RelevanceSystemAlerts_CL table**\n- Check Function App → Functions → RelevanceSystemAlerts → Monitor for execution errors.\n- Verify the GTI API key and project ID are valid.\n- Confirm the source API is reachable from Azure.\n- Review Application Insights traces:\n\n```kql\ntraces\n| where timestamp > ago(1h)\n| order by timestamp desc\n| take 50\n```\n\n**Rate limit errors (429)**\n- The connector automatically retries with exponential backoff. If errors persist, reduce the polling frequency by increasing the **Schedule** cron interval."
+        }
+    ]
+}
