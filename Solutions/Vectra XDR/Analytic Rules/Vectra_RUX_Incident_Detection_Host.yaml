@@ -1,0 +1,103 @@
+id: 231904f5-b670-4223-9bec-2e9aeca9cf5b
+name: Vectra RUX - Create Incident for Escalated Host Detection or Unresolved Priority Host
+version: 1.0.0
+kind: Scheduled
+description: |
+  Creates a Sentinel incident when a detection on a host entity has been escalated in Vectra
+  (investigation_status = escalated). Escalation indicates that a human analyst or MDR service
+  has reviewed the detection and determined it requires immediate host attention or notification.
+  One incident is created per detection — grouping is based on alert display name so that
+  repeated rule evaluations against the same detection do not create duplicate incidents.
+
+  Creates a Sentinel incident when Vectra AI identifies a host entity with one or more detections
+  marked as unresolved and prioritized (unresolved_priority = true). Vectra's AI engine assigns
+  priority based on attack rating, velocity, breadth, and host privilege level. This rule surfaces
+  host-based threats that require analyst attention.
+
+  Incidents are grouped per host entity and remain open while the threat persists. Once all associated
+  detections are resolved in Vectra, the incident can be closed in Sentinel.
+status: Available
+requiredDataConnectors:
+  - connectorId: VectraRUXConnector
+    dataTypes:
+      - VectraDetectionsCombined
+severity: High
+queryFrequency: 10m
+queryPeriod: 10m
+suppressionDuration: PT1H
+suppressionEnabled: false
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - LateralMovement
+  - CredentialAccess
+  - Exfiltration
+  - CommandAndControl
+  - Persistence
+relevantTechniques:
+  - T1046
+  - T1021
+  - T1003
+  - T1041
+  - T1071
+query: |
+  VectraDetectionsCombined
+  | where ["Entity Type"] == "host"
+  | summarize arg_max(TimeGenerated, *) by ["Detection ID"]
+  | where ["Investigation Status"] == "escalated" or ["Unresolved Priority"] == true
+  | extend
+      detection_name     = ["D Type Vname"],
+      detection_category = ["Detection Category"],
+      entity_url         = replace_string(replace_string(URL, "api/v3.4/", ""), "api/v3.5/", ""),
+      mitre_techniques   = tostring(Mitre),
+      detection_tags     = tostring(Tags),
+      assigned_to        = ["Assigned To"],
+      entity_name = ["Entity Name"],
+      entity_uid = ["Entity UID"],
+      entity_id = ["Entity ID"],
+      detection_id = ["Detection ID"],
+      external_reference = ["External Reference ID"],
+      investigation_status = ["Investigation Status"],
+      entity_type = ["Entity Type"]
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: entity_name
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+    groupByAlertDetails:
+      - DisplayName
+customDetails:
+  detection_name: detection_name
+  assigned_to: assigned_to
+  entity_uid: entity_uid
+  entity_url: entity_url
+  entity_id: entity_id
+  detection_id: detection_id
+  external_reference: external_reference
+  investigation_status: investigation_status
+  category: detection_category
+  tags: detection_tags
+  mitre_techniques: mitre_techniques
+  entity_type: entity_type
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vectra AI - {{detection_name}} on {{entity_name}}"
+  alertDescriptionFormat: >
+    Vectra AI has escalated detection {{detection_name}} ({{detection_category}}) on host or identified
+    host {{entity_name}} as a priority threat. See custom details for full context.
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: entity_url
+    - alertProperty: Techniques
+      value: mitre_techniques
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
