@@ -12,8 +12,6 @@ try:
 
     logging.info("Initializing Azure Global Clients at startup.")
 
-    # (Assuming AZURE_CLIENT_ID, etc. are defined above or pulled from os.environ)
-
     GLOBAL_CREDS = ManagedIdentityCredential()
 
     GLOBAL_CLIENT = LogsIngestionClient(
@@ -72,9 +70,7 @@ def post_data(events: list[dict], log_type_suffix: str):
 
     except ClientAuthenticationError as exc:
         logging.error(
-            f"{log_type_suffix} : Authentication failed - verify CLIENT_ID, "
-            f"CLIENT_SECRET, TENANT_ID, and that the App Registration has "
-            f"'Monitoring Metrics Publisher' role assigned on the DCR. Error: {exc}"
+            f"{log_type_suffix} : Authentication failed - verify the 'Monitoring Metrics Publisher' role assigned on the DCR. Error: {exc}"
         )
         raise
     except HttpResponseError as e:
