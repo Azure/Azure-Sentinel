@@ -1,0 +1,883 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Hybrid%20Attack%20-%20Cloud%20%26%20Identity/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThis solution includes hunting queries for hybrid attack scenarios spanning on-premises, cloud, and identity environments. The queries are designed to detect multi-stage attack techniques that leverage both cloud and identity signals. By correlating activities across different domains, these hunting queries help security analysts identify complex attack patterns that may go unnoticed when looking at individual data sources in isolation.\n\n**Workbooks:** 1, **Hunting Queries:** 54\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": null,
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": null
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Kubernetes secret enumeration followed by pod exec",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for identities that enumerate Kubernetes secrets and then perform pod exec or attach operations in a short time window. This hunting query depends on AzureMonitor data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "K8s token audit then novel cloud control plane operations",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Kubernetes token and exec audit activity followed by first-seen cloud control-plane operations from the same IP and user-agent context. This hunting query depends on MicrosoftThreatProtection data connector (CloudAuditEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault secret read then partial storage exfil",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects successful Key Vault secret retrieval followed by key-auth Azure Storage access with mixed success and failure outcomes. This hunting query depends on AzureActivity MicrosoftThreatProtection data connector (AzureActivity CloudStorageAggregatedEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault harvest to SPN sign-in then out-of-scope resource access",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for a chain where Key Vault secret retrieval is followed by suspicious SPN sign-in and access to resource scopes not seen in baseline. This hunting query depends on AzureActivity AzureActiveDirectory data connector (AzureActivity AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault secret harvest followed by novel SPN sign-in from non-1P IP",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects successful Key Vault secret retrieval that is followed by first-seen service principal sign-in behavior from a public non-allowlisted IP. This hunting query depends on AzureActivity AzureActiveDirectory data connector (AzureActivity AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Pod cloud CLI then KeyVault or storage access",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects cloud CLI or token-exchange tooling in Kubernetes pods followed by cloud data-access operations from the same source IP. This hunting query depends on MicrosoftThreatProtection data connector (CloudProcessEvents CloudAuditEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-service network exposure followed by key and data access",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies likely impact progression where network exposure writes across multiple cloud services are followed by secret or data access operations. This hunting query depends on AzureActivity data connector (AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure Network Configuration Tampered by Compromised Identity",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for successful Azure network configuration write and delete operations by user or service principal identities, including NSGs, firewall policies, route tables, VPN gateways, subnets, and role assignments, with UEBA and appliance-IP enrichment. This hunting query depends on AzureActivity MicrosoftDefenderAdvancedThreatProtection BehaviorAnalytics data connector (AzureActivity DeviceInfo BehaviorAnalytics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Novel SPN sign-in followed by Azure RBAC write",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for new service principal sign-in behavior followed by RBAC role assignment or role definition write operations. This hunting query depends on AzureActiveDirectory AzureActivity data connector (AADServicePrincipalSignInLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "Pod token tooling then cloud RBAC write",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects suspicious token and cloud-auth tooling in Kubernetes pods followed by Kubernetes audit activity and Azure RBAC write operations. This hunting query depends on MicrosoftThreatProtection data connector (CloudProcessEvents CloudAuditEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery11",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious sign-in followed by cloud network exposure writes",
+            "elements": [
+              {
+                "name": "huntingquery11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects likely compromised identity usage where a suspicious sign-in is followed by network exposure-changing writes on Key Vault, Storage, or Azure database services. This hunting query depends on AzureActiveDirectory AzureActivity data connector (SigninLogs AADNonInteractiveUserSignInLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery12",
+            "type": "Microsoft.Common.Section",
+            "label": "Cross-subscription and resource-group enumeration sweep by single identity",
+            "elements": [
+              {
+                "name": "huntingquery12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects broad cloud estate mapping where one caller enumerates many subscriptions and resource groups in a tight window. This hunting query depends on AzureActivity data connector (AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery13",
+            "type": "Microsoft.Common.Section",
+            "label": "IAM and subscription enumeration followed by Key Vault operations",
+            "elements": [
+              {
+                "name": "huntingquery13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects cloud reconnaissance that progresses into Key Vault-focused operations by the same caller. This hunting query depends on AzureActivity data connector (AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery14",
+            "type": "Microsoft.Common.Section",
+            "label": "IAM reconnaissance followed by role assignment write attempt",
+            "elements": [
+              {
+                "name": "huntingquery14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects likely escalation staging where IAM discovery is followed by role assignment write operations by the same caller. This hunting query depends on AzureActivity data connector (AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery15",
+            "type": "Microsoft.Common.Section",
+            "label": "Identity and app enumeration followed by novel non-interactive tuple",
+            "elements": [
+              {
+                "name": "huntingquery15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects cloud reconnaissance activity followed by first-seen non-interactive sign-ins from new IP and user-agent context. This hunting query depends on AzureActiveDirectory AzureActivity data connector (AADNonInteractiveUserSignInLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery16",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault discovery followed by data-store access enumeration",
+            "elements": [
+              {
+                "name": "huntingquery16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects progression from Key Vault discovery activity to storage and data-store enumeration by the same caller. This hunting query depends on AzureActivity data connector (AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery17",
+            "type": "Microsoft.Common.Section",
+            "label": "Novel sign-in context followed by IAM reconnaissance burst",
+            "elements": [
+              {
+                "name": "huntingquery17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects first-seen identity sign-in context followed by concentrated IAM and Azure resource discovery operations. This hunting query depends on AzureActiveDirectory AzureActivity data connector (SigninLogs AADNonInteractiveUserSignInLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery18",
+            "type": "Microsoft.Common.Section",
+            "label": "OAuth consent change followed by first-seen OAuthAppId burst",
+            "elements": [
+              {
+                "name": "huntingquery18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects consent or application permission grant changes followed by first-seen CloudAppEvents bursts for OAuth apps. This hunting query depends on AzureActiveDirectory MicrosoftThreatProtection data connector (AuditLogs CloudAppEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery19",
+            "type": "Microsoft.Common.Section",
+            "label": "Email Forwarding Rule Created to External Address",
+            "elements": [
+              {
+                "name": "huntingquery19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies inbox forwarding rules created to redirect or forward email to an external address outside the organization, which may indicate an attacker using cloud app permissions to establish persistent mail collection for long-term data exfiltration. This hunting query depends on MicrosoftCloudAppSecurity data connector (CloudAppEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery20",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault secret read then Storage key-auth pivot",
+            "elements": [
+              {
+                "name": "huntingquery20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Key Vault secret retrieval activity that is followed by first-seen Azure Storage data-plane access using key-based authentication. This hunting query depends on AzureActivity MicrosoftThreatProtection data connector (AzureActivity CloudStorageAggregatedEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery21",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-Mailbox Access by Single IP via Cloud App Permissions",
+            "elements": [
+              {
+                "name": "huntingquery21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies a single IP address accessing an abnormally large number of distinct mailboxes via MailItemsAccessed events, indicating a service principal or OAuth app silently reading mail across the organization using granted permissions. Empty UserAgent combined with high mailbox count indicates programmatic API access consistent with app-based exfiltration. This hunting query depends on MicrosoftCloudAppSecurity MicrosoftDefenderThreatIntelligence data connector (CloudAppEvents ThreatIntelIndicators Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery22",
+            "type": "Microsoft.Common.Section",
+            "label": "Novel identity then Key Vault secret burst",
+            "elements": [
+              {
+                "name": "huntingquery22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects first-seen successful sign-in context followed by concentrated Key Vault secret list and get operations. This hunting query depends on AzureActiveDirectory AzureActivity data connector (SigninLogs AADNonInteractiveUserSignInLogs AADServicePrincipalSignInLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery23",
+            "type": "Microsoft.Common.Section",
+            "label": "Partial failures followed by read concentration",
+            "elements": [
+              {
+                "name": "huntingquery23-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects storage campaigns where early failures are followed by sustained successful read activity on reachable targets. This hunting query depends on MicrosoftThreatProtection data connector (CloudStorageAggregatedEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery24",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure Storage Access via AccountKey or SAS Token from First-Seen External IP",
+            "elements": [
+              {
+                "name": "huntingquery24-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Azure Blob Storage access using AccountKey or SAS token authentication from an external IP address not seen in the prior 7-day baseline for that storage account. Consistent with a stolen storage credential being used from attacker-controlled infrastructure. This hunting query depends on AzureStorageAccount data connector (StorageBlobLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery25",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure Storage Bulk Download via AccountKey or SAS Token from External IP",
+            "elements": [
+              {
+                "name": "huntingquery25-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for bulk Azure Blob Storage downloads authenticated with AccountKey or SAS tokens from external IPs, indicating potential credential abuse and silent data Exfiltration. This hunting query depends on AzureStorageAccount data connector (StorageBlobLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery26",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious OAuth App Consent Granting Sensitive Permissions",
+            "elements": [
+              {
+                "name": "huntingquery26-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies OAuth app consent grants where sensitive permissions (mail, file, directory access) were granted to an unrecognized or anonymous application, which may indicate consent phishing or unauthorized app registration used for data exfiltration. This hunting query depends on AzureActiveDirectory data connector (AuditLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery27",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure VM web process to IMDS token theft chain",
+            "elements": [
+              {
+                "name": "huntingquery27-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for likely Azure VM post-RCE identity abuse by correlating suspicious web or management service child process execution with IMDS (Azure Instance Metadata Service) access and optional near-term public egress. This hunting query depends on MicrosoftThreatProtection data connector (DeviceProcessEvents DeviceNetworkEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery28",
+            "type": "Microsoft.Common.Section",
+            "label": "Credential Stuffing or Password Spray on VPN or Firewall (3P Appliance)",
+            "elements": [
+              {
+                "name": "huntingquery28-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for high-volume authentication failures followed by success on third-party VPN/firewall appliances in CommonSecurityLog, \ncovering credential stuffing and password spray patterns across Fortinet, Palo Alto, Ivanti, SonicWall, Cisco, Check Point, Juniper, and F5. This hunting query depends on CefAma data connector (CommonSecurityLog Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery29",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure Network Configuration Tampered by Compromised Identity",
+            "elements": [
+              {
+                "name": "huntingquery29-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for successful Azure network configuration write and delete operations by user or service principal identities, including NSGs, firewall policies, route tables, VPN gateways, subnets, and role assignments, with UEBA and appliance-IP enrichment. This hunting query depends on AzureActivity MicrosoftDefenderAdvancedThreatProtection BehaviorAnalytics data connector (AzureActivity DeviceInfo BehaviorAnalytics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery30",
+            "type": "Microsoft.Common.Section",
+            "label": "Entra App credential change followed by service principal sign-in burst",
+            "elements": [
+              {
+                "name": "huntingquery30-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for Entra application or service principal credential changes that are followed by rapid sign-in activity for the affected principal. This hunting query depends on AzureActiveDirectory data connector (AuditLogs AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery31",
+            "type": "Microsoft.Common.Section",
+            "label": "Kubernetes first-seen control-plane writer",
+            "elements": [
+              {
+                "name": "huntingquery31-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for first-seen principals writing to Kubernetes control-plane resources in kube-audit telemetry. This hunting query depends on AzureMonitor data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery32",
+            "type": "Microsoft.Common.Section",
+            "label": "Post-Auth Config Change on Network Appliance (3P)",
+            "elements": [
+              {
+                "name": "huntingquery32-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for post-auth configuration tampering on Fortinet, Palo Alto, and Cisco appliances in CommonSecurityLog, including firewall policy weakening, local admin changes, auth updates, and VPN/routing/ACL modifications. This hunting query depends on CefAma data connector (CommonSecurityLog Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery33",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare service principal sign-in followed by RBAC write",
+            "elements": [
+              {
+                "name": "huntingquery33-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for uncommon service principal sign-ins that are quickly followed by Azure role assignment write operations. This hunting query depends on AzureActiveDirectory AzureActivity data connector (SigninLogs AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery34",
+            "type": "Microsoft.Common.Section",
+            "label": "Risky Successful Sign-in to VPN or Network Access Application",
+            "elements": [
+              {
+                "name": "huntingquery34-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for successful sign-ins to VPN or network access applications correlated with Entra ID\nrisk detection events - combining app context from SignInLogs with specific risk reasons from\nAADUserRiskEvents. This hunting query depends on AzureActiveDirectory data connector (SigninLogs AADUserRiskEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery35",
+            "type": "Microsoft.Common.Section",
+            "label": "Threat Intelligence Matched IP on Network Appliance Traffic",
+            "elements": [
+              {
+                "name": "huntingquery35-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for CommonSecurityLog events from 3P network appliances (Fortinet, Palo Alto, Ivanti,\nSonicWall, Cisco, Check Point) where the source or destination IP matches an active threat\nintelligence indicator - covering both inbound attacker access and outbound C2 callbacks\nfrom a compromised device. This hunting query depends on CefAma MicrosoftDefenderThreatIntelligence data connector (CommonSecurityLog ThreatIntelIndicators Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery36",
+            "type": "Microsoft.Common.Section",
+            "label": "VPN Credential Stuffing and Password Spray",
+            "elements": [
+              {
+                "name": "huntingquery36-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects credential stuffing and password spray against VPN and network appliance apps registered in Entra ID, requiring a successful sign-in after the failure burst to confirm probable InitialAccess. This hunting query depends on AzureActiveDirectory data connector (SignInLogs AADNonInteractiveUserSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery37",
+            "type": "Microsoft.Common.Section",
+            "label": "Web service child process with egress",
+            "elements": [
+              {
+                "name": "huntingquery37-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for web-facing server processes that run shells or staging utilities and then connect to a public IPAddress shortly afterward. This hunting query depends on MicrosoftThreatProtection data connector (DeviceProcessEvents DeviceNetworkEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery38",
+            "type": "Microsoft.Common.Section",
+            "label": "AAD Connect host remote admin followed by Entra privilege operation",
+            "elements": [
+              {
+                "name": "huntingquery38-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for remote administration of a likely AAD Connect or sync host that is followed by privileged Entra audit activity by the same hybrid identity. This hunting query depends on MicrosoftThreatProtection data connector (DeviceLogonEvents DeviceProcessEvents IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery39",
+            "type": "Microsoft.Common.Section",
+            "label": "Entra hybrid user sign-in followed by on-prem lateral movement",
+            "elements": [
+              {
+                "name": "huntingquery39-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for successful Entra sign-in activity by a hybrid identity that is followed by RDP or remote execution against hybrid or Entra-joined devices. This hunting query depends on AzureActiveDirectory MicrosoftThreatProtection data connector (AADNonInteractiveUserSignInLogs DeviceInfo DeviceLogonEvents DeviceProcessEvents IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery40",
+            "type": "Microsoft.Common.Section",
+            "label": "Kerberoast burst followed by cloud sign-in",
+            "elements": [
+              {
+                "name": "huntingquery40-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for bursty Kerberos service ticket requests against multiple services by a hybrid identity, followed by successful Entra non-interactive sign-ins. This hunting query depends on MicrosoftThreatProtection SecurityEvents data connector (DeviceInfo DeviceLogonEvents IdentityInfo SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery41",
+            "type": "Microsoft.Common.Section",
+            "label": "RDP to hybrid joined device followed by Entra access",
+            "elements": [
+              {
+                "name": "huntingquery41-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for successful RDP logons by hybrid identities to hybrid or Entra-joined devices that are followed by near-term successful Entra sign-in activity. This hunting query depends on MicrosoftThreatProtection AzureActiveDirectory data connector (DeviceInfo DeviceLogonEvents IdentityInfo AADNonInteractiveUserSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery42",
+            "type": "Microsoft.Common.Section",
+            "label": "WMI or remote admin execution on hybrid device followed by cloud sign-in",
+            "elements": [
+              {
+                "name": "huntingquery42-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for suspicious remote execution on hybrid or Entra-joined devices that is followed by successful Entra sign-in activity by the same hybrid identity. This hunting query depends on MicrosoftThreatProtection AzureActiveDirectory data connector (DeviceInfo DeviceProcessEvents IdentityInfo AADNonInteractiveUserSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery43",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Run Command followed by kernel persistence indicators on target servers",
+            "elements": [
+              {
+                "name": "huntingquery43-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for Azure VM Run Command activity followed by kernel-persistence indicators on the same targeted servers within a short window. This hunting query depends on AzureActivity MicrosoftThreatProtection data connector (AzureActivity DeviceImageLoadEvents DeviceProcessEvents Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery44",
+            "type": "Microsoft.Common.Section",
+            "label": "Appliance management session followed by RBAC write",
+            "elements": [
+              {
+                "name": "huntingquery44-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for unmanaged device management sessions that are followed by high-impact Azure RBAC write operations from the same source IP. This hunting query depends on CEF AzureActivity data connector (CommonSecurityLog AzureActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery45",
+            "type": "Microsoft.Common.Section",
+            "label": "App credential change followed by SP sign-in burst",
+            "elements": [
+              {
+                "name": "huntingquery45-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects likely cloud persistence by correlating app credential operations with near-term service principal authentication bursts. This hunting query depends on AzureActiveDirectory data connector (AuditLogs SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery46",
+            "type": "Microsoft.Common.Section",
+            "label": "Federated Identity Provider Added to Tenant",
+            "elements": [
+              {
+                "name": "huntingquery46-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies federation configuration changes on Entra ID domains, a persistence technique (T1484.002) used by adversaries to hijack authentication via a rogue SAML IdP (Golden SAML / Midnight Blizzard style attacks). This hunting query depends on AzureActiveDirectory data connector (AuditLogs SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery47",
+            "type": "Microsoft.Common.Section",
+            "label": "Kubernetes daemonset or cronjob by non-automation identity",
+            "elements": [
+              {
+                "name": "huntingquery47-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunts for daemonset or cronjob creation performed by identities outside the approved automation allowlist. This hunting query depends on AzureMonitor data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery48",
+            "type": "Microsoft.Common.Section",
+            "label": "MFA Method Added on Risky Account",
+            "elements": [
+              {
+                "name": "huntingquery48-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies MFA method registration, update, or deletion on an account with medium/high Entra ID risk, where a risky sign-in preceded the change. Consistent with Scattered Spider post-compromise persistence (CISA AA23-320A). This hunting query depends on AzureActiveDirectory data connector (AuditLogs SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery49",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare kernel load followed by novel non-interactive sign-in tuple",
+            "elements": [
+              {
+                "name": "huntingquery49-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for rare kernel or driver-load behavior on hybrid servers that is followed by a first-seen non-interactive Entra sign-in tuple for the same identity context. This hunting query depends on MicrosoftThreatProtection AzureActiveDirectory data connector (DeviceImageLoadEvents AADNonInteractiveUserSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery50",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare service principal authentication tuple",
+            "elements": [
+              {
+                "name": "huntingquery50-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects successful service principal authentications from first-seen IP and user-agent tuples compared to baseline. This hunting query depends on AzureActiveDirectory data connector (SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery51",
+            "type": "Microsoft.Common.Section",
+            "label": "Secret Added to Dormant Service Principal",
+            "elements": [
+              {
+                "name": "huntingquery51-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies credentials added to a service principal dormant for 14+ days that then activates. Consistent with Midnight Blizzard (APT29) technique of adding secrets to trusted SPs for stealthy persistent access (T1098.001). This hunting query depends on AzureActiveDirectory data connector (AuditLogs AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery52",
+            "type": "Microsoft.Common.Section",
+            "label": "Service principal Conditional Access anomaly",
+            "elements": [
+              {
+                "name": "huntingquery52-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query hunts for successful service principal sign-ins with unexpected Conditional Access outcomes from new source context. This hunting query depends on AzureActiveDirectory data connector (AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery53",
+            "type": "Microsoft.Common.Section",
+            "label": "Service principal credential change followed by novel SP sign-in",
+            "elements": [
+              {
+                "name": "huntingquery53-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects likely app persistence by correlating service principal credential changes with first-seen service principal sign-ins. This hunting query depends on AzureActiveDirectory data connector (AuditLogs AADServicePrincipalSignInLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery54",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious sign-in followed by auth method or role change",
+            "elements": [
+              {
+                "name": "huntingquery54-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects potential account takeover progression where suspicious sign-ins are followed by authentication method updates or privileged role changes. This hunting query depends on AzureActiveDirectory data connector (SigninLogs AuditLogs Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
