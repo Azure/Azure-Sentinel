@@ -61,7 +61,7 @@ def validate_credentials():
 
     if not endpoint:
         raise InputError(
-            "Sentinel Infrastructure Information is missing. Provide (Data Collection Endpoint).")
+            "Sentinel Infrastructure Information is missing. Provide (Log Ingestion endpoint URI).")
 
 
 def validate_configuration():
