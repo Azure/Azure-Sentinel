@@ -1,0 +1,63 @@
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+name: Darktrace Email Held For Release
+kind: NRT
+description: |
+  This query searches for Darktrace held email events and creates a Microsoft Sentinel
+  incident for each held email, allowing SOC analysts to review and release emails
+  directly from Sentinel.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DarktraceActiveAISecurityPlatform
+    dataTypes:
+      - DarktraceEMAILRelease_CL
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  DarktraceEMAILRelease_CL
+  | extend ParsedSummary = parse_json(summary)
+  | extend SummaryAnomalyIndicators = tostring(ParsedSummary.anomalyIndicators)
+  | extend SummaryHistory = tostring(ParsedSummary.history)
+  | extend SummaryAssociation = tostring(ParsedSummary.association)
+  | extend SummaryValidation = tostring(ParsedSummary.validation)
+  | extend RecipientAccount = tostring(recipients[0])
+  | extend SenderAccount = coalesce(senderHeaderFromEmail, senderEnvelopeSender, senderEmail)
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientAccount
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SenderAccount
+customDetails:
+  emailUuid: emailUuid
+  recipients: recipients
+  uiLink: uiLink
+  senderHeaderFromEmail: senderHeaderFromEmail
+  senderEnvelopeSender: senderEnvelopeSender
+  senderEmail: senderEmail
+  SummaryAnomalyIndicators: SummaryAnomalyIndicators
+  SummaryHistory: SummaryHistory
+  SummaryAssociation: SummaryAssociation
+  SummaryValidation: SummaryValidation
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Darktrace - {{direction}} Email Held For Release: {{subject}}'
+  alertDescriptionFormat: '{{category}}'
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: uiLink
+    - alertProperty: ProductName
+      value: darktraceProduct
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5M
+    matchingMethod: AllEntities
+version: 1.0.0
