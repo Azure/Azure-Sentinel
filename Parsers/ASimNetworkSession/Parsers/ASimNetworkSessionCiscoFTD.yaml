@@ -45,7 +45,9 @@ ParserQuery: |
               EventUid = _ItemId,
               DvcIpAddr = DeviceAddress,
               EventOriginalType = DeviceEventClassID
-          | extend Raw = trim_start(@'%FTD-\d+-\d+:', Raw)
+          | extend
+              Raw = trim_start(@'%FTD-\d+-\d+:', Raw),
+              Hostname = coalesce(DeviceName, Computer, '')
           | parse-kv Raw as (
               DeviceUUID: string,
               InstanceID: string,
@@ -204,8 +206,8 @@ ParserQuery: |
                   ''
               ),
               EventResult = case(
-                  EventOriginalResultDetails in ('Block', 'Block with reset', 'Fastpath', 'Trust'), 'Success', 
-                  EventOriginalResultDetails == 'Allow', 'Failure',
+                  EventOriginalResultDetails in ('Block', 'Block with reset'), 'Failure', 
+                  EventOriginalResultDetails in ('Allow', 'Fastpath', 'Trust'), 'Success',
                   ''
                   ),
               DvcAction = case(
@@ -324,10 +326,7 @@ ParserQuery: |
               )
       ;
       union Intrusion, Connections, File
-      | extend IPParsedHostname = (ipv6_is_match(DeviceName, Computer))
-      | extend
-          Dvc = iff(IPParsedHostname == false, coalesce(DeviceName, Computer), ''),
-          DvcIpAddr = iff(DvcIpAddr != 'Unknown IP', DvcIpAddr, '')
+      | extend DvcIpAddr = iff(DvcIpAddr != 'Unknown IP', DvcIpAddr, '')
       | project
           //Common columns
           TimeGenerated,
@@ -359,6 +358,7 @@ ParserQuery: |
           DvcAction,
           EventSeverity,
           AdditionalFields,
+          Hostname,
           //Columns not available in all branches
           NetworkRuleName = column_ifexists('NetworkRuleName', ''),
           DvcDescription = column_ifexists('DvcDescription', ''),
@@ -407,8 +407,7 @@ ParserQuery: |
               isnotempty(SrcUsername), 'Simple',
               ''
           ),
-          Rule = tostring(NetworkRuleNumber),
-          ASimMatchingIpAddr = 'Both' //set using has_any_ipv4_prefix in parameter based parser
+          Rule = tostring(NetworkRuleNumber)
   };
   parser(
       disabled = disabled,

@@ -86,7 +86,9 @@ ParserQuery: |
               EventUid = _ItemId,
               DvcIpAddr = DeviceAddress,
               EventOriginalType = DeviceEventClassID
-          | extend Raw = trim_start(@'%FTD-\d+-\d+:', Raw)
+          | extend
+              Raw = trim_start(@'%FTD-\d+-\d+:', Raw),
+              Hostname = coalesce(DeviceName, Computer, '')
           | parse-kv Raw as (
               DeviceUUID: string,
               InstanceID: string,
@@ -108,11 +110,11 @@ ParserQuery: |
               NAPPolicy: string
           ) with (pair_delimiter=',', kv_delimiter=':')
           | where (
-              ((array_length(srcipaddr_has_any_prefix) == 0) or (SrcIP has_any (srcipaddr_has_any_prefix)))
-              and ((array_length(dstipaddr_has_any_prefix) == 0) or (DstIP has_any (dstipaddr_has_any_prefix)))
-              and ((array_length(ipaddr_has_any_prefix) == 0) or (DstIP has_any (ipaddr_has_any_prefix)) or (SrcIP has_any (ipaddr_has_any_prefix)))
+              ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SrcIP, srcipaddr_has_any_prefix)))
+              and ((array_length(dstipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(DstIP, dstipaddr_has_any_prefix)))
+              and ((array_length(ipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(DstIP, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(SrcIP, ipaddr_has_any_prefix)))
               and (isnull(dstportnumber) or DstPort == dstportnumber)
-              and ((array_length(hostname_has_any) == 0)) // Hostname detail not available in this parser
+              and ((array_length(hostname_has_any) == 0) or (Hostname has_any (hostname_has_any)))
               //DvcAction and Result filtered in each branch below
           )
           | project-rename
@@ -175,7 +177,7 @@ ParserQuery: |
               )
           | where (
               ((array_length(dvcaction) == 0) or (DvcAction has_any (dvcaction)))
-              and ((array_length(eventresult) == 0) or (EventResult has_any (eventresult)))
+              and ((eventresult == "*") or (EventResult == eventresult))
           )
           | extend
               EventType = 'IDS',
@@ -252,8 +254,8 @@ ParserQuery: |
               DstNatPortNumber = NAT_ResponderPort
           | extend
               EventResult = case(
-                  EventOriginalResultDetails in ('Block', 'Block with reset', 'Fastpath', 'Trust'), 'Success', 
-                  EventOriginalResultDetails == 'Allow', 'Failure',
+                  EventOriginalResultDetails in ('Block', 'Block with reset'), 'Failure', 
+                  EventOriginalResultDetails in ('Allow', 'Fastpath', 'Trust'), 'Success',
                   ''
                   ),
               DvcAction = case(
@@ -270,7 +272,7 @@ ParserQuery: |
               )
           | where (
               ((array_length(dvcaction) == 0) or (DvcAction has_any (dvcaction)))
-              and ((array_length(eventresult) == 0) or (EventResult has_any (eventresult)))
+              and ((eventresult == "*") or (EventResult == eventresult))
           )
           | extend
               EventType = 'NetworkSession',
@@ -354,7 +356,7 @@ ParserQuery: |
               )
           | where (
               ((array_length(dvcaction) == 0) or (DvcAction has_any (dvcaction)))
-              and ((array_length(eventresult) == 0) or (EventResult has_any (eventresult)))
+              and ((eventresult == "*") or (EventResult == eventresult))
           )
           | extend
               EventType = 'EndpointNetworkSession',
@@ -388,10 +390,7 @@ ParserQuery: |
               )
       ;
       union Intrusion, Connections, File
-      | extend IPParsedHostname = (ipv6_is_match(DeviceName, Computer))
-      | extend
-          Dvc = iff(IPParsedHostname == false, coalesce(DeviceName, Computer), ''),
-          DvcIpAddr = iff(DvcIpAddr != 'Unknown IP', DvcIpAddr, '')
+      | extend DvcIpAddr = iff(DvcIpAddr != 'Unknown IP', DvcIpAddr, '')
       | project
           //Common columns
           TimeGenerated,
@@ -423,7 +422,7 @@ ParserQuery: |
           DvcAction,
           EventSeverity,
           AdditionalFields,
-          Hostname = coalesce(DeviceName, Computer, ''),
+          Hostname,
           //Columns not available in all branches
           NetworkRuleName = column_ifexists('NetworkRuleName', ''),
           DvcDescription = column_ifexists('DvcDescription', ''),
@@ -440,7 +439,6 @@ ParserQuery: |
           SrcUsername = column_ifexists('SrcUsername', ''),
           SrcAppName = column_ifexists('SrcAppName', ''),
           EventReportUrl = column_ifexists('EventReportUrl', ''),
-          DstHostname = column_ifexists('DstHostname', ''),
           EventSubType = column_ifexists('EventSubType', ''),
           NetworkBytes = column_ifexists('NetworkBytes', long(null)),
           NetworkPackets = column_ifexists('NetworkPackets', long(null)),
