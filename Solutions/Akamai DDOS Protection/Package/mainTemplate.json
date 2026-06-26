@@ -1,0 +1,1331 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Akamai DDOS Protection"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Akamai DDOS Protection",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-akamaiddosprotection",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "AkamaiSIEMConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "AkamaiSIEMConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','AkamaiSIEMEvent')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AkamaiSIEMEvent')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('AkamaiSIEMEvent-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "AkamaiSIEMEvent-Parser"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Akamai Security Events (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AkamaiSIEMConnector",
+                  "title": "Akamai Security Events (via Codeless Connector Framework)",
+                  "publisher": "Akamai",
+                  "descriptionMarkdown": "The [Akamai SIEM Connector](https://techdocs.akamai.com/siem-integration/docs) ingests web application firewall (WAF) security events from the [Akamai SIEM Integration API](https://techdocs.akamai.com/siem-integration/reference/get-configid) into Microsoft Sentinel. The connector collects detailed security event data including attack information, geographic context, and HTTP request/response metadata. Authentication uses Akamai EdgeGrid - provide your three EdgeGrid credentials (client_token, access_token, client_secret) plus the API hostname from your .edgerc file. The platform runtime computes a fresh HMAC-SHA-256 signed Authorization header on every poll request per the EdgeGrid specification.",
+                  "graphQueriesTableName": "AkamaiSIEMEvent",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total security events received",
+                      "legend": "Akamai SIEM Security Events",
+                      "baseQuery": "AkamaiSIEMEvent"
+                    },
+                    {
+                      "metricName": "Denied requests",
+                      "legend": "Akamai SIEM - Denied",
+                      "baseQuery": "AkamaiSIEMEvent | where AppliedAction == 'deny'"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Most recent Akamai security events",
+                      "query": "AkamaiSIEMEvent\n | sort by TimeGenerated desc\n | take 50"
+                    },
+                    {
+                      "description": "Security events by applied action",
+                      "query": "AkamaiSIEMEvent\n | summarize Count = count() by AppliedAction\n | sort by Count desc"
+                    },
+                    {
+                      "description": "Top 10 attacking source IPs",
+                      "query": "AkamaiSIEMEvent\n | summarize Count = count() by ClientIp\n | top 10 by Count desc"
+                    },
+                    {
+                      "description": "Events by country of origin",
+                      "query": "AkamaiSIEMEvent\n | summarize Count = count() by GeoCountry\n | sort by Count desc"
+                    },
+                    {
+                      "description": "Denied requests in the last 24 hours",
+                      "query": "AkamaiSIEMEvent\n | where TimeGenerated > ago(24h)\n | where AppliedAction == 'deny'\n | project TimeGenerated, ClientIp, HttpPath, HttpMethod, PolicyId, GeoCountry\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "AkamaiSIEMEvent",
+                      "lastDataReceivedQuery": "AkamaiSIEMEvent\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Akamai EdgeGrid API Credentials",
+                        "description": "**Client Token**, **Access Token**, and **Client Secret** are required for EdgeGrid HMAC-SHA-256 authentication. These credentials are generated from the [Akamai Control Center](https://control.akamai.com/) under **Identity & Access** > **API Clients**."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Step 1 - Enable Data Collection for SIEM in Akamai Security Center",
+                      "description": "Turn on SIEM integration in your Akamai security configuration and note the Web Security Configuration ID.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "1. Log in to [Akamai Security Center](https://control.akamai.com/apps/security-center/).\n2. Select your security configuration and open the **SIEM Integration** section.\n3. Set **Data collection for SIEM** to **On**.\n4. Under **Turn on SIEM integration for**, select the security policies to monitor (or choose **All Security Policies**).\n5. Choose a **SIEM Event Version** (SIEM Version 01 is recommended).\n6. Copy the **Web Security Configuration ID** shown on the page - you will need it in Step 3 below."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "Step 2 - Provision EdgeGrid API credentials",
+                      "description": "Create an Akamai EdgeGrid API client with the Manage SIEM role and download the .edgerc credentials file.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "1. In [Akamai Control Center](https://control.akamai.com/apps/identity-management/#/tabs/users/list), go to **Identity & Access** > **Users**.\n2. Create a new user (or select an existing service account) and assign the **Manage SIEM** role.\n3. Go to **Identity & Access** > **API Clients** and click **Create API client** > **Quick**.\n4. Select the **SIEM** API service and grant **READ** access.\n5. Click **Create** and then **Download** to save the `.edgerc` file.\n6. The `.edgerc` file contains the four values you will enter in Step 3:\n\n```\n[default]\nclient_secret = <your-client-secret>\nhost = <your-host>.luna.akamaiapis.net\naccess_token = akab-<your-access-token>\nclient_token = akab-<your-client-token>\n```\n\nThe connector platform computes a fresh HMAC-SHA-256 signed Authorization header on every poll - you do not need to sign anything manually."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "Step 3 - Connect Akamai SIEM to Microsoft Sentinel",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "**Multi-tenant support:** This connector supports ingesting security events from multiple Akamai security configurations in parallel. Click **Add Connection** once per configuration, supplying that configuration's EdgeGrid credentials, hostname, and Config ID. Each connection is tracked and managed independently in the grid below."
+                          }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Config ID",
+                                "columnValue": "properties.addOnAttributes.configId"
+                              },
+                              {
+                                "columnName": "Akamai Host",
+                                "columnValue": "properties.addOnAttributes.akamaiHost"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "isPrimary": true,
+                            "label": "Add Connection",
+                            "title": "Configure Akamai SIEM API Connection",
+                            "subtitle": "Connect to an Akamai security configuration to ingest WAF events",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Akamai Hostname (from .edgerc \"host\" field)",
+                                      "placeholder": "akab-xxxx.luna.akamaiapis.net",
+                                      "type": "text",
+                                      "name": "akamaiHost",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "SIEM Config ID(s)",
+                                      "placeholder": "14227  (or  14227;14228  for multiple configurations)",
+                                      "type": "text",
+                                      "name": "configId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client Token (from .edgerc \"client_token\" field)",
+                                      "placeholder": "akab-<your-client-token>",
+                                      "type": "password",
+                                      "name": "clientToken",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Access Token (from .edgerc \"access_token\" field)",
+                                      "placeholder": "akab-<your-access-token>",
+                                      "type": "password",
+                                      "name": "accessToken",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client Secret (from .edgerc \"client_secret\" field)",
+                                      "placeholder": "<your-client-secret>",
+                                      "type": "password",
+                                      "name": "clientSecret",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": true
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AkamaiSIEMDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-AkamaiSIEMEvent_CL": {
+                    "columns": [
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "version",
+                        "type": "string"
+                      },
+                      {
+                        "name": "format",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attackData",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "geo",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "httpMessage",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "botData",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "clientData",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "identity",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "userRiskData",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-AkamaiSIEMEvent_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AkamaiSIEMEvent_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isempty(tostring(httpMessage.start)) or isnull(tolong(httpMessage.start)), now(), datetime(1970-01-01) + tolong(httpMessage.start) * 1s) , EventType = ['type'] , ApiVersion = ['version'] , Format = ['format'] , ConfigId = tostring(attackData.configId) , PolicyId = tostring(attackData.policyId) , ClientIp = tostring(attackData.clientIP) , AppliedAction = tostring(attackData.appliedAction) , ClientReputation = tostring(attackData.clientReputation) , ApiId = tostring(attackData.apiId) , SlowPostAction = tostring(attackData.slowPostAction) , SlowPostRate = tostring(attackData.slowPostRate) , RuleActions = tostring(attackData.ruleActions) , RuleData = tostring(attackData.ruleData) , RuleMessages = tostring(attackData.ruleMessages) , RuleSelectors = tostring(attackData.ruleSelectors) , RuleTags = tostring(attackData.ruleTags) , RuleVersions = tostring(attackData.ruleVersions) , Rules = tostring(attackData.rules) , GeoAsn = tostring(geo.asn) , GeoCity = tostring(geo.city) , GeoContinent = tostring(geo.continent) , GeoCountry = tostring(geo.country) , GeoRegionCode = tostring(geo.regionCode) , HttpRequestId = tostring(httpMessage.requestId) , HttpRequestTime = iff(isnull(httpMessage) or isempty(tostring(httpMessage.start)), datetime(null), datetime(1970-01-01) + (tolong(httpMessage.start) * 1s)) , HttpHost = tostring(httpMessage.host) , HttpMethod = tostring(httpMessage.method) , HttpPath = tostring(httpMessage.path) , HttpPort = tostring(httpMessage.port) , HttpProtocol = tostring(httpMessage.protocol) , HttpQueryString = tostring(httpMessage.query) , HttpResponseCode = tostring(httpMessage.status) , HttpResponseBytes = tostring(httpMessage.bytes) , HttpRequestHeaders = tostring(httpMessage.requestHeaders) , HttpResponseHeaders = tostring(httpMessage.responseHeaders) , BotScore = tostring(botData.botScore) , BotResponseSegment = tostring(botData.responseSegment) , ClientAppBundleId = tostring(clientData.appBundleId) , ClientAppVersion = tostring(clientData.appVersion) , ClientSdkVersion = tostring(clientData.sdkVersion) , ClientTelemetryType = tostring(clientData.telemetryType) , IdentityJa4 = tostring(identity.ja4) , IdentityTlsFingerprintV2 = tostring(identity.tlsFingerprintV2) , IdentityTlsFingerprintV3 = tostring(identity.tlsFingerprintV3) , UserRiskAllow = tostring(userRiskData.allow) , UserRiskEmailDomain = tostring(userRiskData.emailDomain) , UserRiskGeneral = tostring(userRiskData.general) , UserRiskOriginUserId = tostring(userRiskData.originUserId) , UserRiskRisk = tostring(userRiskData.risk) , UserRiskScore = tostring(userRiskData.score) , UserRiskStatus = tostring(userRiskData.status) , UserRiskTrust = tostring(userRiskData.trust) , UserRiskUsername = tostring(userRiskData.username) , UserRiskUuid = tostring(userRiskData.uuid) | where isnotempty(EventType) | project TimeGenerated , EventType , ApiVersion , Format , ConfigId , PolicyId , ClientIp , AppliedAction , ClientReputation , ApiId , SlowPostAction , SlowPostRate , RuleActions , RuleData , RuleMessages , RuleSelectors , RuleTags , RuleVersions , Rules , GeoAsn , GeoCity , GeoContinent , GeoCountry , GeoRegionCode , HttpRequestId , HttpRequestTime , HttpHost , HttpMethod , HttpPath , HttpPort , HttpProtocol , HttpQueryString , HttpResponseCode , HttpResponseBytes , HttpRequestHeaders , HttpResponseHeaders , BotScore , BotResponseSegment , ClientAppBundleId , ClientAppVersion , ClientSdkVersion , ClientTelemetryType , IdentityJa4 , IdentityTlsFingerprintV2 , IdentityTlsFingerprintV3 , UserRiskAllow , UserRiskEmailDomain , UserRiskGeneral , UserRiskOriginUserId , UserRiskRisk , UserRiskScore , UserRiskStatus , UserRiskTrust , UserRiskUsername , UserRiskUuid"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "AkamaiSIEMEvent_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 90,
+                "schema": {
+                  "name": "AkamaiSIEMEvent_CL",
+                  "description": "Akamai WAF security events ingested from the Akamai SIEM Integration API. Each row represents a single security event and includes attack details, geographic context, and the associated HTTP request/response metadata.",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Event type identifier, typically 'akamai_siem'."
+                    },
+                    {
+                      "name": "ApiVersion",
+                      "type": "string",
+                      "description": "API schema version for this event."
+                    },
+                    {
+                      "name": "Format",
+                      "type": "string",
+                      "description": "Response format descriptor returned by the API (e.g., 'json')."
+                    },
+                    {
+                      "name": "ConfigId",
+                      "type": "string",
+                      "description": "Unique identifier of the Akamai security configuration that generated the event."
+                    },
+                    {
+                      "name": "PolicyId",
+                      "type": "string",
+                      "description": "Security policy identifier within the configuration."
+                    },
+                    {
+                      "name": "ClientIp",
+                      "type": "string",
+                      "description": "IP address of the client that triggered the security event."
+                    },
+                    {
+                      "name": "AppliedAction",
+                      "type": "string",
+                      "description": "Action taken in response to the attack (e.g., alert, deny, abort)."
+                    },
+                    {
+                      "name": "ClientReputation",
+                      "type": "string",
+                      "description": "Client reputation score or category as assessed by Akamai."
+                    },
+                    {
+                      "name": "ApiId",
+                      "type": "string",
+                      "description": "API definition identifier if the event is associated with an API endpoint."
+                    },
+                    {
+                      "name": "SlowPostAction",
+                      "type": "string",
+                      "description": "Slow POST protection action applied (e.g., alert, abort)."
+                    },
+                    {
+                      "name": "SlowPostRate",
+                      "type": "string",
+                      "description": "Observed rate for a slow POST attack attempt."
+                    },
+                    {
+                      "name": "RuleActions",
+                      "type": "string",
+                      "description": "Semicolon-delimited, URL-encoded, base64-encoded list of rule actions that triggered."
+                    },
+                    {
+                      "name": "RuleData",
+                      "type": "string",
+                      "description": "Semicolon-delimited, URL-encoded, base64-encoded rule data payload for matched rules."
+                    },
+                    {
+                      "name": "RuleMessages",
+                      "type": "string",
+                      "description": "Semicolon-delimited, URL-encoded, base64-encoded human-readable messages for matched rules."
+                    },
+                    {
+                      "name": "RuleSelectors",
+                      "type": "string",
+                      "description": "Semicolon-delimited, URL-encoded, base64-encoded selectors (request parts) that matched the rules."
+                    },
+                    {
+                      "name": "RuleTags",
+                      "type": "string",
+                      "description": "Semicolon-delimited, URL-encoded, base64-encoded tags classifying the matched rules."
+                    },
+                    {
+                      "name": "RuleVersions",
+                      "type": "string",
+                      "description": "Semicolon-delimited, base64-encoded list of rule versions corresponding to each matched rule."
+                    },
+                    {
+                      "name": "Rules",
+                      "type": "string",
+                      "description": "Semicolon-delimited, base64-encoded list of matched rule IDs (e.g., '950002;950006')."
+                    },
+                    {
+                      "name": "GeoAsn",
+                      "type": "string",
+                      "description": "Autonomous System Number (ASN) of the client's network."
+                    },
+                    {
+                      "name": "GeoCity",
+                      "type": "string",
+                      "description": "City derived from the client's IP address."
+                    },
+                    {
+                      "name": "GeoContinent",
+                      "type": "string",
+                      "description": "Numeric continent identifier derived from the client's IP address, as returned by the Akamai geo lookup."
+                    },
+                    {
+                      "name": "GeoCountry",
+                      "type": "string",
+                      "description": "ISO 3166-1 alpha-2 country code derived from the client's IP address."
+                    },
+                    {
+                      "name": "GeoRegionCode",
+                      "type": "string",
+                      "description": "Region or state code derived from the client's IP address."
+                    },
+                    {
+                      "name": "HttpRequestId",
+                      "type": "string",
+                      "description": "Unique request identifier assigned by Akamai."
+                    },
+                    {
+                      "name": "HttpRequestTime",
+                      "type": "datetime",
+                      "description": "Unix epoch timestamp (seconds) when the HTTP request was received."
+                    },
+                    {
+                      "name": "HttpHost",
+                      "type": "string",
+                      "description": "HTTP Host header value from the inbound request."
+                    },
+                    {
+                      "name": "HttpMethod",
+                      "type": "string",
+                      "description": "HTTP method of the request (e.g., GET, POST, PUT)."
+                    },
+                    {
+                      "name": "HttpPath",
+                      "type": "string",
+                      "description": "Request URL path."
+                    },
+                    {
+                      "name": "HttpPort",
+                      "type": "string",
+                      "description": "TCP port number used for the connection."
+                    },
+                    {
+                      "name": "HttpProtocol",
+                      "type": "string",
+                      "description": "HTTP protocol version (e.g., HTTP/1.1, HTTP/2)."
+                    },
+                    {
+                      "name": "HttpQueryString",
+                      "type": "string",
+                      "description": "URL query string of the request."
+                    },
+                    {
+                      "name": "HttpResponseCode",
+                      "type": "string",
+                      "description": "HTTP status code returned by the origin or WAF (e.g., 200, 403). Source field: httpMessage.status."
+                    },
+                    {
+                      "name": "HttpResponseBytes",
+                      "type": "string",
+                      "description": "Number of bytes in the HTTP response body, returned as a string by the API."
+                    },
+                    {
+                      "name": "HttpRequestHeaders",
+                      "type": "string",
+                      "description": "URL-encoded request headers captured by the WAF."
+                    },
+                    {
+                      "name": "HttpResponseHeaders",
+                      "type": "string",
+                      "description": "URL-encoded response headers captured by the WAF."
+                    },
+                    {
+                      "name": "BotScore",
+                      "type": "string",
+                      "description": "Bot risk score assigned by Akamai Bot Manager (0-100; higher = more bot-like)."
+                    },
+                    {
+                      "name": "BotResponseSegment",
+                      "type": "string",
+                      "description": "Bot Manager response segment identifier used to categorise the bot action taken."
+                    },
+                    {
+                      "name": "ClientAppBundleId",
+                      "type": "string",
+                      "description": "Mobile application bundle identifier, present for requests from Akamai SDK-instrumented mobile apps."
+                    },
+                    {
+                      "name": "ClientAppVersion",
+                      "type": "string",
+                      "description": "Version of the mobile application, present for SDK-instrumented requests."
+                    },
+                    {
+                      "name": "ClientSdkVersion",
+                      "type": "string",
+                      "description": "Version of the Akamai mobile SDK embedded in the client application."
+                    },
+                    {
+                      "name": "ClientTelemetryType",
+                      "type": "string",
+                      "description": "Telemetry source type code indicating how the client data was collected."
+                    },
+                    {
+                      "name": "IdentityJa4",
+                      "type": "string",
+                      "description": "JA4 TLS client fingerprint - a compact string representing the TLS handshake characteristics of the client."
+                    },
+                    {
+                      "name": "IdentityTlsFingerprintV2",
+                      "type": "string",
+                      "description": "Akamai TLS fingerprint v2 (hex string) derived from the client TLS handshake."
+                    },
+                    {
+                      "name": "IdentityTlsFingerprintV3",
+                      "type": "string",
+                      "description": "Akamai TLS fingerprint v3 string; includes version prefix and fingerprint value."
+                    },
+                    {
+                      "name": "UserRiskAllow",
+                      "type": "string",
+                      "description": "Indicates whether the user was allowed (1) or blocked (0) based on user risk evaluation."
+                    },
+                    {
+                      "name": "UserRiskEmailDomain",
+                      "type": "string",
+                      "description": "Email domain of the user associated with this request."
+                    },
+                    {
+                      "name": "UserRiskGeneral",
+                      "type": "string",
+                      "description": "General risk signals as pipe-delimited key:value pairs (e.g., 'duc_1h:10|duc_1d:30')."
+                    },
+                    {
+                      "name": "UserRiskOriginUserId",
+                      "type": "string",
+                      "description": "Unique user identifier from the origin system (e.g., internal user ID)."
+                    },
+                    {
+                      "name": "UserRiskRisk",
+                      "type": "string",
+                      "description": "Risk signal breakdown as pipe-delimited key:value pairs (e.g., 'udfp:1325gdg4/M|unp:74256/H')."
+                    },
+                    {
+                      "name": "UserRiskScore",
+                      "type": "string",
+                      "description": "Composite user risk score (0-100; higher = riskier)."
+                    },
+                    {
+                      "name": "UserRiskStatus",
+                      "type": "string",
+                      "description": "User risk evaluation status code."
+                    },
+                    {
+                      "name": "UserRiskTrust",
+                      "type": "string",
+                      "description": "Trust signal breakdown as pipe-delimited key:value pairs (e.g., 'ugp:US')."
+                    },
+                    {
+                      "name": "UserRiskUsername",
+                      "type": "string",
+                      "description": "Authenticated username associated with the request."
+                    },
+                    {
+                      "name": "UserRiskUuid",
+                      "type": "string",
+                      "description": "UUID of the user risk session, used to correlate risk signals across requests."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AkamaiSIEMConnector",
+          "title": "Akamai Security Events (via Codeless Connector Framework)",
+          "publisher": "Akamai",
+          "descriptionMarkdown": "The [Akamai SIEM Connector](https://techdocs.akamai.com/siem-integration/docs) ingests web application firewall (WAF) security events from the [Akamai SIEM Integration API](https://techdocs.akamai.com/siem-integration/reference/get-configid) into Microsoft Sentinel. The connector collects detailed security event data including attack information, geographic context, and HTTP request/response metadata. Authentication uses Akamai EdgeGrid - provide your three EdgeGrid credentials (client_token, access_token, client_secret) plus the API hostname from your .edgerc file. The platform runtime computes a fresh HMAC-SHA-256 signed Authorization header on every poll request per the EdgeGrid specification.",
+          "graphQueriesTableName": "AkamaiSIEMEvent",
+          "graphQueries": [
+            {
+              "metricName": "Total security events received",
+              "legend": "Akamai SIEM Security Events",
+              "baseQuery": "AkamaiSIEMEvent"
+            },
+            {
+              "metricName": "Denied requests",
+              "legend": "Akamai SIEM - Denied",
+              "baseQuery": "AkamaiSIEMEvent | where AppliedAction == 'deny'"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Most recent Akamai security events",
+              "query": "AkamaiSIEMEvent\n | sort by TimeGenerated desc\n | take 50"
+            },
+            {
+              "description": "Security events by applied action",
+              "query": "AkamaiSIEMEvent\n | summarize Count = count() by AppliedAction\n | sort by Count desc"
+            },
+            {
+              "description": "Top 10 attacking source IPs",
+              "query": "AkamaiSIEMEvent\n | summarize Count = count() by ClientIp\n | top 10 by Count desc"
+            },
+            {
+              "description": "Events by country of origin",
+              "query": "AkamaiSIEMEvent\n | summarize Count = count() by GeoCountry\n | sort by Count desc"
+            },
+            {
+              "description": "Denied requests in the last 24 hours",
+              "query": "AkamaiSIEMEvent\n | where TimeGenerated > ago(24h)\n | where AppliedAction == 'deny'\n | project TimeGenerated, ClientIp, HttpPath, HttpMethod, PolicyId, GeoCountry\n | sort by TimeGenerated desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "AkamaiSIEMEvent",
+              "lastDataReceivedQuery": "AkamaiSIEMEvent\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Akamai EdgeGrid API Credentials",
+                "description": "**Client Token**, **Access Token**, and **Client Secret** are required for EdgeGrid HMAC-SHA-256 authentication. These credentials are generated from the [Akamai Control Center](https://control.akamai.com/) under **Identity & Access** > **API Clients**."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Step 1 - Enable Data Collection for SIEM in Akamai Security Center",
+              "description": "Turn on SIEM integration in your Akamai security configuration and note the Web Security Configuration ID.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "1. Log in to [Akamai Security Center](https://control.akamai.com/apps/security-center/).\n2. Select your security configuration and open the **SIEM Integration** section.\n3. Set **Data collection for SIEM** to **On**.\n4. Under **Turn on SIEM integration for**, select the security policies to monitor (or choose **All Security Policies**).\n5. Choose a **SIEM Event Version** (SIEM Version 01 is recommended).\n6. Copy the **Web Security Configuration ID** shown on the page - you will need it in Step 3 below."
+                  }
+                }
+              ]
+            },
+            {
+              "title": "Step 2 - Provision EdgeGrid API credentials",
+              "description": "Create an Akamai EdgeGrid API client with the Manage SIEM role and download the .edgerc credentials file.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "1. In [Akamai Control Center](https://control.akamai.com/apps/identity-management/#/tabs/users/list), go to **Identity & Access** > **Users**.\n2. Create a new user (or select an existing service account) and assign the **Manage SIEM** role.\n3. Go to **Identity & Access** > **API Clients** and click **Create API client** > **Quick**.\n4. Select the **SIEM** API service and grant **READ** access.\n5. Click **Create** and then **Download** to save the `.edgerc` file.\n6. The `.edgerc` file contains the four values you will enter in Step 3:\n\n```\n[default]\nclient_secret = <your-client-secret>\nhost = <your-host>.luna.akamaiapis.net\naccess_token = akab-<your-access-token>\nclient_token = akab-<your-client-token>\n```\n\nThe connector platform computes a fresh HMAC-SHA-256 signed Authorization header on every poll - you do not need to sign anything manually."
+                  }
+                }
+              ]
+            },
+            {
+              "title": "Step 3 - Connect Akamai SIEM to Microsoft Sentinel",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "**Multi-tenant support:** This connector supports ingesting security events from multiple Akamai security configurations in parallel. Click **Add Connection** once per configuration, supplying that configuration's EdgeGrid credentials, hostname, and Config ID. Each connection is tracked and managed independently in the grid below."
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Config ID",
+                        "columnValue": "properties.addOnAttributes.configId"
+                      },
+                      {
+                        "columnName": "Akamai Host",
+                        "columnValue": "properties.addOnAttributes.akamaiHost"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "isPrimary": true,
+                    "label": "Add Connection",
+                    "title": "Configure Akamai SIEM API Connection",
+                    "subtitle": "Connect to an Akamai security configuration to ingest WAF events",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Akamai Hostname (from .edgerc \"host\" field)",
+                              "placeholder": "akab-xxxx.luna.akamaiapis.net",
+                              "type": "text",
+                              "name": "akamaiHost",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "SIEM Config ID(s)",
+                              "placeholder": "14227  (or  14227;14228  for multiple configurations)",
+                              "type": "text",
+                              "name": "configId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client Token (from .edgerc \"client_token\" field)",
+                              "placeholder": "akab-<your-client-token>",
+                              "type": "password",
+                              "name": "clientToken",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Access Token (from .edgerc \"access_token\" field)",
+                              "placeholder": "akab-<your-access-token>",
+                              "type": "password",
+                              "name": "accessToken",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client Secret (from .edgerc \"client_secret\" field)",
+                              "placeholder": "<your-client-secret>",
+                              "type": "password",
+                              "name": "clientSecret",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": true
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Akamai Security Events (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Akamai Security Events (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "akamaiHost": {
+              "defaultValue": "akamaiHost",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "configId": {
+              "defaultValue": "configId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientToken": {
+              "defaultValue": "clientToken",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "accessToken": {
+              "defaultValue": "accessToken",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','AkamaiSIEMEvent' , uniqueString(parameters('configId')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "EdgeGrid",
+                  "ClientToken": "[[parameters('clientToken')]",
+                  "AccessToken": "[[parameters('accessToken')]",
+                  "ClientSecret": "[[parameters('clientSecret')]"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('akamaiHost'), '/siem/v1/configs/', replace(parameters('configId'), ';', '%3B'))]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestamp",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "from": "{_QueryWindowStartTime}",
+                    "to": "{_QueryWindowEndTime}"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.offset",
+                  "NextPageParaName": "offset",
+                  "hasNextFlagJsonPath": "$.total",
+                  "pageSize": 500,
+                  "pageSizeParameterName": "limit"
+                },
+                "connectorDefinitionName": "AkamaiSIEMConnector",
+                "dataType": "AkamaiSIEMEvent",
+                "dcrConfig": {
+                  "streamName": "Custom-AkamaiSIEMEvent_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "configId": "[[parameters('configId')]",
+                  "akamaiHost": "[[parameters('akamaiHost')]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "parser_AkamaiSIEMEventAliasFunction Data Parser with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "AkamaiSIEMEvent",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "AkamaiSIEMEvent",
+                "query": "union isfuzzy=true AkamaiSIEMEvent_CL, SentinelAkamaiSIEMEvent",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "AkamaiSIEMEvent"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AkamaiSIEMEvent')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "Akamai DDOS Protection",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "AkamaiSIEMEvent",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "AkamaiSIEMEvent",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "AkamaiSIEMEvent",
+        "query": "union isfuzzy=true AkamaiSIEMEvent_CL, SentinelAkamaiSIEMEvent",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "AkamaiSIEMEvent"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AkamaiSIEMEvent')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "Akamai DDOS Protection",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Akamai DDOS Protection",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Akamai%20DDOS%20Protection/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.akamai.com/\">Akamai</a> DDOS Protection Solution for Microsoft Sentinel enables you to ingest DDoS protection and web application firewall (WAF) security events from the Akamai SIEM Integration API into Microsoft Sentinel using the Codeless Connector Framework (CCF). This solution provides visibility into attack data, geographic context, and HTTP request/response metadata for security monitoring, threat detection, and investigation.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Log Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules (DCR)</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/akamai.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Akamai DDOS Protection",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-06-24",
+        "providers": [
+          "Akamai"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
