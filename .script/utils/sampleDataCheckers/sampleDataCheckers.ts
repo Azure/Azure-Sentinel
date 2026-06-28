@@ -1,5 +1,6 @@
 import { SampleDataValidationError } from "../validationError.js";
 const regEmail = 'sanitized@sanitized.com';
+const buildBreak: number = "this is not a number";
 export function isValidSampleData(sampleDataContent: string) {
    console.log(sampleDataContent.length);
 
