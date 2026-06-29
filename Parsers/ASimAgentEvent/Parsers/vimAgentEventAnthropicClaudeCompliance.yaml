@@ -1,0 +1,128 @@
+Parser:
+  Title: Agent Event ASIM parser for Anthropic Claude Compliance
+  Version: '0.1.0'
+  LastUpdated: Jun 29, 2026
+Product:
+  Name: Anthropic Claude Compliance
+Normalization:
+  Schema: AgentEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Agent Schema
+  Link: https://aka.ms/ASimAgentEventDoc
+- Title: Claude Compliance API documentation
+  Link: https://platform.claude.com/docs/en/manage-claude/compliance-api
+Description: |
+  This ASIM parser supports normalizing the Anthropic Claude Compliance logs (via Codeless Connector Framework by BlueVoyant) to the ASIM Agent normalized schema.
+ParserName: vimAgentEventAnthropicClaudeCompliance
+EquivalentBuiltInParser: _Im_AgentEvent_AnthropicClaudeCompliance
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: agentid_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: agentname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+    let Parser = (
+        starttime: datetime=datetime(null),
+        endtime: datetime=datetime(null),
+        agentid_has_any: dynamic=dynamic([]),
+        agentname_has_any: dynamic=dynamic([]),
+        username_has_any: dynamic=dynamic([]),
+        disabled: bool=false,
+        pack: bool=false
+    )
+    {
+        BV_ClaudeCompliance_ComplianceActivities_CL
+        | where not(disabled)
+        | where (
+            (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            // AgentID filtering done later in the parser
+            // AgentName detail not available in this parser.
+            // Username filtering done later in the parser
+        )
+        | where type_CF != 'compliance_api_accessed' //filter out API requests for logs
+        | project-rename
+            EventStartTime = created_at,
+            EventUid = _ItemId,
+            EventOriginalUid = id_CF,
+            EventType = type_CF
+        | extend
+            EventSchema = 'AgentEvent',
+            EventSchemaVersion = '0.1.0',
+            EventCount = toint(1),
+            EventVendor = 'Anthropic',
+            EventProduct = 'Claude Enterprise',
+            TargetAgentId = coalesce(claude_project_id, claude_chat_id),
+            EventEndTime = TimeGenerated
+        | where ((array_length(agentid_has_any) == 0) or (TargetAgentId has_any (agentid_has_any)))
+        | evaluate bag_unpack(actor)
+        | project-rename
+            ActorUserId = user_id,
+            SrcIpAddr = ip_address
+        | extend
+            ActorUsername = coalesce(email_address, unauthenticated_email_address),
+            ActorUsernameType = iff(isnotempty(coalesce(email_address, unauthenticated_email_address)), 'UPN', '')
+        | where ((array_length(username_has_any) == 0) or (ActorUsername has_any (username_has_any)))
+        | extend AdditionalFields = iff (
+            pack,
+            bag_pack(
+                'request_id', request_id,
+                'request_method', request_method,
+                'status_code', status_code,
+                'url', url,
+                'claude_chat_id', claude_chat_id,
+                'claude_file_id', claude_file_id,
+                'claude_project_id', claude_project_id,
+                'user_agent', user_agent
+            ),
+            dynamic({})
+        )
+        | project
+            TimeGenerated,
+            Type,
+            EventStartTime,
+            EventEndTime,
+            EventUid,
+            EventOriginalUid,
+            EventType,
+            EventSchema,
+            EventSchemaVersion,
+            EventCount,
+            EventVendor,
+            EventProduct,
+            TargetAgentId,
+            ActorUserId,
+            SrcIpAddr,
+            ActorUsername,
+            ActorUsernameType,
+            AdditionalFields,
+            EventResult = 'Success',
+            Dvc = SrcIpAddr
+    };
+    Parser(
+        starttime = starttime,
+        endtime = endtime,
+        agentid_has_any = agentid_has_any,
+        agentname_has_any = agentname_has_any,
+        username_has_any = username_has_any,
+        disabled = disabled,
+        pack = pack
+    )

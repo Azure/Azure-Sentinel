@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAgentEventAnthropicClaudeCompliance')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Agent Event ASIM parser for Anthropic Claude Compliance",
+        "category": "ASIM",
+        "FunctionAlias": "vimAgentEventAnthropicClaudeCompliance",
+        "query": "let Parser = (\n    starttime: datetime=datetime(null),\n    endtime: datetime=datetime(null),\n    agentid_has_any: dynamic=dynamic([]),\n    agentname_has_any: dynamic=dynamic([]),\n    username_has_any: dynamic=dynamic([]),\n    disabled: bool=false,\n    pack: bool=false\n)\n{\n    BV_ClaudeCompliance_ComplianceActivities_CL\n    | where not(disabled)\n    | where (\n        (isnull(starttime) or TimeGenerated >= starttime)\n        and (isnull(endtime) or TimeGenerated <= endtime)\n        // AgentID filtering done later in the parser\n        // AgentName detail not available in this parser.\n        // Username filtering done later in the parser\n    )\n    | where type_CF != 'compliance_api_accessed' //filter out API requests for logs\n    | project-rename\n        EventStartTime = created_at,\n        EventUid = _ItemId,\n        EventOriginalUid = id_CF,\n        EventType = type_CF\n    | extend\n        EventSchema = 'AgentEvent',\n        EventSchemaVersion = '0.1.0',\n        EventCount = toint(1),\n        EventVendor = 'Anthropic',\n        EventProduct = 'Claude Enterprise',\n        TargetAgentId = coalesce(claude_project_id, claude_chat_id),\n        EventEndTime = TimeGenerated\n    | where ((array_length(agentid_has_any) == 0) or (TargetAgentId has_any (agentid_has_any)))\n    | evaluate bag_unpack(actor)\n    | project-rename\n        ActorUserId = user_id,\n        SrcIpAddr = ip_address\n    | extend\n        ActorUsername = coalesce(email_address, unauthenticated_email_address),\n        ActorUsernameType = iff(isnotempty(coalesce(email_address, unauthenticated_email_address)), 'UPN', '')\n    | where ((array_length(username_has_any) == 0) or (ActorUsername has_any (username_has_any)))\n    | extend AdditionalFields = iff (\n        pack,\n        bag_pack(\n            'request_id', request_id,\n            'request_method', request_method,\n            'status_code', status_code,\n            'url', url,\n            'claude_chat_id', claude_chat_id,\n            'claude_file_id', claude_file_id,\n            'claude_project_id', claude_project_id,\n            'user_agent', user_agent\n        ),\n        dynamic({})\n    )\n    | project\n        TimeGenerated,\n        Type,\n        EventStartTime,\n        EventEndTime,\n        EventUid,\n        EventOriginalUid,\n        EventType,\n        EventSchema,\n        EventSchemaVersion,\n        EventCount,\n        EventVendor,\n        EventProduct,\n        TargetAgentId,\n        ActorUserId,\n        SrcIpAddr,\n        ActorUsername,\n        ActorUsernameType,\n        AdditionalFields,\n        EventResult = 'Success',\n        Dvc = SrcIpAddr\n};\nParser(\n    starttime = starttime,\n    endtime = endtime,\n    agentid_has_any = agentid_has_any,\n    agentname_has_any = agentname_has_any,\n    username_has_any = username_has_any,\n    disabled = disabled,\n    pack = pack\n)",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),agentid_has_any:dynamic=dynamic([]),agentname_has_any:dynamic=dynamic([]),username_has_any:dynamic=dynamic([]),disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
