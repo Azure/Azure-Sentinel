@@ -70,7 +70,7 @@ ParserQuery: |
             EventCount = toint(1),
             EventVendor = 'Anthropic',
             EventProduct = 'Claude Enterprise',
-            TargetAgentId = coalesce(claude_project_id, claude_chat_id),
+            TargetAgentId = coalesce(claude_project_id, claude_chat_id, claude_file_id),
             EventEndTime = TimeGenerated
         | where ((array_length(agentid_has_any) == 0) or (TargetAgentId has_any (agentid_has_any)))
         | evaluate bag_unpack(actor)
@@ -91,7 +91,8 @@ ParserQuery: |
                 'claude_chat_id', claude_chat_id,
                 'claude_file_id', claude_file_id,
                 'claude_project_id', claude_project_id,
-                'user_agent', user_agent
+                'user_agent', user_agent,
+                'status_code', status_code
             ),
             dynamic({})
         )
@@ -114,7 +115,13 @@ ParserQuery: |
             ActorUsername,
             ActorUsernameType,
             AdditionalFields,
-            EventResult = 'Success',
+            EventResult = case(
+                status_code >= 200 and status_code < 300, 'Success',
+                status_code >= 400 and status_code < 500, 'Failure',
+                status_code >= 500, 'Failure',
+                isempty(status_code), '',
+                ''
+            ),
             Dvc = SrcIpAddr
     };
     Parser(
