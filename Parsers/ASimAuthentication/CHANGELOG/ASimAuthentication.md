@@ -2,7 +2,7 @@
 
 ## Version 0.2.17
 
-- (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #]()
+- (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #14581](https://github.com/Azure/Azure-Sentinel/pull/14581)
 
 ## Version 0.2.16
 
