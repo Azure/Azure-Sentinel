@@ -1,0 +1,126 @@
+id: 4ad6abf5-d8a4-4f1d-a39f-8d8eb1dfc7e2
+name: Novel SPN sign-in followed by Azure RBAC write
+description: |
+  Hunts for new service principal sign-in behavior followed by RBAC role assignment or role definition write operations.
+description-detailed: |
+  This query identifies first-seen SPN authentication tuples and then correlates them to near-term RBAC changes from the same principal.
+  It is tuned to highlight app identity abuse where stolen SPN credentials are used to execute privilege-impacting control-plane actions.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADServicePrincipalSignInLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+  - T1098.003
+  - T1526
+tags:
+  - Service principal
+  - Azure RBAC
+  - Role assignment
+  - Identity abuse
+query: |
+  // Time and tuning parameters
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineWindow = 14d;
+  let RbacWindow = 60m;
+  // Baseline successful SPN sign-in tuples for rarity test
+  let SpnBaseline =
+    AADServicePrincipalSignInLogs
+    | where TimeGenerated between ((StartTime - BaselineWindow) .. StartTime)
+    | where ResultType =~ 'Success' or ResultType == '0'
+    | extend SpId = tolower(tostring(ServicePrincipalId)),
+             AppIdNorm = tolower(tostring(AppId)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent),
+             CredNorm = tolower(tostring(ClientCredentialType))
+    | where isnotempty(SpId) and isnotempty(IpNorm)
+    | summarize by SpId, AppIdNorm, IpNorm, UaNorm, CredNorm;
+  // Current successful SPN sign-ins in hunt interval
+  let SpnCurrent =
+    AADServicePrincipalSignInLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ResultType =~ 'Success' or ResultType == '0'
+    | extend SpId = tolower(tostring(ServicePrincipalId)),
+             AppIdNorm = tolower(tostring(AppId)),
+             IpNorm = tostring(IPAddress),
+             UaNorm = tostring(UserAgent),
+             CredNorm = tolower(tostring(ClientCredentialType))
+    | where isnotempty(SpId) and isnotempty(IpNorm)
+    | project SigninTime = TimeGenerated,
+              SpId,
+              AppIdNorm,
+              SpnName = tostring(ServicePrincipalName),
+              Identity,
+              IpNorm,
+              UaNorm,
+              CredNorm,
+              ResourceDisplayName,
+              CorrelationId;
+  // Keep only first-seen tuples for high-fidelity hunting.
+  let SpnNovel =
+    SpnCurrent
+    | join kind=leftanti SpnBaseline on SpId, AppIdNorm, IpNorm, UaNorm, CredNorm;
+  // Collect RBAC-impacting control-plane write operations
+  let RbacWrites =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ActivityStatusValue =~ 'Succeeded' or ActivitySubstatusValue has 'OK'
+    | extend Op = tolower(tostring(OperationNameValue)),
+             CallerNorm = tolower(tostring(Caller))
+    | where Op has_any (
+        'microsoft.authorization/roleassignments/write',
+        'microsoft.authorization/roledefinitions/write',
+        'microsoft.authorization/roleassignments/delete'
+      )
+    | project WriteTime = TimeGenerated,
+              CallerNorm,
+              CallerIpAddress,
+              OperationNameValue,
+              ResourceId,
+              ResourceGroup,
+              SubscriptionId,
+              CorrelationId,
+              Authorization_d;
+  // Correlate novel SPN sign-in to RBAC writes via ServicePrincipalId/AppId
+  SpnNovel
+  | extend JoinKeys = pack_array(SpId, AppIdNorm)
+  | mv-expand JoinKey = JoinKeys
+  | extend JoinKey = tostring(JoinKey)
+  | join kind=inner (
+      RbacWrites
+      | project WriteTime, CallerNorm, CallerIpAddress, OperationNameValue, ResourceId, ResourceGroup, SubscriptionId, CorrelationId, Authorization_d
+    ) on $left.JoinKey == $right.CallerNorm
+  // Require near-term temporal chain for stronger suspicion.
+  | where WriteTime between (SigninTime .. (SigninTime + RbacWindow))
+  | summarize FirstSignin=min(SigninTime),
+              FirstRbacWrite=min(WriteTime),
+              LastRbacWrite=max(WriteTime),
+              RbacWriteCount=count(),
+              Operations=make_set(OperationNameValue, 10),
+              ResourcesTouched=make_set(ResourceId, 20),
+              ResourceGroups=make_set(ResourceGroup, 20),
+              Subscriptions=make_set(SubscriptionId, 10),
+              FirstSigninIp=any(IpNorm),
+              SigninIps=make_set(IpNorm, 5),
+              WriteIps=make_set(CallerIpAddress, 5)
+    by SpId, AppIdNorm, SpnName, Identity, UaNorm, CredNorm
+  | extend TimeGenerated = FirstSignin
+  | order by RbacWriteCount desc, FirstRbacWrite desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: SpnName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FirstSigninIp
+version: 1.0.0
