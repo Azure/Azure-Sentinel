@@ -86,8 +86,12 @@ When using `--solution-analyzer`, files are downloaded from the Azure-Sentinel G
 | `solutions_connectors_tables_mapping_simplified.csv` | `solution_analyzer_mapping` |
 | `solutions_connectors_tables_mapping.csv` | `solution_analyzer_full_mapping` |
 | `content_tables_mapping.csv` | `solution_analyzer_content_tables_mapping` |
+| `artifact_doc_links.csv` | `solution_analyzer_artifact_doc_links` |
+| `playbook_connectors.csv` | `solution_analyzer_playbook_connectors` |
 | `parsers.csv` | `solution_analyzer_parsers_lookup` |
 | `asim_parsers.csv` | `solution_analyzer_asim_parsers_lookup` |
+| `solution_dependencies.csv` | `solution_analyzer_solution_dependencies` |
+| `table_schemas.csv` | `solution_analyzer_table_schemas` |
 
 ## Authentication
 
