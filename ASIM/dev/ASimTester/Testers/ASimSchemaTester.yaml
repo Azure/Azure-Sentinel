@@ -1,0 +1,57 @@
+Parser:
+  Title: ASIM Schema tester
+  Version: '1.0.0'
+  LastUpdated: Mar 06, 2026
+Product:
+  Name: Source agnostic
+Description: |
+  This KQL function tests if the schema present in your parser or ASim table conforms with the ASim schema provided.
+ParserName: ASimSchemaTester
+ParserParams:
+  - Name: T
+    Type: (ColumnName:string,ColumnType:string)
+  - Name: selected_schema
+    Type: string
+    Default: ''
+ParserQuery: |
+  let ASimFields = materialize(externaldata (ColumnName: string, ColumnType: string, Class: string, Schema: string, LogicalType:string, ListOfValues: string, AliasedField: string)
+    [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/ASIM/dev/ASimTester/ASimTester.csv"] with (format="csv", IgnoreFirstRecord=true)
+    | where Schema =~ selected_schema or Schema =~ "Common"
+    | extend _Priority = iif(Schema =~ selected_schema, 0, 1)
+    | summarize arg_min(_Priority, ColumnType, Class, Schema, LogicalType, ListOfValues, AliasedField) by ColumnName
+    | project-away _Priority);
+  let ASimFieldsWithAliases = materialize(ASimFields | project-rename SchemaColumn = ColumnName, SchemaType = ColumnType | lookup (ASimFields | project ParentClass = Class, ParentColumn = ColumnName) on $left.AliasedField == $right.ParentColumn);
+  let ParserFields = toscalar (T | summarize make_set(ColumnName));
+  T
+  | join kind=fullouter ASimFieldsWithAliases on $left.ColumnName == $right.SchemaColumn
+  | extend Result = case(
+      ColumnName == "" and Class == "Mandatory",  strcat ("(0) Error: Missing mandatory field [", SchemaColumn, "]"),
+      ColumnName == "" and Class == "Recommended", strcat ("(1) Warning: Missing recommended field [", SchemaColumn, "]"),
+      ColumnName == "" and Class == "Conditional" and ParentClass == "Mandatory",
+          strcat ("(0) Error: Missing field [", SchemaColumn, "] is mandatory when mandatory column [", AliasedField, "] exists"),
+      ColumnName == "" and Class == "Conditional" and AliasedField in (ParserFields),
+          strcat ("(0) Error: Missing field [", SchemaColumn, "] is mandatory when field [", AliasedField, "] exists"),
+      ColumnName == "" and Class == "Alias",
+          case
+            (ParentClass == "Mandatory",
+                  iff (AliasedField in (ParserFields),
+                      strcat ("(0) Error: Missing mandatory alias [", SchemaColumn, "] aliasing existing column [", AliasedField, "]"),
+                      strcat ("(0) Error: Missing mandatory alias [", SchemaColumn, "] aliasing missing column [", AliasedField, "]")
+                  ),
+              ParentClass == "Recommended" ,
+                  iff (AliasedField in (ParserFields),
+                      strcat ("(0) Error: Missing recommended alias [", SchemaColumn, "] aliasing existing column [", AliasedField, "]"),
+                      strcat ("(2) Info: Missing recommended alias [", SchemaColumn, "] aliasing non-existent column [", AliasedField, "]")
+                  ),
+              // -- default: ParentClass is optional
+              iff (AliasedField in (ParserFields),
+                  strcat ("(0) Error: Missing optional alias [", SchemaColumn, "] aliasing existing column [", AliasedField, "]"),
+                  strcat ("(2) Info: Missing optional alias [", SchemaColumn, "] aliasing non-existent column [", AliasedField, "]")
+              )
+          ),
+      ColumnName == "" and Class == "Optional", strcat ("(2) Info: Missing optional field [", SchemaColumn, "]"),
+      SchemaColumn == "", strcat ("(2) Info: extra unnormalized column [", ColumnName, "]"),
+      ColumnName != "" and ColumnType != SchemaType, strcat ("(0) Error: type mismatch for column [", ColumnName, "]. It is currently ", ColumnType, " and should be ", SchemaType),
+      'None'
+      )
+  | where Result != "None" | sort by Result asc | project Result
