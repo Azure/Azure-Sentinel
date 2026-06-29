@@ -302,7 +302,7 @@ while [[ $# -gt 0 ]]; do
 		shift 2
 		;;
 	--kvaultname)
-		kv="$2"
+		kv="${2,,}"
 		shift 2
 		;;
 	--loganalyticswsid)
@@ -460,6 +460,7 @@ if [ "$MODE" == 'kvsi' ] && { [ -z "$APPID" ] || [ -z "$APPSECRET" ] || [ -z "$T
 	read_value APPSECRET "Application Secret"
 	read_value TENANT "Tenant ID"
 	read_value kv "Keyvault Name"
+	kv="${kv,,}"
 fi
 
 if [ $USESNC ] && { [ -z "$SAPCRYPTOLIB" ] || [ -z "$SAPGENPSE" ] || [ -z "$SERVERCERT" ] || { { [ -z "$CLIENTKEY" ] || [ -z "$CLIENTCERT" ]; } && [ -z "$CLIENTPFX" ]; }; }; then
@@ -700,6 +701,7 @@ sudo usermod -aG docker "$USER"
 
 if { [ "$MODE" == 'kvmi' ] && [ -z "$kv" ]; } || { [ "$MODE" == 'kvsi' ] && [ -z "$kv" ]; }; then
 	read_value kv "KeyVault Name"
+	kv="${kv,,}"
 fi
 
 validateKeyVault() {
