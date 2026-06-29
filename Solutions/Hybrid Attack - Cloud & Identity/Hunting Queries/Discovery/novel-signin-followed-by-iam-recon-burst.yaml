@@ -1,0 +1,121 @@
+id: a7e1e6bf-7a91-4ec7-91b2-13322089e3d8
+name: Novel sign-in context followed by IAM reconnaissance burst
+description: |
+  Detects first-seen identity sign-in context followed by concentrated IAM and Azure resource discovery operations.
+description-detailed: |
+  This hunt links successful first-seen sign-in tuples to high-volume IAM reconnaissance in AzureActivity.
+  It is designed for high fidelity by requiring novelty, operation diversity, and sequence timing.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+  - CredentialAccess
+relevantTechniques:
+  - T1078.004
+  - T1087.004
+  - T1069.003
+  - T1526
+tags:
+  - Hybrid attack
+  - Identity compromise
+  - IAM enumeration
+  - AzureActivity
+query: |
+  // Parameterized execution window supplied by the hunting framework.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineWindow = 14d;
+  let ReconWindow = 2h;
+  // Success filters for sign-ins and Azure control-plane operations.
+  let SuccessResultValues = dynamic(["0", "success"]);
+  let SuccessActivityStatusValues = dynamic(["succeeded", "success"]);
+  // IAM/resource discovery operations in scope.
+  let IamReconOps = dynamic([
+    "microsoft.authorization/roleassignments/read",
+    "microsoft.authorization/roledefinitions/read",
+    "microsoft.resources/subscriptions/read",
+    "microsoft.resources/subscriptions/resourcegroups/read",
+    "microsoft.resources/subscriptions/resourcegroups/resources/read",
+    "microsoft.resources/subscriptions/providers/read"
+  ]);
+  // Build a unified successful sign-in stream from interactive and non-interactive logs.
+  let SuccessfulSignins =
+    union isfuzzy=true
+      (SigninLogs
+      | where TimeGenerated between ((StartTime - BaselineWindow) .. EndTime)
+      | project TimeGenerated, Identity=tostring(coalesce(UserPrincipalName, Identity)), IPAddress=tostring(IPAddress),
+                AppDisplayName=tostring(AppDisplayName), UserAgent=tostring(UserAgent), ResultType=tostring(ResultType)),
+      (AADNonInteractiveUserSignInLogs
+      | where TimeGenerated between ((StartTime - BaselineWindow) .. EndTime)
+      | project TimeGenerated, Identity=tostring(coalesce(UserPrincipalName, Identity)), IPAddress=tostring(IPAddress),
+                AppDisplayName=tostring(AppDisplayName), UserAgent=tostring(UserAgent), ResultType=tostring(ResultType))
+    | extend ResultTypeNorm = tolower(ResultType)
+    | where ResultTypeNorm in (SuccessResultValues)
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), IpNorm = tolower(IPAddress), AppNorm = tolower(AppDisplayName), UaNorm = tolower(UserAgent);
+  // Baseline historical sign-in tuples for novelty detection.
+  let BaselineSignins =
+    SuccessfulSignins
+    | where TimeGenerated between ((StartTime - BaselineWindow) .. StartTime)
+    | summarize by IdentityNorm, IpNorm, AppNorm, UaNorm;
+  // Keep only first-seen tuples during the hunt window.
+  let NovelSignins =
+    SuccessfulSignins
+    | where TimeGenerated between (StartTime .. EndTime)
+    | join kind=leftanti BaselineSignins on IdentityNorm, IpNorm, AppNorm, UaNorm
+    | summarize FirstSignin=min(TimeGenerated), LastSignin=max(TimeGenerated),
+                Apps=make_set(AppNorm, 10), UserAgents=make_set(UaNorm, 10)
+      by IdentityNorm, IpNorm;
+  // Aggregate successful IAM reconnaissance by caller and source IP.
+  let IamRecon =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+    | extend CallerNorm = tolower(Caller), CallerIp = tolower(tostring(CallerIpAddress)), Op = tolower(OperationNameValue),
+             StatusNorm = tolower(tostring(ActivityStatusValue)), SubStatusNorm = tolower(tostring(ActivitySubstatusValue))
+    | where Op in (IamReconOps)
+    | where StatusNorm in (SuccessActivityStatusValues) or SubStatusNorm has "ok"
+    // Dedupe multi-stage AzureActivity records for a single logical operation.
+    | extend ActionKey = iff(
+        isnotempty(CorrelationId),
+        strcat(CorrelationId, "|", Op, "|", CallerNorm),
+        strcat(CallerNorm, "|", CallerIp, "|", Op, "|", tostring(SubscriptionId), "|", tostring(ResourceId), "|", tostring(bin(TimeGenerated, 1m)))
+      )
+    | summarize arg_min(TimeGenerated, *) by ActionKey
+    | summarize ReconCount=count(), DistinctReconOps=dcount(Op),
+                ReconOps=make_set(OperationNameValue, 20),
+                ReconCorrelationIds=make_set_if(CorrelationId, isnotempty(CorrelationId), 30),
+                FirstRecon=min(TimeGenerated), LastRecon=max(TimeGenerated),
+                Subscriptions=dcount(SubscriptionId), ResourceGroups=dcountif(ResourceGroup, isnotempty(ResourceGroup))
+      by CallerNorm, CallerIp;
+  // Sequence novel sign-in context into near-term IAM reconnaissance.
+  NovelSignins
+  | join kind=inner IamRecon on $left.IdentityNorm == $right.CallerNorm and $left.IpNorm == $right.CallerIp
+  | where FirstRecon between (FirstSignin .. (LastSignin + ReconWindow))
+  | where ReconCount >= 8 and DistinctReconOps >= 3 and Subscriptions >= 1
+  | extend IdentityName = iff(IdentityNorm contains "@", tostring(split(IdentityNorm, "@")[0]), IdentityNorm),
+           IdentityUPNSuffix = iff(IdentityNorm contains "@", tostring(split(IdentityNorm, "@")[1]), "")
+  | project TimeGenerated=FirstSignin, Identity=IdentityNorm, SigninIp=IpNorm,
+            IdentityName, IdentityUPNSuffix,
+            FirstSignin, LastSignin, FirstRecon, LastRecon,
+            ReconCount, DistinctReconOps, Subscriptions, ResourceGroups,
+            Apps, UserAgents, ReconOps, ReconCorrelationIds
+  | order by ReconCount desc, FirstRecon desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: IdentityName
+      - identifier: UPNSuffix
+        columnName: IdentityUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SigninIp
+version: 1.0.0
