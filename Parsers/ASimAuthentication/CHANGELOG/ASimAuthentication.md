@@ -1,5 +1,9 @@
 # Changelog for ASimAuthentication.yaml
 
+## Version 0.2.17
+
+- (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #]()
+
 ## Version 0.2.16
 
 - (2026-06-03) Add pack parameter to updated Salesforce Service Cloud parser - [PR #14215](https://github.com/Azure/Azure-Sentinel/pull/14215)
