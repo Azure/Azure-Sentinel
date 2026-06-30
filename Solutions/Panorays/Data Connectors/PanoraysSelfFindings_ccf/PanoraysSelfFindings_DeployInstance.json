@@ -1,0 +1,181 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Panorays",
+    "support": {
+      "tier": "Partner",
+      "name": "Panorays",
+      "email": "support@panorays.com",
+      "link": "https://support.panoraysapp.com/"
+    }
+  },
+  "parameters": {
+    "workspaceName": { "type": "string", "metadata": { "description": "Log Analytics Workspace Name (Not ID)" } },
+    "location": { "type": "string", "defaultValue": "eastus" },
+    "panoraysAPIBaseUrl": { "type": "string", "defaultValue": "https://api.panoraysapp.com" },
+    "apitoken": {
+      "type": "secureString",
+      "metadata": { "description": "API token" }
+}
+  },
+  "variables": {
+    "dceName": "Panorays-Manual-DCE",
+    "dcrName": "Panorays-Manual-DCR",
+    "tableName": "PanoraysCompanyFindingPOC_CL",
+    "connectorDefinitionName": "Panorays_ConnectorDefinition",
+    "connectorInstanceName": "Panorays-Manual-Instance"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": { "publicNetworkAccess": "Enabled" }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspaceName'), '/', variables('tableName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "FindingKey", "type": "string" },
+            { "name": "status", "type": "string" },
+            { "name": "severity", "type": "string" },
+            { "name": "asset_name", "type": "string" },
+            { "name": "cves", "type": "dynamic" },
+            { "name": "finding_text", "type": "string" },
+            { "name": "description", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', variables('connectorDefinitionName'))]",
+      "location": "[parameters('location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectorDefinitionName'))]",
+          "title": "Panorays (Manual)",
+          "publisher": "Panorays",
+          "descriptionMarkdown": "Manually deployed Panorays Connector for testing.",
+          "graphQueriesTableName": "[variables('tableName')]",
+          "graphQueries": [
+            { "metricName": "Total findings", "legend": "Findings", "baseQuery": "{{graphQueriesTableName}}" }
+          ],
+          "sampleQueries": [
+            { "description": "Get Sample Data", "query": "{{graphQueriesTableName}} | take 10" }
+          ],
+          "dataTypes": [
+            { "name": "{{graphQueriesTableName}}", "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize max(TimeGenerated)" }
+          ],
+          "connectivityCriteria": [ { "type": "HasDataConnectors" } ],
+          "permissions": { "resourceProvider": [ { "provider": "Microsoft.OperationalInsights/workspaces", "permissionsDisplayText": "Read and Write required.", "providerDisplayName": "Log Analytics Workspace", "scope": "ResourceGroup", "requiredPermissions": { "read": true, "write": true, "delete": true, "action": false } } ] },
+          "instructionSteps": [
+            {
+              "instructions": [
+                { "type": "Markdown", "parameters": { "content": "Manual Deployment Test" } }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-PanoraysStream": {
+            "columns": [
+              { "name": "id", "type": "string" },
+              { "name": "status", "type": "string" },
+              { "name": "severity", "type": "string" },
+              { "name": "asset_name", "type": "string" },
+              { "name": "cves", "type": "string" },
+              { "name": "finding_text", "type": "string" },
+              { "name": "description", "type": "string" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+              "name": "law"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-PanoraysStream" ],
+            "destinations": [ "law" ],
+            "transformKql": "source | project TimeGenerated = now(), FindingKey = id, status, severity, asset_name, cves, finding_text, description",
+            "outputStream": "[concat('Custom-', variables('tableName'))]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', variables('connectorInstanceName'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectorDefinitionName'))]"
+      ],
+      "kind": "RestApiPoller",
+      "properties": {
+        "connectorDefinitionName": "[variables('connectorDefinitionName')]",
+        "dataType": "[variables('tableName')]",
+        "dcrConfig": {
+          "streamName": "Custom-PanoraysStream",
+          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
+          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2024-03-11').immutableId]" 
+        },
+        "auth": {
+          "type": "APIKey",
+          "ApiKey": "[parameters('apitoken')]",
+          "ApiKeyName": "Authorization",
+          "ApiKeyIdentifier": "Bearer"
+        },
+        "request": {
+          "apiEndpoint": "[concat(parameters('panoraysAPIBaseUrl'), '/v2/findings')]",
+          "rateLimitQPS": 10,
+          "queryWindowInMin": 1,
+          "httpMethod": "GET",
+          "headers": { 
+            "Accept": "application/json",
+            "User-Agent": "PanoraysIntegration/1.0"
+          }
+        },
+        "paging": {
+          "pagingType": "NextPageToken",
+          "PageSize": 100,
+          "PageSizeParameterName": "limit",
+          "NextPageTokenJsonPath": "$.pagination.nextCursor",
+          "NextPageParaName": "cursor"
+        },
+        "response": { "eventsJsonPaths": [ "$.data" ] }
+      }
+    }
+  ]
+}

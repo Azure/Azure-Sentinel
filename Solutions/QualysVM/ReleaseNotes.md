@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            	|
 |-------------|--------------------------------|----------------------------------------------------------------|
+| 3.0.10      | 22-06-2026                     | Increased **CCP Connector** request timeout to 300s (platform max), reduced query window to 10 min, added a connectivity check using the `/msp/about.php` endpoint, and clarified Truncation Limit options to reduce timeouts on large environments. |
 | 3.0.9       | 29-05-2026                     | Adding new query string parameter                              |
 | 3.0.8       | 14-05-2026                     | Bumping API version                                            |
 | 3.0.7       | 18-11-2025                     | Adding adjustable API partition limit & rate limit protection. |
