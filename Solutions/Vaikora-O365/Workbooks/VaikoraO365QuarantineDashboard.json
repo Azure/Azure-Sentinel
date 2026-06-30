@@ -1,0 +1,322 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Vaikora for O365 - Quarantine Dashboard\n\nThis workbook visualizes Microsoft 365 mailbox quarantine events written to `VaikoraO365_Quarantine_CL` by the Vaikora for O365 black-box VM. Use it to review classification volume by tenant, action breakdown, confidence distribution, and recent high-risk quarantines."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "tenantId",
+            "version": "KqlParameterItem/1.0",
+            "name": "TenantId",
+            "label": "Tenant",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "VaikoraO365_Quarantine_CL\n| where isnotempty(TenantId_s)\n| summarize by TenantId_s\n| project value=TenantId_s, label=TenantId_s\n| take 50",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "actionFilter",
+            "version": "KqlParameterItem/1.0",
+            "name": "ActionFilter",
+            "label": "Action",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "VaikoraO365_Quarantine_CL\n| where isnotempty(ActionName_s)\n| summarize by ActionName_s\n| project value=ActionName_s, label=ActionName_s",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Summary"
+      },
+      "name": "summary-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| summarize\n    TotalQuarantined = count(),\n    Phishing = countif(ActionId_d == 5),\n    Suspected = countif(ActionId_d == 4),\n    HighConfidence = countif(Confidence_d >= 0.9),\n    Tenants = dcount(TenantId_s),\n    RecipientsTargeted = dcount(RecipientAddress_s)\n| project TotalQuarantined, Phishing, Suspected, HighConfidence, Tenants, RecipientsTargeted",
+        "size": 4,
+        "title": "Quarantine Overview",
+        "queryType": 0,
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "TotalQuarantined",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "purple"
+            }
+          }
+        }
+      },
+      "name": "overview-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Quarantine Volume Over Time"
+      },
+      "name": "volume-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| summarize\n    Total = count(),\n    Phishing = countif(ActionId_d == 5),\n    Suspected = countif(ActionId_d == 4),\n    AlmostSuspected = countif(ActionId_d == 3)\n  by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Quarantine Volume Over Time",
+        "queryType": 0,
+        "visualization": "timechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "Phishing",
+              "color": "red"
+            },
+            {
+              "seriesName": "Suspected",
+              "color": "orange"
+            },
+            {
+              "seriesName": "AlmostSuspected",
+              "color": "yellow"
+            }
+          ]
+        }
+      },
+      "name": "volume-timechart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Action Breakdown and Confidence Distribution"
+      },
+      "name": "breakdown-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| summarize Count = count() by ActionName_s\n| order by Count desc",
+        "size": 3,
+        "title": "Quarantines by Action",
+        "queryType": 0,
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "action-pie"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| extend ConfidenceBucket = bin(Confidence_d, 0.1)\n| summarize Count = count() by ConfidenceBucket\n| order by ConfidenceBucket asc",
+        "size": 3,
+        "title": "Confidence Distribution (bin=0.1)",
+        "queryType": 0,
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "confidence-histogram"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Top Sender Domains and Targeted Recipients"
+      },
+      "name": "top-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| where isnotempty(SenderDomain_s)\n| summarize\n    Quarantines = count(),\n    AvgConfidence = round(avg(Confidence_d), 2),\n    PhishingCount = countif(ActionId_d == 5),\n    LastSeen = max(TimeGenerated)\n  by SenderDomain = SenderDomain_s\n| order by Quarantines desc\n| take 10",
+        "size": 0,
+        "title": "Top 10 Sender Domains",
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "top-senders"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| where isnotempty(RecipientAddress_s)\n| summarize\n    Quarantines = count(),\n    AvgConfidence = round(avg(Confidence_d), 2),\n    PhishingCount = countif(ActionId_d == 5),\n    LastSeen = max(TimeGenerated)\n  by Recipient = RecipientAddress_s\n| order by Quarantines desc\n| take 10",
+        "size": 0,
+        "title": "Top 10 Targeted Recipients",
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "top-recipients"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Recent High-Risk Quarantines"
+      },
+      "name": "highrisk-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| where ActionId_d in (4, 5)\n| where Confidence_d >= 0.8\n| project TimeGenerated, ActionName_s, Confidence_d, RiskScore_d, SubCategory_s, SenderAddress_s, SenderDomain_s, RecipientAddress_s, Subject_s, Reasoning_s\n| order by TimeGenerated desc\n| take 50",
+        "size": 0,
+        "title": "Recent High-Risk Quarantines (top 50)",
+        "queryType": 0,
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ActionName_s",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Phishing",
+                    "representation": "red",
+                    "text": "{0}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Suspected",
+                    "representation": "orange",
+                    "text": "{0}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "blue",
+                    "text": "{0}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Confidence_d",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "max": 1,
+                "palette": "redBright"
+              }
+            }
+          ]
+        }
+      },
+      "name": "highrisk-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Tenant Activity"
+      },
+      "name": "tenant-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "VaikoraO365_Quarantine_CL\n| where TimeGenerated {TimeRange}\n| where TenantId_s in~ ({TenantId}) or \"*\" in~ ({TenantId})\n| where ActionName_s in~ ({ActionFilter}) or \"*\" in~ ({ActionFilter})\n| summarize\n    Quarantines = count(),\n    Phishing = countif(ActionId_d == 5),\n    Suspected = countif(ActionId_d == 4),\n    AvgConfidence = round(avg(Confidence_d), 2),\n    RecipientsTargeted = dcount(RecipientAddress_s),\n    LastSeen = max(TimeGenerated)\n  by TenantId = TenantId_s\n| order by Quarantines desc",
+        "size": 0,
+        "title": "Quarantine Activity by Tenant",
+        "queryType": 0,
+        "visualization": "table"
+      },
+      "name": "tenant-table"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-VaikoraO365QuarantineDashboard",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

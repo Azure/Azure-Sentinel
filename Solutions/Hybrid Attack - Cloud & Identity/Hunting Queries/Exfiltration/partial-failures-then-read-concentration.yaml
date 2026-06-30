@@ -1,0 +1,112 @@
+id: c4bc0ab8-8834-4b16-8baf-95ddf0328e30
+name: Partial failures followed by read concentration
+description: |
+  Detects storage campaigns where early failures are followed by sustained successful read activity on reachable targets.
+description-detailed: |
+  This hunt models attacker adaptation in partial-exfiltration scenarios by requiring failed operations in an initial phase and
+  read-heavy successful operations in a later phase for the same actor and source tuple.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudStorageAggregatedEvents
+tactics:
+  - Discovery
+  - Collection
+  - Exfiltration
+  - DefenseEvasion
+relevantTechniques:
+  - T1526
+  - T1530
+  - T1550.001
+  - T1567
+  - T1567.002
+tags:
+  - Hybrid attack
+  - Azure Storage
+  - Partial exfiltration
+  - Read concentration
+query: |
+  // Execution window and phase split.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let CampaignWindow = EndTime - StartTime;
+  let PhaseSplit = StartTime + (CampaignWindow / 2.0);
+  let KeyAuthTypes = dynamic(["accountkey", "sas"]);
+  let MinEarlyFailures = 5;
+  let MinLateReads = 12;
+  let MinLateResponseBytes = 5000000;
+  // Normalize raw activity for both phases.
+  let NormalizedStorage =
+    CloudStorageAggregatedEvents
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend IPAddress = coalesce(column_ifexists('IPAddress', ''), column_ifexists('IpAddress', ''))
+    | where Timestamp between (StartTime .. EndTime)
+    | extend ActorNorm=tolower(tostring(coalesce(AccountUpn, AccountObjectId, AccountApplicationId))),
+             IpNorm=tostring(IPAddress),
+             AuthNorm=tolower(tostring(AuthenticationType)),
+             StorageNorm=tolower(tostring(StorageAccount))
+    | where isnotempty(ActorNorm) and isnotempty(IpNorm) and isnotempty(StorageNorm)
+    | where AuthNorm in (KeyAuthTypes)
+    | project Timestamp, ActorNorm, IpNorm, AuthNorm, StorageNorm,
+              StorageAccount, StorageContainer, ServiceType, UserAgentHeader,
+              OperationsCount, SuccessfulOperationsCount, FailedOperationsCount,
+              SuccessfulReadOperations, DistinctGetOperations, TotalResponseLength;
+  // Early phase captures failed exploration attempts.
+  let EarlyPhase =
+    NormalizedStorage
+    | where Timestamp between (StartTime .. PhaseSplit)
+    | summarize EarlyFirstSeen=min(Timestamp),
+                EarlyOps=sum(tolong(coalesce(OperationsCount, 0))),
+                EarlySuccess=sum(tolong(coalesce(SuccessfulOperationsCount, 0))),
+                EarlyFailures=sum(tolong(coalesce(FailedOperationsCount, 0))),
+                EarlyAccounts=dcount(StorageNorm),
+                EarlyTargets=make_set(StorageAccount, 20)
+      by ActorNorm, IpNorm;
+  // Late phase captures successful read concentration after adaptation.
+  let LatePhase =
+    NormalizedStorage
+    | where Timestamp between (PhaseSplit .. EndTime)
+    | summarize LateFirstSeen=min(Timestamp),
+                LateOps=sum(tolong(coalesce(OperationsCount, 0))),
+                LateSuccess=sum(tolong(coalesce(SuccessfulOperationsCount, 0))),
+                LateFailures=sum(tolong(coalesce(FailedOperationsCount, 0))),
+                LateReads=sum(tolong(coalesce(SuccessfulReadOperations, 0))),
+                LateDistinctGets=sum(tolong(coalesce(DistinctGetOperations, 0))),
+                LateResponseBytes=sum(tolong(coalesce(TotalResponseLength, 0))),
+                LateAccounts=dcount(StorageNorm),
+                LateTargets=make_set(StorageAccount, 20),
+                Containers=make_set(StorageContainer, 30),
+                Services=make_set(ServiceType, 10),
+                UserAgents=make_set(UserAgentHeader, 10)
+      by ActorNorm, IpNorm;
+  // Require explicit attacker adaptation: failures first, read-heavy access later.
+  EarlyPhase
+  | join kind=inner LatePhase on ActorNorm, IpNorm
+  | where EarlyFailures >= MinEarlyFailures
+  | where LateReads >= MinLateReads
+  | where LateResponseBytes >= MinLateResponseBytes
+  | where LateSuccess > 0
+  | extend LateReadToFailureRatio = round(todouble(LateReads) / todouble(max_of(EarlyFailures, 1)), 3),
+           IdentityName = iff(ActorNorm contains "@", tostring(split(ActorNorm, "@")[0]), ActorNorm),
+           IdentityUPNSuffix = iff(ActorNorm contains "@", tostring(split(ActorNorm, "@")[1]), "")
+  | project TimeGenerated=LateFirstSeen,
+            Identity=ActorNorm, IdentityName, IdentityUPNSuffix,
+            SourceIp=IpNorm,
+            EarlyFirstSeen, EarlyOps, EarlySuccess, EarlyFailures, EarlyAccounts, EarlyTargets,
+            LateFirstSeen, LateOps, LateSuccess, LateFailures, LateReads, LateDistinctGets,
+            LateResponseBytes, LateAccounts, LateTargets,
+            LateReadToFailureRatio,
+            Containers, Services, UserAgents
+  | order by LateReads desc, EarlyFailures desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: IdentityName
+      - identifier: UPNSuffix
+        columnName: IdentityUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0

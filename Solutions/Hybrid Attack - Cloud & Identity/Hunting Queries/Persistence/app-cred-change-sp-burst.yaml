@@ -1,0 +1,64 @@
+id: 1bd11966-beb8-4ee9-bb8d-f6627b45a250
+name: App credential change followed by SP sign-in burst
+description: |
+  Detects likely cloud persistence by correlating app credential operations with near-term service principal authentication bursts.
+description-detailed: |
+  This query uses ASIM audit and authentication tables to identify potential account manipulation and operationalization of newly added secrets or certificates.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078.004
+  - T1550.001
+tags:
+  - Identity persistence
+  - Service principal
+  - ASIM
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let CredChanges =
+  _Im_AuditEvent(starttime=StartTime, endtime=EndTime)
+  | extend OperationText = tolower(tostring(coalesce(Operation, EventType, EventMessage))),
+           TargetId = tolower(tostring(coalesce(ObjectId, ActorUserId))),
+           TargetName = tostring(Object),
+           Initiator = tostring(ActorUsername),
+           InitiatorIp = tostring(SrcIpAddr)
+  | where OperationText has_any ("credential", "certificate", "secret", "password", "service principal", "application")
+  | where isnotempty(TargetId)
+  | project ChangeTime=TimeGenerated, OperationText, TargetId, TargetName, Initiator, InitiatorIp;
+  let SPBurst =
+  _Im_Authentication(starttime=StartTime, endtime=(EndTime + 1d))
+  | where EventResult == "Success"
+  | where ActorUserType has "Service Principal"
+  | extend PrincipalId = tolower(tostring(ActorUserId)),
+           PrincipalName = tostring(ActorUsername),
+           SrcIp = tostring(SrcIpAddr),
+           UserAgent = tostring(HttpUserAgent)
+  | where isnotempty(PrincipalId)
+  | summarize FirstSignin=min(TimeGenerated), LastSignin=max(TimeGenerated), SigninCount=count(), DistinctIPs=dcount(SrcIp),
+              SrcIps=make_set(SrcIp, 20), UserAgents=make_set(UserAgent, 10)
+      by PrincipalId, PrincipalName;
+  CredChanges
+  | join kind=inner SPBurst on $left.TargetId == $right.PrincipalId
+  | where FirstSignin between (ChangeTime .. (ChangeTime + 24h))
+  | where SigninCount >= 3
+  | project TimeGenerated=ChangeTime, OperationText, TargetId, TargetName, Initiator, InitiatorIp,
+            PrincipalName, FirstSignin, LastSignin, SigninCount, DistinctIPs, SrcIps, UserAgents
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatorIp
+version: 1.0.0
