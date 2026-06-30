@@ -1,0 +1,140 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "CommvaultSecurityIQ_CCF",
+            "metadata": {
+                "description": "Resource name for the data connector"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/',parameters('connectorResourceName'))]",
+            "apiVersion": "2021-03-01-preview",
+            "location": "[resourceGroup().location]",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "CommvaultSecurityIQ_CCF",
+                    "title": "Commvault Security IQ (CCF)",
+                    "publisher": "Commvault",
+                    "descriptionMarkdown": "This Codeless Connector Platform (CCF) connector polls the Commvault `/Client/Anomaly` API every 5 minutes and ingests threat indicator anomaly events into Microsoft Sentinel. Each record in `CommvaultAlerts_CL` corresponds to one entry in the `anomalyClients` array and includes fields such as `refTime`, `anomalyType`, `createCount`, `deleteCount`, `modCount`, `renameCount`, `infectedFilesCount`, `applicationSizeMB`, `backupSizeMB`, and nested `client` details.",
+                    "graphQueriesTableName": "CommvaultAlerts_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Commvault Security IQ Logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Last 10 anomaly events",
+                            "query": "CommvaultAlerts_CL\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, refTime_d, anomalyType_d, client_clientName_s, client_clientId_d, createCount_d, deleteCount_d, modCount_d, renameCount_d, infectedFilesCount_d, location_s\n| sort by TimeGenerated desc\n| limit 10"
+                        },
+                        {
+                            "description": "High-severity anomalies (Ransomware: bit 64, VSA: bit 8192)",
+                            "query": "CommvaultAlerts_CL\n| where TimeGenerated > ago(7d)\n| extend anomalyType = toint(anomalyType_d)\n| where anomalyType & 64 == 64 or anomalyType & 8192 == 8192\n| project TimeGenerated, client_clientName_s, anomalyType, infectedFilesCount_d, location_s\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Clients with the most anomaly events in the last 7 days",
+                            "query": "CommvaultAlerts_CL\n| where TimeGenerated > ago(7d)\n| summarize EventCount = count() by ClientName = client_clientName_s\n| sort by EventCount desc\n| limit 20"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "IsConnectedQuery",
+                            "value": [
+                                "CommvaultAlerts_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and write permissions on the workspace are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Commvault API Credentials",
+                                "description": "Commvault Base URL and QSDK Token are required to authorize the API requests."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Configure Commvault Security IQ Connection",
+                            "description": "Provide the Commvault API endpoint URL and your QSDK Access Token below to connect Sentinel to Commvault.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Commvault Environment Endpoint URL (e.g., https://example.commvault.com)",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{endpointUrl}}",
+                                                "placeHolderValue": ""
+                                            }
+                                        ]
+                                    },
+                                    "type": "ApiKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "apiKeyName": "authtoken",
+                        "apiKeyIdentifier": ""
+                    },
+                    "request": {
+                        "apiEndpoint": "{{endpointUrl}}/Client/Anomaly",
+                        "httpMethod": "Get",
+                        "headers": {
+                            "Accept": "application/json",
+                            "User-Agent": "SentinelDataConnector",
+                            "Authorization": "Bearer {{apiKey}}"
+                        }
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$.anomalyClients"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
