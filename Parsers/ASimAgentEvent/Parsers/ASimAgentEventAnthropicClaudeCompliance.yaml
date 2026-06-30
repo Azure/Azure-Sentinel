@@ -1,0 +1,102 @@
+Parser:
+  Title: Agent Event ASIM parser for Anthropic Claude Compliance
+  Version: '0.1.0'
+  LastUpdated: Jun 29, 2026
+Product:
+  Name: Anthropic Claude Compliance
+Normalization:
+  Schema: AgentEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Agent Schema
+  Link: https://aka.ms/ASimAgentEventDoc
+- Title: Claude Compliance API documentation
+  Link: https://platform.claude.com/docs/en/manage-claude/compliance-api
+Description: |
+  This ASIM parser supports normalizing the Anthropic Claude Compliance logs (via Codeless Connector Framework by BlueVoyant) to the ASIM Agent normalized schema.
+ParserName: ASimAgentEventAnthropicClaudeCompliance
+EquivalentBuiltInParser: _ASim_AgentEvent_AnthropicClaudeCompliance
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+    let Parser = (
+        disabled: bool=false,
+        pack: bool=false
+    )
+    {
+        BV_ClaudeCompliance_ComplianceActivities_CL
+        | where not(disabled)
+        | where type_CF != 'compliance_api_accessed' //filter out API requests for logs
+        | project-rename
+            EventStartTime = created_at,
+            EventUid = _ItemId,
+            EventOriginalUid = id_CF,
+            EventType = type_CF
+        | extend
+            EventSchema = 'AgentEvent',
+            EventSchemaVersion = '0.1.0',
+            EventCount = toint(1),
+            EventVendor = 'Anthropic',
+            EventProduct = 'Claude Enterprise',
+            TargetAgentId = coalesce(claude_project_id, claude_chat_id, claude_file_id),
+            EventEndTime = TimeGenerated
+        | evaluate bag_unpack(actor)
+        | project-rename
+            ActorUserId = user_id,
+            SrcIpAddr = ip_address
+        | extend
+            ActorUsername = coalesce(email_address, unauthenticated_email_address),
+            ActorUsernameType = iff(isnotempty(coalesce(email_address, unauthenticated_email_address)), 'UPN', '')
+        | extend AdditionalFields = iff (
+            pack,
+            bag_pack(
+                'request_id', request_id,
+                'request_method', request_method,
+                'status_code', status_code,
+                'url', url,
+                'claude_chat_id', claude_chat_id,
+                'claude_file_id', claude_file_id,
+                'claude_project_id', claude_project_id,
+                'user_agent', user_agent,
+                'status_code', status_code
+            ),
+            dynamic({})
+        )
+        | project
+            TimeGenerated,
+            Type,
+            EventStartTime,
+            EventEndTime,
+            EventUid,
+            EventOriginalUid,
+            EventType,
+            EventSchema,
+            EventSchemaVersion,
+            EventCount,
+            EventVendor,
+            EventProduct,
+            TargetAgentId,
+            ActorUserId,
+            SrcIpAddr,
+            ActorUsername,
+            ActorUsernameType,
+            AdditionalFields,
+            EventResult = case(
+                status_code >= 200 and status_code < 300, 'Success',
+                status_code >= 400 and status_code < 500, 'Failure',
+                status_code >= 500, 'Failure',
+                isempty(status_code), '',
+                ''
+            ),
+            Dvc = SrcIpAddr
+    };
+    Parser
+    (
+        disabled = disabled,
+        pack = pack
+    )   
