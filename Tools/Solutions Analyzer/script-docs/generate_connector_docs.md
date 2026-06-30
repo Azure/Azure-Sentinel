@@ -225,6 +225,7 @@ In addition to the documentation tree, the script writes `artifact_doc_links.csv
 - **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, Custom Log V1 (CLv1) indicator, and documentation links
 - **Documentation References** are listed individually with specific names and links per applicable source: Azure Monitor Tables Reference, Defender XDR Advanced Hunting Schema, Sentinel Tables and Connectors Reference, Azure Monitor Tables Feature Support, Azure Monitor Logs Ingestion API. Tables discovered via docs-only sources show the relevant doc link.
 - **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
+- **Schema References** section with links to official Microsoft Learn documentation pages providing field/column information. Specific schema documentation pages are provided for certain tables (e.g., SecurityAlert, DNS tables via AMA), along with the general data source schema reference for all other tables.
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
 - **Connectors** section listing connectors ingesting this table with selection criteria
@@ -297,6 +298,9 @@ In addition to the documentation tree, the script writes `artifact_doc_links.csv
 - Deprecated connectors section (in connectors index)
 - Deprecated solutions marked with 🚫 icon (in solutions index)
 - Cross-references between solutions, connectors, tables, content, and parsers
+
+> **Solutions-index completeness safety net:** the solutions index is grouped from `solutions_connectors_tables_mapping.csv`, so a solution that produced **no** mapping rows would otherwise be dropped from the index even though its detail page is generated. After grouping, the generator seeds `by_solution` from the **union** of the mapping CSV and `solutions.csv`: any solution present in `solutions.csv` but missing from the mapping CSV is added with an empty-connector placeholder row (empty `connector_id`, so it adds no phantom connector). This guarantees every solution remains linked from `solutions-index.md`. The same seeding is applied in `generate_interactive_docs.py` for `index.html`.
+
 
 ## Interactive HTML Index
 
@@ -467,6 +471,24 @@ The script attempts to find and include markdown documentation associated with e
 The documentation content is included in an "Additional Documentation" section with a link to the source file in GitHub.
 
 > **Note**: The generator searches for all markdown files (`.md`) in the `Data Connectors` folder and its subfolders, following various naming conventions used across solutions.
+
+### Schema Reference Documentation Links
+
+Table pages automatically include a "Schema References" section with official Microsoft Learn documentation for field/column information. This section provides:
+
+- **Specific schema documentation** for known tables (e.g., SecurityAlert, DNS tables via AMA) when applicable
+- **General data source schema reference** as a fallback for all other tables
+- Direct links to authoritative Microsoft documentation for field definitions and data types
+
+The schema references are configured in the `TABLE_SCHEMA_REFERENCES` mapping in `generate_connector_docs.py` and currently include:
+
+| Table(s) | Reference | URL |
+|----------|-----------|-----|
+| (General) | Data Source Schema Reference | https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference |
+| SecurityAlert | Security Alert Schema | https://learn.microsoft.com/en-us/azure/sentinel/security-alert-schema |
+| DnsEvents, DnsInventory, AMA_DNS | DNS AMA Fields Reference | https://learn.microsoft.com/en-us/azure/sentinel/dns-ama-fields |
+
+To add or modify schema references for additional tables, update the `TABLE_SCHEMA_REFERENCES` dictionary in `generate_connector_docs.py` with the table name as key and the Microsoft Learn URL as value.
 
 ## Documentation Overrides and Additional Information
 
