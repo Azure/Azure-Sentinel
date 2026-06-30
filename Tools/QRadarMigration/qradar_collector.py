@@ -4,12 +4,14 @@
 QRadar Data Collector — collects, transforms, and exports QRadar
 rule and log-source metadata for migration analysis.
 
+Version: 0.4.1
+
 Usage:
     python qradar_collector.py --help
 """
 from __future__ import absolute_import, print_function, unicode_literals, division
 
-VERSION = '0.3.2'
+VERSION = '0.4.1'
 
 import argparse
 import base64
@@ -114,6 +116,9 @@ CALCULATED_COLUMNS = [
     'QRadar Version',
     'Version',
 ]
+
+# Marker value for the summary row appended after all rule rows
+SUMMARY_ROW_MARKER = '__ALL_ACTIVE_DATA_SOURCES__'
 
 # Log sources report columns (order matters)
 LOG_SOURCE_REPORT_COLUMNS = [
@@ -3675,17 +3680,17 @@ class DependencyExpansionHandler(BaseHandler):
 # ---------------------------------------------------------------------------
 
 def format_bracket_list(items):
-    """Format a pre-sorted list as '[item1, item2, ...]' or '[]'.
+    """Format a pre-sorted list as '[item1 | item2 | ...]' or '[]'.
 
     Args:
         items: list of str or int values, pre-sorted by the caller.
 
     Returns:
-        str: Bracket-formatted string with comma-space separators.
+        str: Bracket-formatted string with pipe-space separators.
     """
     if not items:
         return '[]'
-    return '[{0}]'.format(', '.join(str(i) for i in items))
+    return '[{0}]'.format(' | '.join(str(i) for i in items))
 
 
 def format_sorted_bracket_list(items, sort_key=None):
@@ -3697,7 +3702,7 @@ def format_sorted_bracket_list(items, sort_key=None):
                   If None, uses default sorted() behaviour.
 
     Returns:
-        str: '[sorted_item1, sorted_item2]' or '[]'.
+        str: '[sorted_item1 | sorted_item2]' or '[]'.
     """
     if not items:
         return '[]'
@@ -4172,6 +4177,28 @@ class UCMCSVExtensionHandler(BaseHandler):
                 logger.info('Processed {0}/{1} rows'.format(
                     idx + 1, len(rows)))
 
+        # 5b. Build and append summary row with all active LST names
+        type_id_to_name = enrichment_ctx.get('type_id_to_name', {})
+        active_type_ids = enrichment_ctx.get('active_type_ids', set())
+        active_lst_names = [
+            type_id_to_name[str(tid)]
+            for tid in active_type_ids
+            if str(tid) in type_id_to_name
+        ]
+        summary_row = {col: '' for col in extended_fieldnames}
+        summary_row['Rule name'] = SUMMARY_ROW_MARKER
+        summary_row['Is rule'] = 'FALSE'
+        summary_row['Rule enabled'] = 'FALSE'
+        summary_row['Rule installed'] = 'FALSE'
+        summary_row['Rule ID'] = SUMMARY_ROW_MARKER
+        summary_row['uuid'] = SUMMARY_ROW_MARKER
+        summary_row['Log Source Types'] = format_sorted_bracket_list(
+            active_lst_names)
+        summary_row['QRadar Version'] = calc_qradar_version(
+            summary_row, enrichment_ctx)
+        summary_row['Version'] = calc_version(summary_row, enrichment_ctx)
+        processed_rows.append(summary_row)
+
         # 6. Write extended CSV
         output_filename = 'qradar_rules_{0}.csv'.format(context.timestamp)
         output_path = os.path.join(context.output_dir, output_filename)
@@ -4194,7 +4221,7 @@ class UCMCSVExtensionHandler(BaseHandler):
             len(v) for v in enrichment_ctx.get(
                 'type_id_to_instances', {}).values()
         )
-        total_rules = len(processed_rows)
+        total_rules = len(rows)  # excludes summary row
         pct = (100.0 * rules_with_sources / total_rules
                if total_rules > 0 else 0.0)
 
