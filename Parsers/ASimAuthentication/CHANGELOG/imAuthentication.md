@@ -1,5 +1,9 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.14
+
+- (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #14581](https://github.com/Azure/Azure-Sentinel/pull/14581)
+
 ## Version 0.3.13
 
 - (2026-06-03) Add pack parameter to updated Salesforce Service Cloud parser - [PR #14215](https://github.com/Azure/Azure-Sentinel/pull/14215)
