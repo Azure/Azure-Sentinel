@@ -346,7 +346,7 @@ class DCRConfigurationVerifications:
     # CONSTANTS
     DCR_DOC = "https://docs.microsoft.com/azure/azure-monitor/agents/data-collection-rule-overview"
     DCRA_DOC = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
-    CEF_STREAM_NAME = "SECURITY_CEF_BLOB"
+    CEF_STREAM_NAME = "Microsoft-CommonSecurityLog"
     CISCO_STREAM_NAME = "SECURITY_CISCO_ASA_BLOB"
     SYSLOG_STREAM_NAME = "LINUX_SYSLOGS_BLOB"
     STREAM_NAME = {"cef": CEF_STREAM_NAME, "asa": CISCO_STREAM_NAME, "syslog": SYSLOG_STREAM_NAME}
