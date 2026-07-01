@@ -4,6 +4,8 @@ The Advanced Security Information Model (ASIM) enables you to use and create sou
 
 For more information, see [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 
+For a list of parsers that currently exist, see [List of Microsoft Sentinel Advanced Security Information Model (ASIM) parsers](https://learn.microsoft.com/en-us/azure/sentinel/normalization-parsers-list).
+
 ## Copilot Agent Skills for ASIM Parser Creation
 
 GitHub Copilot agent skills are available to help you create, validate, deploy, and package ASIM parsers locally. The skills guide you through the full workflow — from gathering requirements and generating KQL parsers to deploying to Log Analytics and opening a PR.
@@ -22,7 +24,9 @@ To deploy a single schema use the buttons below:
 
 | ASim Schema | Deploy | Deploy to Azure Gov |
 | --------------- |-------------|--------|
+|[Agent Event](https://aka.ms/ASimAgentEventDoc)| No parsers exist yet | No parsers exist yet
 |[Alert Event](https://aka.ms/ASimAlertEventDoc)|[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAlertEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAlertEventARMgov) |
+|[Asset Entity](https://aka.ms/ASimAssetEntityDoc)| No parsers exist yet| No parsers exist yet |
 | [Audit Event](https://aka.ms/ASimAuditEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuditEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuditEventARMgov) |
 | [Authentication](https://aka.ms/ASimAuthenticationDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimAuthenticationARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimAuthenticationARMgov) |
 | [Dhcp Event](https://aka.ms/ASimDhcpEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimDhcpEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimDhcpEventARMgov) |

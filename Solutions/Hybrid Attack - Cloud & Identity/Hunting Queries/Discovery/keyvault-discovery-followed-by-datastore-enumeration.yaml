@@ -1,0 +1,66 @@
+id: 48f40e49-cf3d-4f54-8f91-9077f6494186
+name: Key Vault discovery followed by data-store access enumeration
+description: |
+  Detects progression from Key Vault discovery activity to storage and data-store enumeration by the same caller.
+description-detailed: |
+  This query helps identify credential-to-data pivot behavior by correlating Key Vault discovery with near-term data-platform access discovery in AzureActivity.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+  - Collection
+  - CredentialAccess
+relevantTechniques:
+  - T1526
+  - T1087.004
+  - T1552
+tags:
+  - Key Vault
+  - Data-store enumeration
+  - Credential to data pivot
+  - AzureActivity
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let KeyVaultDiscovery =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has "microsoft.keyvault/vaults/" and OperationNameValue has_any ("/read", "/list", "accesspolicies")
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress)
+    | summarize FirstKv=min(TimeGenerated), LastKv=max(TimeGenerated), KvOps=make_set(OperationNameValue, 20), KvCount=count()
+      by CallerNorm, CallerIp, SubscriptionId;
+  let DataStoreRecon =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has_any (
+        "microsoft.storage/storageaccounts/",
+        "microsoft.sql/servers/databases/",
+        "microsoft.documentdb/databaseaccounts/",
+        "microsoft.kusto/clusters/",
+        "listkeys/action"
+      )
+      and OperationNameValue has_any ("/read", "/list", "listkeys/action", "/query")
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress)
+    | summarize FirstData=min(TimeGenerated), LastData=max(TimeGenerated), DataOps=make_set(OperationNameValue, 30),
+                DataResources=make_set(ResourceId, 30), DataCount=count()
+      by CallerNorm, CallerIp, SubscriptionId;
+  KeyVaultDiscovery
+  | join kind=inner DataStoreRecon on CallerNorm, SubscriptionId
+  | where FirstData between (FirstKv .. (LastKv + 2h))
+  | project TimeGenerated=FirstKv, FirstKv, LastKv, FirstData, LastData, Caller=CallerNorm, CallerIp, SubscriptionId,
+            KvCount, DataCount, KvOps, DataOps, DataResources
+  | order by FirstData desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIp
+version: 1.0.0
