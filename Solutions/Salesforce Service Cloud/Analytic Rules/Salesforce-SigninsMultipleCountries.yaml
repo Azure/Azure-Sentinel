@@ -1,7 +1,9 @@
 id: 3094e036-e5ae-4d6e-8626-b0f86ebc71f2
 name: User Sign in from different countries
 description: |
-  'This query searches for successful user logins from different countries within 30 mins.'
+  'This rule identifies successful Salesforce Service Cloud user logins from different countries within a 30-minute
+  time bucket. It correlates login events by user and geolocates source IPs to detect account activity that may indicate compromise,
+  password sharing, or suspicious travel behavior.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -16,27 +18,31 @@ tactics:
   - InitialAccess
 relevantTechniques:
   - T1078
+  - T1078.004
 query: |
   let threshold = 2;
   let Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)
   [@"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv"];
   let UsersLocation = SalesforceServiceCloud
-  | where EventType =~ 'Login' and LoginStatus=~'LOGIN_NO_ERROR'
-  | project TimeGenerated, TimestampDerived, ClientIp, UserId, User, UserType ;
+  | where EventType =~ 'Login' and LoginStatus =~ 'LOGIN_NO_ERROR'
+  | project TimeGenerated, TimestampDerived = todatetime(TimestampDerived), ClientIp, UserId, User, UserType;
   UsersLocation
-  | extend Dummy=1
-  | extend TimestampDerived = todatetime(TimestampDerived)
-  | summarize count() by Hour=bin(TimestampDerived,30m), ClientIp,User, Dummy
-  | partition by Hour(
-                  lookup (Countrydb|extend Dummy=1) on Dummy
-                | where ipv4_is_match(ClientIp, Network)
-                )
-  | summarize NumOfCountries = dcount(country_name) by User, Hour
-  | where NumOfCountries >= threshold
+  | where isnotempty(ClientIp) and isnotempty(User)
+  | join kind=leftouter Countrydb on $left.ClientIp == $right.Network
+  | summarize DistinctCountries = dcount(country_name), DistinctIPs = dcount(ClientIp), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by User, Hour = bin(TimestampDerived, 30m)
+  | where DistinctCountries >= threshold
+  | project User, Hour, StartTime, EndTime, DistinctCountries, DistinctIPs, threshold
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: AadUserId
-        columnName: User
-version: 1.0.4
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: User
+alertDetailsOverride:
+  alertDisplayNameFormat: 'User sign in from multiple countries: {{User}}'
+  alertDescriptionFormat: User {{User}} signed in from {{DistinctCountries}} countries within the {{Hour}} time bucket.
+customDetails:
+  DistinctCountries: DistinctCountries
+  DistinctIPs: DistinctIPs
+  Hour: Hour
+version: 1.0.5
 kind: Scheduled
