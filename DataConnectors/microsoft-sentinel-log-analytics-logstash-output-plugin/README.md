@@ -60,7 +60,7 @@ Note: make sure that the path exists before creating the sample file.
 ### Configurations:
 The following parameters are optional and should be used to create a sample file.
 - **create_sample_file** - Boolean, False by default. When enabled, up to 10 events will be written to a sample json file.
-- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
+- **sample_file_path** - String, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
 
 ### Complete example
 1. set the pipeline.conf with the following configuration:
@@ -99,6 +99,13 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 1) To ingest the data to a custom table use [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs>) tutorial. Note that as part of creating the table and the DCR you will need to provide the sample file that you've created in the previous section.
 2) To ingest the data to a standard table like Syslog or CommonSecurityLog use [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api>).
 
+*Note:* The identity (service principal or managed identity) must have the **Monitoring Metrics Publisher** role on the target DCR:
+
+    az role assignment create \
+      --assignee <object-id-of-identity> \
+      --role "Monitoring Metrics Publisher" \
+      --scope "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Insights/dataCollectionRules/<dcr-name>"
+
 
 ## 4. Configure Logstash configuration file
 
@@ -120,7 +127,7 @@ Here is an example for the output plugin configuration section:
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
-        client_app_Id => "<enter your client_app_id value here>"
+        client_app_Id => "<enter your client_app_Id value here>"
         client_app_secret => "<enter your client_app_secret value here>"
         tenant_id => "<enter your tenant id here>"
         data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
@@ -203,7 +210,7 @@ Here is an example configuration that parses Syslog incoming data into a custom 
 ```
 input {
     beats {
-        port => "5044"
+        port => 5044
     }
 }
  filter {
@@ -226,8 +233,8 @@ output {
 ```
 input {
     tcp {
-        port => "514"
-        type => syslog #optional, will effect log type in table
+        port => 514
+        type => syslog #optional, will affect log type in table
     }
 }
  filter {

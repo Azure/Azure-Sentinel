@@ -55,7 +55,7 @@ Note: make sure that the path exists before creating the sample file.
 ### Configurations:
 The following parameters are optional and should be used to create a sample file.  
 - **create_sample_file** - Boolean, False by default. When enabled, up to 10 events will be written to a sample json file.  
-- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.  
+- **sample_file_path** - String, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.  
 
 ### Complete example
 1. set the pipeline.conf with the following configuration:  
