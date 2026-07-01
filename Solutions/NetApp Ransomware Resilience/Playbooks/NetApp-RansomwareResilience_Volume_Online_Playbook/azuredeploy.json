@@ -232,6 +232,42 @@
                     }
                   }
                 },
+                "Handle_Parse_Auth_Error": {
+                  "runAfter": {
+                    "Parse_Auth_Response": [
+                      "Failed"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorStatusCode",
+                    "value": 401
+                  }
+                },
+                "Set_Parse_Auth_Error_Message": {
+                  "runAfter": {
+                    "Handle_Parse_Auth_Error": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorMessage",
+                    "value": "Authentication playbook returned invalid response"
+                  }
+                },
+                "Set_Parse_Auth_Error_Details": {
+                  "runAfter": {
+                    "Set_Parse_Auth_Error_Message": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorDetails",
+                    "value": "@body('Call_Auth_Playbook')"
+                  }
+                },
                 "Set_Token": {
                   "runAfter": {
                     "Parse_Auth_Response": [
@@ -417,13 +453,14 @@
             "Return_Response": {
               "runAfter": {
                 "Check_Auth_Success": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Failed"
                 ]
               },
               "type": "If",
               "expression": {
-                "equals": [
-                  "@variables('ErrorStatusCode')",
+                "greater": [
+                  "@variables('ResponseStatusCode')",
                   0
                 ]
               },
@@ -448,14 +485,14 @@
                     "type": "Response",
                     "kind": "Http",
                     "inputs": {
-                      "statusCode": "@variables('ErrorStatusCode')",
+                      "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
                       "headers": {
                         "Content-Type": "application/json"
                       },
                       "body": {
                         "success": false,
-                        "statusCode": "@variables('ErrorStatusCode')",
-                        "message": "@variables('ErrorMessage')",
+                        "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
+                        "message": "@if(empty(variables('ErrorMessage')), 'An unexpected error occurred', variables('ErrorMessage'))",
                         "details": "@variables('ErrorDetails')"
                       }
                     }

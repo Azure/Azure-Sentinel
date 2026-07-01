@@ -7,10 +7,10 @@
     "prerequisites": [
       "1. NetApp Ransomware Resilience Auth Playbook must be deployed first and functioning correctly",
       "2. Valid NetApp Ransomware Resilience API credentials must be configured in the Auth Playbook",
-      "3. Caller must provide user_id and user_ips in the request body"
+      "3. Caller must provide user_id in the request body; user_ips and duration are optional based on the protection scenario (user_ips required for NFS, optional for CIFS)"
     ],
     "postDeployment": [
-      "1. Test the playbook with a valid user_id and user_ips payload",
+      "1. Test the playbook with a valid user_id payload, validating behavior with and without optional user_ips and duration",
       "2. Confirm that successful and failed API responses are returned with matching status codes"
     ],
     "lastUpdateTime": "2026-06-29T00:00:00.000Z",
@@ -130,11 +130,6 @@
                     "value": "@if(equals(triggerBody()?['user_ips'], null), json('[]'), triggerBody()?['user_ips'])"
                   },
                   {
-                    "name": "Duration",
-                    "type": "string",
-                    "value": "@if(equals(triggerBody()?['duration'], null), '', string(triggerBody()?['duration']))"
-                  },
-                  {
                     "name": "AccountId",
                     "type": "string"
                   },
@@ -235,6 +230,42 @@
                     }
                   }
                 },
+                "Handle_Parse_Auth_Error": {
+                  "runAfter": {
+                    "Parse_Auth_Response": [
+                      "Failed"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorStatusCode",
+                    "value": 401
+                  }
+                },
+                "Set_Parse_Auth_Error_Message": {
+                  "runAfter": {
+                    "Handle_Parse_Auth_Error": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorMessage",
+                    "value": "Authentication playbook returned invalid response"
+                  }
+                },
+                "Set_Parse_Auth_Error_Details": {
+                  "runAfter": {
+                    "Set_Parse_Auth_Error_Message": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "ErrorDetails",
+                    "value": "@body('Call_Auth_Playbook')"
+                  }
+                },
                 "Set_Token": {
                   "runAfter": {
                     "Parse_Auth_Response": [
@@ -276,7 +307,7 @@
                     },
                     "body": {
                       "user_id": "@variables('UserId')",
-                      "duration": "@if(greater(length(variables('Duration')), 0), variables('Duration'), null)",
+                      "duration": "@triggerBody()?['duration']",
                       "user_ips": "@if(greater(length(variables('UserIps')), 0), variables('UserIps'), null)"
                     },
                     "retryPolicy": {
@@ -418,13 +449,14 @@
             "Return_Response": {
               "runAfter": {
                 "Check_Auth_Success": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Failed"
                 ]
               },
               "type": "If",
               "expression": {
-                "equals": [
-                  "@variables('ErrorStatusCode')",
+                "greater": [
+                  "@variables('ResponseStatusCode')",
                   0
                 ]
               },
@@ -449,14 +481,14 @@
                     "type": "Response",
                     "kind": "Http",
                     "inputs": {
-                      "statusCode": "@variables('ErrorStatusCode')",
+                      "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
                       "headers": {
                         "Content-Type": "application/json"
                       },
                       "body": {
                         "success": false,
-                        "statusCode": "@variables('ErrorStatusCode')",
-                        "message": "@variables('ErrorMessage')",
+                        "statusCode": "@if(equals(variables('ErrorStatusCode'), 0), 500, variables('ErrorStatusCode'))",
+                        "message": "@if(empty(variables('ErrorMessage')), 'An unexpected error occurred', variables('ErrorMessage'))",
                         "details": "@variables('ErrorDetails')"
                       }
                     }
