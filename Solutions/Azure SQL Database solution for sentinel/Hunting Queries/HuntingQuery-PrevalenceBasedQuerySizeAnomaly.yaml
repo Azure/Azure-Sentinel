@@ -37,16 +37,14 @@ query: |
       AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize));
   let total =
   processedData
-  | summarize count() by PrincipalName, ApplicationName
-  | extend key = strcat(PrincipalName, ApplicationName);
+  | summarize count() by PrincipalName, ApplicationName;
   let anomalyData = processedData
   //Splitting on "=" provides a good estimate to the parameters
   | extend parameters = countof(Statement, "=")
   //Splitting on space provides a good estimate to the tokens in the query
   | extend tokens = array_length(split(Statement, " "))
   | summarize count(), make_set(parameters, 10000), make_list(TimeGenerated, 10000), make_list(ClientIp, 10000), dcount(ClientIp), min(TimeGenerated), max(TimeGenerated), make_list(Statement, 10000) by tokens, PrincipalName, ApplicationName
-  | extend key = strcat(PrincipalName, ApplicationName)
-  | join kind=leftouter (total) on key
+  | join kind=leftouter (total) on PrincipalName, ApplicationName
   | extend prevalence = toreal(count_) / toreal(count_1) * 100
   | where prevalence <= prevalenceThreshold
   //Optional; Filter to instances where multiple parameters were seen
@@ -78,4 +76,4 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: ApplicationName
-version: 1.0.1
+version: 1.0.2

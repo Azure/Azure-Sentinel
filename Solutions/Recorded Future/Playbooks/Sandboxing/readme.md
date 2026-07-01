@@ -24,7 +24,7 @@ If you use the Enterprise Sandbox, you need to provide an additional key `Enterp
 Refer to [Recorded Future API Key](../readme.md#recorded-future-api-key) for guidance on obtaining and using the necessary API keys.
 
 ### Configure Sandbox region
-Recorded Future has multiple sandbox regions available. By default, the playbooks will submit to the `us` sandbox.
+Recorded Future has multiple sandbox regions available. By default, the playbooks will submit to the `eu` sandbox.
 But you can configure this in the logic apps by changing the parameter `SandboxRegion` to one of the following values:
 * `eu` (default)
 * `us`

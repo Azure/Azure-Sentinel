@@ -1,0 +1,219 @@
+{
+  "name": "AkamaiSIEMConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "AkamaiSIEMConnector",
+      "title": "Akamai Security Events (via Codeless Connector Framework)",
+      "publisher": "Akamai",
+      "descriptionMarkdown": "The [Akamai SIEM Connector](https://techdocs.akamai.com/siem-integration/docs) ingests web application firewall (WAF) security events from the [Akamai SIEM Integration API](https://techdocs.akamai.com/siem-integration/reference/get-config) into Microsoft Sentinel. The connector collects detailed security event data including attack information, geographic context, and HTTP request/response metadata. Authentication uses Akamai EdgeGrid - provide your three EdgeGrid credentials (client_token, access_token, client_secret) plus the API hostname from your .edgerc file. The platform runtime computes a fresh HMAC-SHA-256 signed Authorization header on every poll request per the EdgeGrid specification.",
+      "graphQueriesTableName": "AkamaiSIEMEvent",
+      "graphQueries": [
+        {
+          "metricName": "Total security events received",
+          "legend": "Akamai SIEM Security Events",
+          "baseQuery": "AkamaiSIEMEvent"
+        },
+        {
+          "metricName": "Denied requests",
+          "legend": "Akamai SIEM - Denied",
+          "baseQuery": "AkamaiSIEMEvent | where AppliedAction == 'deny'"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Most recent Akamai security events",
+          "query": "AkamaiSIEMEvent\n | sort by TimeGenerated desc\n | take 50"
+        },
+        {
+          "description": "Security events by applied action",
+          "query": "AkamaiSIEMEvent\n | summarize Count = count() by AppliedAction\n | sort by Count desc"
+        },
+        {
+          "description": "Top 10 attacking source IPs",
+          "query": "AkamaiSIEMEvent\n | summarize Count = count() by ClientIp\n | top 10 by Count desc"
+        },
+        {
+          "description": "Events by country of origin",
+          "query": "AkamaiSIEMEvent\n | summarize Count = count() by GeoCountry\n | sort by Count desc"
+        },
+        {
+          "description": "Denied requests in the last 24 hours",
+          "query": "AkamaiSIEMEvent\n | where TimeGenerated > ago(24h)\n | where AppliedAction == 'deny'\n | project TimeGenerated, ClientIp, HttpPath, HttpMethod, PolicyId, GeoCountry\n | sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "AkamaiSIEMEvent",
+          "lastDataReceivedQuery": "AkamaiSIEMEvent\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Akamai EdgeGrid API Credentials",
+            "description": "**Client Token**, **Access Token**, and **Client Secret** are required for EdgeGrid HMAC-SHA-256 authentication. These credentials are generated from the [Akamai Control Center](https://control.akamai.com/) under **Identity & Access** > **API Clients**."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Step 1 - Enable Data Collection for SIEM in Akamai Security Center",
+          "description": "Turn on SIEM integration in your Akamai security configuration and note the Web Security Configuration ID.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "1. Log in to [Akamai Security Center](https://control.akamai.com/apps/security-center/).\n2. Select your security configuration and open the **SIEM Integration** section.\n3. Set **Data collection for SIEM** to **On**.\n4. Under **Turn on SIEM integration for**, select the security policies to monitor (or choose **All Security Policies**).\n5. Choose a **SIEM Event Version** (SIEM Version 01 is recommended).\n6. Copy the **Web Security Configuration ID** shown on the page - you will need it in Step 3 below."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Step 2 - Provision EdgeGrid API credentials",
+          "description": "Create an Akamai EdgeGrid API client with the Manage SIEM role and download the .edgerc credentials file.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "1. In [Akamai Control Center](https://control.akamai.com/apps/identity-management/#/tabs/users/list), go to **Identity & Access** > **Users**.\n2. Create a new user (or select an existing service account) and assign the **Manage SIEM** role.\n3. Go to **Identity & Access** > **API Clients** and click **Create API client** > **Quick**.\n4. Select the **SIEM** API service and grant **READ** access.\n5. Click **Create** and then **Download** to save the `.edgerc` file.\n6. The `.edgerc` file contains the four values you will enter in Step 3:\n\n```\n[default]\nclient_secret = <your-client-secret>\nhost = <your-host>.luna.akamaiapis.net\naccess_token = akab-<your-access-token>\nclient_token = akab-<your-client-token>\n```\n\nThe connector platform computes a fresh HMAC-SHA-256 signed Authorization header on every poll - you do not need to sign anything manually."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Step 3 - Connect Akamai SIEM to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "**Multi-tenant support:** This connector supports ingesting security events from multiple Akamai security configurations in parallel. Click **Add Connection** once per configuration, supplying that configuration's EdgeGrid credentials, hostname, and Config ID. Each connection is tracked and managed independently in the grid below."
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Config ID",
+                    "columnValue": "properties.addOnAttributes.configId"
+                  },
+                  {
+                    "columnName": "Akamai Host",
+                    "columnValue": "properties.addOnAttributes.akamaiHost"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Configure Akamai SIEM API Connection",
+                "subtitle": "Connect to an Akamai security configuration to ingest WAF events",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Akamai Hostname (from .edgerc \"host\" field)",
+                          "placeholder": "akab-xxxx.luna.akamaiapis.net",
+                          "type": "text",
+                          "name": "akamaiHost",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "SIEM Config ID(s)",
+                          "placeholder": "14227  (or  14227;14228  for multiple configurations)",
+                          "type": "text",
+                          "name": "configId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client Token (from .edgerc \"client_token\" field)",
+                          "placeholder": "akab-<your-client-token>",
+                          "type": "password",
+                          "name": "clientToken",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Access Token (from .edgerc \"access_token\" field)",
+                          "placeholder": "akab-<your-access-token>",
+                          "type": "password",
+                          "name": "accessToken",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Client Secret (from .edgerc \"client_secret\" field)",
+                          "placeholder": "<your-client-secret>",
+                          "type": "password",
+                          "name": "clientSecret",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": true
+    }
+  }
+}

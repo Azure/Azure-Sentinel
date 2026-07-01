@@ -81,7 +81,9 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
 
-            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "OAuthForm") {
             $newParameter = [PSCustomObject]@{
@@ -133,9 +135,28 @@ function New-ParametersForConnectorInstuctions($instructions) {
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
+        elseif ($instruction.type -eq "Radio") {
+            # Add a parameter for the radio field itself
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.options[0].value;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
+
+            # Process nested instructions from all options, deduplicating by name
+            foreach ($option in $instruction.parameters.options) {
+                if ($null -ne $option.instructions) {
+                    New-ParametersForConnectorInstuctions $option.instructions
+                }
+            }
+        }
         else {
             $instructionType = $instruction.type;
-            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
+            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm, ContextPane and Radio!"
         }
     }
 }
@@ -1226,8 +1247,56 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # TokenEndpoint is required for both formats
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'visaxpaytoken') {
+        # ApiKey (verified from Visa Threat Intelligence connector schema)
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ApiKey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # ApiSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ApiSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'ciscoduo') {
+        # ClientSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # APIKey
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'APIKey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'commvault') {
+        # CommVault token-based credential. Confirm/adjust field name against the connector poller JSON.
+        # TokenEndpoint
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # RefreshToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'RefreshToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # AccessToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'barracudawaf') {
+        # Barracuda WAF token-based credential. Confirm/adjust field name against the connector poller JSON.
+        # UserName
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'UserName' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        
+        # Password
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'Password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        
+        # TokenEndpoint
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'edgegrid') {
+        # Akamai EdgeGrid credentials. Field names follow the standard EdgeGrid scheme;
+        # confirm/adjust them against the connector's data connector poller JSON.
+        # clientToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # clientSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # accessToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
     else {
-        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey' or 'JwtToken'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey', 'JwtToken', 'CiscoDuo', 'CommVault', 'VisaXpayToken', 'BarracudaWAF' or 'EdgeGrid'." -BackgroundColor Red
         exit 1;
     }
 
