@@ -1,0 +1,75 @@
+id: c59f5f45-42fc-4f30-9f22-08908fc4d1ea
+name: Identity and app enumeration followed by novel non-interactive tuple
+description: |
+  Detects cloud reconnaissance activity followed by first-seen non-interactive sign-ins from new IP and user-agent context.
+description-detailed: |
+  The hunt correlates Azure control-plane discovery operations with AAD non-interactive sign-ins that are novel for the same identity and source context. This helps identify token replay or post-recon session abuse.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1087.004
+  - T1526
+  - T1550.001
+  - T1528
+tags:
+  - Hybrid attack
+  - Token replay
+  - Non-interactive sign-in
+  - Reconnaissance
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let DiscoveryOps =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has_any (
+        "microsoft.authorization/roleassignments/read",
+        "microsoft.authorization/roledefinitions/read",
+        "microsoft.resources/subscriptions/read",
+        "microsoft.resources/subscriptions/resourcegroups/read",
+        "microsoft.resources/subscriptions/resourcegroups/resources/read",
+        "microsoft.resources/subscriptions/providers/read"
+      )
+    | where isnotempty(CallerIpAddress)
+    | extend CallerNorm = tolower(Caller)
+    | project EnumTime=TimeGenerated, CallerNorm, CallerIpAddress, EnumOperation=OperationNameValue, SubscriptionId;
+  let BaselineNISignin =
+    AADNonInteractiveUserSignInLogs
+    | where TimeGenerated between ((StartTime - 14d) .. StartTime)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), AppIdNorm = tolower(AppId), SrcIp = tostring(IPAddress), Ua = tostring(UserAgent)
+    | summarize by IdentityNorm, AppIdNorm, SrcIp, Ua;
+  let CurrentNovelNISignin =
+    AADNonInteractiveUserSignInLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), AppIdNorm = tolower(AppId), SrcIp = tostring(IPAddress), Ua = tostring(UserAgent)
+    | join kind=leftanti BaselineNISignin on IdentityNorm, AppIdNorm, SrcIp, Ua
+    | project SigninTime=TimeGenerated, Identity, IdentityNorm, AppId, IPAddress=SrcIp, UserAgent=Ua, CorrelationId, ResultType, ConditionalAccessStatus;
+  CurrentNovelNISignin
+  | join kind=inner DiscoveryOps on $left.IPAddress == $right.CallerIpAddress
+  | where SigninTime between (EnumTime .. (EnumTime + 2h))
+  | project TimeGenerated=EnumTime, SigninTime, Identity, AppId, IPAddress, UserAgent, CorrelationId,
+            EnumOperation, SubscriptionId, Caller=CallerNorm, ConditionalAccessStatus, ResultType
+  | order by SigninTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Identity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0

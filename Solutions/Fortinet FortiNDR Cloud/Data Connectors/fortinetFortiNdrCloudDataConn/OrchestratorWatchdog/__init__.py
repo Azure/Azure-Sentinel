@@ -9,8 +9,12 @@ from azure.durable_functions.models import DurableOrchestrationStatus
 from errors import InputError
 from fnc.fnc_client import FncClient
 from fnc.utils import datetime_to_utc_str
-from globalVariables import (DEFAULT_BUCKET_NAME, INTEGRATION_NAME,
-                             ORCHESTRATION_NAME, SUPPORTED_EVENT_TYPES)
+from globalVariables import (
+    DEFAULT_BUCKET_NAME,
+    INTEGRATION_NAME,
+    ORCHESTRATION_NAME,
+    SUPPORTED_EVENT_TYPES,
+)
 
 NOT_RUNNING_FUNCTION_STATES = [
     df.OrchestrationRuntimeStatus.Completed,
@@ -52,14 +56,20 @@ BUCKET_NAME = os.environ.get("FncBucketName", DEFAULT_BUCKET_NAME)
 DOMAIN = os.environ.get("FncApiDomain", None)
 
 
+def validate_credentials():
+    endpoint = (os.environ.get("DceUri") or "").strip()
+
+    if not endpoint:
+        raise InputError(
+            "Sentinel Infrastructure Information is missing. Provide (Log Ingestion endpoint URI).")
+
+
 def validate_configuration():
     if EVENT_TYPES and not SUPPORTED_EVENT_TYPES.issuperset(EVENT_TYPES):
         raise InputError(
             f"FncEvents must be one or more of {SUPPORTED_EVENT_TYPES}")
 
-    sentinel_shared_key = (os.environ.get("WorkspaceKey") or "").strip()
-    if not sentinel_shared_key:
-        raise InputError("WorkspaceKey is required.")
+    validate_credentials()
 
     if INTERVAL is None or INTERVAL < 1 or INTERVAL > 60:
         raise InputError("FncIntervalMinutes must be a number 1-60")
