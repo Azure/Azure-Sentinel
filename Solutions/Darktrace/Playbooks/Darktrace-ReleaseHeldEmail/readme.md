@@ -20,8 +20,32 @@ This playbook releases an email held by Darktrace /Email directly from a Microso
    - **DarktraceClientId**: OAuth2 Client ID
    - **DarktraceClientSecret**: OAuth2 Client Secret
    - **CloseIncidentOnRelease**: Set to `true` to automatically close the incident after a successful release (default: `false`)
-3. After deployment, grant the Logic App's managed identity the **Microsoft Sentinel Responder** role on the resource group containing your Sentinel workspace.
-4. Attach this playbook to incidents created by the DarktraceEmailHeldForRelease analytic rule (manually run via "Run playbook" on an incident).
+
+## Post-Deployment Steps
+
+### 1. Assign Microsoft Sentinel Responder to the Logic App's managed identity
+
+This allows the playbook to interact with Sentinel incidents (add comments, close incidents).
+
+1. In the Azure Portal, go to your **Resource Group** containing the Sentinel workspace.
+2. Go to **Access control (IAM)** → **Add role assignment**.
+3. Role: **Microsoft Sentinel Responder**.
+4. Members: select **Managed identity** → pick the Logic App (`Darktrace-ReleaseHeldEmail`).
+5. Save.
+
+### 2. Assign Microsoft Sentinel Automation Contributor
+
+This allows Sentinel automation rules to trigger the playbook.
+
+1. In the Azure Portal, go to the **Logic App** resource (`Darktrace-ReleaseHeldEmail`).
+2. Go to **Access control (IAM)** → **Add role assignment**.
+3. Role: **Microsoft Sentinel Automation Contributor**.
+4. Members: select **User, group, or service principal** → search for **Microsoft Sentinel** (or **Azure Security Insights**).
+5. Save.
+
+### 3. Attach the playbook to incidents
+
+Attach this playbook to incidents created by the **DarktraceEmailHeldForRelease** analytic rule. You can run it manually via "Run playbook" on an incident, or create an automation rule to trigger it automatically.
 
 ## How It Works
 

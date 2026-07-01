@@ -113,35 +113,15 @@
                 "body": {
                   "callback_url": "@listCallbackUrl()"
                 },
-                "path": "/incident-creation"
+                "path": "/incident-update"
               }
             }
           },
           "actions": {
-            "Get_incident_comments": {
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/Incidents/(@{triggerBody()?['object']?['properties']?['incidentNumber']})/Comments",
-                "queries": {
-                  "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
-                  "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
-                  "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
-                }
-              },
-              "runAfter": {}
-            },
             "Get_latest_comment": {
               "type": "Compose",
-              "inputs": "@last(body('Get_incident_comments')?['value'])",
-              "runAfter": {
-                "Get_incident_comments": ["Succeeded"]
-              }
+              "inputs": "@last(triggerBody()?['incidentUpdates']?['comments'])?['properties']?['message']",
+              "runAfter": {}
             },
             "Check_comment_exists": {
               "type": "If",
@@ -158,27 +138,9 @@
                 "Get_latest_comment": ["Succeeded"]
               },
               "actions": {
-                "Get_alerts_for_incident": {
-                  "type": "ApiConnection",
-                  "inputs": {
-                    "host": {
-                      "connection": {
-                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                      }
-                    },
-                    "method": "post",
-                    "path": "/Incidents/Relations/(@{triggerBody()?['object']?['properties']?['incidentNumber']})/Alerts",
-                    "queries": {
-                      "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
-                      "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
-                      "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
-                    }
-                  },
-                  "runAfter": {}
-                },
                 "For_each_alert": {
                   "type": "Foreach",
-                  "foreach": "@body('Get_alerts_for_incident')?['value']",
+                  "foreach": "@triggerBody()?['object']?['properties']?['alerts']",
                   "actions": {
                     "Extract_PBID_from_alert": {
                       "type": "Compose",
@@ -210,7 +172,7 @@
                         "headers": {
                           "Content-Type": "application/x-www-form-urlencoded"
                         },
-                        "body": "grant_type=client_credentials&client_id=@{encodeUriComponent(parameters('DarktraceClientId'))}&client_secret=@{encodeUriComponent(parameters('DarktraceClientSecret'))}"
+                        "body": "grant_type=client_credentials&client_id=@{encodeUriComponent(parameters('DarktraceClientId'))}&client_secret=@{encodeUriComponent(parameters('DarktraceClientSecret'))}&scope=.default"
                       },
                       "runAfter": {
                         "Parse_custom_details": ["Succeeded"]
@@ -226,7 +188,7 @@
                           "Content-Type": "application/json"
                         },
                         "body": {
-                          "message": "@{outputs('Get_latest_comment')?['properties']?['message']}"
+                          "message": "@{outputs('Get_latest_comment')}"
                         }
                       },
                       "runAfter": {
@@ -234,9 +196,7 @@
                       }
                     }
                   },
-                  "runAfter": {
-                    "Get_alerts_for_incident": ["Succeeded"]
-                  }
+                  "runAfter": {}
                 }
               },
               "else": {
