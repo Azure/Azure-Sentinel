@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM filtering parser for Google Threat Intelligence
   Version: '0.1.0'
-  LastUpdated: Jun 09, 2026
+  LastUpdated: Jul 01, 2026
 Product:
   Name: Google Threat Intelligence
 Normalization:
@@ -50,6 +50,9 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: pack
+    Type: bool
+    Default: false
 ParserQuery: |
   let AlertStatusLookup = datatable(state:string, AlertStatus:string)
     [
@@ -82,16 +85,17 @@ ParserQuery: |
       threatcategory_has_any: dynamic=dynamic([]),
       alertverdict_has_any: dynamic=dynamic([]),
       eventseverity_has_any: dynamic=dynamic([]),
-      disabled: bool=false) {
+      disabled: bool=false,
+      pack: bool=false) {
       RelevanceSystemAlerts_CL
       | where not(disabled)
       | where (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime)
-          // ipaddr_has_any_prefix filtering not supported by this source - no IP fields present
-          // hostname_has_any filtering not supported by this source - no hostname fields present
-          // username_has_any filtering not supported by this source - no username fields present
-          // attacktactics_has_any filtering not supported by this source
-          // attacktechniques_has_any filtering not supported by this source
+      | where (array_length(ipaddr_has_any_prefix) == 0) // Parser does not support ipaddr_has_any_prefix - no IP fields present
+      | where (array_length(hostname_has_any) == 0) // Parser does not support hostname_has_any - no hostname fields present
+      | where (array_length(username_has_any) == 0) // Parser does not support username_has_any - no username fields present
+      | where (array_length(attacktactics_has_any) == 0) // Parser does not support attacktactics_has_any
+      | where (array_length(attacktechniques_has_any) == 0) // Parser does not support attacktechniques_has_any
       | lookup AlertStatusLookup on state
       | lookup AlertVerdictLookup on state
       | extend AlertVerdict = coalesce(AlertVerdict, "Unknown")
@@ -167,26 +171,30 @@ ParserQuery: |
           ThreatLastReportedTime = todatetime(audit_updateTime),
           ThreatIsActive = iff(state in ("STATE_UNSPECIFIED", "NEW", "READ", "TRIAGED", "ESCALATED"), true, false)
       // AdditionalFields - preserve rich GTI analysis context
-      | extend AdditionalFields = bag_pack(
-          "etag", etag,
-          "findings", findings,
-          "discoveryDocumentIds", coalesce(
-              detail_dataLeak_discoveryDocumentIds,
-              detail_initialAccessBroker_discoveryDocumentIds,
-              detail_insiderThreat_discoveryDocumentIds
-          ),
-          "relevanceLevel", relevanceAnalysis_relevanceLevel,
-          "relevanceRelevant", relevanceAnalysis_relevant,
-          "relevanceReasoning", relevanceAnalysis_reasoning,
-          "commonThemes", relevanceAnalysis_evidence_commonThemes,
-          "distinctThemes", relevanceAnalysis_evidence_distinctThemes,
-          "severityReasoning", severityAnalysis_reasoning,
-          "severityConfidence", severityAnalysis_confidence,
-          "priorityReasoning", priorityAnalysis_reasoning
-      )
+      | extend
+          AdditionalFields = iif(
+              pack, bag_pack(
+                  "etag", etag,
+                  "findings", findings,
+                  "discoveryDocumentIds", coalesce(
+                      detail_dataLeak_discoveryDocumentIds,
+                      detail_initialAccessBroker_discoveryDocumentIds,
+                      detail_insiderThreat_discoveryDocumentIds
+                  ),
+                  "relevanceLevel", relevanceAnalysis_relevanceLevel,
+                  "relevanceRelevant", relevanceAnalysis_relevant,
+                  "relevanceReasoning", relevanceAnalysis_reasoning,
+                  "commonThemes", relevanceAnalysis_evidence_commonThemes,
+                  "distinctThemes", relevanceAnalysis_evidence_distinctThemes,
+                  "severityReasoning", severityAnalysis_reasoning,
+                  "severityConfidence", severityAnalysis_confidence,
+                  "priorityReasoning", priorityAnalysis_reasoning
+              ),
+              dynamic(null)
+          )
       // Aliases per ASIM AlertEvent schema
       | extend
-          AlertId = tostring(split(name, "/")[-1]),
+          AlertId = EventUid,
           AlertDescription = EventMessage
       | project
           TimeGenerated,
@@ -236,5 +244,6 @@ ParserQuery: |
       threatcategory_has_any = threatcategory_has_any,
       alertverdict_has_any = alertverdict_has_any,
       eventseverity_has_any = eventseverity_has_any,
-      disabled = disabled
+      disabled = disabled,
+      pack = pack
   )

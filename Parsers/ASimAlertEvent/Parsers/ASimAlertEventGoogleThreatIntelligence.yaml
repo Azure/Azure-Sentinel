@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM parser for Google Threat Intelligence
   Version: '0.1.0'
-  LastUpdated: Jun 09, 2026
+  LastUpdated: Jul 01, 2026
 Product:
   Name: Google Threat Intelligence
 Normalization:
@@ -18,6 +18,9 @@ ParserName: ASimAlertEventGoogleThreatIntelligence
 EquivalentBuiltInParser: _ASim_AlertEvent_GoogleThreatIntelligence
 ParserParams:
   - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
     Type: bool
     Default: false
 ParserQuery: |
@@ -41,7 +44,7 @@ ParserQuery: |
     "BENIGN", "Benign Positive",
     "RESOLVED", "True Positive"
     ];
-  let parser = (disabled: bool=false) {
+  let parser = (disabled: bool=false, pack: bool=false) {
       RelevanceSystemAlerts_CL
       | where not(disabled)
       | lookup AlertStatusLookup on state
@@ -107,25 +110,29 @@ ParserQuery: |
           ThreatFirstReportedTime = todatetime(audit_createTime),
           ThreatLastReportedTime = todatetime(audit_updateTime),
           ThreatIsActive = iff(state in ("STATE_UNSPECIFIED", "NEW", "READ", "TRIAGED", "ESCALATED"), true, false)
-      | extend AdditionalFields = bag_pack(
-          "etag", etag,
-          "findings", findings,
-          "discoveryDocumentIds", coalesce(
-              detail_dataLeak_discoveryDocumentIds,
-              detail_initialAccessBroker_discoveryDocumentIds,
-              detail_insiderThreat_discoveryDocumentIds
-          ),
-          "relevanceLevel", relevanceAnalysis_relevanceLevel,
-          "relevanceRelevant", relevanceAnalysis_relevant,
-          "relevanceReasoning", relevanceAnalysis_reasoning,
-          "commonThemes", relevanceAnalysis_evidence_commonThemes,
-          "distinctThemes", relevanceAnalysis_evidence_distinctThemes,
-          "severityReasoning", severityAnalysis_reasoning,
-          "severityConfidence", severityAnalysis_confidence,
-          "priorityReasoning", priorityAnalysis_reasoning
-      )
       | extend
-          AlertId = tostring(split(name, "/")[-1]),
+          AdditionalFields = iif(
+              pack, bag_pack(
+                  "etag", etag,
+                  "findings", findings,
+                  "discoveryDocumentIds", coalesce(
+                      detail_dataLeak_discoveryDocumentIds,
+                      detail_initialAccessBroker_discoveryDocumentIds,
+                      detail_insiderThreat_discoveryDocumentIds
+                  ),
+                  "relevanceLevel", relevanceAnalysis_relevanceLevel,
+                  "relevanceRelevant", relevanceAnalysis_relevant,
+                  "relevanceReasoning", relevanceAnalysis_reasoning,
+                  "commonThemes", relevanceAnalysis_evidence_commonThemes,
+                  "distinctThemes", relevanceAnalysis_evidence_distinctThemes,
+                  "severityReasoning", severityAnalysis_reasoning,
+                  "severityConfidence", severityAnalysis_confidence,
+                  "priorityReasoning", priorityAnalysis_reasoning
+              ),
+              dynamic(null)
+          )
+      | extend
+          AlertId = EventUid,
           AlertDescription = EventMessage
       | project
           TimeGenerated,
@@ -164,4 +171,4 @@ ParserQuery: |
           ThreatOriginalRiskLevel,
           ThreatRiskLevel
   };
-  parser(disabled = disabled)
+  parser(disabled = disabled, pack = pack)
