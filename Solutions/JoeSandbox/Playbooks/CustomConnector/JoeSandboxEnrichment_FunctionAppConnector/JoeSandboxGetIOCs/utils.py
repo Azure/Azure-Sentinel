@@ -14,7 +14,6 @@ from os import environ
 JOE_SANDBOX_BASE_URL= environ["JoeSandboxBaseURL"]
 IOC_LIST = ["domains", "ips", "urls", "files"]
 CONFIDENCE = {"malicious": "100", "suspicious": "75"}
-INDICATOR_LIST = []
 HASH_TYPE_LIST = [
     ("MD5", "md5"),
     ("SHA-1", "sha1"),
@@ -282,9 +281,8 @@ def get_utc_time() -> str:
         e.g., '2025-06-26T14:03:12.123Z'.
     """
     current_time = datetime.now(timezone.utc)
-    formatted_time = (
-        current_time.strftime(UTC_DATE_FORMAT)
-        + f"{current_time.microsecond // 1000:03d}Z"
+    formatted_time = current_time.isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
     )
     return formatted_time
 

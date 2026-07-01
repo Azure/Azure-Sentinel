@@ -75,6 +75,24 @@ Hunting Queries are YAML files that define proactive search queries in Microsoft
 - **Instead do this** (specific and clear):
   - ✅ "Calculate the count of BytesIn per Source-Destination pair over 12/24 hours. Higher values may indicate beaconing. C2 servers reply with the same data, making BytesIn value the same."
 
+#### **description-detailed** (Extended Description - Optional)
+- **Required**: No (optional field)
+- **When to Use**: When the description exceeds 255 characters and additional context is needed
+- **Format**: Extended narrative text (no hard character limit)
+- **Rules**:
+  - Only use if `description` field cannot adequately convey the hunting methodology within 255 characters
+  - Provides supplementary information about the query purpose, methodology, or hunt rationale
+  - Can include more detailed explanation of patterns, thresholds, and threat indicators
+  - Can provide context about why certain data sources or time windows were chosen
+  - Useful for complex hunts that require deeper explanation
+- **When NOT to Use**:
+  - If the 255-character description is sufficient
+  - If the additional content is just repetition of the description
+  - For implementation details or technical KQL explanations
+- **Example Usage**:
+  - **description**: "Identify service accounts with unusually high failed login attempts within a short timeframe, which may indicate credential compromise or brute force attacks."
+  - **description-detailed**: "This hunt searches for service accounts that experience more than 10 failed login attempts within a 1-hour window across multiple workstations. Service accounts should typically have successful logins; repeated failures may indicate credential compromise, brute force attempts, or misconfigured applications. Focus on investigating the affected workstations and reviewing access logs for those time periods. Check if any recent password changes or security alerts occurred before the failed attempts."
+
 #### **requiredDataConnectors** (Data Sources)
 - **Required**: Yes
 - **Type**: Array of objects with `connectorId` and `dataTypes`
