@@ -57,14 +57,11 @@ DOMAIN = os.environ.get("FncApiDomain", None)
 
 
 def validate_credentials():
-    tenant_id = (os.environ.get("TENANT_ID") or "").strip()
-    client_id = (os.environ.get("CLIENT_ID") or "").strip()
-    client_secret = (os.environ.get("CLIENT_SECRET") or "").strip()
     endpoint = (os.environ.get("DceUri") or "").strip()
 
-    if not tenant_id or not client_id or not client_secret or not endpoint:
+    if not endpoint:
         raise InputError(
-            "Sentinel Infrastructure Information is missing. Provide (Tenant ID, Client ID, Client Secret and Data Collection Endpoint).")
+            "Sentinel Infrastructure Information is missing. Provide (Log Ingestion endpoint URI).")
 
 
 def validate_configuration():
