@@ -242,8 +242,7 @@ def get_semperis_token(api_key: str) -> Optional[str]:
         response = requests.post(
             SEMPERIS_AUTH_ENDPOINT,
             json=payload,
-            headers=headers,
-            verify=False,
+            headers=headers
         )
         response.raise_for_status()
         data = response.json()
