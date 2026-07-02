@@ -1,0 +1,74 @@
+# Netskope Alerts & Events Connector (via Netskope Log Streaming)
+#
+# NOTE ON FORMAT
+# --------------
+# The Microsoft Sentinel V3 solution packaging tool (createSolutionV3.ps1) only
+# recognizes a Codeless Connector Framework (CCF) connector when its definition is
+# authored as JSON with the ARM wrapper. The build-critical, machine-consumed
+# connector definition therefore lives at:
+#
+#   Data Connectors/NetskopeAlertEvents_CCF/NetskopeAlertEvents_connectorDefinition.json
+#   Data Connectors/NetskopeAlertEvents_CCF/NetskopeAlertEvents_DCR.json
+#   Data Connectors/NetskopeAlertEvents_CCF/NetskopeAlertEvents_Table.json
+#   Data Connectors/NetskopeAlertEvents_CCF/NetskopeAlertEvents_PollingConfig.json
+#
+# This YAML is a human-readable specification of that connector and is provided
+# for review/documentation. It is intentionally NOT referenced by
+# Data/Solution_NetskopeAlertEvents.json.
+
+connectorName: NetskopeAlertEventsConnector
+title: Netskope Alerts & Events (via Log Streaming)
+publisher: Netskope
+connectorType: CCF                       # Codeless Connector Framework (StorageAccountBlobContainer)
+dataType: Alerts + Events
+table: NetskopeAlertEvents_CL
+streamName: Custom-NetskopeAlertEvents
+
+dataFlow: >
+  Netskope Log Streaming -> Azure Blob Storage -> Event Grid -> Storage Queue
+  -> Sentinel CCF Connector -> Log Analytics custom table (NetskopeAlertEvents_CL)
+
+ingestion:
+  format: csv                # Netskope NLS streams Alerts & Events as positional gzipped CSV
+  isGzipCompressed: true
+  eventsJsonPaths: ["$"]
+  auth: ServicePrincipal
+  fieldOrderCritical: true    # 254 columns are mapped BY POSITION; NLS field order must match the DCR stream declaration
+
+parameters:
+  - name: principalId                       # Service Principal (object) ID of the Sentinel CCF app
+  - name: blobContainerUri                  # Blob Container URL
+  - name: blobFolderName                    # Optional sub-folder
+  - name: StorageAccountLocation
+  - name: StorageAccountResourceGroupName
+  - name: StorageAccountSubscription
+  - name: EGSystemTopicName                 # Existing Event Grid system topic (optional)
+
+configurationSteps:
+  - step: 1
+    title: Configure Netskope Log Streaming
+    description: >
+      In the Netskope tenant admin console, create a Log Streaming configuration
+      that streams Alerts and Events to an Azure Blob Storage container as
+      gzip-compressed CSV. The field/column order produced by NLS must match the
+      254-column DCR stream declaration, because values are mapped by position.
+  - step: 2
+    title: Configure Azure Blob Storage
+    description: >
+      Create (or identify) the storage account and blob container that Netskope
+      streams to. Note the container URL, storage account location, resource
+      group, and subscription ID.
+  - step: 3
+    title: Deploy ARM template
+    description: >
+      Install the solution from Content Hub (Package/mainTemplate.json). This
+      registers the data connector definition, DCR, custom table, and parser.
+  - step: 4
+    title: Connect in Sentinel
+    description: >
+      Open the "Netskope Alerts & Events (via Log Streaming)" data connector,
+      supply the Service Principal ID, Blob Container URL, storage account
+      details, and (optionally) an existing Event Grid topic, then click Connect.
+      The Connect action provisions the live DCE/DCR, the notification and
+      dead-letter storage queues, the Event Grid subscription, and the required
+      role assignments.
