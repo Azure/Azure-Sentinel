@@ -34,11 +34,12 @@ query: |
       where OwnerId !in (EnabledAccountIds)
       | summarize DisabledOrMissingOwners = make_list(OwnerId))
   | where array_length(DisabledOrMissingOwners) == array_length(OwnerIds)
-  | extend FirstDisabledOwnerId = tostring(DisabledOrMissingOwners[0])
-  | join kind=leftouter IdentityIdtoUPN on $left.FirstDisabledOwnerId == $right.AccountObjectId
-  | project-rename DisabledOwnerUpn = AccountUpn
-  | project-away FirstDisabledOwnerId, AccountObjectId
-  | project-reorder CreatedDateTime, AgentId, Name, Platform, DisabledOrMissingOwners, DisabledOwnerUpn
+  | mv-expand DisabledOwnerId = DisabledOrMissingOwners to typeof(string)
+  | join kind=leftouter IdentityIdtoUPN on $left.DisabledOwnerId == $right.AccountObjectId
+  | extend ResolvedOwner = coalesce(AccountUpn, DisabledOwnerId)
+  | summarize DisabledOwnerUpns = make_set(ResolvedOwner), DisabledOrMissingOwners = take_any(DisabledOrMissingOwners) by AgentId, Name, Platform, CreatedDateTime
+  | extend DisabledOwnerUpn = tostring(DisabledOwnerUpns[0])
+  | project-reorder CreatedDateTime, AgentId, Name, Platform, DisabledOrMissingOwners, DisabledOwnerUpns, DisabledOwnerUpn
 entityMappings:
   - entityType: Account
     fieldMappings:

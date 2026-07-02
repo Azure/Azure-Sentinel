@@ -17,19 +17,19 @@ query: |
       | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
       | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId
       | project AccountObjectId = tostring(AccountObjectId), AccountUpn);
-  let AgentToolNames =
+  let LatestAgents = materialize (
       AgentsInfo
       | summarize arg_max(Timestamp, *) by AgentId
-      | where LifecycleStatus != "Deleted"
+      | where LifecycleStatus != "Deleted");
+  let AgentToolNames =
+      LatestAgents
       | where array_length(DeclaredTools) > 0
       | mv-expand Tool = DeclaredTools
       | extend ToolName = tostring(Tool.name)
       | where isnotempty(ToolName)
       | summarize ToolNames = make_set(ToolName) by AgentId;
-  AgentsInfo
-  | summarize arg_max(Timestamp, *) by AgentId
-  | where LifecycleStatus != "Deleted"
-  | where isnotempty(Instructions)
+  LatestAgents
+  | where isnotempty(Instructions) and Instructions != "N/A"
   | join kind=inner AgentToolNames on AgentId
   | mv-apply ToolName = ToolNames to typeof(string) on (
       where Instructions !has ToolName
