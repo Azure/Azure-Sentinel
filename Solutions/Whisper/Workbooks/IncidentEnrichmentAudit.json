@@ -1,0 +1,96 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Whisper Security - Incident Enrichment Audit\nThis workbook provides operational visibility into the Whisper Security enrichment playbooks running in Microsoft Sentinel. Track success and failure rates, monitor latency percentiles, review enrichment volume trends, and investigate error patterns to ensure reliable threat intelligence enrichment."
+      },
+      "name": "header-markdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s in ('Succeeded', 'Failed')\n| summarize Succeeded = countif(status_s == 'Succeeded'), Failed = countif(status_s == 'Failed') by resource_workflowName_s\n| extend Total = Succeeded + Failed\n| extend SuccessRate = round(100.0 * Succeeded / Total, 1)\n| project PlaybookName = resource_workflowName_s, Succeeded, Failed, Total, SuccessRate\n| order by Total desc",
+        "size": 0,
+        "title": "Enrichment Playbook Success and Failure Rates",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SuccessRate",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            },
+            {
+              "columnMatch": "Failed",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            }
+          ]
+        }
+      },
+      "name": "success-failure-rates"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s == 'Succeeded'\n| where isnotempty(duration_s)\n| extend DurationMs = toreal(extract(@'(\\d+\\.?\\d*)', 1, duration_s))\n| summarize P50 = percentile(DurationMs, 50), P90 = percentile(DurationMs, 90), P95 = percentile(DurationMs, 95), P99 = percentile(DurationMs, 99) by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Enrichment Latency Percentiles Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "latency-percentiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s in ('Succeeded', 'Failed')\n| summarize EnrichmentCount = count() by bin(TimeGenerated, 1d), status_s\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Enrichment Volume Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "enrichment-volume"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s == 'Failed'\n| extend ErrorCode = coalesce(error_code_s, code_s, 'Unknown')\n| extend ErrorMessage = coalesce(error_message_s, 'No message available')\n| summarize ErrorCount = count() by resource_workflowName_s, ErrorCode, ErrorMessage\n| order by ErrorCount desc",
+        "size": 0,
+        "title": "Error Breakdown by Playbook and Error Type",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ErrorCount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            }
+          ]
+        }
+      },
+      "name": "error-breakdown"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-IncidentEnrichmentAuditWorkbook"
+}

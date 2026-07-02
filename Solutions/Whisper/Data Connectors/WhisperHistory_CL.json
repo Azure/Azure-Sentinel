@@ -1,0 +1,250 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Whisper Security - History Table",
+    "description": "Deploys the WhisperHistory_CL custom table, Data Collection Endpoint, and Data Collection Rule for ingesting historical WHOIS snapshots and BGP routing history from the Whisper Security knowledge graph.",
+    "prerequisites": [
+      "Azure Sentinel workspace",
+      "Whisper API key in Key Vault"
+    ],
+    "version": "1.0.0",
+    "author": {
+      "name": "Whisper Security"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {
+    "tableName": "WhisperHistory_CL",
+    "dceName": "dce-whisper-history",
+    "dcrName": "dcr-whisper-history",
+    "customStreamName": "Custom-WhisperHistory_CL",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "indicator",
+              "type": "string",
+              "description": "The domain or IP address being tracked"
+            },
+            {
+              "name": "indicatorType",
+              "type": "string",
+              "description": "Indicator type (domain, ip)"
+            },
+            {
+              "name": "snapshotDate",
+              "type": "dateTime",
+              "description": "Date of the historical snapshot"
+            },
+            {
+              "name": "registrar",
+              "type": "string",
+              "description": "Domain registrar at time of snapshot"
+            },
+            {
+              "name": "registrant",
+              "type": "string",
+              "description": "Domain registrant at time of snapshot"
+            },
+            {
+              "name": "country",
+              "type": "string",
+              "description": "Registrant country at time of snapshot"
+            },
+            {
+              "name": "nameServers",
+              "type": "string",
+              "description": "Nameservers at time of snapshot (comma-separated)"
+            },
+            {
+              "name": "createDate",
+              "type": "dateTime",
+              "description": "Domain creation date from WHOIS"
+            },
+            {
+              "name": "updateDate",
+              "type": "dateTime",
+              "description": "Domain last updated date from WHOIS"
+            },
+            {
+              "name": "expiryDate",
+              "type": "dateTime",
+              "description": "Domain expiry date from WHOIS"
+            },
+            {
+              "name": "bgpOrigin",
+              "type": "string",
+              "description": "BGP origin AS number at time of snapshot"
+            },
+            {
+              "name": "bgpPrefix",
+              "type": "string",
+              "description": "BGP prefix at time of snapshot"
+            },
+            {
+              "name": "bgpVisibility",
+              "type": "real",
+              "description": "BGP route visibility percentage (0-100)"
+            },
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime",
+              "description": "Event generation timestamp"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "[variables('customStreamName')]": {
+            "columns": [
+              {
+                "name": "indicator",
+                "type": "string"
+              },
+              {
+                "name": "indicatorType",
+                "type": "string"
+              },
+              {
+                "name": "snapshotDate",
+                "type": "datetime"
+              },
+              {
+                "name": "registrar",
+                "type": "string"
+              },
+              {
+                "name": "registrant",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "nameServers",
+                "type": "string"
+              },
+              {
+                "name": "createDate",
+                "type": "datetime"
+              },
+              {
+                "name": "updateDate",
+                "type": "datetime"
+              },
+              {
+                "name": "expiryDate",
+                "type": "datetime"
+              },
+              {
+                "name": "bgpOrigin",
+                "type": "string"
+              },
+              {
+                "name": "bgpPrefix",
+                "type": "string"
+              },
+              {
+                "name": "bgpVisibility",
+                "type": "real"
+              },
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "whisperWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('customStreamName')]"
+            ],
+            "destinations": [
+              "whisperWorkspace"
+            ],
+            "transformKql": "source",
+            "outputStream": "[variables('customStreamName')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "tableResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+    },
+    "dceResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+    },
+    "dcrResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))).logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))).immutableId]"
+    }
+  }
+}

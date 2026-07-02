@@ -1,0 +1,121 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Whisper Security - ASN Reputation Monitoring\nThis workbook tracks ASN reputation over time using threat intelligence from the Whisper Security knowledge graph. Monitor reputation trends, identify degradation events, analyze prefix threat density, and review the ASNs with the most significant reputation declines."
+      },
+      "name": "header-markdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperASNReputation_CL\n| where isnotempty(asnName)\n| summarize AvgReputation = avg(reputationScore), MaxThreat = max(maxThreatScore) by bin(TimeGenerated, 1d), asnName\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "ASN Reputation Trend Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "reputation-trend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperASNReputation_CL\n| where isnotempty(asnName)\n| order by asnName asc, TimeGenerated asc\n| serialize\n| extend PrevScore = prev(reputationScore), PrevAsn = prev(asnName)\n| where asnName == PrevAsn and isnotempty(PrevScore)\n| extend ScoreDrop = PrevScore - reputationScore\n| where ScoreDrop > 5\n| project TimeGenerated, asn, asnName, PreviousScore = PrevScore, CurrentScore = reputationScore, ScoreDrop, maxThreatScore, hasThreateningPrefixes\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Reputation Degradation Alert Timeline",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ScoreDrop",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "CurrentScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "degradation-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperASNReputation_CL\n| where isnotempty(asnName)\n| summarize AvgThreat = avg(avgThreatScore), TotalPrefixes = max(prefixCount) by asnName, country\n| extend ThreatDensity = iff(TotalPrefixes > 0, round(AvgThreat * TotalPrefixes / 100.0, 2), 0.0)\n| order by ThreatDensity desc\n| take 25",
+        "size": 0,
+        "title": "Prefix Threat Density Heatmap",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ThreatDensity",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "AvgThreat",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            }
+          ]
+        }
+      },
+      "name": "prefix-threat-density"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperASNReputation_CL\n| where isnotempty(asnName)\n| summarize EarliestScore = arg_min(TimeGenerated, reputationScore), LatestScore = arg_max(TimeGenerated, reputationScore) by asn, asnName, country\n| extend ScoreChange = LatestScore_reputationScore - EarliestScore_reputationScore\n| where ScoreChange < 0\n| project asn, asnName, country, EarliestScore = EarliestScore_reputationScore, LatestScore = LatestScore_reputationScore, ScoreChange\n| order by ScoreChange asc\n| take 20",
+        "size": 0,
+        "title": "Top Degraded ASNs",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ScoreChange",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "LatestScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "top-degraded-asns"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-AsnReputationMonitoringWorkbook"
+}

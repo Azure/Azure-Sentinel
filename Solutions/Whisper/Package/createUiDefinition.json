@@ -1,0 +1,435 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Whisper.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Whisper/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe **Whisper Security** solution for Microsoft Sentinel brings the Whisper internet-scale infrastructure knowledge graph (7+ billion nodes, 39+ billion edges, 40+ threat feeds) into Sentinel's detection and response workflows. It provides real-time threat intelligence enrichment, infrastructure context, WHOIS/BGP history, and ASN reputation polling.\n\n**Underlying Microsoft technologies used:**\n- [Azure Logic Apps](https://azure.microsoft.com/services/logic-apps/) for enrichment playbooks\n- [Microsoft Sentinel custom tables](https://learn.microsoft.com/azure/azure-monitor/logs/create-custom-table) for storing enriched threat/infrastructure data\n- [Azure Key Vault](https://azure.microsoft.com/services/key-vault/) for Whisper API key storage\n\n**Workbooks:** 5, **Analytic Rules:** 8, **Hunting Queries:** 6, **Playbooks:** 10\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Microsoft Sentinel solution installs the following workbooks. Workbooks provide a flexible canvas for monitoring and analyzing enriched Whisper threat and infrastructure data alongside your existing Sentinel logs."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - External Attack Surface Overview",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Per-organization view of all externally observed IPs, domains, and ASNs cross-referenced with Whisper threat scores."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook2",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Infrastructure Threat Landscape",
+            "elements": [
+              {
+                "name": "workbook2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Network-wide threat landscape across ingested Whisper threat intelligence and infrastructure context."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook3",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - ASN Reputation Monitoring",
+            "elements": [
+              {
+                "name": "workbook3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Continuous ASN reputation tracking with degradation alerts."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook4",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Domain Registration Anomaly",
+            "elements": [
+              {
+                "name": "workbook4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects anomalies in domain registration patterns using Whisper WHOIS history."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook5",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Incident Enrichment Audit",
+            "elements": [
+              {
+                "name": "workbook5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Audit of which Sentinel incidents have been enriched with Whisper data."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs scheduled analytic rule templates that correlate Whisper threat intelligence and infrastructure context with your Sentinel data sources. After installation, enable the rules in the Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - C2 Communication Detection",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - Tor Exit Node Communication",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies network traffic communicating with known Tor exit nodes. While Tor usage may be legitimate in some environments, unexpected Tor communication can indicate data exfiltration, C2 tunneling, or policy violations."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - Newly Registered Domain on Threat ASN",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies newly registered domains (under 7 days old) hosted on autonomous systems with elevated threat scores. This combination often indicates adversary infrastructure staging for phishing, malware delivery, or C2 operations."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - Co-Hosted Malware Cluster Detection",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies IP addresses that host multiple domains associated with malware. When an IP has more than 3 co-hosted domains and at least 3 of those domains are flagged as malware by Whisper threat intelligence, it strongly indicates compromised or adversary-controlled infrastructure."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - ASN Reputation Degradation",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects autonomous systems whose reputation score has increased by more than 20 points in the last 24 hours. Higher scores indicate worse reputation, so a score increase signals degradation that may indicate adversary use of the network."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - BGP Route Anomaly with Traffic Spike",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - Domain Registrar Change Anomaly",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper Security - SPF Record Unauthorized Include Detection",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. Run them to pivot through your environment using Whisper's infrastructure graph context for proactive threat discovery."
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Attack Surface Discovery",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Enumerates all external IPs, domains, and ASNs from WhisperInfraContext_CL cross-referenced with threat scores from WhisperThreatIntel_CL, producing a prioritized risk inventory. This hunting query depends on WhisperSecurityConnector data connector (WhisperInfraContext_CL WhisperThreatIntel_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Newly Registered Domain Hunt",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Finds newly registered domains (age less than 14 days) and enriches with threat intelligence to identify suspicious new domains. This hunting query depends on WhisperSecurityConnector data connector (WhisperInfraContext_CL WhisperThreatIntel_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Shared Infrastructure Clustering",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Discovers threat actor infrastructure clusters by grouping indicators by shared ASN, prefix, registrar, or nameserver with elevated threat scores. This hunting query depends on WhisperSecurityConnector data connector (WhisperInfraContext_CL WhisperThreatIntel_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Infrastructure Pivot Analysis",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Pivots from known-malicious indicators to discover related threat infrastructure sharing ASNs, IP addresses, or registrars. This hunting query depends on WhisperSecurityConnector data connector (WhisperInfraContext_CL WhisperThreatIntel_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - Domain to ASN Migration",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects domains that changed hosting ASN over time, indicating potential threat actor infrastructure migration. This hunting query depends on WhisperSecurityConnector data connector (WhisperInfraContext_CL WhisperThreatIntel_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Whisper - ASN Reputation Score Hunt",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects ASN reputation degradation by comparing scores across 24-hour windows, flagging increases greater than 20 points. Helps surface ASNs that became significantly more risky in recent telemetry. This hunting query depends on WhisperSecurityConnector data connector (WhisperASNReputation_CL Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "playbooks",
+        "label": "Playbooks",
+        "subLabel": {
+          "preValidation": "Configure the playbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Playbooks",
+        "elements": [
+          {
+            "name": "playbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following Logic Apps playbooks for on-demand enrichment of IPs, domains, ASNs, and infrastructure relationships. Playbooks can be managed from the Manage solution view."
+            }
+          },
+          {
+            "name": "playbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
