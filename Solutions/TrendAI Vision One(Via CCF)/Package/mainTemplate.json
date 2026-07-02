@@ -1,0 +1,701 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "2.0.0.0",
+  "metadata": {
+    "author": "TrendAI",
+    "comments": "Solution template for TrendAI Vision One"
+  },
+  "parameters": {
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Region to deploy solution resources"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "excludeThirdPartyOat": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Exclude OAT detections from third-party linked sources (productCode == 'tlc'). Defaults to true."
+      }
+    }
+  },
+  "variables": {
+    "email": "xdrfeedback@trendmicro.com",
+    "_email": "[variables('email')]",
+    "_solutionVersion": "2.0.0",
+    "solutionId": "trendmicro.trend-micro-vision-one-sentinel-solution",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dceName": "TrendAI-XDR-DCE",
+    "workbenchDcrName": "TrendAI-XDR-Workbench-DCR",
+    "oatDcrName": "TrendAI-XDR-OAT-DCR",
+    "workbenchTableName": "TrendAI_XDR_WORKBENCH_V2_CL",
+    "oatTableName": "TrendAI_XDR_OAT_V2_CL",
+    "workbenchConnectorId": "TrendAIVisionOneWorkbench",
+    "oatConnectorId": "TrendAIVisionOneOAT",
+    "logo": "data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik01LjI1MDEzIDkuNzM3MjdDNi4yMjk1NCAxMC43MzY3IDcuMTgzNzEgMTEuOTc0IDcuNDA1NTMgMTMuMjgwM0M3LjgwNDc2IDExLjA0MTIgMTAuODE3MiA3Ljk5MzM4IDEzLjA2NTcgNy42MDczMUMxMC44MzE4IDcuMjQ1MjkgNy43NjA0OSA0LjE3MjUxIDcuNDA1NyAxLjkyOTY5QzcuMDAzNDcgNC4xNDI2MiAzLjk3MDAzIDcuMjE3ODIgMS43NDUzNyA3LjYwNDAzQzMuMDQxOTIgNy44Mjc1OSA0LjI1NDcyIDguNzY0NjggNS4yNTAxMyA5LjczNzI3WiIgZmlsbD0iI0Q3MTkyMCIvPgo8cGF0aCBkPSJNMjMuMDgyMyAzLjMyNzY0QzIwLjc3MDcgMC41NjYwOTMgMTYuNDczMyAxLjQwOTQ5IDEzLjE1NCAyLjc1OTNDMTguNDIxOCAxLjA5NDcyIDIzLjI1MjQgMy4yODUwMiAyMC43MzE3IDkuNTQ2MTFDMTkuNDgzIDEyLjYyNDMgMTYuMzQyMSAxNS43NzI4IDEzLjMzMjIgMTcuNTUyNkMxMS43NDI4IDE4LjU4MDEgMTAuMDQyNyAxOS40NDU1IDguMTkwMDYgMTkuNzA0NkM1LjMzOTggMjAuMDk1NyAzLjYzMTY1IDE4LjYyNDIgNC4zNTY2MyAxNS42ODM3QzQuNTM5NDUgMTQuOTY1NyA0Ljg3MjI2IDE0LjI0MDggNS4yMDI2OCAxMy41MzU2QzQuNjU4NzIgMTIuMjQ0NiAzLjQ4ODM3IDEwLjkyMzkgMi4yMzIzOCAxMC41NTY5QzEuNTU1MzMgMTEuNTc1NiAxLjA2MjcyIDEyLjQ5NzcgMC41NjE0OTUgMTMuOTIzNUMtMC41NzI4MTIgMTYuOTg3OCAtMC4yMDIzMDIgMjEuNDg3MyAzLjY3MzY1IDIyLjQ2MDlDMTAuNzY2OCAyMy44NzQxIDIwLjM2MiAxNi4zMzQ2IDIzLjA5MzEgMTAuMDUxNUMyNC4yNjIgNy40MDM0NSAyNC4zNDU2IDQuOTU1ODggMjMuMDgyMyAzLjMyNzY0WiIgZmlsbD0iI0Q3MTkyMCIvPgo8L3N2Zz4K",
+    "oatTransformBody": "TimeGenerated = detectedDateTime, SourceSystem = 'RestAPI', Computer = '', RawData = tostring(detail), detectionTime_t = todatetime(detectedDateTime), entityType_s = tostring(entityType), entityName_s = tostring(entityName), filters_s = tostring(filters), endpoint_ips_s = tostring(endpoint.ips), endpoint_name_s = tostring(endpoint.endpointName), endpoint_guid_g = tostring(endpoint.agentGuid), xdrCustomerId_g = '', detail_endpointGuid_g = tostring(d.endpointGuid), detail_eventId_s = tostring(d.eventId), detail_eventSubId_s = tostring(d.eventSubId), detail_firstSeen_t = todatetime(datetime(1970-01-01) + tolong(d.firstSeen) * 1ms), detail_lastSeen_t = todatetime(datetime(1970-01-01) + tolong(d.lastSeen) * 1ms), detail_logonUser_s = tostring(d.logonUser), detail_objectCmd_s = tostring(d.objectCmd), detail_objectFileCreation_d = toreal(d.objectFileCreation), detail_objectFileHashSha256_s = tostring(d.objectFileHashSha256), detail_objectFileModifiedTime_d = toreal(d.objectFileModifiedTime), detail_objectFileSize_d = toreal(d.objectFileSize), detail_objectLaunchTime_d = toreal(d.objectLaunchTime), detail_objectName_s = tostring(d.objectName), detail_objectRunAsLocalAccount_b = tobool(d.objectRunAsLocalAccount), detail_objectSigner_s = tostring(d.objectSigner), detail_objectSignerValid_s = tostring(d.objectSignerValid), detail_objectTrueType_d = toreal(d.objectTrueType), detail_objectUser_s = tostring(d.objectUser), detail_objectUserDomain_s = tostring(d.objectUserDomain), detail_osName_s = tostring(d.osName), detail_osType_s = tostring(d.osType), detail_osVer_s = tostring(d.osVer), detail_parentCmd_s = tostring(d.parentCmd), detail_parentFileCreation_d = toreal(d.parentFileCreation), detail_parentFileHashSha1_s = tostring(d.parentFileHashSha1), detail_parentFileHashSha256_s = tostring(d.parentFileHashSha256), detail_parentFileModifiedTime_d = toreal(d.parentFileModifiedTime), detail_parentFilePath_s = tostring(d.parentFilePath), detail_parentFileSize_d = toreal(d.parentFileSize), detail_parentLaunchTime_d = toreal(d.parentLaunchTime), detail_parentName_s = tostring(d.parentName), detail_parentTrueType_d = toreal(d.parentTrueType), detail_parentUser_s = tostring(d.parentUser), detail_parentUserDomain_s = tostring(d.parentUserDomain), detail_processCmd_s = tostring(d.processCmd), detail_processFileCreation_d = toreal(d.processFileCreation), detail_processFileHashSha1_s = tostring(d.processFileHashSha1), detail_processFileHashSha256_s = tostring(d.processFileHashSha256), detail_processFileModifiedTime_d = toreal(d.processFileModifiedTime), detail_processFilePath_s = tostring(d.processFilePath), detail_processFileSize_d = toreal(d.processFileSize), detail_processLaunchTime_d = toreal(d.processLaunchTime), detail_processPid_d = toreal(d.processPid), detail_processSigner_s = tostring(d.processSigner), detail_processSignerValid_s = tostring(d.processSignerValid), detail_processTrueType_d = toreal(d.processTrueType), detail_processUser_s = tostring(d.processUser), detail_processUserDomain_s = tostring(d.processUserDomain), detail_hostName_s = tostring(d.hostName), detail_endpointHostName_s = tostring(d.endpointHostName), detail_filterRiskLevel_s = tostring(d.filterRiskLevel), detail_ruleName_s = tostring(d.ruleName), detail_malName_s = tostring(d.malName), detail_src_s = tostring(d.src), detail_dst_s = tostring(d.dst), detail_spt_d = toreal(d.spt), detail_dpt_d = toreal(d.dpt)",
+    "oatTransformKql": "[concat('source | extend d = detail', if(parameters('excludeThirdPartyOat'), ' | where tostring(d.productCode) != ''tlc''', ''), ' | extend ', variables('oatTransformBody'))]",
+    "parserName1": "TrendAIWorkbench_Complete",
+    "parserName2": "TrendAIOAT_Complete",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_workbenchConnectorContentId": "[variables('workbenchConnectorId')]",
+    "_oatConnectorContentId": "[variables('oatConnectorId')]",
+    "_workbenchConnectionsContentId": "[concat(variables('workbenchConnectorId'), 'Connections')]",
+    "_oatConnectionsContentId": "[concat(variables('oatConnectorId'), 'Connections')]",
+    "workbenchConnectionsTemplateName": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_workbenchConnectionsContentId')))]",
+    "oatConnectionsTemplateName": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_oatConnectionsContentId')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('workbenchTableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('workbenchTableName')]",
+          "columns": [
+            {"name": "TimeGenerated", "type": "datetime"},
+            {"name": "SourceSystem", "type": "string"},
+            {"name": "MG", "type": "string"},
+            {"name": "ManagementGroupName", "type": "string"},
+            {"name": "Computer", "type": "string"},
+            {"name": "RawData", "type": "string"},
+            {"name": "workbenchId_s", "type": "string"},
+            {"name": "schemaVersion_s", "type": "string"},
+            {"name": "investigationStatus_s", "type": "string"},
+            {"name": "alertStatus_s", "type": "string"},
+            {"name": "investigationResult_s", "type": "string"},
+            {"name": "workbenchLink_s", "type": "string"},
+            {"name": "alertProvider_s", "type": "string"},
+            {"name": "modelId_g", "type": "string"},
+            {"name": "modelId_s", "type": "string"},
+            {"name": "model_s", "type": "string"},
+            {"name": "workbenchName_s", "type": "string"},
+            {"name": "modelType_s", "type": "string"},
+            {"name": "priorityScore_d", "type": "real"},
+            {"name": "severity_s", "type": "string"},
+            {"name": "createdTime_t", "type": "datetime"},
+            {"name": "updatedTime_t", "type": "datetime"},
+            {"name": "alertTriggerTimestamp_t", "type": "datetime"},
+            {"name": "workbenchCompleteTimestamp_t", "type": "datetime"},
+            {"name": "incidentId_s", "type": "string"},
+            {"name": "description_s", "type": "string"},
+            {"name": "desktopCount_d", "type": "real"},
+            {"name": "serverCount_d", "type": "real"},
+            {"name": "accountCount_d", "type": "real"},
+            {"name": "emailAddressCount_d", "type": "real"},
+            {"name": "containerCount_d", "type": "real"},
+            {"name": "cloudIdentityCount_d", "type": "real"},
+            {"name": "cloudWorkloadCount_d", "type": "real"},
+            {"name": "indicators_s", "type": "string"},
+            {"name": "indicators", "type": "dynamic"},
+            {"name": "impactScope_s", "type": "string"},
+            {"name": "impactScope_Summary_s", "type": "string"},
+            {"name": "entities", "type": "dynamic"},
+            {"name": "matchedRules_s", "type": "string"},
+            {"name": "matchedRules", "type": "dynamic"},
+            {"name": "xdrCustomerID_g", "type": "string"},
+            {"name": "FileName_s", "type": "string"},
+            {"name": "FileHashValue_s", "type": "string"},
+            {"name": "DomainName_s", "type": "string"},
+            {"name": "FileDirectory_s", "type": "string"},
+            {"name": "IPAddress", "type": "string"},
+            {"name": "URL_s", "type": "string"},
+            {"name": "HostHostName_s", "type": "string"},
+            {"name": "ProcessCommandLine_s", "type": "string"},
+            {"name": "RegistryKey_s", "type": "string"},
+            {"name": "RegistryValue_s", "type": "string"},
+            {"name": "RegistryValueName_s", "type": "string"},
+            {"name": "UserAccountNTDomain_s", "type": "string"},
+            {"name": "UserAccountName_s", "type": "string"},
+            {"name": "MailboxPrimaryAddress_s", "type": "string"},
+            {"name": "MalwareName_s", "type": "string"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('oatTableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('oatTableName')]",
+          "columns": [
+            {"name": "TimeGenerated", "type": "datetime"},
+            {"name": "SourceSystem", "type": "string"},
+            {"name": "Computer", "type": "string"},
+            {"name": "RawData", "type": "string"},
+            {"name": "detectionTime_t", "type": "datetime"},
+            {"name": "entityType_s", "type": "string"},
+            {"name": "entityName_s", "type": "string"},
+            {"name": "filters_s", "type": "string"},
+            {"name": "endpoint_ips_s", "type": "string"},
+            {"name": "endpoint_name_s", "type": "string"},
+            {"name": "endpoint_guid_g", "type": "string"},
+            {"name": "xdrCustomerId_g", "type": "string"},
+            {"name": "detail_endpointGuid_g", "type": "string"},
+            {"name": "detail_eventId_s", "type": "string"},
+            {"name": "detail_eventSubId_s", "type": "string"},
+            {"name": "detail_firstSeen_t", "type": "datetime"},
+            {"name": "detail_lastSeen_t", "type": "datetime"},
+            {"name": "detail_logonUser_s", "type": "string"},
+            {"name": "detail_objectCmd_s", "type": "string"},
+            {"name": "detail_objectFileCreation_d", "type": "real"},
+            {"name": "detail_objectFileHashSha256_s", "type": "string"},
+            {"name": "detail_objectFileModifiedTime_d", "type": "real"},
+            {"name": "detail_objectFileSize_d", "type": "real"},
+            {"name": "detail_objectLaunchTime_d", "type": "real"},
+            {"name": "detail_objectName_s", "type": "string"},
+            {"name": "detail_objectRunAsLocalAccount_b", "type": "boolean"},
+            {"name": "detail_objectSigner_s", "type": "string"},
+            {"name": "detail_objectSignerValid_s", "type": "string"},
+            {"name": "detail_objectTrueType_d", "type": "real"},
+            {"name": "detail_objectUser_s", "type": "string"},
+            {"name": "detail_objectUserDomain_s", "type": "string"},
+            {"name": "detail_osName_s", "type": "string"},
+            {"name": "detail_osType_s", "type": "string"},
+            {"name": "detail_osVer_s", "type": "string"},
+            {"name": "detail_parentCmd_s", "type": "string"},
+            {"name": "detail_parentFileCreation_d", "type": "real"},
+            {"name": "detail_parentFileHashSha1_s", "type": "string"},
+            {"name": "detail_parentFileHashSha256_s", "type": "string"},
+            {"name": "detail_parentFileModifiedTime_d", "type": "real"},
+            {"name": "detail_parentFilePath_s", "type": "string"},
+            {"name": "detail_parentFileSize_d", "type": "real"},
+            {"name": "detail_parentLaunchTime_d", "type": "real"},
+            {"name": "detail_parentName_s", "type": "string"},
+            {"name": "detail_parentTrueType_d", "type": "real"},
+            {"name": "detail_parentUser_s", "type": "string"},
+            {"name": "detail_parentUserDomain_s", "type": "string"},
+            {"name": "detail_processCmd_s", "type": "string"},
+            {"name": "detail_processFileCreation_d", "type": "real"},
+            {"name": "detail_processFileHashSha1_s", "type": "string"},
+            {"name": "detail_processFileHashSha256_s", "type": "string"},
+            {"name": "detail_processFileModifiedTime_d", "type": "real"},
+            {"name": "detail_processFilePath_s", "type": "string"},
+            {"name": "detail_processFileSize_d", "type": "real"},
+            {"name": "detail_processLaunchTime_d", "type": "real"},
+            {"name": "detail_processPid_d", "type": "real"},
+            {"name": "detail_processSigner_s", "type": "string"},
+            {"name": "detail_processSignerValid_s", "type": "string"},
+            {"name": "detail_processTrueType_d", "type": "real"},
+            {"name": "detail_processUser_s", "type": "string"},
+            {"name": "detail_processUserDomain_s", "type": "string"},
+            {"name": "detail_hostName_s", "type": "string"},
+            {"name": "detail_endpointHostName_s", "type": "string"},
+            {"name": "detail_filterRiskLevel_s", "type": "string"},
+            {"name": "detail_ruleName_s", "type": "string"},
+            {"name": "detail_malName_s", "type": "string"},
+            {"name": "detail_src_s", "type": "string"},
+            {"name": "detail_dst_s", "type": "string"},
+            {"name": "detail_spt_d", "type": "real"},
+            {"name": "detail_dpt_d", "type": "real"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('workbenchDcrName')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('workbenchTableName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-TrendAI_XDR_WORKBENCH_V2_CL": {
+            "columns": [
+              {"name": "id", "type": "string"},
+              {"name": "schemaVersion", "type": "string"},
+              {"name": "investigationStatus", "type": "string"},
+              {"name": "status", "type": "string"},
+              {"name": "investigationResult", "type": "string"},
+              {"name": "workbenchLink", "type": "string"},
+              {"name": "alertProvider", "type": "string"},
+              {"name": "modelId", "type": "string"},
+              {"name": "model", "type": "string"},
+              {"name": "modelType", "type": "string"},
+              {"name": "score", "type": "int"},
+              {"name": "severity", "type": "string"},
+              {"name": "createdDateTime", "type": "datetime"},
+              {"name": "updatedDateTime", "type": "datetime"},
+              {"name": "incidentId", "type": "string"},
+              {"name": "description", "type": "string"},
+              {"name": "impactScope", "type": "dynamic"},
+              {"name": "indicators", "type": "dynamic"},
+              {"name": "matchedRules", "type": "dynamic"}
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [{
+            "workspaceResourceId": "[variables('workspaceResourceId')]",
+            "name": "clv2ws1"
+          }]
+        },
+        "dataFlows": [{
+          "streams": ["Custom-TrendAI_XDR_WORKBENCH_V2_CL"],
+          "destinations": ["clv2ws1"],
+          "transformKql": "source | extend TimeGenerated = todatetime(createdDateTime) | extend SourceSystem = 'RestAPI' | extend Computer = '' | extend MG = '' | extend ManagementGroupName = '' | extend RawData = tostring(indicators) | extend workbenchId_s = tostring(id) | extend schemaVersion_s = tostring(schemaVersion) | extend investigationStatus_s = tostring(investigationStatus) | extend alertStatus_s = tostring(status) | extend investigationResult_s = tostring(investigationResult) | extend workbenchLink_s = tostring(workbenchLink) | extend alertProvider_s = tostring(alertProvider) | extend modelId_g = tostring(modelId) | extend modelId_s = tostring(modelId) | extend model_s = tostring(model) | extend workbenchName_s = tostring(model) | extend modelType_s = tostring(modelType) | extend priorityScore_d = todouble(score) | extend severity_s = tostring(severity) | extend createdTime_t = todatetime(createdDateTime) | extend updatedTime_t = todatetime(updatedDateTime) | extend alertTriggerTimestamp_t = todatetime(createdDateTime) | extend workbenchCompleteTimestamp_t = todatetime(updatedDateTime) | extend incidentId_s = tostring(incidentId) | extend description_s = tostring(description) | extend desktopCount_d = todouble(impactScope.desktopCount) | extend serverCount_d = todouble(impactScope.serverCount) | extend accountCount_d = todouble(impactScope.accountCount) | extend emailAddressCount_d = todouble(impactScope.emailAddressCount) | extend containerCount_d = todouble(impactScope.containerCount) | extend cloudIdentityCount_d = todouble(impactScope.cloudIdentityCount) | extend cloudWorkloadCount_d = todouble(impactScope.cloudWorkloadCount) | extend indicators_dynamic = indicators | extend indicators_s = tostring(indicators) | extend impactScope_s = tostring(impactScope) | extend impactScope_Summary_s = tostring(impactScope) | extend entities = impactScope.entities | extend matchedRules_dynamic = matchedRules | extend matchedRules_s = tostring(matchedRules) | extend xdrCustomerID_g = '' | extend FileName_s = '' | extend FileHashValue_s = '' | extend DomainName_s = '' | extend FileDirectory_s = '' | extend IPAddress = '' | extend URL_s = '' | extend HostHostName_s = '' | extend ProcessCommandLine_s = '' | extend RegistryKey_s = '' | extend RegistryValue_s = '' | extend RegistryValueName_s = '' | extend UserAccountNTDomain_s = '' | extend UserAccountName_s = '' | extend MailboxPrimaryAddress_s = '' | extend MalwareName_s = '' | extend indicators = indicators_dynamic | extend matchedRules = matchedRules_dynamic | project-away id, schemaVersion, investigationStatus, status, investigationResult, workbenchLink, alertProvider, modelId, model, modelType, score, severity, createdDateTime, updatedDateTime, incidentId, description, impactScope, indicators_dynamic, matchedRules_dynamic",
+          "outputStream": "Custom-TrendAI_XDR_WORKBENCH_V2_CL"
+        }]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('oatDcrName')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('oatTableName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-TrendAI_XDR_OAT_V2_CL": {
+            "columns": [
+              {"name": "source", "type": "string"},
+              {"name": "uuid", "type": "string"},
+              {"name": "detectedDateTime", "type": "datetime"},
+              {"name": "ingestedDateTime", "type": "datetime"},
+              {"name": "entityType", "type": "string"},
+              {"name": "entityName", "type": "string"},
+              {"name": "filters", "type": "dynamic"},
+              {"name": "endpoint", "type": "dynamic"},
+              {"name": "detail", "type": "dynamic"}
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [{
+            "workspaceResourceId": "[variables('workspaceResourceId')]",
+            "name": "clv2ws1"
+          }]
+        },
+        "dataFlows": [{
+          "streams": ["Custom-TrendAI_XDR_OAT_V2_CL"],
+          "destinations": ["clv2ws1"],
+          "transformKql": "[variables('oatTransformKql')]",
+          "outputStream": "Custom-TrendAI_XDR_OAT_V2_CL"
+        }]
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('workbenchConnectionsTemplateName')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "displayName": "TrendAI Vision One - Workbench Alerts Connector",
+        "description": "Template spec for TrendAI Workbench data connector connections"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('workbenchConnectionsTemplateName'), '/', variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbenchConnectionsTemplateName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('workbenchDcrName'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "connectorDefinitionName": {"defaultValue": "TrendAIVisionOneWorkbench", "type": "string"},
+            "workspace": {"defaultValue": "[parameters('workspace')]", "type": "string"},
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
+                "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('workbenchDcrName')), '2024-03-11').immutableId]"
+              }
+            },
+            "apiDomain": {"type": "string", "minLength": 1, "defaultValue": "api.xdr.trendmicro.com"},
+            "apiToken": {"type": "securestring", "minLength": 1},
+            "workbenchFilter": {"type": "string", "defaultValue": ""}
+          },
+          "variables": {},
+          "resources": [
+            {
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/TrendAIWorkbench-', uniqueString(parameters('apiDomain')))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dataType": "TrendAI_XDR_WORKBENCH_V2_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-TrendAI_XDR_WORKBENCH_V2_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[concat('Bearer ', parameters('apiToken'))]",
+                  "ApiKeyName": "Authorization"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('apiDomain'), '/v3.0/workbench/alerts')]",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "startDateTime",
+                  "endTimeAttributeName": "endDateTime",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": "[[if(empty(parameters('workbenchFilter')), createObject('Accept', 'application/json'), createObject('Accept', 'application/json', 'TMV1-Filter', parameters('workbenchFilter')))]"
+                },
+                "response": {"eventsJsonPaths": ["$.items"], "format": "json"},
+                "paging": {"pagingType": "LinkHeader", "linkHeaderTokenJsonPath": "$.nextLink"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('oatConnectionsTemplateName')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "displayName": "TrendAI Vision One - OAT Detections Connector",
+        "description": "Template spec for TrendAI OAT data connector connections"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('oatConnectionsTemplateName'), '/', variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('oatConnectionsTemplateName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('oatDcrName'))]"
+      ],
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "connectorDefinitionName": {"defaultValue": "TrendAIVisionOneOAT", "type": "string"},
+            "workspace": {"defaultValue": "[parameters('workspace')]", "type": "string"},
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
+                "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('oatDcrName')), '2024-03-11').immutableId]"
+              }
+            },
+            "apiDomain": {"type": "string", "minLength": 1, "defaultValue": "api.xdr.trendmicro.com"},
+            "apiToken": {"type": "securestring", "minLength": 1},
+            "oatFilter": {"type": "string", "defaultValue": ""},
+            "excludeThirdPartyOat": {"type": "string", "defaultValue": "false"}
+          },
+          "variables": {},
+          "resources": [
+            {
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/TrendAIOAT-', uniqueString(parameters('apiDomain')))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "dataType": "TrendAI_XDR_OAT_V2_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-TrendAI_XDR_OAT_V2_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[concat('Bearer ', parameters('apiToken'))]",
+                  "ApiKeyName": "Authorization"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('apiDomain'), '/v3.0/oat/detections')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "httpMethod": "GET",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "detectedStartDateTime",
+                  "endTimeAttributeName": "detectedEndDateTime",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": "[[if(empty(parameters('oatFilter')), createObject('Accept', 'application/json'), createObject('Accept', 'application/json', 'TMV1-Filter', parameters('oatFilter')))]",
+                  "queryParameters": "[[if(equals(parameters('excludeThirdPartyOat'), 'true'), createObject('top', '500'), createObject('top', '500'))]"
+                },
+                "response": {"eventsJsonPaths": ["$.items"], "format": "json"},
+                "paging": {"pagingType": "LinkHeader", "linkHeaderTokenJsonPath": "$.nextLink"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2024-09-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('workbenchConnectorId'))]",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('workbenchDcrName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Resources/templateSpecs/versions', variables('workbenchConnectionsTemplateName'), variables('dataConnectorCCPVersion'))]"
+      ],
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[variables('workbenchConnectorId')]",
+          "title": "TrendAI Vision One™ - Workbench Alerts (via Codeless Connector Framework)",
+          "publisher": "TrendAI",
+          "logo": "[variables('logo')]",
+          "descriptionMarkdown": "The [TrendAI Vision One™](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) Workbench data connector ingests security alerts from the TrendAI Vision One™ into Microsoft Sentinel.",
+          "graphQueriesTableName": "[variables('workbenchTableName')]",
+          "graphQueries": [{
+            "metricName": "Total Workbench alerts received",
+            "legend": "TrendAI Vision One™ Workbench Alerts",
+            "baseQuery": "[variables('workbenchTableName')]"
+          }],
+          "sampleQueries": [
+            {"description": "Get sample of Workbench alerts", "query": "[concat(variables('workbenchTableName'), ' | take 10')]"},
+            {"description": "High and critical severity alerts", "query": "[concat(variables('workbenchTableName'), ' | where severity_s in (''high'', ''critical'') | project TimeGenerated, workbenchId_s, workbenchName_s, severity_s, priorityScore_d')]"}
+          ],
+          "dataTypes": [{
+            "name": "[variables('workbenchTableName')]",
+            "lastDataReceivedQuery": "[concat(variables('workbenchTableName'), ' | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)')]"
+          }],
+          "connectivityCriteria": [{"type": "HasDataConnectors"}],
+          "availability": {"status": 1, "isPreview": false},
+          "permissions": {
+            "resourceProvider": [{
+              "provider": "Microsoft.OperationalInsights/workspaces",
+              "permissionsDisplayText": "Read and Write permissions are required.",
+              "providerDisplayName": "Workspace",
+              "scope": "Workspace",
+              "requiredPermissions": {"read": true, "write": true, "delete": true}
+            }]
+          },
+          "instructionSteps": [{
+            "instructions": [
+              {"type": "Markdown", "parameters": {"content": "#### 1. Retrieve your TrendAI Vision One™ API Token\n1. Log in to the TrendAI Vision One™ Console.\n2. Navigate to **Administration → API Keys**.\n3. Click **Generate New API Key**, select the **SIEM** role, and copy the token."}},
+              {"type": "Markdown", "parameters": {"content": "#### 2. Select your TrendAI Vision One™ Region\nChoose the API domain that matches the region where your TrendAI Vision One™ tenant is hosted:\n- **US:** `api.xdr.trendmicro.com`\n- **EU:** `api.eu.xdr.trendmicro.com`\n- **SG:** `api.sg.xdr.trendmicro.com`\n- **JP:** `api.xdr.trendmicro.co.jp` / `api.jp.xdr.trendmicro.co.jp`\n- **AU:** `api.au.xdr.trendmicro.com`\n- **IN:** `api.in.xdr.trendmicro.com`\n- **MEA:** `api.mea.xdr.trendmicro.com`\n- **UK:** `api.uk.xdr.trendmicro.com`\n- **CA:** `api.ca.xdr.trendmicro.com`\n- **ZA (South Africa):** `api.za.xdr.trendmicro.com`"}},
+              {"type": "Textbox", "parameters": {"label": "API Domain", "placeholder": "api.xdr.trendmicro.com", "type": "text", "name": "apiDomain", "required": true}},
+              {"type": "Textbox", "parameters": {"label": "API Token", "placeholder": "Paste your TrendAI Vision One™ API token here", "type": "password", "name": "apiToken", "required": true}},
+              {"type": "Textbox", "parameters": {"label": "TMV1-Filter (Optional)", "placeholder": "investigationStatus eq 'New' and contains(impactScopeEntityValue,'nimda')", "type": "text", "name": "workbenchFilter", "required": false}},
+              {"type": "ConnectionToggleButton", "parameters": {"label": "toggle", "name": "toggle"}}
+            ]
+          }]
+        },
+        "connectionsConfig": {
+          "templateSpecName": "[resourceId('Microsoft.Resources/templateSpecs', variables('workbenchConnectionsTemplateName'))]",
+          "templateSpecVersion": "[variables('dataConnectorCCPVersion')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2024-09-01",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('oatConnectorId'))]",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('oatDcrName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.Resources/templateSpecs/versions', variables('oatConnectionsTemplateName'), variables('dataConnectorCCPVersion'))]"
+      ],
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[variables('oatConnectorId')]",
+          "title": "TrendAI Vision One™ - OAT Detections (via Codeless Connector Framework)",
+          "publisher": "TrendAI",
+          "logo": "[variables('logo')]",
+          "descriptionMarkdown": "The [TrendAI Vision One™](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) OAT data connector ingests Observed Attack Techniques (OAT) detections from the TrendAI Vision One™ into Microsoft Sentinel. Detections include full process trees, file hashes, network indicators, and MITRE ATT&CK mappings.",
+          "graphQueriesTableName": "[variables('oatTableName')]",
+          "graphQueries": [{
+            "metricName": "Total OAT detections received",
+            "legend": "TrendAI Vision One™ OAT Detections",
+            "baseQuery": "[variables('oatTableName')]"
+          }],
+          "sampleQueries": [
+            {"description": "Get sample of OAT detections", "query": "[concat(variables('oatTableName'), ' | take 10')]"},
+            {"description": "High risk detections", "query": "[concat(variables('oatTableName'), ' | where detail_filterRiskLevel_s == ''high'' | project TimeGenerated, detail_endpointHostName_s, detail_processCmd_s')]"}
+          ],
+          "dataTypes": [{
+            "name": "[variables('oatTableName')]",
+            "lastDataReceivedQuery": "[concat(variables('oatTableName'), ' | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated) | where isnotempty(Time)')]"
+          }],
+          "connectivityCriteria": [{"type": "HasDataConnectors"}],
+          "availability": {"status": 1, "isPreview": false},
+          "permissions": {
+            "resourceProvider": [{
+              "provider": "Microsoft.OperationalInsights/workspaces",
+              "permissionsDisplayText": "Read and Write permissions are required.",
+              "providerDisplayName": "Workspace",
+              "scope": "Workspace",
+              "requiredPermissions": {"read": true, "write": true, "delete": true}
+            }]
+          },
+          "instructionSteps": [{
+            "instructions": [
+              {"type": "Markdown", "parameters": {"content": "#### 1. Retrieve your TrendAI Vision One™ API Token\n1. Log in to the TrendAI Vision One™ Console.\n2. Navigate to **Administration → API Keys**.\n3. Click **Generate New API Key**, select the **SIEM** role, and copy the token."}},
+              {"type": "Markdown", "parameters": {"content": "#### 2. Select your TrendAI Vision One™ Region\nChoose the API domain that matches the region where your TrendAI Vision One™ tenant is hosted:\n- **US:** `api.xdr.trendmicro.com`\n- **EU:** `api.eu.xdr.trendmicro.com`\n- **SG:** `api.sg.xdr.trendmicro.com`\n- **JP:** `api.xdr.trendmicro.co.jp` / `api.jp.xdr.trendmicro.co.jp`\n- **AU:** `api.au.xdr.trendmicro.com`\n- **IN:** `api.in.xdr.trendmicro.com`\n- **MEA:** `api.mea.xdr.trendmicro.com`\n- **UK:** `api.uk.xdr.trendmicro.com`\n- **CA:** `api.ca.xdr.trendmicro.com`\n- **ZA (South Africa):** `api.za.xdr.trendmicro.com`"}},
+              {"type": "Textbox", "parameters": {"label": "API Domain", "placeholder": "api.xdr.trendmicro.com", "type": "text", "name": "apiDomain", "required": true}},
+              {"type": "Textbox", "parameters": {"label": "API Token", "placeholder": "Paste your TrendAI Vision One™ API token here", "type": "password", "name": "apiToken", "required": true}},
+              {"type": "Textbox", "parameters": {"label": "TMV1-Filter (Optional)", "placeholder": "(riskLevel eq 'high') and (endpointName eq 'my-computer')", "type": "text", "name": "oatFilter", "required": false}},
+              {"type": "Textbox", "parameters": {"label": "Exclude third-party OAT detections (productCode == 'tlc')", "type": "boolean", "name": "excludeThirdPartyOat", "required": false}},
+              {"type": "ConnectionToggleButton", "parameters": {"label": "toggle", "name": "toggle"}}
+            ]
+          }]
+        },
+        "connectionsConfig": {
+          "templateSpecName": "[resourceId('Microsoft.Resources/templateSpecs', variables('oatConnectionsTemplateName'))]",
+          "templateSpecVersion": "[variables('dataConnectorCCPVersion')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('parserName1'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('workbenchTableName'))]"
+      ],
+      "properties": {
+        "etag": "*",
+        "displayName": "TrendAI Workbench Complete Parser",
+        "category": "TrendAI",
+        "functionAlias": "[variables('parserName1')]",
+        "query": "union isfuzzy=true (TrendMicro_XDR_WORKBENCH_CL | extend source_table = 'legacy'), (TrendAI_XDR_WORKBENCH_V2_CL | extend source_table = 'ccf' | extend indicators_parsed = todynamic(indicators_s) | mv-expand indicator = indicators_parsed | extend indicatorType = tostring(indicator.type), indicatorValue = tostring(indicator.value) | extend FileName_s = iff(indicatorType == 'file_name', indicatorValue, '') | extend FileHashValue_s = iff(indicatorType in ('file_sha1', 'file_sha256', 'file_md5'), indicatorValue, '') | extend DomainName_s = iff(indicatorType == 'domain', indicatorValue, '') | extend FileDirectory_s = iff(indicatorType == 'fullpath', indicatorValue, '') | extend IPAddress = iff(indicatorType == 'ip', indicatorValue, '') | extend URL_s = iff(indicatorType == 'url', indicatorValue, '') | extend ProcessCommandLine_s = iff(indicatorType == 'command_line', indicatorValue, '') | extend RegistryKey_s = iff(indicatorType == 'registry', indicatorValue, '') | extend MalwareName_s = iff(indicatorType == 'malware_name', indicatorValue, '') | extend entities_parsed = todynamic(impactScope_s) | mv-expand entity = entities_parsed.entities | extend entityType = tostring(entity.entityType) | extend HostHostName_s = iff(entityType in ('host', 'endpoint'), tostring(entity.entityValue.name), '') | extend UserAccountName_s = iff(entityType == 'account', tostring(entity.entityValue.name), '') | extend UserAccountNTDomain_s = iff(entityType == 'account', tostring(entity.entityValue.domain), '') | extend MailboxPrimaryAddress_s = iff(entityType == 'emailAddress', tostring(entity.entityValue.emailAddress), '') | summarize FileName_s = make_set_if(FileName_s, isnotempty(FileName_s)), FileHashValue_s = make_set_if(FileHashValue_s, isnotempty(FileHashValue_s)), DomainName_s = make_set_if(DomainName_s, isnotempty(DomainName_s)), FileDirectory_s = make_set_if(FileDirectory_s, isnotempty(FileDirectory_s)), IPAddress = make_set_if(IPAddress, isnotempty(IPAddress)), URL_s = make_set_if(URL_s, isnotempty(URL_s)), ProcessCommandLine_s = make_set_if(ProcessCommandLine_s, isnotempty(ProcessCommandLine_s)), RegistryKey_s = make_set_if(RegistryKey_s, isnotempty(RegistryKey_s)), MalwareName_s = make_set_if(MalwareName_s, isnotempty(MalwareName_s)), HostHostName_s = make_set_if(HostHostName_s, isnotempty(HostHostName_s)), UserAccountName_s = make_set_if(UserAccountName_s, isnotempty(UserAccountName_s)), UserAccountNTDomain_s = make_set_if(UserAccountNTDomain_s, isnotempty(UserAccountNTDomain_s)), MailboxPrimaryAddress_s = make_set_if(MailboxPrimaryAddress_s, isnotempty(MailboxPrimaryAddress_s)), source_table = any(source_table) by TimeGenerated, workbenchId_s, workbenchName_s, severity_s, priorityScore_d, description_s, workbenchLink_s, alertProvider_s, model_s, modelId_s, modelType_s, investigationStatus_s, alertStatus_s, investigationResult_s, createdTime_t, updatedTime_t, xdrCustomerID_g, impactScope_Summary_s, indicators_s, matchedRules_s)",
+        "functionParameters": "",
+        "version": 2
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspace'), '/', variables('parserName2'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('oatTableName'))]"
+      ],
+      "properties": {
+        "etag": "*",
+        "displayName": "TrendAI OAT Complete Parser",
+        "category": "TrendAI",
+        "functionAlias": "[variables('parserName2')]",
+        "query": "union isfuzzy=true (TrendMicro_XDR_OAT_CL | extend source_table = 'legacy'), (TrendAI_XDR_OAT_V2_CL | extend source_table = 'ccf')",
+        "functionParameters": "",
+        "version": 2
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "[variables('_solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "TrendAI Vision One",
+        "publisherDisplayName": "TrendAI",
+        "descriptionHtml": "<p>The TrendAI Vision One solution for Microsoft Sentinel provides two data connectors that ingest security data from the TrendAI Vision One platform using the Codeless Connector Framework (CCF):</p><ul><li><strong>Workbench Alerts</strong> – Security incidents, investigations, and alerts with IOC extraction</li><li><strong>OAT Detections</strong> – MITRE ATT&CK mapped detections with full process trees</li></ul><p>This solution also includes KQL parser functions, an analytic rule, and a workbook dashboard for Workbench Alerts.</p>",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "[variables('logo')]",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TrendAI Vision One",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "TrendAI",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "TrendAI",
+          "tier": "Partner",
+          "link": "https://success.trendmicro.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {"kind": "DataConnector", "contentId": "[variables('workbenchConnectorId')]", "version": "[variables('_solutionVersion')]"},
+            {"kind": "DataConnector", "contentId": "[variables('oatConnectorId')]", "version": "[variables('_solutionVersion')]"},
+            {"kind": "Parser", "contentId": "[variables('parserName1')]", "version": "[variables('_solutionVersion')]"},
+            {"kind": "Parser", "contentId": "[variables('parserName2')]", "version": "[variables('_solutionVersion')]"}
+          ]
+        },
+        "categories": {
+          "domains": ["Security - Threat Protection"]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "dceEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))).logsIngestion.endpoint]"
+    },
+    "workbenchDcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('workbenchDcrName'))).immutableId]"
+    },
+    "oatDcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('oatDcrName'))).immutableId]"
+    }
+  }
+}
