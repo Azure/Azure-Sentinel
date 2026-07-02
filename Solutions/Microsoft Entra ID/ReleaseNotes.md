@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.14       | 30-06-2026                    | Updated **BruteForceAgainstanEntraAuthenticatedWindowsDevice** Analytic rule to add an explicit "sort by TimeGenerated asc" before building "make_list" arrays. |
 | 3.3.13       | 22-06-2026                    | Updated Description of **AccountCreatedandDeletedinShortTimeframe** Analytic Rule. |
 | 3.3.12       | 28-04-2026                    | Renamed analytic rule from **BruteForceCloudPC** to **BruteForceAgainstEntraAuthenticatedWindowsDevice** and updated name and description in **Analytic Rule** to reflect detection scope across all Entra-authenticated Windows devices (including Entra-joined, hybrid-joined, and Windows 365 Cloud PCs), resolving ambiguity around Cloud PC specificity |
 | 3.3.11       | 13-04-2026                    | Added **Watchlist** ConditionalAccessBenignStatusCodes and updated **BypassCondAccessRule** analytic rule |
