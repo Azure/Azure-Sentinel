@@ -1,0 +1,44 @@
+id: d4e5f6a7-b8c9-0123-defa-234567890123
+name: Critical Finding Overdue on Internet-Facing App
+description: |
+  Detects Critical and High severity findings older than 7 days that remain
+  open on internet-facing applications. Uses the InternetFacingApps watchlist
+  to scope results to externally exposed assets requiring urgent remediation.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: StratoSecureFindings
+    dataTypes:
+      - StratoSecure_Findings_CL
+queryFrequency: 1d
+queryPeriod: 1d15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  let maxAgeDays = 7;
+  let InternetFacingList = _GetWatchlist("InternetFacingApps")
+      | project WL_ApplicationId = column_ifexists("ApplicationId", ""),
+          WL_AppName = column_ifexists("AppName", ""),
+          WL_Owner = column_ifexists("Owner", "");
+  StratoSecure_Findings_CL
+      | where FixStatus =~ "open"
+      | where Severity in ("Critical", "High")
+      | extend AgeInDays = datetime_diff("day", now(), TimeGenerated)
+      | where AgeInDays > maxAgeDays
+      | join kind=inner InternetFacingList on $left.ApplicationId == $right.WL_ApplicationId
+      | summarize TotalOverdueFindings = count(), OldestAge = max(AgeInDays),
+          RuleIds = make_set(RuleId, 20), EndTime = max(TimeGenerated)
+          by ApplicationId, WL_AppName, WL_Owner, StraTenantId
+      | project TimeGenerated = EndTime, ApplicationId, AppName = WL_AppName, Owner = WL_Owner,
+          StraTenantId, TotalOverdueFindings, OldestAge, RuleIds
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+version: 1.0.0
+kind: Scheduled

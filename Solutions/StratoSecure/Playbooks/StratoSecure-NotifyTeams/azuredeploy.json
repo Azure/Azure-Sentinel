@@ -1,0 +1,221 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "StratoSecure - Notify Microsoft Teams",
+    "description": "When a Microsoft Sentinel incident is created from a StratoSecure finding, this playbook posts an adaptive card notification to a Microsoft Teams channel via incoming webhook. Human approval is always required before the action executes.",
+    "author": "Soluciones Etech Corp",
+    "support": {
+      "name": "Soluciones Etech Corp",
+      "email": "support@stratocode.io",
+      "tier": "Developer",
+      "link": "https://stratocode.io/support"
+    },
+    "lastUpdateTime": "2026-06-01T00:00:00Z",
+    "entities": ["Account", "Host"],
+    "tags": ["StratoSecure", "Teams", "Notification", "ASPM"],
+    "categories": {
+      "domains": ["Security"],
+      "verticals": ["Banking", "Financial Services"]
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "StratoSecure-NotifyTeams",
+      "metadata": {
+        "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Microsoft Sentinel Log Analytics workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the Logic App. Defaults to the resource group location."
+      }
+    },
+    "TeamsWebhookUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Incoming webhook URL for the target Microsoft Teams channel. Configure an Incoming Webhook connector in Teams to obtain this URL."
+      }
+    },
+    "LogAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics workspace ID for audit log ingestion."
+      }
+    },
+    "LogAnalyticsWorkspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Log Analytics workspace primary or secondary key for HTTP Data Collector API."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "WorkspaceName": {
+              "type": "string",
+              "defaultValue": "[parameters('WorkspaceName')]"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/subscribe"
+              }
+            }
+          },
+          "actions": {
+            "Condition_RequireHumanApproval": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@true",
+                      "@true"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Action_PostToTeams": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[parameters('TeamsWebhookUrl')]",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "@type": "MessageCard",
+                      "@context": "http://schema.org/extensions",
+                      "themeColor": "D13438",
+                      "summary": "@{triggerBody()?['object']?['properties']?['title']}",
+                      "sections": [
+                        {
+                          "activityTitle": "StratoSecure Security Alert",
+                          "activitySubtitle": "@{triggerBody()?['object']?['properties']?['title']}",
+                          "activityImage": "https://stratocode.io/icon-192.png",
+                          "facts": [
+                            {
+                              "name": "Severity",
+                              "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                            },
+                            {
+                              "name": "Status",
+                              "value": "@{triggerBody()?['object']?['properties']?['status']}"
+                            },
+                            {
+                              "name": "Description",
+                              "value": "@{triggerBody()?['object']?['properties']?['description']}"
+                            }
+                          ],
+                          "markdown": true
+                        }
+                      ],
+                      "potentialAction": [
+                        {
+                          "@type": "OpenUri",
+                          "name": "View in Sentinel",
+                          "targets": [
+                            {
+                              "os": "default",
+                              "uri": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Action_AuditLog": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[concat('https://', parameters('LogAnalyticsWorkspaceId'), '.ods.opinsights.azure.com/api/logs?api-version=2016-04-01')]",
+                    "headers": {
+                      "Log-Type": "StratoSecure_PlaybookRuns_CL",
+                      "Content-Type": "application/json",
+                      "Authorization": "[concat('SharedKey ', parameters('LogAnalyticsWorkspaceId'), ':', parameters('LogAnalyticsWorkspaceKey'))]"
+                    },
+                    "body": [
+                      {
+                        "PlaybookName": "[parameters('PlaybookName')]",
+                        "IncidentId": "@{triggerBody()?['object']?['name']}",
+                        "IncidentTitle": "@{triggerBody()?['object']?['properties']?['title']}",
+                        "Action": "NotifyTeams",
+                        "Status": "@{outputs('Action_PostToTeams')['statusCode']}",
+                        "WorkspaceName": "[parameters('WorkspaceName')]",
+                        "TimeGenerated": "@{utcNow()}"
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Action_PostToTeams": ["Succeeded", "Failed"]
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/azuresentinel')]",
+                "connectionName": "azuresentinel",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "PlaybookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "PlaybookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2017-07-01', 'Full').identity.principalId]"
+    }
+  }
+}
