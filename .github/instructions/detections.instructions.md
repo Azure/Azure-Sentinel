@@ -58,7 +58,6 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 
 #### **description** (Rule Description)
 - **Required**: Yes (all rule types)
-- **Format**: Comprehensive narrative text (max 255 characters)
 - **Opening**: Must start with "This query searches for" or "Identifies"
 - **Length**: Should be maximum 5 sentences
 - **Rules**:
@@ -317,6 +316,26 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
   - Must include all connectors required for query execution
   - Specify exact data types needed
   - Use official connector IDs
+  
+#### **connectorId Validation**
+- **Source of Truth**: All `connectorId` values must be validated against the official list:
+  ```
+  https://github.com/Azure/Azure-Sentinel/blob/master/.script/tests/detectionTemplateSchemaValidation/ValidConnectorIds.json
+  ```
+- **Validation Process**:
+  - Check if the `connectorId` value exists in ValidConnectorIds.json
+  - If NOT found: Flag as invalid and request update to ValidConnectorIds.json
+  - Case-sensitive matching required
+- **Valid Examples**: 
+  - `CiscoDuoSecurity` ✅ (exists in valid list)
+  - `AzureActiveDirectory` ✅ (exists in valid list)
+  - `CiscoASA` ✅ (exists in valid list)
+- **Invalid Examples**:
+  - `CiscoDuo` ❌ (correct ID is `CiscoDuoSecurity`)
+  - `AzureAD` ❌ (correct ID is `AzureActiveDirectory`)
+  - `CustomConnectorXYZ` ❌ (not in official list - needs to be added to ValidConnectorIds.json)
+- **Action if Invalid**: 
+  - Comment: "connectorId `[value]` is not found in the ValidConnectorIds.json file. Please update ValidConnectorIds.json to include this connector or use a valid connector ID from the official list."
 
 #### **entityMappings** (Entity Extraction)
 - **Required**: Yes for Detections

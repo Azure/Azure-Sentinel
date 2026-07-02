@@ -1,0 +1,598 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Location": {
+      "defaultValue": "[resourceGroup().location]",
+      "type": "string",
+      "metadata": {
+        "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+      }
+    },
+    "DetectionAlertsTableName": {
+      "type": "string",
+      "defaultValue": "DetectionAlerts",
+      "maxLength": 52,
+      "metadata": {
+        "description": "Enter name of the table used to store detection alerts. Default: DetectionAlerts."
+      }
+    },
+    "GoogleSecopsProjectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Google Cloud project ID hosting the Google SecOps instance."
+      }
+    },
+    "GoogleSecopsRegion": {
+      "type": "string",
+      "minLength": 1,
+      "allowedValues": [
+        "us",
+        "eu",
+        "europe",
+        "africa-south1",
+        "asia-east1",
+        "asia-northeast1",
+        "asia-northeast3",
+        "asia-south1",
+        "asia-southeast1",
+        "asia-southeast2",
+        "australia-southeast1",
+        "europe-central2",
+        "europe-west12",
+        "europe-west2",
+        "europe-west3",
+        "europe-west6",
+        "europe-west9",
+        "me-central1",
+        "me-central2",
+        "me-west1",
+        "northamerica-northeast2",
+        "southamerica-east1"
+      ],
+      "metadata": {
+        "description": "Google SecOps instance region. Select from the dropdown list of supported regions."
+      }
+    },
+    "GoogleSecopsInstanceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Google SecOps instance ID."
+      }
+    },
+    "GoogleSecopsServiceAccountJson": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Full JSON content of the Google Cloud service-account key."
+      }
+    },
+    "GoogleOauthScope": {
+      "type": "string",
+      "defaultValue": "https://www.googleapis.com/auth/cloud-platform",
+      "metadata": {
+        "description": "Google OAuth scope for service account authentication. Default is cloud-platform scope for full access."
+      }
+    },
+    "FunctionName": {
+      "defaultValue": "GSDAlerts",
+      "minLength": 1,
+      "maxLength": 11,
+      "type": "string",
+      "metadata": {
+        "description": "Function app name prefix (1-11 chars)"
+      }
+    },
+    "LookbackDays": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 7,
+      "metadata": {
+        "description": "Number of days to look back for initial data pull. Range: 1-7 days. Calculation: current UTC time - N days. Example: if current time is 2026-04-15T00:00:00Z and LookbackDays=1, start time will be 2026-04-14T00:05:00Z. Subsequent runs use the persisted checkpoint."
+      }
+    },
+    "FetchSchedule": {
+      "type": "string",
+      "defaultValue": "0 */10 * * * *",
+      "metadata": {
+        "description": "Timer-trigger CRON expression for GoogleSecOpsToStorage function (default: every 10 minutes). Fetches detection alerts from SecOps API."
+      }
+    },
+    "IngestSchedule": {
+      "type": "string",
+      "defaultValue": "0 2/10 * * * *",
+      "metadata": {
+        "description": "Timer-trigger CRON expression for AzureStorageToSentinel function (default: every 5 minutes). Ingests detections from File Share into Sentinel."
+      }
+    },
+    "LogLevel": {
+      "type": "string",
+      "defaultValue": "INFO",
+      "allowedValues": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR"
+      ],
+      "metadata": {
+        "description": "Application log level."
+      }
+    },
+    "TenantId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Enter Tenant Id of your Microsoft Entra Id."
+      }
+    },
+    "AzureClientId": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Enter Azure Client Id that you have created during app registration."
+      }
+    },
+    "AzureClientSecret": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "Enter Azure Client Secret that you have created during creating the client secret."
+      }
+    },
+    "AzureEntraObjectID": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Enter Object ID of your Microsoft Entra App (from Enterprise Applications)."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Log Analytics workspace name. Can be found under Log Analytics Settings."
+      }
+    },
+    "AppInsightsWorkspaceResourceID": {
+      "type": "string",
+      "metadata": {
+        "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 February 2024. Use Log Analytic Workspace -- Properties blade having Resource ID property value. This is a fully qualified resourceId which is in format /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}."
+      }
+    }
+  },
+  "variables": {
+    "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+    "StorageSuffix": "[environment().suffixes.storage]",
+    "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+    "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+    "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "dataRuleName": "[concat(toLower(parameters('FunctionName')),'dataCollectionRule', variables('suffix'))]",
+    "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+    "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+    "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('endpointName')]",
+      "location": "[parameters('Location')]",
+      "kind": "Linux",
+      "properties": {
+        "description": "Data collection endpoint for Google SecOps detection alerts ingestion.",
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('WorkspaceName'), '/', parameters('DetectionAlertsTableName'), '_CL')]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[concat(parameters('DetectionAlertsTableName'), '_CL')]",
+          "columns": [
+            {
+              "name": "DetectionType",
+              "type": "string"
+            },
+            {
+              "name": "detection",
+              "type": "dynamic"
+            },
+            {
+              "name": "createdTime",
+              "type": "datetime"
+            },
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "timeWindow",
+              "type": "dynamic"
+            },
+            {
+              "name": "timeWindow_startTime",
+              "type": "datetime"
+            },
+            {
+              "name": "timeWindow_endTime",
+              "type": "datetime"
+            },
+            {
+              "name": "collectionElements",
+              "type": "dynamic"
+            },
+            {
+              "name": "detectionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "detectionTimingDetails",
+              "type": "dynamic"
+            },
+            {
+              "name": "latencyMetrics",
+              "type": "dynamic"
+            },
+            {
+              "name": "latencyMetrics_oldestIngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "latencyMetrics_newestIngestionTime",
+              "type": "datetime"
+            },
+            {
+              "name": "latencyMetrics_oldestEventTime",
+              "type": "datetime"
+            },
+            {
+              "name": "latencyMetrics_newestEventTime",
+              "type": "datetime"
+            },
+            {
+              "name": "latencyMetrics_ingestionLatency",
+              "type": "string"
+            },
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "totalRetentionInDays": 90
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dataRuleName')]",
+      "location": "[parameters('Location')]",
+      "dependsOn": [
+        "[concat(variables('logWsResId'), '/tables/', parameters('DetectionAlertsTableName'), '_CL')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+        "streamDeclarations": {
+          "[concat('Custom-', parameters('DetectionAlertsTableName'))]": {
+            "columns": [
+              {
+                "name": "type",
+                "type": "string"
+              },
+              {
+                "name": "detection",
+                "type": "dynamic"
+              },
+              {
+                "name": "createdTime",
+                "type": "datetime"
+              },
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "timeWindow",
+                "type": "dynamic"
+              },
+              {
+                "name": "timeWindow_startTime",
+                "type": "datetime"
+              },
+              {
+                "name": "timeWindow_endTime",
+                "type": "datetime"
+              },
+              {
+                "name": "collectionElements",
+                "type": "dynamic"
+              },
+              {
+                "name": "detectionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "detectionTimingDetails",
+                "type": "dynamic"
+              },
+              {
+                "name": "latencyMetrics",
+                "type": "dynamic"
+              },
+              {
+                "name": "latencyMetrics_oldestIngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "latencyMetrics_newestIngestionTime",
+                "type": "datetime"
+              },
+              {
+                "name": "latencyMetrics_oldestEventTime",
+                "type": "datetime"
+              },
+              {
+                "name": "latencyMetrics_newestEventTime",
+                "type": "datetime"
+              },
+              {
+                "name": "latencyMetrics_ingestionLatency",
+                "type": "string"
+              },
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+              "name": "[concat('RuleDest', variables('suffix'))]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[concat('Custom-', parameters('DetectionAlertsTableName'))]"
+            ],
+            "destinations": [
+              "[concat('RuleDest', variables('suffix'))]"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_timeWindow = parse_json(timeWindow), json_latencyMetrics = parse_json(latencyMetrics)\n| extend timeWindow_startTime = todatetime(json_timeWindow.startTime), timeWindow_endTime = todatetime(json_timeWindow.endTime), latencyMetrics_oldestIngestionTime = todatetime(json_latencyMetrics.oldestIngestionTime), latencyMetrics_newestIngestionTime = todatetime(json_latencyMetrics.newestIngestionTime), latencyMetrics_oldestEventTime = todatetime(json_latencyMetrics.oldestEventTime), latencyMetrics_newestEventTime = todatetime(json_latencyMetrics.newestEventTime), latencyMetrics_ingestionLatency = tostring(json_latencyMetrics.ingestionLatency)\n| project-away json_timeWindow, timeWindow, json_latencyMetrics, latencyMetrics\n | project-rename DetectionType = ['type']",
+            "outputStream": "[concat('Custom-', parameters('DetectionAlertsTableName'), '_CL')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleDefinitions",
+      "apiVersion": "2022-04-01",
+      "name": "[variables('dcrRoleId')]",
+      "properties": {
+        "assignableScopes": [
+          "[resourceGroup().id]",
+          "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]"
+        ],
+        "description": "Entra ID application access role for Google SecOps data connector.",
+        "permissions": [
+          {
+            "actions": [
+              "Microsoft.Insights/Register/Action",
+              "Microsoft.Support/*",
+              "Microsoft.Resources/subscriptions/resourceGroups/read"
+            ],
+            "dataActions": [
+              "Microsoft.Insights/Metrics/Write",
+              "Microsoft.Insights/Telemetry/Write"
+            ]
+          }
+        ],
+        "roleName": "[variables('dcrRoleName')]",
+        "type": "customRole"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, concat('DCR Role assignment', variables('FunctionName')))]",
+      "dependsOn": [
+        "[variables('dcrRoleId')]",
+        "[variables('dataRuleName')]"
+      ],
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]",
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+        "principalId": "[parameters('AzureEntraObjectID')]"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('FunctionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "ApplicationId": "[variables('FunctionName')]",
+        "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[tolower(variables('FunctionName'))]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "virtualNetworkRules": [],
+          "ipRules": [],
+          "defaultAction": "Allow"
+        },
+        "supportsHttpsTrafficOnly": true,
+        "encryption": {
+          "services": {
+            "file": {
+              "keyType": "Account",
+              "enabled": true
+            },
+            "blob": {
+              "keyType": "Account",
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage"
+        },
+        "minimumTlsVersion": "TLS1_2"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('FunctionName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+      ],
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "properties": {
+        "cors": {
+          "corsRules": []
+        },
+        "deleteRetentionPolicy": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('FunctionName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+      ],
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "properties": {
+        "cors": {
+          "corsRules": []
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2018-11-01",
+      "name": "[variables('FunctionName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]",
+        "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+      ],
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "name": "[variables('FunctionName')]",
+        "httpsOnly": true,
+        "clientAffinityEnabled": true,
+        "alwaysOn": true,
+        "reserved": true,
+        "siteConfig": {
+          "linuxFxVersion": "python|3.12"
+        }
+      },
+      "resources": [
+        {
+          "apiVersion": "2018-11-01",
+          "type": "config",
+          "name": "appsettings",
+          "dependsOn": [
+            "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+          ],
+          "properties": {
+            "FUNCTIONS_EXTENSION_VERSION": "~4",
+            "FUNCTIONS_WORKER_RUNTIME": "python",
+            "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+            "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+            "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+            "FetchSchedule": "[parameters('FetchSchedule')]",
+            "IngestSchedule": "[parameters('IngestSchedule')]",
+            "GoogleSecopsProjectId": "[parameters('GoogleSecopsProjectId')]",
+            "GoogleSecopsRegion": "[parameters('GoogleSecopsRegion')]",
+            "GoogleSecopsInstanceId": "[parameters('GoogleSecopsInstanceId')]",
+            "GoogleSecopsServiceAccountJson": "[parameters('GoogleSecopsServiceAccountJson')]",
+            "LookbackDays": "[string(parameters('LookbackDays'))]",
+            "DetectionAlertsTableName": "[parameters('DetectionAlertsTableName')]",
+            "StateTableName": "GoogleSecOpsState",
+            "LogLevel": "[parameters('LogLevel')]",
+            "AZURE_CLIENT_ID": "[parameters('AzureClientId')]",
+            "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
+            "AZURE_TENANT_ID": "[parameters('TenantId')]",
+            "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+            "DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))).immutableId]",
+            "DcrStreamName": "[concat('Custom-', parameters('DetectionAlertsTableName'))]",
+            "SCOPE": "[variables('scope')]",
+            "OAuthScope": "[parameters('GoogleOauthScope')]",
+            "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-GoogleSecOpsDetectionAlerts-functionapp"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-secrets')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+      ],
+      "properties": {
+        "publicAccess": "None"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2019-06-01",
+      "name": "[concat(variables('FunctionName'), '/default/', tolower(variables('FunctionName')))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('FunctionName'), 'default')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+      ],
+      "properties": {
+        "shareQuota": 5120
+      }
+    }
+  ]
+}

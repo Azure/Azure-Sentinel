@@ -13,4 +13,4 @@ This ensures incident timestamps align correctly with Microsoft Sentinel's polli
 ## Resources
 
 - Privacy Policy: https://d3security.com/privacy-policy/
-- Support: https://d3security.com/
+- Support: https://d3security.com/company/contact/
