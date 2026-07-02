@@ -1,0 +1,54 @@
+id: f4a5b6c7-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+name: "Tailscale Premium: Mass fan-out from single node"
+description: |
+  Identifies when a single node initiates flows to 25 or more unique destinations within a 15-minute window. Sudden fan-out is consistent with port scanning, lateral discovery, or worm-style propagation. Requires Tailscale Premium or Enterprise.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - LateralMovement
+relevantTechniques:
+  - T1018
+  - T1021
+  - T1046
+query: |
+  let dstThreshold = 25;
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(15m)
+  | where HasVirtualTraffic
+  | mv-expand t = VirtualTraffic
+  | extend Src = tostring(t.src), Dst = tostring(t.dst)
+  | summarize UniqueDestinations = dcount(Dst), TopDestinations = make_set(Dst, 25) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags), Src
+  | where UniqueDestinations >= dstThreshold
+  | order by UniqueDestinations desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

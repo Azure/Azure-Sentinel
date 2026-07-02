@@ -1,0 +1,46 @@
+id: a1b2c3d4-5678-9012-3456-789012340042
+name: "Tailscale: Unauthorized device connected to control plane"
+description: Identifies devices actively connected to the Tailscale control plane (ConnectedToControl=true) but not yet authorized by an admin (Authorized=false). Often benign onboarding but can indicate rogue joins.
+description-detailed: |
+  Identifies devices actively connected to the Tailscale control plane (ConnectedToControl=true) but not yet authorized by an admin (Authorized=false). With device approval enabled, persistent entries warrant review; without approval, persistence may indicate a node-key injection attempt.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  Tailscale_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by DeviceId
+  | where Authorized == false and ConnectedToControl == true
+  | project TimeGenerated, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, MachineKey, NodeKey
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

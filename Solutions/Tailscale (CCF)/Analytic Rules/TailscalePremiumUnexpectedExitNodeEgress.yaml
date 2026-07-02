@@ -1,0 +1,64 @@
+id: c1d2e3f4-1a2b-3c4d-5e6f-7a8b9c0d1e2f
+name: "Tailscale Premium: Unexpected exit-node egress"
+description: Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a node may indicate routing-policy drift, data exfiltration, or compromise.
+description-detailed: |
+  Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a specific source may indicate unsanctioned egress, a compromised node pivoting, or a policy misconfiguration. Requires Tailscale Premium or Enterprise.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1090
+  - T1041
+query: |
+  let baseline = 7d;
+  let recent = 1h;
+  let recentEgress =
+      Tailscale_Network_CL
+      | where TimeGenerated > ago(recent)
+      | where HasExitTraffic
+      | mv-expand t = ExitTraffic
+      | extend Src = tostring(t.src), ExitDst = tostring(t.dst), Bytes = tolong(t.txBytes) + tolong(t.rxBytes)
+      | summarize FirstSeen = min(TimeGenerated), TotalBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, Src, ExitDst;
+  let baselineEgress =
+      Tailscale_Network_CL
+      | where TimeGenerated between (ago(baseline + recent) .. ago(recent))
+      | where HasExitTraffic
+      | mv-expand t = ExitTraffic
+      | extend Src = tostring(t.src), ExitDst = tostring(t.dst)
+      | distinct NodeId, Src, ExitDst;
+  recentEgress
+  | join kind=leftanti baselineEgress on NodeId, Src, ExitDst
+  | extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

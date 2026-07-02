@@ -1,0 +1,46 @@
+id: e9f0a1b2-3456-7890-12cd-ef1234560040
+name: "Tailscale: Tailnet lock validation failed"
+description: Identifies tailnet devices with a non-empty TailnetLockError, indicating the device failed tailnet-lock cryptographic validation. Suspicious - likely an unsigned node attempting to join.
+description-detailed: |
+  Identifies tailnet devices with a non-empty TailnetLockError, indicating the device failed tailnet-lock cryptographic validation. Tailnet lock requires new node-keys be co-signed by trusted signers; errors here are the only direct signal of a node-key injection attempt.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1556
+  - T1078
+query: |
+  Tailscale_Devices_CL
+  | where TimeGenerated > ago(1h)
+  | summarize arg_max(TimeGenerated, *) by DeviceId
+  | where isnotempty(TailnetLockError)
+  | project TimeGenerated, DeviceName, Hostname, User, Os, ClientVersion, TailnetLockError, TailnetLockKey, LastSeen, Authorized
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0

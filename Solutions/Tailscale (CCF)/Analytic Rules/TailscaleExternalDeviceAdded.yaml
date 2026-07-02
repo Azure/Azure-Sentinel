@@ -1,0 +1,53 @@
+id: b2c3d4e5-6789-0123-4567-890123450043
+name: "Tailscale: External (shared-in) device added"
+description: |
+  Identifies new external (shared-in) devices joining the tailnet that were not present in the prior 24-hour baseline. Each shared-in device expands the trust boundary - confirm the share matches a documented agreement and ACL scope.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let recent =
+      Tailscale_Devices_CL
+      | where TimeGenerated > ago(1h)
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where IsExternal == true
+      | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags;
+  let prior =
+      Tailscale_Devices_CL
+      | where TimeGenerated between (ago(2d) .. ago(1h))
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where IsExternal == true
+      | distinct DeviceId;
+  recent
+  | join kind=leftanti prior on DeviceId
+  | project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+    groupByEntities: []
+kind: Scheduled
+version: 1.0.0
