@@ -71,19 +71,6 @@ with open(path, 'w') as f:
     json.dump(ui, f, indent=4)
 print('Patched createUiDefinition.json')
 "
-# Step 3b: Remove unreferenced script-injected parameters
-python3 -c "
-import json
-path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
-with open(path) as f:
-    t = json.load(f)
-t['parameters'].pop('resourceGroupName', None)
-t['parameters'].pop('subscription', None)
-t['parameters'].pop('dcrConfig', None)
-with open(path, 'w') as f:
-    json.dump(t, f, indent=4)
-print('Removed unreferenced parameters: resourceGroupName, subscription, dcrConfig')
-"
 
 # Step 3: patch the Package mainTemplate.json parameters
 python3 -c "
