@@ -1,0 +1,37 @@
+id: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+Function:
+  Title: Parser for Mimecast Audit (CCF Push)
+  Version: "1.0.0"
+  LastUpdated: "2026-07-06"
+Category: Microsoft Sentinel Parser
+FunctionName: MimecastAudit
+FunctionAlias: MimecastAudit
+FunctionQuery: |
+  // Source: MimecastEvents_CL, mimecastEventType == "audit"
+  // Timestamp: payload.eventTime = ISO-8601 string (e.g. "2024-01-15T08:32:11+0000")
+  // Dedup key: id (opaque string token, e.g. "eNoVjE0KgEAMhO8yk...")
+  // eventInfo is a key-value string containing IP and Application fields — parsed with parse-kv.
+  // Sample-verified: YES (Audit_CL records observed)
+  let MimecastAudit_view = view() {
+      MimecastEvents_CL
+      | where mimecastEventType == "audit"
+      | extend _b = todynamic(mimecast_body)
+      | extend ["Id"]         = mimecastEventId
+      | extend ["Audit Type"] = auditType
+      | extend ["User"]       = tostring(_b.user)
+      | extend ["Event Time"] = eventTime
+      | extend ["Event Info"] = tostring(_b.eventInfo)
+      | extend ["Category"]   = tostring(_b.category)
+      | parse-kv ["Event Info"] as (IP: string, Application: string) with (pair_delimiter=',', kv_delimiter=':')
+      | project
+          ["Time Generated"] = TimeGenerated,
+          ["Id"],
+          ["Audit Type"],
+          ["User"],
+          ["Event Time"],
+          ["Event Info"],
+          ["Category"],
+          ["Source IP"] = IP,
+          Application
+  };
+  MimecastAudit_view

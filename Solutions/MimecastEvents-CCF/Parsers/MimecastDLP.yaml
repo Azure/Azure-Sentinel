@@ -1,0 +1,39 @@
+id: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
+Function:
+  Title: Parser for Mimecast SEG Data Leak Prevention (CCF Push)
+  Version: "1.0.0"
+  LastUpdated: "2026-07-06"
+Category: Microsoft Sentinel Parser
+FunctionName: MimecastDLP
+FunctionAlias: MimecastDLP
+FunctionQuery: |
+  // Source: MimecastEvents_CL, mimecastEventType == "seg_dlp"
+  //
+  // DISCRIMINATOR NOTE (envelope-dependent):
+  //   DLP events are expected to carry auditType == "DLP" (or similar) in the payload, which
+  //   would cause the DCR discriminator to classify them as "audit". If Mimecast Event Push
+  //   sends DLP events with a Logtype field instead (e.g. Logtype == "dlp"), they would be
+  //   classified as "seg_cg" or "seg_dlp" depending on configuration.
+  //   CURRENT ASSUMPTION: DLP events arrive with mimecastEventType == "seg_dlp" as a distinct
+  //   Logtype value. If DLP events are not appearing, check mimecastLogtype values in MimecastCG
+  //   output or mimecastEventType == "audit" with auditType containing "DLP".
+  //   SAMPLE-UNVERIFIED: Seg_Dlp_CL was empty on the reference tenant.
+  //
+  // Timestamp: payload.eventTime = ISO-8601 string (assumed, unverified)
+  // Dedup key: strcat(senderAddress|recipientAddress|messageId) — no native id observed
+  let MimecastDLP_view = view() {
+      MimecastEvents_CL
+      | where mimecastEventType == "seg_dlp"
+      | extend _b = todynamic(mimecast_body)
+      | project
+          ["Time Generated"]      = TimeGenerated,
+          ["Event Time"]          = iff(isnotempty(eventTime), eventTime, tostring(_b.eventTime)),
+          ["Sender Address"]      = senderAddress,
+          ["Recipient Address"]   = recipientAddress,
+          ["Subject"]             = subject,
+          ["Route"]               = route,
+          ["Policy"]              = tostring(_b.policy),
+          ["Action"]              = action,
+          ["Message ID"]          = messageId
+  };
+  MimecastDLP_view

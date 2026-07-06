@@ -1,24 +1,36 @@
-// MimecastEvents parser — deduplication view over MimecastEvents_CL
+// MimecastEvents — unified deduplication view over MimecastEvents_CL
 //
-// Deduplication key: mimecastEventId + mimecastEventType.
-// For events where mimecastEventId is absent (e.g. SEG Cloud Gateway uses aggregateId),
-// a synthetic key is derived from aggregateId or the concatenation of sender + messageId.
+// EVENT TYPE DISCRIMINATOR (derived in DCR transform, NOT from a push-envelope field):
+//   mimecastEventType values set by transformKql:
+//     "seg_cg"           — SEG Cloud Gateway (Logtype = email_receipt | email_process | email_spam)
+//     "email_ttp_ap"     — SEG Attachment Protect rows (Logtype = email_ttp_ap), routed to TTP parser
+//     "audit"            — Mimecast Audit events (auditType field present)
+//     "ttp_impersonation"— TTP Impersonation Protect (impersonationResults array present and non-empty)
+//     "ttp_url"          — TTP URL Protect (url field present, no Logtype/auditType/impersonationResults)
+//     "ttp_attachment"   — Dedicated TTP Attachment events (if pushed as separate stream by Mimecast)
+//     "unknown"          — Unclassified (fallback)
 //
-// Usage:
-//   MimecastEvents                                  -- all events
-//   MimecastEvents | where mimecastEventType == "ttp_url"
-//   MimecastEvents | where mimecastEventType == "seg_cg"
-//   MimecastEvents | where mimecastEventType == "audit"
+// DEDUP KEY STRATEGY (per event type):
+//   seg_cg / email_ttp_ap  →  processingId   (unique per row; do NOT use aggregateId — it groups rows)
+//   audit                  →  id             (opaque token, e.g. eNoVjE0KgEAMhO8yk...)
+//   ttp_impersonation      →  id             (MTOKEN format, e.g. eNoVjcEKAjAMhN...)
+//   ttp_url                →  synthetic      (strcat of messageId|url|date — no native id on this event)
+//   ttp_attachment         →  strcat(senderAddress|recipientAddress|messageId)
 //
-// Legacy table equivalences:
-//   ttp_url          ~  Ttp_Url_CL
-//   ttp_attachment   ~  Ttp_Attachment_CL
-//   ttp_impersonation~  Ttp_Impersonation_CL
-//   seg_cg           ~  Seg_Cg_CL
-//   seg_dlp          ~  Seg_Dlp_CL
-//   audit            ~  Audit_CL
-//   cloud_integrated ~  Cloud_Integrated_CL
-//   awareness_*      ~  Awareness_*_CL
+// TIMESTAMP NOTES (all handled in DCR transform before arrival here):
+//   seg_cg / email_ttp_ap  →  payload.timestamp = epoch MILLISECONDS (real/double);
+//                              computed as datetime(1970-01-01) + tolong(timestamp)*1ms
+//   audit / ttp_impersonation → payload.eventTime = ISO-8601 string
+//   ttp_url                →  payload.date = ISO-8601 with timezone offset (+00:00 form)
+//   TimeGenerated is always clamped: if null or < ago(2d), set to now()
+//
+// USAGE:
+//   MimecastEvents                                                   -- all deduplicated events
+//   MimecastEvents | where mimecastEventType == "ttp_url"            -- URL protect events
+//   MimecastEvents | where mimecastEventType == "seg_cg"             -- SEG cloud gateway
+//   MimecastEvents | where mimecastEventType in ("email_ttp_ap","ttp_attachment") -- attachment protect
+//   MimecastEvents | where mimecastEventType == "audit"              -- audit events
+//   MimecastEvents | where mimecastEventType == "ttp_impersonation"  -- impersonation (pre-mv-expand)
 
 let dummy_table = datatable(
     TimeGenerated: datetime,
@@ -30,33 +42,30 @@ let MimecastEvents = view() {
     union isfuzzy=true
         dummy_table,
         MimecastEvents_CL
-    // Build a stable dedup key: prefer mimecastEventId; fall back to aggregateId; then synthetic
-    | extend _dedupKey = iff(
-        isnotempty(mimecastEventId), mimecastEventId,
-        iff(isnotempty(aggregateId), aggregateId,
-            strcat(mimecastEventType, "|", messageId, "|", senderAddress, "|", recipientAddress))
-      )
-    | summarize arg_max(TimeGenerated, *) by _dedupKey, mimecastEventType
-    | project-away _dedupKey
+    // Deduplicate: prefer latest ingestion for same logical event
+    | summarize arg_max(TimeGenerated, *) by mimecastEventId, mimecastEventType
     | project
         TimeGenerated,
-        EventTime        = column_ifexists("eventTime", ""),
-        EventType        = column_ifexists("mimecastEventType", ""),
-        EventId          = column_ifexists("mimecastEventId", ""),
-        SenderAddress    = column_ifexists("senderAddress", ""),
-        RecipientAddress = column_ifexists("recipientAddress", ""),
-        Subject          = column_ifexists("subject", ""),
-        Action           = column_ifexists("action", ""),
-        MessageId        = column_ifexists("messageId", ""),
-        Route            = column_ifexists("route", ""),
-        Url              = column_ifexists("url", ""),
-        FileHash         = column_ifexists("fileHash", ""),
-        FileName         = column_ifexists("fileName", ""),
-        ScanResult       = column_ifexists("scanResult", ""),
-        SenderIp         = column_ifexists("senderIp", ""),
-        AuditType        = column_ifexists("auditType", ""),
-        AccountId        = column_ifexists("accountId", ""),
-        AggregateId      = column_ifexists("aggregateId", ""),
-        RawBody          = column_ifexists("mimecast_body", "")
+        EventTime             = column_ifexists("eventTime", ""),
+        EventType             = column_ifexists("mimecastEventType", ""),
+        EventId               = column_ifexists("mimecastEventId", ""),
+        Logtype               = column_ifexists("mimecastLogtype", ""),
+        Subtype               = column_ifexists("mimecastSubtype", ""),
+        SenderAddress         = column_ifexists("senderAddress", ""),
+        RecipientAddress      = column_ifexists("recipientAddress", ""),
+        Subject               = column_ifexists("subject", ""),
+        Action                = column_ifexists("action", ""),
+        MessageId             = column_ifexists("messageId", ""),
+        Route                 = column_ifexists("route", ""),
+        Url                   = column_ifexists("url", ""),
+        FileHash              = column_ifexists("fileHash", ""),
+        FileName              = column_ifexists("fileName", ""),
+        ScanResult            = column_ifexists("scanResult", ""),
+        SenderIp              = column_ifexists("senderIp", ""),
+        AuditType             = column_ifexists("auditType", ""),
+        AccountId             = column_ifexists("accountId", ""),
+        AggregateId           = column_ifexists("aggregateId", ""),
+        ImpersonationResults  = column_ifexists("impersonationResults", dynamic(null)),
+        RawBody               = column_ifexists("mimecast_body", "")
 };
 MimecastEvents
