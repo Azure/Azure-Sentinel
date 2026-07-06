@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimAuthenticationGoogleWorkspaceReportsLogins')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM filtering parser for Google Workspace Logins",
+        "category": "ASIM",
+        "FunctionAlias": "ASimAuthenticationGoogleWorkspaceReportsLogins",
+        "query": "let GoogleWorkspaceLoginParser = (\n    disabled: bool = false,\n    pack: bool = false\n)\n{\n    GWorkspace_ReportsAPI_login_CL\n    | where not(disabled)\n    | where event_type_s in (\"login\", \"logout\")\n    | where event_name_s in (\n        \"login_success\",\n        \"login_failure\",\n        \"logout\",\n        \"risky_sensitive_action_allowed\",\n        \"risky_sensitive_action_blocked\"\n        )\n    | extend\n        EventVendor = \"Google\",\n        Dvc = \"Google Workspace\",\n        Challenges = iff(isempty(login_challenge_method_s), dynamic([\"none\"]), parse_json(login_challenge_method_s)),\n        EventUid = _ItemId,\n        EventProduct = \"Google Workspace\",\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.4\",\n        EventCount = int(1),\n        EventStartTime = TimeGenerated,\n        EventEndTime = TimeGenerated,\n        EventMessage = case(\n            event_name_s == \"login_failure\",\n                strcat(actor_email_s, \" failed to login.\"),\n            event_name_s == \"login_success\",\n                strcat(actor_email_s, \" logged in.\"),\n            event_name_s == \"risky_sensitive_action_allowed\",\n                strcat(actor_email_s, \" was allowed to attempt sensitive action: \", sensitive_action_name_s, \". This action might be restricted based on privileges or other limitations.\"),\n            event_name_s == \"risky_sensitive_action_blocked\",\n                strcat(actor_email_s, \" wasn't allowed to attempt sensitive action: \", sensitive_action_name_s, \".\"),\n            event_name_s == \"logout\",\n                strcat(actor_email_s, \" logged out.\"),\n            \"\"\n        ),\n        EventType = case(\n            event_name_s startswith_cs \"login\", \"Logon\",\n            event_name_s == \"logout\", \"Logoff\",\n            event_name_s startswith_cs \"risky_sensitive_action\", \"Logon\",\n            \"\"\n        ),\n        EventResult = case(\n            event_name_s in (\"login_success\", \"risky_sensitive_action_allowed\", \"logout\"), \"Success\",\n            event_name_s in (\"login_failure\", \"risky_sensitive_action_blocked\"), \"Failure\",\n            \"\"\n        ),\n        EventResultDetails = iff(\n            event_name_s in (\"risky_sensitive_action_blocked\"),\n            \"Logon violates policy\",\n            \"Other\"\n        ),\n        TargetUsernameType = \"UPN\",\n        TargetUserIdType = \"Other\",\n        Src = IPAddress,\n        SrcIpAddr = IPAddress,\n        IpAddr = IPAddress\n    | extend HasMFA = Challenges has_any (\n        \"security_key\", \"security_key_otp\", \"passkey\", \"userless_fido\",\n        \"google_authenticator\", \"google_prompt\", \"device_prompt\",\n        \"idv_preregistered_phone\", \"idv_any_phone\", \"backup_code\",\n        \"offline_otp\", \"internal_two_factor\", \"cross_device\", \"web_approval\"\n        )\n    | extend LogonMethod = case(\n        HasMFA, \"Multi factor authentication\",\n        login_type_s == \"google_password\", \"Username & Password\",\n        \"Other\"\n        ),\n        LogonProtocol = case(\n            login_type_s == \"saml\", \"SAML\",\n            Challenges has_any (\"saml\"), \"SAML\",\n            Challenges has_any (\"oidc\"), \"OpenID Connect\",\n            \"Other\"\n        )\n    | project-rename\n        EventOriginalUid = id_uniqueQualifier_s,\n        TargetUserId = actor_profileId_s,\n        TargetUsername = actor_email_s,\n        SrcGeoCountry = networkInfo_regionCode_s,\n        SrcGeoRegion = networkInfo_subdivisionCode_s\n    | extend AdditionalFields = iff(\n    pack == true,\n    bag_merge(\n        bag_pack(\n            \"LoginType\", login_type_s,\n            \"LoginChallengeMethods\", Challenges\n        ),\n        iff(\n            isempty(sensitive_action_name_s),\n            dynamic({}),\n            bag_pack(\"SensitiveActionName\", sensitive_action_name_s)\n        )\n    ),\n    dynamic(null)\n    )\n    | project\n        TimeGenerated,\n        Type,\n        EventMessage,\n        EventStartTime,\n        EventEndTime,\n        EventType,\n        EventResult,\n        EventResultDetails,\n        LogonProtocol,\n        LogonMethod,\n        EventUid,\n        EventOriginalUid,\n        EventProduct,\n        EventVendor,\n        EventSchema,\n        EventSchemaVersion,\n        EventCount,\n        TargetUsername,\n        TargetUsernameType,\n        TargetUserId,\n        TargetUserIdType,\n        Dvc,\n        Src,\n        SrcIpAddr,\n        IpAddr,\n        SrcGeoCountry,\n        SrcGeoRegion,\n        AdditionalFields\n};\nGoogleWorkspaceLoginParser(\n    disabled = disabled,\n    pack = pack\n)",
+        "version": 1,
+        "functionParameters": "disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
