@@ -1,0 +1,51 @@
+{
+  "name": "MimecastEventsPushDCR",
+  "apiVersion": "2021-09-01-preview",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "location": "[parameters('workspace-location')]",
+  "properties": {
+    "dataCollectionEndpointId": "[resourceId(parameters('subscription'), parameters('resourceGroupName'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('workspace'))]",
+    "streamDeclarations": {
+      "Custom-MimecastEvents": {
+        "columns": [
+          {
+            "name": "mimecastEventType",
+            "type": "string"
+          },
+          {
+            "name": "mimecastEventId",
+            "type": "string"
+          },
+          {
+            "name": "eventTime",
+            "type": "string"
+          },
+          {
+            "name": "mimecast_body",
+            "type": "dynamic"
+          }
+        ]
+      }
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "workspaceResourceId": "[variables('workspaceResourceId')]",
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Custom-MimecastEvents"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| extend TimeGenerated = iff(\n    isnull(todatetime(eventTime)) or todatetime(eventTime) < ago(2d),\n    now(),\n    todatetime(eventTime)\n  )\n| extend mimecastEventType = tostring(mimecastEventType)\n| extend mimecastEventId   = tostring(mimecastEventId)\n| extend senderAddress    = tostring(iff(isnotempty(mimecast_body.senderAddress),     mimecast_body.senderAddress,\n                             iff(isnotempty(mimecast_body.senderEnvelope),            mimecast_body.senderEnvelope,\n                             iff(isnotempty(mimecast_body.fromUserEmailAddress),       mimecast_body.fromUserEmailAddress, ''))))\n| extend recipientAddress = tostring(iff(isnotempty(mimecast_body.recipientAddress),  mimecast_body.recipientAddress,\n                             iff(isnotempty(mimecast_body.userEmailAddress),           mimecast_body.userEmailAddress, '')))\n| extend subject          = tostring(mimecast_body.subject)\n| extend action           = tostring(iff(isnotempty(mimecast_body.action),            mimecast_body.action,\n                             iff(isnotempty(mimecast_body.actionTriggered),            mimecast_body.actionTriggered, '')))\n| extend messageId        = tostring(mimecast_body.messageId)\n| extend route            = tostring(mimecast_body.route)\n| extend url              = tostring(mimecast_body.url)\n| extend fileHash         = tostring(iff(isnotempty(mimecast_body.fileHash),          mimecast_body.fileHash,\n                             iff(isnotempty(mimecast_body.sha256),                    mimecast_body.sha256, '')))\n| extend fileName         = tostring(mimecast_body.fileName)\n| extend scanResult       = tostring(iff(isnotempty(mimecast_body.scanResult),        mimecast_body.scanResult,\n                             iff(isnotempty(mimecast_body.result),                    mimecast_body.result, '')))\n| extend senderIp         = tostring(iff(isnotempty(mimecast_body.senderIp),          mimecast_body.senderIp,\n                             iff(isnotempty(mimecast_body.senderIpAddress),           mimecast_body.senderIpAddress,\n                             iff(isnotempty(mimecast_body.sendingIp),                 mimecast_body.sendingIp, ''))))\n| extend auditType        = tostring(mimecast_body.auditType)\n| extend accountId        = tostring(mimecast_body.accountId)\n| extend aggregateId      = tostring(mimecast_body.aggregateId)\n| extend mimecast_body    = tostring(mimecast_body)\n| project TimeGenerated, eventTime, mimecastEventType, mimecastEventId, mimecast_body,\n          senderAddress, recipientAddress, subject, action, messageId, route,\n          url, fileHash, fileName, scanResult, senderIp, auditType, accountId, aggregateId",
+        "outputStream": "Custom-MimecastEvents_CL"
+      }
+    ]
+  }
+}
