@@ -35,7 +35,7 @@ The solution provides visibility into:
         Netskope Log Streaming
                  |
                  v
-        Azure Blob Storage            (gzip-compressed JSON)
+        Azure Blob Storage            (gzip-compressed CSV)
                  |
                  v
            Event Grid                 (Blob Created notifications)
@@ -122,7 +122,7 @@ then click **Connect**.
 4. Confirm alerts populate severity and DLP fields:
    ```kusto
    NetskopeAlertEvents_CL
-   | where IsAlert =~ "yes"
+   | where Alert =~ "yes"
    | summarize count() by Severity, AlertType
    ```
 5. Open the **Netskope Alerts & Events** workbook and confirm tiles render.
