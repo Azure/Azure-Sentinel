@@ -146,6 +146,45 @@ with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Fixed DCR dataCollectionEndpointId')
 "
+
+# Step 3e: Fix dcrConfig wiring (outer stays plain, nested references outer, usage references nested)
+python3 -c "
+import json
+path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
+with open(path) as f:
+    t = json.load(f)
+
+# 1. Outer parameter (line ~44): must stay a plain object, NOT a parameters() reference
+t['parameters']['dcrConfig'] = {
+    'type': 'object',
+    'defaultValue': {
+        'dataCollectionEndpoint': '',
+        'dataCollectionRuleImmutableId': ''
+    }
+}
+
+# 2. Walk resources to find the nested contentTemplate mainTemplate + its RestApiPoller resource
+for r in t['resources']:
+    if r.get('properties', {}).get('contentKind') == 'ResourcesDataConnector':
+        nested = r['properties']['mainTemplate']
+
+        # 2a. Nested parameter declaration: reference the OUTER dcrConfig as its default
+        if 'dcrConfig' in nested.get('parameters', {}):
+            nested['parameters']['dcrConfig']['defaultValue'] = \"[parameters('dcrConfig')]\"
+            # NOTE: type must remain 'object' — do NOT set defaultValue to a nested dict here
+
+        # 2b. Usage site inside the RestApiPoller resource: reference the NESTED dcrConfig
+        for nres in nested.get('resources', []):
+            props = nres.get('properties', {})
+            if 'dcrConfig' in props and 'streamName' in props['dcrConfig']:
+                props['dcrConfig']['dataCollectionEndpoint'] = \"[parameters('dcrConfig').dataCollectionEndpoint]\"
+                props['dcrConfig']['dataCollectionRuleImmutableId'] = \"[parameters('dcrConfig').dataCollectionRuleImmutableId]\"
+
+with open(path, 'w') as f:
+    json.dump(t, f, indent=4)
+print('Fixed dcrConfig: outer plain, nested inherits outer, usage references nested')
+"
+
 # Step 4: Regenerate the zip from the patched files
 
 python3 -c "
