@@ -1,5 +1,9 @@
 # Changelog for vimRegistryEventEmpty.yaml
 
+## Version 1.0.0
+
+- (2026-07-06) Added entity key columns and AdditionalEntities column to support available event entities
+
 ## Version 0.2.0
 
 - (2026-03-17) Update empty parser alphabetically and align with columns from ASimTester.csv - [PR #13851](https://github.com/Azure/Azure-Sentinel/pull/13851)
