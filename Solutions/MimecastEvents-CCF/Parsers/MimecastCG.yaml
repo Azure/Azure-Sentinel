@@ -1,80 +1,37 @@
-id: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+id: a9da07a2-ea63-4d8a-ba4f-64539b3bc0f0
 Function:
-  Title: Parser for Mimecast SEG Cloud Gateway (CCF Push)
-  Version: "1.0.0"
-  LastUpdated: "2026-07-06"
+  Title: Parser for MimecastCG
+  Version: '1.0.0'
+  LastUpdated: 2026-07-06
 Category: Microsoft Sentinel Parser
 FunctionName: MimecastCG
 FunctionAlias: MimecastCG
 FunctionQuery: |
-  // Source: MimecastEvents_CL, mimecastEventType == "seg_cg"
-  // Note: email_ttp_ap rows (SEG attachment-protect) are routed to MimecastTTPAttachment, not here.
-  // Timestamp: payload.timestamp is epoch milliseconds (real); converted in DCR transform.
-  // Dedup key: processingId (unique per SEG row). aggregateId groups logical events — not used for dedup.
-  // Sample-verified: YES (Seg_Cg_CL records observed with Logtype email_receipt/email_process/email_spam)
-  let MimecastCG_view = view() {
-      MimecastEvents_CL
-      | where mimecastEventType == "seg_cg"
-      | extend _b = todynamic(mimecast_body)
-      | project
-          ["Time Generated"]                = TimeGenerated,
-          ["Event Time"]                    = tostring(datetime(1970-01-01) + tolong(_b.timestamp) * 1ms),
-          ["Processing ID"]                 = mimecastEventId,
-          ["Aggregate ID"]                  = aggregateId,
-          ["Account ID"]                    = accountId,
-          ["Log Type"]                      = mimecastLogtype,
-          ["Sub Type"]                      = mimecastSubtype,
-          ["Direction"]                     = tostring(_b.direction),
-          ["Route"]                         = route,
-          ["Sender Envelope"]               = tostring(_b.senderEnvelope),
-          ["Sender Domain"]                 = tostring(_b.senderDomain),
-          ["Sender IP"]                     = senderIp,
-          ["Sender Header"]                 = tostring(_b.senderHeader),
-          ["Recipients"]                    = tostring(_b.recipients),
-          ["Message ID"]                    = messageId,
-          ["Subject"]                       = subject,
-          ["Action"]                        = action,
-          ["Hold Reason"]                   = tostring(_b.holdReason),
-          ["Delivered"]                     = tostring(_b.delivered),
-          ["Delivery Attempts"]             = tostring(_b.deliveryAttempts),
-          ["Delivery Errors"]               = tostring(_b.deliveryErrors),
-          ["Destination IP"]                = tostring(_b.destinationIp),
-          ["Host Name"]                       = tostring(_b.Hostname),
-          ["TLS Used"]                      = tostring(_b.tlsUsed),
-          ["TLS Version"]                   = tostring(_b.tlsVersion),
-          ["TLS Cipher"]                    = tostring(_b.tlsCipher),
-          ["Email Size"]                    = tostring(_b.emailSize),
-          ["Number of Attachments"]         = tostring(_b.numberAttachments),
-          ["Total of Size Attachments"]     = tostring(_b.totalSizeAttachments),
-          ["Attachments"]                   = tostring(_b.attachments),
-          ["Url Category"]                  = tostring(_b.urlCategory),
-          ["Scan Results"]                  = scanResult,
-          ["Tagged Malicious"]              = tostring(_b.taggedMalicious),
-          ["Tagged External"]               = tostring(_b.taggedExternal),
-          ["Similar Domain"]                = tostring(_b.similarDomain),
-          ["Monitored Domain Source"]       = tostring(_b.monitoredDomainSource),
-          ["Similar Internal Domain"]       = tostring(_b.similarInternalDomain),
-          ["Similar Custom External Domain"]= tostring(_b.similarCustomExternalDomain),
-          ["Similar Mimecast External Domain"] = tostring(_b.similarMimecastExternalDomain),
-          ["New Domain"]                    = tostring(_b.newDomain),
-          ["Custom Name Match"]             = tostring(_b.customNameMatch),
-          ["Reply Mismatch"]                = tostring(_b.replyMismatch),
-          ["Internal User Name"]            = tostring(_b.internalUserName),
-          ["Items Detected"]                = tostring(_b.itemsDetected),
-          ["Custom Threat Dictionary"]      = tostring(_b.customThreatDictionary),
-          ["Mimecast Threat Dictionary"]    = tostring(_b.mimecastThreatDictionary),
-          ["Virus Found"]                   = tostring(_b.virusFound),
-          ["Sha256"]                        = tostring(_b.sha256),
-          ["Sha1"]                          = tostring(_b.sha1),
-          ["Md5"]                           = tostring(_b.md5),
-          ["File Name"]                     = tostring(_b.fileName),
-          ["File Extension"]                = tostring(_b.fileExtension),
-          ["Rejection Type"]                = tostring(_b.rejectionType),
-          ["Rejection Code"]                = tostring(_b.rejectionCode),
-          ["Rejection Info"]                = tostring(_b.rejectionInfo),
-          ["Spam Info"]                     = tostring(_b.spamInfo),
-          ["Spam Processing Detail"]        = tostring(_b.spamProcessingDetail),
-          ["Partition"]                     = tostring(_b.partition),
-          ["Offset"]                        = tostring(_b.offset)
-  };
-  MimecastCG_view
+    MimecastEvents_CL
+    | where mimecastEventType in ('seg_cg', 'email_ttp_ap')
+    | summarize arg_max(TimeGenerated, *) by mimecastEventId
+    | extend d = todynamic(mimecast_body)
+    | project TimeGenerated,
+        Logtype = tostring(d.Logtype), subtype = tostring(d.subtype),
+        aggregateId = tostring(d.aggregateId), processingId = tostring(d.processingId),
+        accountId = tostring(d.accountId), messageId = tostring(d.messageId),
+        subject = tostring(d.subject), senderEnvelope = tostring(d.senderEnvelope),
+        senderHeader = tostring(d.senderHeader), senderDomain = tostring(d.senderDomain),
+        recipients = tostring(d.recipients), senderIp = tostring(d.senderIp),
+        destinationIp = tostring(d.destinationIp), route = tostring(d.route),
+        direction = tostring(d.direction), action = tostring(d.action),
+        holdReason = tostring(d.holdReason), rejectionType = tostring(d.rejectionType),
+        rejectionCode = tostring(d.rejectionCode), rejectionInfo = tostring(d.rejectionInfo),
+        delivered = tostring(d.delivered), deliveryAttempts = tostring(d.deliveryAttempts),
+        deliveryErrors = tostring(d.deliveryErrors), spamInfo = tostring(d.spamInfo),
+        spamProcessingDetail = tostring(d.spamProcessingDetail),
+        tlsUsed = tostring(d.tlsUsed), tlsVersion = tostring(d.tlsVersion), tlsCipher = tostring(d.tlsCipher),
+        attachments = tostring(d.attachments), fileName = tostring(d.fileName),
+        fileExtension = tostring(d.fileExtension), sha256 = tostring(d.sha256),
+        sha1 = tostring(d.sha1), md5 = tostring(d.md5),
+        virusFound = tostring(d.virusFound), urlCategory = tostring(d.urlCategory),
+        scanResults = tostring(d.scanResults), emailSize = tostring(d.emailSize),
+        numberAttachments = tostring(d.numberAttachments), Hostname = tostring(d.Hostname),
+        internalUserName = tostring(d.internalUserName),
+        taggedExternal = tostring(d.taggedExternal), taggedMalicious = tostring(d.taggedMalicious),
+        timestamp = tostring(d.timestamp)

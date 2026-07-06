@@ -1,73 +1,35 @@
 {
-  "name": "MimecastEventsPush",
+  "name": "MimecastEventsCCFDefinition",
   "apiVersion": "2022-09-01-preview",
   "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
   "location": "[parameters('workspace-location')]",
   "kind": "Customizable",
   "properties": {
     "connectorUiConfig": {
-      "id": "MimecastEventsPush",
-      "title": "Mimecast Events (Push)",
+      "id": "MimecastEventsCCFDefinition",
+      "title": "Mimecast Security Events (via Codeless Connector Framework)",
       "publisher": "Mimecast",
-      "descriptionMarkdown": "The [Mimecast](https://www.mimecast.com) Events connector ingests security events from the Mimecast Event Push service into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. All Mimecast event types — Secure Email Gateway (Cloud Gateway, DLP), Targeted Threat Protection (URL, Attachment, Impersonation Protect), Audit, Cloud Integrated, and Awareness Training — are routed to the unified `MimecastEvents_CL` table. The `mimecastEventType` column acts as a discriminator so existing KQL queries can be adapted with a simple filter. Auth is Entra client credentials configured on the Mimecast side; no Mimecast API credentials are stored in Microsoft Sentinel.",
+      "descriptionMarkdown": "Ingests Mimecast Secure Email Gateway, Targeted Threat Protection, DLP and Audit events into Microsoft Sentinel using Mimecast **Event Push** and the Codeless Connector Framework (Push). Mimecast posts events directly to the Azure Monitor Logs Ingestion API \u2014 no Mimecast credentials are stored in Sentinel.",
       "graphQueriesTableName": "MimecastEvents_CL",
       "graphQueries": [
         {
-          "metricName": "All Mimecast events",
+          "metricName": "Total events received",
           "legend": "MimecastEvents_CL",
           "baseQuery": "MimecastEvents_CL"
-        },
-        {
-          "metricName": "TTP URL events",
-          "legend": "TTP URL",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'ttp_url'"
-        },
-        {
-          "metricName": "TTP Attachment events",
-          "legend": "TTP Attachment",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'ttp_attachment'"
-        },
-        {
-          "metricName": "TTP Impersonation events",
-          "legend": "TTP Impersonation",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'ttp_impersonation'"
-        },
-        {
-          "metricName": "SEG Cloud Gateway events",
-          "legend": "SEG Cloud Gateway",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'seg_cg'"
-        },
-        {
-          "metricName": "SEG DLP events",
-          "legend": "SEG DLP",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'seg_dlp'"
-        },
-        {
-          "metricName": "Audit events",
-          "legend": "Audit",
-          "baseQuery": "MimecastEvents_CL | where mimecastEventType == 'audit'"
         }
       ],
       "sampleQueries": [
         {
-          "description": "All Mimecast events (last 24 h) — volume by type",
-          "query": "MimecastEvents_CL\n| where TimeGenerated > ago(24h)\n| summarize count() by mimecastEventType\n| order by count_ desc"
+          "description": "All Mimecast events by type",
+          "query": "MimecastEvents_CL\n| summarize count() by mimecastEventType\n| order by count_ desc"
         },
         {
-          "description": "TTP URL events — blocked or malicious URLs",
-          "query": "MimecastEvents_CL\n| where mimecastEventType == 'ttp_url'\n| where scanResult == 'malicious' or action == 'Block'\n| extend body = todynamic(mimecast_body)\n| project TimeGenerated, senderAddress, recipientAddress, url, scanResult, action"
+          "description": "Secure Email Gateway events (deduplicated)",
+          "query": "MimecastCG\n| take 100"
         },
         {
-          "description": "TTP Attachment events — blocked attachments",
-          "query": "MimecastEvents_CL\n| where mimecastEventType == 'ttp_attachment'\n| where action == 'Block' or scanResult !in ('clean', '')\n| project TimeGenerated, senderAddress, recipientAddress, fileName, fileHash, scanResult, action"
-        },
-        {
-          "description": "SEG Cloud Gateway — top senders by event count",
-          "query": "MimecastEvents_CL\n| where mimecastEventType == 'seg_cg'\n| summarize EventCount = count() by senderAddress\n| top 20 by EventCount desc"
-        },
-        {
-          "description": "Audit events — by audit type",
-          "query": "MimecastEvents_CL\n| where mimecastEventType == 'audit'\n| extend body = todynamic(mimecast_body)\n| summarize count() by auditType\n| order by count_ desc"
+          "description": "TTP URL Protect events",
+          "query": "MimecastTTPUrl\n| take 100"
         }
       ],
       "dataTypes": [
@@ -88,8 +50,7 @@
         }
       ],
       "availability": {
-        "status": 1,
-        "isPreview": true
+        "isPreview": false
       },
       "permissions": {
         "resourceProvider": [
@@ -107,42 +68,32 @@
         ],
         "customs": [
           {
-            "name": "Microsoft Entra",
-            "description": "Permission to create an app registration in Microsoft Entra ID. Requires Entra ID Application Developer role or higher."
-          },
-          {
-            "name": "Microsoft Azure",
-            "description": "Permission to assign the Monitoring Metrics Publisher role on the Data Collection Rule (DCR). Requires Azure RBAC Owner or User Access Administrator role."
-          },
-          {
             "name": "Mimecast Event Push",
-            "description": "An active Mimecast subscription with access to the Event Push (SIEM) integration settings in the Mimecast Administration Console."
+            "description": "Access to the Mimecast Administration Console (Integrations Hub) to configure an Event Push integration with OAuth 2.0 client credentials."
+          },
+          {
+            "name": "Microsoft Entra ID",
+            "description": "Permission to create an application registration (performed automatically by the Deploy button below)."
           }
         ]
       },
       "instructionSteps": [
         {
-          "title": "1. Deploy Connector Resources",
-          "description": "This connector enables Mimecast to push security events directly to Microsoft Sentinel via the Azure Monitor Logs Ingestion API.",
+          "title": "1. Deploy the ingestion resources",
+          "description": "This creates the Data Collection Endpoint, Data Collection Rule, custom table, and a Microsoft Entra application (with client secret) scoped to ingest into this connector's table only.",
           "instructions": [
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "#### Automated Deployment\nClicking **Deploy** will create:\n- The `MimecastEvents_CL` custom log table\n- A Data Collection Rule (DCR) with ingestion-time field extraction\n- A Data Collection Endpoint (DCE) for log ingestion\n- A Microsoft Entra application with OAuth 2.0 client credentials\n- The required **Monitoring Metrics Publisher** role assignment on the DCR\n\nThis allows Mimecast to securely push events using OAuth 2.0 client credentials targeting `scope = https://monitor.azure.com/.default`.\n\n> **Note:** No Mimecast credentials are stored in Microsoft Sentinel. Authentication is configured entirely on the Mimecast side."
-              }
-            },
             {
               "type": "DeployPushConnectorButton",
               "parameters": {
-                "label": "Deploy Mimecast Events Push Connector",
-                "applicationDisplayName": "Mimecast Events Sentinel Push Connector"
+                "label": "Deploy",
+                "applicationDisplayName": "Mimecast Events Push Connector"
               }
             }
           ]
         },
         {
-          "title": "2. Copy Configuration Values",
-          "description": "After deployment completes, copy the following values into the Mimecast Administration Console to configure the Event Push SIEM integration.",
+          "title": "2. Configure Mimecast Event Push",
+          "description": "In the Mimecast Administration Console, open **Integrations Hub \u2192 Event Push** and create a destination with format **JSON** and OAuth 2.0 client credentials. Enter the values below.\n\n- **Token endpoint**: https://login.microsoftonline.com/{Tenant ID}/oauth2/v2.0/token\n- **Scope**: https://monitor.azure.com/.default\n- **Destination URL**: {Data Collection Endpoint}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-MimecastEvents_CL?api-version=2023-01-01",
           "instructions": [
             {
               "type": "CopyableLabel",
@@ -156,65 +107,37 @@
             {
               "type": "CopyableLabel",
               "parameters": {
-                "label": "Application (Client) ID",
+                "label": "Client ID (Application ID)",
                 "fillWith": [
                   "ApplicationId"
-                ],
-                "placeholder": "Deploy the push connector above to obtain the Application ID"
+                ]
               }
             },
             {
               "type": "CopyableLabel",
               "parameters": {
-                "label": "Client Secret",
+                "label": "Client secret",
                 "fillWith": [
                   "ApplicationSecret"
-                ],
-                "placeholder": "Deploy the push connector above to obtain the Client Secret"
+                ]
               }
             },
             {
               "type": "CopyableLabel",
               "parameters": {
-                "label": "Data Collection Endpoint URI",
+                "label": "Data Collection Endpoint",
                 "fillWith": [
                   "DataCollectionEndpoint"
-                ],
-                "placeholder": "Deploy the push connector above to obtain the DCE endpoint URI"
+                ]
               }
             },
             {
               "type": "CopyableLabel",
               "parameters": {
-                "label": "Data Collection Rule Immutable ID",
+                "label": "DCR Immutable ID",
                 "fillWith": [
                   "DataCollectionRuleId"
-                ],
-                "placeholder": "Deploy the push connector above to obtain the DCR immutable ID"
-              }
-            }
-          ]
-        },
-        {
-          "title": "3. Configure Mimecast Event Push",
-          "description": "Log in to the Mimecast Administration Console and configure the SIEM / Event Push integration using the values collected in Step 2.",
-          "instructions": [
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "#### Mimecast Administration Console Setup\n\n1. Sign in to the [Mimecast Administration Console](https://login.mimecast.com/).\n2. Navigate to **Administration > Account > Account Settings > Enhanced Logging**.\n3. Select the **Microsoft Sentinel** SIEM integration (or create a new integration).\n4. Enter the following values:\n   - **Token endpoint:** `https://login.microsoftonline.com/{Tenant ID}/oauth2/v2.0/token`\n   - **Scope:** `https://monitor.azure.com/.default`\n   - **Client ID:** Application (Client) ID from Step 2\n   - **Client Secret:** Client Secret from Step 2\n   - **Ingestion Endpoint:** Data Collection Endpoint URI from Step 2\n   - **DCR Immutable ID:** Data Collection Rule Immutable ID from Step 2\n   - **Stream name:** `Custom-MimecastEvents`\n5. Select the event types to push (SEG, TTP, Audit, Awareness Training, Cloud Integrated).\n6. Save and enable the integration.\n\n> **Event types and routing:** All enabled event types are routed to the unified `MimecastEvents_CL` table. Use `mimecastEventType` to filter by type (e.g. `ttp_url`, `seg_cg`, `audit`). See the sample queries tab for examples."
-              }
-            }
-          ]
-        },
-        {
-          "title": "4. Verify Data Ingestion",
-          "description": "After enabling the integration, allow 5–15 minutes for events to appear. Run the KQL query below to confirm data is flowing.",
-          "instructions": [
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "```kql\nMimecastEvents_CL\n| where TimeGenerated > ago(1h)\n| summarize count() by mimecastEventType\n| order by count_ desc\n```\n\nIf no data appears after 15 minutes:\n- Verify credentials in the Mimecast Administration Console.\n- Check that the stream name in Mimecast is exactly `Custom-MimecastEvents`.\n- Confirm the DCR Immutable ID does not include a leading `dcr-` prefix if your tool strips it.\n- Review Azure Monitor diagnostic logs for ingestion errors."
+                ]
               }
             }
           ]

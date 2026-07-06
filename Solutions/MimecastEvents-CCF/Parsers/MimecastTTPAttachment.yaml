@@ -1,56 +1,25 @@
-id: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
+id: 2ec572ab-3f0e-44e8-9f9f-1725009dba34
 Function:
-  Title: Parser for Mimecast TTP Attachment Protect (CCF Push)
-  Version: "1.0.0"
-  LastUpdated: "2026-07-06"
+  Title: Parser for MimecastTTPAttachment
+  Version: '1.0.0'
+  LastUpdated: 2026-07-06
 Category: Microsoft Sentinel Parser
 FunctionName: MimecastTTPAttachment
 FunctionAlias: MimecastTTPAttachment
 FunctionQuery: |
-  // Source: MimecastEvents_CL, mimecastEventType in ("email_ttp_ap", "ttp_attachment")
-  //
-  // ROUTING NOTE (envelope-dependent):
-  //   email_ttp_ap  — SEG Cloud Gateway rows where Logtype == "email_ttp_ap". These carry
-  //                   sha256/sha1/md5/fileName/fileExtension from the SEG payload structure.
-  //                   Timestamp = epoch ms (payload.timestamp); EventTime from DCR transform = "".
-  //   ttp_attachment— Dedicated TTP Attachment events (if Mimecast Event Push sends them as a
-  //                   separate stream). Field names follow TTP conventions: senderAddress,
-  //                   recipientAddress, actionTriggered, fileHash, fileType, result, Date.
-  //                   SAMPLE-UNVERIFIED: Ttp_Attachment_CL was empty on the reference tenant.
-  //
-  // Dedup key:
-  //   email_ttp_ap → processingId (from mimecastEventId)
-  //   ttp_attachment → strcat(senderAddress|recipientAddress|messageId)
-  let MimecastTTPAttachment_view = view() {
-      MimecastEvents_CL
-      | where mimecastEventType in ("email_ttp_ap", "ttp_attachment")
-      | extend _b = todynamic(mimecast_body)
-      | project
-          ["Time Generated"]          = TimeGenerated,
-          ["Event Time"]              = iff(
-              mimecastEventType == "email_ttp_ap",
-              tostring(datetime(1970-01-01) + tolong(_b.timestamp) * 1ms),
-              tostring(iff(isnotempty(_b.date), _b.date, _b.Date))),
-          ["Mimecast Event ID"]       = "ttp_attachment",
-          ["Mimecast Event Category"] = "ttp_attachment",
-          ["Type"]                    = mimecastEventType,
-          ["Sender Address"]          = senderAddress,
-          ["Recipient Address"]       = recipientAddress,
-          ["Message ID"]              = messageId,
-          ["Subject"]                 = subject,
-          ["Route"]                   = route,
-          ["Action Triggered"]        = action,
-          ["Definition"]              = tostring(iff(isnotempty(_b.definition), _b.definition, "")),
-          ["Details"]                 = tostring(_b.details),
-          ["Result"]                  = scanResult,
-          ["File Hash"]               = fileHash,
-          ["File Name"]               = fileName,
-          ["File Extension"]          = tostring(_b.fileExtension),
-          ["File Type"]               = tostring(_b.fileType),
-          ["Sha256"]                  = tostring(_b.sha256),
-          ["Sha1"]                    = tostring(_b.sha1),
-          ["Md5"]                     = tostring(_b.md5),
-          ["Processing ID"]           = iff(mimecastEventType == "email_ttp_ap", mimecastEventId, ""),
-          ["Account ID"]              = accountId
-  };
-  MimecastTTPAttachment_view
+    MimecastEvents_CL
+    | where mimecastEventType in ('email_ttp_ap', 'ttp_attachment')
+    | summarize arg_max(TimeGenerated, *) by mimecastEventId
+    | extend d = todynamic(mimecast_body)
+    | project TimeGenerated,
+        senderAddress = iff(isnotempty(tostring(d.senderAddress)), tostring(d.senderAddress), tostring(d.senderEnvelope)),
+        recipientAddress = iff(isnotempty(tostring(d.recipientAddress)), tostring(d.recipientAddress), tostring(d.recipients)),
+        fileName = tostring(d.fileName), fileType = tostring(d.fileType),
+        fileExtension = tostring(d.fileExtension),
+        fileHash = iff(isnotempty(tostring(d.fileHash)), tostring(d.fileHash), tostring(d.sha256)),
+        sha1 = tostring(d.sha1), md5 = tostring(d.md5),
+        result = iff(isnotempty(tostring(d.result)), tostring(d.result), tostring(d.scanResults)),
+        actionTriggered = iff(isnotempty(tostring(d.actionTriggered)), tostring(d.actionTriggered), tostring(d.action)),
+        definition = tostring(d.definition), details = tostring(d.details),
+        subject = tostring(d.subject), route = tostring(d.route),
+        messageId = tostring(d.messageId)

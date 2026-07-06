@@ -1,42 +1,27 @@
-id: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
+id: 42f1dfa0-5605-4972-a5d4-928299d87914
 Function:
-  Title: Parser for Mimecast TTP Impersonation Protect (CCF Push)
-  Version: "1.0.0"
-  LastUpdated: "2026-07-06"
+  Title: Parser for MimecastTTPImpersonation
+  Version: '1.0.0'
+  LastUpdated: 2026-07-06
 Category: Microsoft Sentinel Parser
 FunctionName: MimecastTTPImpersonation
 FunctionAlias: MimecastTTPImpersonation
 FunctionQuery: |
-  // Source: MimecastEvents_CL, mimecastEventType == "ttp_impersonation"
-  // Timestamp: payload.eventTime = ISO-8601 string
-  // Dedup key: id (MTOKEN format, e.g. "eNoVjcEKAjAMhN...==")
-  // impersonationResults is a dynamic array; mv-expand creates one row per check result.
-  //   Each element has keys: impersonationDomainSource, similarDomain, checkerResult
-  // Sample-verified: YES (Ttp_Impersonation_CL records observed; impersonationResults structure confirmed)
-  let MimecastTTPImpersonation_view = view() {
-      MimecastEvents_CL
-      | where mimecastEventType == "ttp_impersonation"
-      | extend _b = todynamic(mimecast_body)
-      | mv-expand _ir = impersonationResults
-      | project
-          ["Time Generated"]              = TimeGenerated,
-          ["ID"]                          = mimecastEventId,
-          ["Mimecast Event ID"]           = "ttp_impersonation",
-          ["Mimecast Event Category"]     = "ttp_impersonation",
-          ["Action"]                      = action,
-          ["Definition"]                  = tostring(_b.definition),
-          ["Event Time"]                  = eventTime,
-          ["Hits"]                        = tostring(_b.hits),
-          ["Identifiers"]                 = tostring(_b.identifiers),
-          ["Impersonation Domain Source"] = tostring(_ir.impersonationDomainSource),
-          ["Similar Domain"]              = tostring(_ir.similarDomain),
-          ["Checker Result"]              = tostring(_ir.checkerResult),
-          ["Message ID"]                  = messageId,
-          ["Recipient Address"]           = recipientAddress,
-          ["Sender Address"]              = senderAddress,
-          ["Sender IP Address"]           = senderIp,
-          ["Subject"]                     = subject,
-          ["Tagged External"]             = tostring(_b.taggedExternal),
-          ["Tagged Malicious"]            = tostring(_b.taggedMalicious)
-  };
-  MimecastTTPImpersonation_view
+    MimecastEvents_CL
+    | where mimecastEventType == 'ttp_impersonation'
+    | summarize arg_max(TimeGenerated, *) by mimecastEventId
+    | extend d = todynamic(mimecast_body)
+    | project TimeGenerated,
+        id = tostring(d.id), senderAddress = tostring(d.senderAddress),
+        recipientAddress = tostring(d.recipientAddress), subject = tostring(d.subject),
+        definition = tostring(d.definition), hits = toint(d.hits),
+        identifiers = tostring(d.identifiers), action = tostring(d.action),
+        taggedExternal = tobool(d.taggedExternal), taggedMalicious = tobool(d.taggedMalicious),
+        senderIpAddress = tostring(d.senderIpAddress), eventTime = todatetime(d.eventTime),
+        impersonationResults = todynamic(d.impersonationResults),
+        messageId = tostring(d.messageId)
+    | mv-expand impersonationResult = impersonationResults
+    | extend impersonationDomainSource = tostring(impersonationResult.impersonationDomainSource),
+             similarDomain = tostring(impersonationResult.similarDomain),
+             checkerResult = tostring(impersonationResult.checkerResult)
+    | project-away impersonationResult
