@@ -7,7 +7,7 @@ app = func.FunctionApp()
 
 
 @app.timer_trigger(
-    schedule=f"0 */{os.getenv('INTERVAL', 5)} * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False # type: ignore[misc]
+    schedule=f"0 */{os.getenv('INTERVAL', 5)} * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False
 )
 def timer_trigger(myTimer: func.TimerRequest) -> None:
     if myTimer.past_due:
