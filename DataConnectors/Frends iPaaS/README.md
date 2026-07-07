@@ -8,7 +8,9 @@ Apps to maintain.
 | | |
 |---|---|
 | **Solution** | Frends iPaaS Audit Logs |
-| **Support** | KanenasCS — konstantinos_lianos@hotmail.com |
+| **Author** | Konstantinos Lianos |
+| **Support** | KanenasCS — Konstantinos_lianos@hotmail.com |
+| **Provider** | Microsoft Security Community |
 | **Version** | 1.0.0 |
 | **Table** | `FrendsAuditLogs_CL` (Analytics plan, 365-day retention) |
 | **Source** | Frends Platform API — `GET /api/v1/audit-log` |
