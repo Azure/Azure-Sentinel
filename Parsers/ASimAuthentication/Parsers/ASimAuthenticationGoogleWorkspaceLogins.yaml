@@ -33,20 +33,30 @@ ParserQuery: |
             pack: bool = false
         )
         {
-            GWorkspace_ReportsAPI_login_CL
+            GoogleWorkspaceReports
             | where not(disabled)
-            | where event_type_s in ("login", "logout")
-            | where event_name_s in (
+            | where IdApplicationName == "login"
+            | where EventType in ("login", "logout")
+            | where EventName in (
                 "login_success",
                 "login_failure",
                 "logout",
                 "risky_sensitive_action_allowed",
-                "risky_sensitive_action_blocked"
+                "risky_sensitive_action_blocked",
+                "suspicious_login",
+                "suspicious_login_less_secure_app",
+                "suspicious_programmatic_login",
+                "user_signed_out_due_to_suspicious_session_cookie"
                 )
             | extend
                 EventVendor = "Google",
                 Dvc = "Google Workspace",
-                Challenges = iff(isempty(login_challenge_method_s), dynamic(["none"]), parse_json(login_challenge_method_s)),
+                EventParametersJson = parse_json(EventParameters),
+                Challenges = iff(
+                    isempty(tostring(parse_json(EventParameters).login_challenge_method)),
+                    dynamic(["none"]),
+                    parse_json(EventParameters).login_challenge_method
+                ),
                 EventUid = _ItemId,
                 EventProduct = "Google Workspace",
                 EventSchema = "Authentication",
@@ -55,39 +65,43 @@ ParserQuery: |
                 EventStartTime = TimeGenerated,
                 EventEndTime = TimeGenerated,
                 EventMessage = case(
-                    event_name_s == "login_failure",
-                        strcat(actor_email_s, " failed to login."),
-                    event_name_s == "login_success",
-                        strcat(actor_email_s, " logged in."),
-                    event_name_s == "risky_sensitive_action_allowed",
-                        strcat(actor_email_s, " was allowed to attempt sensitive action: ", sensitive_action_name_s, ". This action might be restricted based on privileges or other limitations."),
-                    event_name_s == "risky_sensitive_action_blocked",
-                        strcat(actor_email_s, " wasn't allowed to attempt sensitive action: ", sensitive_action_name_s, "."),
-                    event_name_s == "logout",
-                        strcat(actor_email_s, " logged out."),
+                    EventName == "login_failure",
+                        strcat(ActorEmail, " failed to login."),
+                    EventName == "login_success",
+                        strcat(ActorEmail, " logged in."),
+                    EventName == "risky_sensitive_action_allowed",
+                        strcat(ActorEmail, " was allowed to attempt sensitive action: ", tostring(parse_json(EventParameters).sensitive_action_name), ". This action might be restricted based on privileges or other limitations."),
+                    EventName == "risky_sensitive_action_blocked",
+                        strcat(ActorEmail, " wasn't allowed to attempt sensitive action: ", tostring(parse_json(EventParameters).sensitive_action_name), "."),
+                    EventName == "logout",
+                        strcat(ActorEmail, " logged out."),
+                    EventName == "suspicious_login",
+                        strcat("Google has detected a suspicious login for ", ActorEmail),
+                    EventName == "suspicious_login_less_secure_app",
+                        strcat("Google has detected a suspicious login for ", ActorEmail , " from a less secure app."),
+                    EventName == "suspicious_programmatic_login",
+                        strcat("Google has detected a suspicious programmatic login for ", ActorEmail),
+                    EventName == "user_signed_out_due_to_suspicious_session_cookie",
+                        strcat("Suspicious session cookie detected for user ", ActorEmail),
                     ""
                 ),
                 EventType = case(
-                    event_name_s startswith_cs "login", "Logon",
-                    event_name_s == "logout", "Logoff",
-                    event_name_s startswith_cs "risky_sensitive_action", "Logon",
-                    ""
+                    EventName in ("logout", "user_signed_out_due_to_suspicious_session_cookie"), "Logoff",
+                    "Logon"
                 ),
                 EventResult = case(
-                    event_name_s in ("login_success", "risky_sensitive_action_allowed", "logout"), "Success",
-                    event_name_s in ("login_failure", "risky_sensitive_action_blocked"), "Failure",
+                    EventName in ("login_success", "risky_sensitive_action_allowed", "logout", "user_signed_out_due_to_suspicious_session_cookie"), "Success",
+                    EventName in ("login_failure", "risky_sensitive_action_blocked", "suspicious_login", "suspicious_login_less_secure_app", "suspicious_programmatic_login"), "Failure",
                     ""
                 ),
-                EventResultDetails = iff(
-                    event_name_s in ("risky_sensitive_action_blocked"),
-                    "Logon violates policy",
+                EventResultDetails = case(
+                    EventName in ("suspicious_login_less_secure_app", "suspicious_programmatic_login", "risky_sensitive_action_blocked"), "Logon violates policy",
                     "Other"
                 ),
                 TargetUsernameType = "UPN",
                 TargetUserIdType = "Other",
-                Src = IPAddress,
-                SrcIpAddr = IPAddress,
-                IpAddr = IPAddress
+                Src = SrcIpAddr,
+                IpAddr = SrcIpAddr
             | extend HasMFA = Challenges has_any (
                 "security_key", "security_key_otp", "passkey", "userless_fido",
                 "google_authenticator", "google_prompt", "device_prompt",
@@ -96,35 +110,35 @@ ParserQuery: |
                 )
             | extend LogonMethod = case(
                 HasMFA, "Multi factor authentication",
-                login_type_s == "google_password", "Username & Password",
+                tostring(parse_json(EventParameters).login_type) == "google_password", "Username & Password",
                 "Other"
                 ),
                 LogonProtocol = case(
-                    login_type_s == "saml", "SAML",
+                    tostring(parse_json(EventParameters).login_type) == "saml", "SAML",
                     Challenges has_any ("saml"), "SAML",
                     Challenges has_any ("oidc"), "OpenID Connect",
                     "Other"
                 )
             | project-rename
-                EventOriginalUid = id_uniqueQualifier_s,
-                TargetUserId = actor_profileId_s,
-                TargetUsername = actor_email_s,
-                SrcGeoCountry = networkInfo_regionCode_s,
-                SrcGeoRegion = networkInfo_subdivisionCode_s
+                EventOriginalUid = IdUniqueQualifier,
+                TargetUserId = ActorProfileId,
+                TargetUsername = ActorEmail,
+                SrcGeoCountry = NetworkInfoRegionCode,
+                SrcGeoRegion = NetworkInfoSubdivisionCode
             | extend AdditionalFields = iff(
-            pack == true,
-            bag_merge(
-                bag_pack(
-                    "LoginType", login_type_s,
-                    "LoginChallengeMethods", Challenges
+                pack == true,
+                bag_merge(
+                    bag_pack(
+                        "LoginType", tostring(parse_json(EventParameters).login_type),
+                        "LoginChallengeMethods", Challenges
+                    ),
+                    iff(
+                        isempty(tostring(parse_json(EventParameters).sensitive_action_name)),
+                        dynamic({}),
+                        bag_pack("SensitiveActionName", tostring(parse_json(EventParameters).sensitive_action_name))
+                    )
                 ),
-                iff(
-                    isempty(sensitive_action_name_s),
-                    dynamic({}),
-                    bag_pack("SensitiveActionName", sensitive_action_name_s)
-                )
-            ),
-            dynamic(null)
+                dynamic(null)
             )
             | project
                 TimeGenerated,
