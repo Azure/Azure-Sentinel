@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Google Workspace.
 
-This ASIM parser supports normalizing the Google Workspace login activities ingested in 'GoogleWorkspaceReports' table to the ASIM Authentication normalized schema. This parser supports the new CCF data connector.
+This ASIM parser supports normalizing the Google Workspace login activities ingested in 'GoogleWorkspaceReports' table (via Codeless Connector Framework) to the ASIM Authentication normalized schema. 
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
