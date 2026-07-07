@@ -5,7 +5,7 @@ changes, user actions and system events) into Microsoft Sentinel using the
 **Codeless Connector Framework (CCF)** — fully SaaS, no Function Apps or Logic
 Apps to maintain.
 
-| | |
+| Field | Value |
 |---|---|
 | **Solution** | Frends iPaaS Audit Logs |
 | **Author** | Konstantinos Lianos |
