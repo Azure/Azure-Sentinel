@@ -1,0 +1,119 @@
+{
+    "id": "WizSentinel",
+    "title": "Wiz for Microsoft Sentinel",
+    "publisher": "Wiz",
+    "descriptionMarkdown": "The Wiz integration pushes Wiz **Issues**, **Detections**, and **Audit Logs** into Microsoft Sentinel in real time. Wiz sends data to a Data Collection Endpoint using the Wiz service principal, so there is no Azure Function to host and no shared keys to manage. This connector grants that service principal the least-privilege RBAC it needs; Wiz then creates the data collection rule and tables and begins pushing once you configure the integration in the Wiz portal.",
+    "logo": "Wiz.svg",
+    "graphQueries": [
+        {
+            "metricName": "Total Issues received",
+            "legend": "WizIssuesV3_CL",
+            "baseQuery": "WizIssuesV3_CL"
+        },
+        {
+            "metricName": "Total Detections received",
+            "legend": "WizDetectionsV3_CL",
+            "baseQuery": "WizDetectionsV3_CL"
+        },
+        {
+            "metricName": "Total Audit Logs received",
+            "legend": "WizAuditLogsV3_CL",
+            "baseQuery": "WizAuditLogsV3_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All Wiz Issues",
+            "query": "WizIssuesV3_CL\n | sort by TimeGenerated desc"
+        },
+        {
+            "description": "All Wiz Detections",
+            "query": "WizDetectionsV3_CL\n | sort by TimeGenerated desc"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "union isfuzzy=true (WizIssuesV3_CL), (WizDetectionsV3_CL), (WizAuditLogsV3_CL)\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "WizIssuesV3_CL",
+            "lastDataReceivedQuery": "WizIssuesV3_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        },
+        {
+            "name": "WizDetectionsV3_CL",
+            "lastDataReceivedQuery": "WizDetectionsV3_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        },
+        {
+            "name": "WizAuditLogsV3_CL",
+            "lastDataReceivedQuery": "WizAuditLogsV3_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Subscription permissions",
+                "description": "**Owner** or **User Access Administrator** at the subscription is required to create the custom role definition (Microsoft.Authorization/roleDefinitions/write)."
+            },
+            {
+                "name": "Microsoft Entra permissions",
+                "description": "Permission to read (and, if the Wiz enterprise application is not yet consented, create) the Wiz service principal in Microsoft Entra ID."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "STEP 1 - Get the Wiz service principal object ID",
+            "description": "ARM cannot resolve a Microsoft Entra object, so you supply the Wiz service principal **object ID**. In Azure Cloud Shell (no local install required; creating the service principal needs permission to register enterprise applications in Microsoft Entra ID) run the line below — it prints the object ID, creating the service principal first if it does not yet exist in your tenant:\n\n```bash\naz ad sp show --id ae69b94b-e367-4660-9b35-cfb4b5966728 --query id -o tsv 2>/dev/null \\\n  || az ad sp create --id ae69b94b-e367-4660-9b35-cfb4b5966728 --query id -o tsv\n```"
+        },
+        {
+            "title": "STEP 2 - Grant Wiz the RBAC",
+            "description": "Deploy the custom role and assignment into the resource group that hosts this workspace. Paste the object ID from Step 1 (and, optionally, a Data Collection Endpoint resource ID).\n\n1. Click **Deploy the Wiz RBAC role**: \n\n\t[![Deploy the Wiz RBAC role](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FWiz%2FData%20Connectors%2Fazuredeploy_WizSentinelIntegration.json) \n2. Select the **Subscription** and the **Resource group** that hosts this workspace. \n3. Enter **wizPrincipalObjectId** (from Step 1); optionally **dataCollectionEndpointId**. \n4. **Review + create**.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceResourceId"
+                        ],
+                        "label": "Workspace Resource ID"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "STEP 3 - Configure the integration in Wiz",
+            "description": "In Wiz, go to **Settings > Integrations > Add > Microsoft Sentinel**. Paste your **Tenant ID**, **Workspace Resource ID**, and **Data Collection Endpoint Resource ID**, tick *Deployment completed*, and save. Wiz then creates the data collection rule and tables and begins pushing Issues, Detections, and Audit Logs into this workspace."
+        }
+    ]
+}

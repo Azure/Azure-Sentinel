@@ -7,6 +7,7 @@ requiredSkills:
   - asim-parser-create-parser
   - asim-parser-validator
   - asim-parser-create-parameter-parser
+  - asim-parser-filter-validator
   - asim-parser-la-deployer
   - asim-parser-github-pr-packager
   - log-analytics-workspace-queryer
@@ -72,7 +73,13 @@ The output of this step is a file named `vim<Schema><Vendor><Product>.kql`.
 
 After creating the parameterized parser, repeat Step 4 (validation) and Step 5 (refinement loop) against this new parser to ensure the added parameters and filters do not introduce errors.
 
-## Step 7: Ask the user what they want to do with the parser
+## Step 7: Validate filtering parameters
+
+Run the filter validation tests against the parameterized parser to confirm that each filtering parameter behaves correctly. Use the `asim-parser-filter-validator` skill, passing the parameterized parser file (`vim<Schema><Vendor><Product>.kql`), the schema name, and the workspace ID.
+
+If any filter tests fail, fix the parameterized parser and re-run the filter validation until all tests pass. Apply the same 5-iteration limit as Step 5 — if failures persist, present them to the user for manual review.
+
+## Step 8: Ask the user what they want to do with the parser
 
 After parser creation, ask the user what they want to do next. Present two options:
 
@@ -86,7 +93,7 @@ Use the `asim-parser-github-pr-packager` skill to package the parser into a GitH
 
 The user may choose one or both options.
 
-## Step 8: Report
+## Step 9: Report
 
 After the workflow is complete, present a summary report to the user that includes:
 
