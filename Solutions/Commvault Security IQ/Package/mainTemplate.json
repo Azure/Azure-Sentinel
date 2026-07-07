@@ -27,11 +27,25 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
     }
   },
   "variables": {
     "_solutionName": "Commvault Security IQ",
-    "_solutionVersion": "3.0.4",
+    "_solutionVersion": "3.0.5",
     "solutionId": "commvault.microsoft-sentinel-solution-commvaultsecurityiq",
     "_solutionId": "[variables('solutionId')]",
     "analyticRuleObject1": {
@@ -67,15 +81,12 @@
     "playbookId3": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId3'))]",
     "playbookTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId3'))))]",
     "_playbookcontentProductId3": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId3'),'-', variables('playbookVersion3'))))]",
-    "uiConfigId1": "CommvaultSecurityIQ_CL",
-    "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "CommvaultSecurityIQ_CL",
-    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
-    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-    "_dataConnectorId1": "[variables('dataConnectorId1')]",
-    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
-    "dataConnectorVersion1": "1.0.0",
-    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "dataConnectorCCPVersion": "3.0.5",
+    "_dataConnectorContentIdConnectorDefinition1": "CommvaultSecurityIQConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CommvaultSecurityIQConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -88,7 +99,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultSecurityIQ_Alert_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "CommvaultSecurityIQ_Alert_AnalyticalRules Analytics Rule with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -105,7 +116,7 @@
                 "description": "This query identifies Alerts from Commvault Cloud.",
                 "displayName": "Commvault Cloud Alert",
                 "enabled": false,
-                "query": "let TargetEventCodes = dynamic([\"7:211\", \"7:212\", \"7:293\", \"7:269\", \"14:337\", \"14:338\", \"69:59\", \"7:333\", \"69:60\", \"35:5575\", \"35:5636\", \"7:349\", \"17:193\", \"17:195\"]);\nCommvaultAlerts_CL\n| where TimeGenerated > ago(5m)\n| where EventCode in (TargetEventCodes)\n| take 1000\n",
+                "query": "let TargetEventCodes = dynamic([\"7:211\", \"7:212\", \"7:293\", \"7:269\", \"14:337\", \"14:338\", \"69:59\", \"7:333\", \"69:60\", \"35:5575\", \"35:5636\", \"7:349\", \"17:193\", \"17:195\"]);\nCommvaultAlertsCCF_CL\n| where TimeGenerated > ago(5m)\n| where EventCode in (TargetEventCodes)\n| take 1000\n",
                 "queryFrequency": "PT5M",
                 "queryPeriod": "PT5M",
                 "severity": "Medium",
@@ -116,10 +127,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "CommvaultSecurityIQ_CL",
                     "datatypes": [
-                      "CommvaultAlerts_CL"
-                    ]
+                      "CommvaultAlertsCCF_CL"
+                    ],
+                    "connectorId": "CommvaultSecurityIQ_CCF"
                   }
                 ],
                 "tactics": [
@@ -137,8 +148,8 @@
                   "Client": "HostName"
                 },
                 "alertDetailsOverride": {
-                  "alertDynamicProperties": [],
                   "alertDescriptionFormat": "Alert from Commvault Cloud for Event ID: {{EventId}}. Event Description: {{Description}}. Check the event description on Commvault Command Center for more details.",
+                  "alertDynamicProperties": [],
                   "alertDisplayNameFormat": "Alert from Commvault Cloud for Event ID: {{EventId}}"
                 }
               }
@@ -193,7 +204,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultDataAgingPlaybook Playbook with template version 3.0.4",
+        "description": "CommvaultDataAgingPlaybook Playbook with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -575,7 +586,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultSAMLPlaybook Playbook with template version 3.0.4",
+        "description": "CommvaultSAMLPlaybook Playbook with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -917,7 +928,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CommvaultUserPlaybook Playbook with template version 3.0.4",
+        "description": "CommvaultUserPlaybook Playbook with template version 3.0.5",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -1288,153 +1299,680 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
-      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Commvault Security IQ data connector with template version 3.0.4",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Commvault Security IQ (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
           "parameters": {},
           "variables": {},
           "resources": [
             {
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
-              "apiVersion": "2021-03-01-preview",
-              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
               "location": "[parameters('workspace-location')]",
-              "kind": "GenericUI",
+              "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "[variables('_uiConfigId1')]",
-                  "title": "CommvaultSecurityIQ",
+                  "id": "CommvaultSecurityIQConnector",
+                  "title": "Commvault Security IQ (via Codeless Connector Framework)",
                   "publisher": "Commvault",
-                  "descriptionMarkdown": "This Azure Function enables Commvault users to ingest alerts/events into their Microsoft Sentinel instance. With Analytic Rules,Microsoft Sentinel can automatically create Microsoft Sentinel incidents from incoming events and logs.",
+                  "descriptionMarkdown": "The Commvault Security IQ data connector ingests threat indicator anomaly events from the Commvault `/Client/Anomaly` API into Microsoft Sentinel. Each record in `CommvaultAlertsCCF_CL` corresponds to one entry in the `anomalyClients` array and captures fields such as `AnomalyType` (a bitfield — 64=Ransomware, 8192=VSA Attack), file operation counts (`CreateCount`, `DeleteCount`, `ModCount`, `RenameCount`, `InfectedFilesCount`), data sizes (`ApplicationSizeMB`, `BackupSizeMB`), and client details (`ClientName`, `ClientId`). The connector requires a Commvault Base URL and a valid QSDK Access Token.",
+                  "graphQueriesTableName": "CommvaultAlertsCCF_CL",
                   "graphQueries": [
                     {
-                      "metricName": "Commvault Events",
-                      "legend": "Commvault Security IQ Logs",
-                      "baseQuery": "CommvaultAlerts_CL"
+                      "metricName": "Total anomaly events received",
+                      "legend": "Commvault Security IQ Events",
+                      "baseQuery": "CommvaultAlertsCCF_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
-                      "description": "Last 10 events/alerts ",
-                      "query": "CommvaultAlerts_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
+                      "description": "Last 10 anomaly events",
+                      "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, AnomalyType, ClientName, ClientId, CreateCount, DeleteCount, ModCount, RenameCount, InfectedFilesCount, Location\n| sort by TimeGenerated desc\n| limit 10"
+                    },
+                    {
+                      "description": "High-severity anomalies (Ransomware: bit 64, VSA: bit 8192)",
+                      "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| where binary_and(AnomalyType, 64) == 64 or binary_and(AnomalyType, 8192) == 8192\n| project TimeGenerated, ClientName, AnomalyType, InfectedFilesCount, Location\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Clients with the most anomaly events in the last 7 days",
+                      "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| summarize EventCount = count() by ClientName\n| sort by EventCount desc\n| limit 20"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "CommvaultAlerts_CL",
-                      "lastDataReceivedQuery": "CommvaultAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "name": "CommvaultAlertsCCF_CL",
+                      "lastDataReceivedQuery": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
-                  "connectivityCriterias": [
+                  "connectivityCriteria": [
                     {
-                      "type": "IsConnectedQuery",
-                      "value": [
-                        "CommvaultAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-                      ]
+                      "type": "HasDataConnectors"
                     }
                   ],
                   "availability": {
-                    "status": 1,
-                    "isPreview": false
+                    "isPreview": true,
+                    "status": 1
                   },
                   "permissions": {
                     "resourceProvider": [
                       {
                         "provider": "Microsoft.OperationalInsights/workspaces",
-                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
                         "providerDisplayName": "Workspace",
                         "scope": "Workspace",
                         "requiredPermissions": {
                           "write": true,
                           "read": true,
-                          "delete": true
-                        }
-                      },
-                      {
-                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                        "providerDisplayName": "Keys",
-                        "scope": "Workspace",
-                        "requiredPermissions": {
-                          "action": true
+                          "delete": true,
+                          "action": false
                         }
                       }
                     ],
                     "customs": [
                       {
-                        "name": "Microsoft.Web/sites permissions",
-                        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
-                      },
-                      {
-                        "name": "Commvault Environment Endpoint URL",
-                        "description": "Make sure to follow the documentation and set the secret value in KeyVault"
-                      },
-                      {
-                        "name": "Commvault QSDK Token",
-                        "description": "Make sure to follow the documentation and set the secret value in KeyVault"
+                        "name": "Commvault API Credentials",
+                        "description": "A Commvault environment Base URL and a valid QSDK Access Token are required to authorize API requests."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "description": ">**NOTE:** This connector uses Azure Functions to connect to a Commvault Instance to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
-                    },
-                    {
-                      "description": ">Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
-                    },
-                    {
-                      "description": "**STEP 1 - Configuration steps for the Commvalut QSDK Token**\n\n[Follow these instructions](https://documentation.commvault.com/2024e/essential/creating_access_token.html) to create an API Token."
-                    },
-                    {
-                      "description": "**STEP 2 - Deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the CommvaultSecurityIQ data connector, have the Workspace ID  and Workspace Primary Key (can be copied from the following), as well as the Commvault Endpoint URL and QSDK Token, readily available.",
+                      "title": "1. Connector Management",
+                      "description": "Manage your Commvault Security IQ connector instances. Each instance connects to one Commvault environment.",
                       "instructions": [
                         {
+                          "type": "Markdown",
                           "parameters": {
-                            "fillWith": [
-                              "WorkspaceId"
-                            ],
-                            "label": "Workspace ID"
-                          },
-                          "type": "CopyableLabel"
+                            "content": "## Commvault Security IQ Connector Instances\n\nThis connector polls the Commvault `/Client/Anomaly` API every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table."
+                          }
                         },
                         {
+                          "type": "DataConnectorsGrid",
                           "parameters": {
-                            "fillWith": [
-                              "PrimaryKey"
+                            "mapping": [
+                              {
+                                "columnName": "Environment Endpoint",
+                                "columnValue": "properties.request.apiEndpoint"
+                              },
+                              {
+                                "columnName": "Status",
+                                "columnValue": "properties.connectionState"
+                              }
                             ],
-                            "label": "Primary Key"
-                          },
-                          "type": "CopyableLabel"
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "label": "Add Connector",
+                            "title": "Add Commvault Security IQ Connector",
+                            "subtitle": "Connect to a Commvault environment",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Markdown",
+                                    "parameters": {
+                                      "content": "## API Configuration\n\nProvide your Commvault environment endpoint URL and QSDK Access Token."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Commvault Environment Endpoint URL",
+                                      "placeholder": "https://your-environment.commvault.com",
+                                      "type": "text",
+                                      "name": "endpointUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Enter the base URL of your Commvault Command Center (e.g., `https://example.commvault.com`). Do **not** include `/Client/Anomaly` — the connector appends this automatically.",
+                                      "visible": true,
+                                      "inline": false
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "QSDK Access Token",
+                                      "placeholder": "Enter your Commvault QSDK Access Token",
+                                      "type": "password",
+                                      "name": "qsdkToken",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "The QSDK Token is sent as a `Bearer` token in the `Authorization` header. Generate this token from the Commvault Command Center under **Security > API Tokens**.",
+                                      "visible": true,
+                                      "inline": false
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "**Data Collection Schedule**: The connector polls for new anomaly events every 30 minutes.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
                         }
                       ]
-                    },
-                    {
-                      "description": "**Azure Resource Manager (ARM) Template**\n\nUse this method for automated deployment of the Commvault Security IQ data connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CommvaultSecurityIQ-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Region**. \n3. Enter the **Workspace ID**, **Workspace Key** 'and/or Other required fields' and click Next. \n4. Click **Create** to deploy."
                     }
                   ]
                 }
               }
             },
             {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-              "apiVersion": "2023-04-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
               "properties": {
-                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-                "contentId": "[variables('_dataConnectorContentId1')]",
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
                 "kind": "DataConnector",
-                "version": "[variables('dataConnectorVersion1')]",
+                "version": "[variables('dataConnectorCCPVersion')]",
                 "source": {
-                  "kind": "Solution",
-                  "name": "Commvault Security IQ",
-                  "sourceId": "[variables('_solutionId')]"
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "svc.cv-securityiq@commvault.com"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Commvault",
+                  "email": "support@commvault.com",
+                  "link": "https://www.commvault.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CommvaultSecurityIQDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CommvaultAlertsCCF_CL": {
+                    "columns": [
+                      {
+                        "name": "refTime",
+                        "type": "long",
+                        "description": "Epoch timestamp (seconds) of the anomaly event from Commvault."
+                      },
+                      {
+                        "name": "anomalyType",
+                        "type": "int",
+                        "description": "Bitfield integer identifying the anomaly type(s). Bit 64=Ransomware, Bit 8192=VSA Attack."
+                      },
+                      {
+                        "name": "createCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "deleteCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "modCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "renameCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "infectedFilesCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "applicationSizeMB",
+                        "type": "real"
+                      },
+                      {
+                        "name": "backupSizeMB",
+                        "type": "real"
+                      },
+                      {
+                        "name": "location",
+                        "type": "string"
+                      },
+                      {
+                        "name": "client",
+                        "type": "dynamic",
+                        "description": "Nested object containing clientName and clientId."
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CommvaultAlertsCCF_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-CommvaultAlertsCCF_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnull(refTime), now(), todatetime(1s * tolong(refTime))) , RefTime = tolong(refTime) , AnomalyType = toint(anomalyType) , CreateCount = toint(createCount) , DeleteCount = toint(deleteCount) , ModCount = toint(modCount) , RenameCount = toint(renameCount) , InfectedFilesCount = toint(infectedFilesCount) , ApplicationSizeMB = todouble(applicationSizeMB) , BackupSizeMB = todouble(backupSizeMB) , Location = tostring(location) , ClientName = tostring(parse_json(client).clientName) , ClientId = toint(parse_json(client).clientId) | project TimeGenerated , RefTime , AnomalyType , CreateCount , DeleteCount , ModCount , RenameCount , InfectedFilesCount , ApplicationSizeMB , BackupSizeMB , Location , ClientName , ClientId"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CommvaultAlertsCCF_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CommvaultAlertsCCF_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Timestamp derived from the anomaly refTime field."
+                    },
+                    {
+                      "name": "RefTime",
+                      "type": "long",
+                      "description": "Raw epoch timestamp (seconds) from the Commvault anomaly event."
+                    },
+                    {
+                      "name": "AnomalyType",
+                      "type": "int",
+                      "description": "Bitfield integer representing the type(s) of anomaly detected. Common bits: 64=Ransomware, 8192=VSA Attack."
+                    },
+                    {
+                      "name": "CreateCount",
+                      "type": "int",
+                      "description": "Number of files created during the anomaly window."
+                    },
+                    {
+                      "name": "DeleteCount",
+                      "type": "int",
+                      "description": "Number of files deleted during the anomaly window."
+                    },
+                    {
+                      "name": "ModCount",
+                      "type": "int",
+                      "description": "Number of files modified during the anomaly window."
+                    },
+                    {
+                      "name": "RenameCount",
+                      "type": "int",
+                      "description": "Number of files renamed during the anomaly window."
+                    },
+                    {
+                      "name": "InfectedFilesCount",
+                      "type": "int",
+                      "description": "Number of files identified as infected."
+                    },
+                    {
+                      "name": "ApplicationSizeMB",
+                      "type": "real",
+                      "description": "Application data size in megabytes at time of anomaly."
+                    },
+                    {
+                      "name": "BackupSizeMB",
+                      "type": "real",
+                      "description": "Backup data size in megabytes at time of anomaly."
+                    },
+                    {
+                      "name": "Location",
+                      "type": "string",
+                      "description": "Location or region associated with the anomaly."
+                    },
+                    {
+                      "name": "ClientName",
+                      "type": "string",
+                      "description": "Name of the Commvault client (endpoint) where the anomaly was detected."
+                    },
+                    {
+                      "name": "ClientId",
+                      "type": "int",
+                      "description": "Numeric identifier of the Commvault client."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CommvaultSecurityIQConnector",
+          "title": "Commvault Security IQ (via Codeless Connector Framework)",
+          "publisher": "Commvault",
+          "descriptionMarkdown": "The Commvault Security IQ data connector ingests threat indicator anomaly events from the Commvault `/Client/Anomaly` API into Microsoft Sentinel. Each record in `CommvaultAlertsCCF_CL` corresponds to one entry in the `anomalyClients` array and captures fields such as `AnomalyType` (a bitfield — 64=Ransomware, 8192=VSA Attack), file operation counts (`CreateCount`, `DeleteCount`, `ModCount`, `RenameCount`, `InfectedFilesCount`), data sizes (`ApplicationSizeMB`, `BackupSizeMB`), and client details (`ClientName`, `ClientId`). The connector requires a Commvault Base URL and a valid QSDK Access Token.",
+          "graphQueriesTableName": "CommvaultAlertsCCF_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total anomaly events received",
+              "legend": "Commvault Security IQ Events",
+              "baseQuery": "CommvaultAlertsCCF_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Last 10 anomaly events",
+              "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, AnomalyType, ClientName, ClientId, CreateCount, DeleteCount, ModCount, RenameCount, InfectedFilesCount, Location\n| sort by TimeGenerated desc\n| limit 10"
+            },
+            {
+              "description": "High-severity anomalies (Ransomware: bit 64, VSA: bit 8192)",
+              "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| where binary_and(AnomalyType, 64) == 64 or binary_and(AnomalyType, 8192) == 8192\n| project TimeGenerated, ClientName, AnomalyType, InfectedFilesCount, Location\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Clients with the most anomaly events in the last 7 days",
+              "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| summarize EventCount = count() by ClientName\n| sort by EventCount desc\n| limit 20"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommvaultAlertsCCF_CL",
+              "lastDataReceivedQuery": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Commvault API Credentials",
+                "description": "A Commvault environment Base URL and a valid QSDK Access Token are required to authorize API requests."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Connector Management",
+              "description": "Manage your Commvault Security IQ connector instances. Each instance connects to one Commvault environment.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "## Commvault Security IQ Connector Instances\n\nThis connector polls the Commvault `/Client/Anomaly` API every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table."
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Environment Endpoint",
+                        "columnValue": "properties.request.apiEndpoint"
+                      },
+                      {
+                        "columnName": "Status",
+                        "columnValue": "properties.connectionState"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "label": "Add Connector",
+                    "title": "Add Commvault Security IQ Connector",
+                    "subtitle": "Connect to a Commvault environment",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Markdown",
+                            "parameters": {
+                              "content": "## API Configuration\n\nProvide your Commvault environment endpoint URL and QSDK Access Token."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Commvault Environment Endpoint URL",
+                              "placeholder": "https://your-environment.commvault.com",
+                              "type": "text",
+                              "name": "endpointUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Enter the base URL of your Commvault Command Center (e.g., `https://example.commvault.com`). Do **not** include `/Client/Anomaly` — the connector appends this automatically.",
+                              "visible": true,
+                              "inline": false
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "QSDK Access Token",
+                              "placeholder": "Enter your Commvault QSDK Access Token",
+                              "type": "password",
+                              "name": "qsdkToken",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "The QSDK Token is sent as a `Bearer` token in the `Authorization` header. Generate this token from the Commvault Command Center under **Security > API Tokens**.",
+                              "visible": true,
+                              "inline": false
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "**Data Collection Schedule**: The connector polls for new anomaly events every 30 minutes.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "svc.cv-securityiq@commvault.com"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "Commvault",
+          "email": "support@commvault.com",
+          "link": "https://www.commvault.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Commvault Security IQ (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Commvault Security IQ (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "endpointUrl": {
+              "defaultValue": "endpointUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "qsdkToken": {
+              "defaultValue": "qsdkToken",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
                 },
                 "author": {
                   "name": "svc.cv-securityiq@commvault.com"
@@ -1446,170 +1984,56 @@
                   "link": "https://www.commvault.com/support"
                 }
               }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CommvaultSecurityIQPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CommvaultSecurityIQConnector",
+                "dataType": "CommvaultAlertsCCF_CL",
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('qsdkToken')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('endpointUrl'), '/Client/Anomaly')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 30,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 120,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "MS-Sentinel-CCF-CommvaultSecurityIQ"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.anomalyClients[*]"
+                  ],
+                  "format": "json"
+                },
+                "dcrConfig": {
+                  "streamName": "Custom-CommvaultAlertsCCF_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              }
             }
           ]
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
         "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
-        "contentId": "[variables('_dataConnectorContentId1')]",
-        "contentKind": "DataConnector",
-        "displayName": "CommvaultSecurityIQ",
-        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
-        "id": "[variables('_dataConnectorcontentProductId1')]",
-        "version": "[variables('dataConnectorVersion1')]"
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
-      "dependsOn": [
-        "[variables('_dataConnectorId1')]"
-      ],
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-        "contentId": "[variables('_dataConnectorContentId1')]",
-        "kind": "DataConnector",
-        "version": "[variables('dataConnectorVersion1')]",
-        "source": {
-          "kind": "Solution",
-          "name": "Commvault Security IQ",
-          "sourceId": "[variables('_solutionId')]"
-        },
-        "author": {
-          "name": "svc.cv-securityiq@commvault.com"
-        },
-        "support": {
-          "tier": "Partner",
-          "name": "Commvault",
-          "email": "support@commvault.com",
-          "link": "https://www.commvault.com/support"
-        }
-      }
-    },
-    {
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
-      "apiVersion": "2021-03-01-preview",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "location": "[parameters('workspace-location')]",
-      "kind": "GenericUI",
-      "properties": {
-        "connectorUiConfig": {
-          "title": "CommvaultSecurityIQ",
-          "publisher": "Commvault",
-          "descriptionMarkdown": "This Azure Function enables Commvault users to ingest alerts/events into their Microsoft Sentinel instance. With Analytic Rules,Microsoft Sentinel can automatically create Microsoft Sentinel incidents from incoming events and logs.",
-          "graphQueries": [
-            {
-              "metricName": "Commvault Events",
-              "legend": "Commvault Security IQ Logs",
-              "baseQuery": "CommvaultAlerts_CL"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "CommvaultAlerts_CL",
-              "lastDataReceivedQuery": "CommvaultAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
-          "connectivityCriterias": [
-            {
-              "type": "IsConnectedQuery",
-              "value": [
-                "CommvaultAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-              ]
-            }
-          ],
-          "sampleQueries": [
-            {
-              "description": "Last 10 events/alerts ",
-              "query": "CommvaultAlerts_CL \n| where TimeGenerated > ago(24h) \n| limit 10"
-            }
-          ],
-          "availability": {
-            "status": 1,
-            "isPreview": false
-          },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions on the workspace are required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "write": true,
-                  "read": true,
-                  "delete": true
-                }
-              },
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
-                }
-              }
-            ],
-            "customs": [
-              {
-                "name": "Microsoft.Web/sites permissions",
-                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
-              },
-              {
-                "name": "Commvault Environment Endpoint URL",
-                "description": "Make sure to follow the documentation and set the secret value in KeyVault"
-              },
-              {
-                "name": "Commvault QSDK Token",
-                "description": "Make sure to follow the documentation and set the secret value in KeyVault"
-              }
-            ]
-          },
-          "instructionSteps": [
-            {
-              "description": ">**NOTE:** This connector uses Azure Functions to connect to a Commvault Instance to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
-            },
-            {
-              "description": ">Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
-            },
-            {
-              "description": "**STEP 1 - Configuration steps for the Commvalut QSDK Token**\n\n[Follow these instructions](https://documentation.commvault.com/2024e/essential/creating_access_token.html) to create an API Token."
-            },
-            {
-              "description": "**STEP 2 - Deploy the connector and the associated Azure Function**\n\n>**IMPORTANT:** Before deploying the CommvaultSecurityIQ data connector, have the Workspace ID  and Workspace Primary Key (can be copied from the following), as well as the Commvault Endpoint URL and QSDK Token, readily available.",
-              "instructions": [
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Workspace ID"
-                  },
-                  "type": "CopyableLabel"
-                },
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "PrimaryKey"
-                    ],
-                    "label": "Primary Key"
-                  },
-                  "type": "CopyableLabel"
-                }
-              ]
-            },
-            {
-              "description": "**Azure Resource Manager (ARM) Template**\n\nUse this method for automated deployment of the Commvault Security IQ data connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CommvaultSecurityIQ-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Region**. \n3. Enter the **Workspace ID**, **Workspace Key** 'and/or Other required fields' and click Next. \n4. Click **Create** to deploy."
-            }
-          ],
-          "id": "[variables('_uiConfigId1')]"
-        }
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
@@ -1617,7 +2041,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.4",
+        "version": "3.0.5",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Commvault Security IQ",
@@ -1668,8 +2092,8 @@
             },
             {
               "kind": "DataConnector",
-              "contentId": "[variables('_dataConnectorContentId1')]",
-              "version": "[variables('dataConnectorVersion1')]"
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
             }
           ]
         },

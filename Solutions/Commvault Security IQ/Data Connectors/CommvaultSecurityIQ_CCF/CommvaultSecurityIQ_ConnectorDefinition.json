@@ -1,0 +1,175 @@
+{
+  "name": "CommvaultSecurityIQConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "CommvaultSecurityIQConnector",
+      "title": "Commvault Security IQ (via Codeless Connector Framework)",
+      "publisher": "Commvault",
+      "descriptionMarkdown": "The Commvault Security IQ data connector ingests threat indicator anomaly events from the Commvault `/Client/Anomaly` API into Microsoft Sentinel. Each record in `CommvaultAlertsCCF_CL` corresponds to one entry in the `anomalyClients` array and captures fields such as `AnomalyType` (a bitfield — 64=Ransomware, 8192=VSA Attack), file operation counts (`CreateCount`, `DeleteCount`, `ModCount`, `RenameCount`, `InfectedFilesCount`), data sizes (`ApplicationSizeMB`, `BackupSizeMB`), and client details (`ClientName`, `ClientId`). The connector requires a Commvault Base URL and a valid QSDK Access Token.",
+      "graphQueriesTableName": "CommvaultAlertsCCF_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total anomaly events received",
+          "legend": "Commvault Security IQ Events",
+          "baseQuery": "CommvaultAlertsCCF_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Last 10 anomaly events",
+          "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(24h)\n| project TimeGenerated, AnomalyType, ClientName, ClientId, CreateCount, DeleteCount, ModCount, RenameCount, InfectedFilesCount, Location\n| sort by TimeGenerated desc\n| limit 10"
+        },
+        {
+          "description": "High-severity anomalies (Ransomware: bit 64, VSA: bit 8192)",
+          "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| where binary_and(AnomalyType, 64) == 64 or binary_and(AnomalyType, 8192) == 8192\n| project TimeGenerated, ClientName, AnomalyType, InfectedFilesCount, Location\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Clients with the most anomaly events in the last 7 days",
+          "query": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(7d)\n| summarize EventCount = count() by ClientName\n| sort by EventCount desc\n| limit 20"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "CommvaultAlertsCCF_CL",
+          "lastDataReceivedQuery": "CommvaultAlertsCCF_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Commvault API Credentials",
+            "description": "A Commvault environment Base URL and a valid QSDK Access Token are required to authorize API requests."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Connector Management",
+          "description": "Manage your Commvault Security IQ connector instances. Each instance connects to one Commvault environment.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Commvault Security IQ Connector Instances\n\nThis connector polls the Commvault `/Client/Anomaly` API every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table."
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Environment Endpoint",
+                    "columnValue": "properties.request.apiEndpoint"
+                  },
+                  {
+                    "columnName": "Status",
+                    "columnValue": "properties.connectionState"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "label": "Add Connector",
+                "title": "Add Commvault Security IQ Connector",
+                "subtitle": "Connect to a Commvault environment",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## API Configuration\n\nProvide your Commvault environment endpoint URL and QSDK Access Token."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Commvault Environment Endpoint URL",
+                          "placeholder": "https://your-environment.commvault.com",
+                          "type": "text",
+                          "name": "endpointUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Enter the base URL of your Commvault Command Center (e.g., `https://example.commvault.com`). Do **not** include `/Client/Anomaly` — the connector appends this automatically.",
+                          "visible": true,
+                          "inline": false
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "QSDK Access Token",
+                          "placeholder": "Enter your Commvault QSDK Access Token",
+                          "type": "password",
+                          "name": "qsdkToken",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The QSDK Token is sent as a `Bearer` token in the `Authorization` header. Generate this token from the Commvault Command Center under **Security > API Tokens**.",
+                          "visible": true,
+                          "inline": false
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "**Data Collection Schedule**: The connector polls for new anomaly events every 30 minutes.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

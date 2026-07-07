@@ -25,72 +25,34 @@ Before beginning the installation, ensure you have:
 - **Azure Cloud Shell**: Access to Azure Cloud Shell with PowerShell support
 
 ## Required Azure Resources
-The following Azure resources will be created or configured during this installation:
 
-### Key Vault
-- **Purpose**: Securely stores Commvault credentials and API endpoints
-- **Required Secrets**:
-  - `access-token`: Your Commvault Cloud access token
-  - `environment-endpoint-url`: Your Commvault Cloud API endpoint URL (Commvault/Metallic endpoint URL : https://`hostname`/commandcenter/api )
-  - `refresh-token`: Your Commvault Cloud refresh token
+The **Commvault Security IQ** data connector uses Microsoft's **Codeless Connector Framework (CCF)** — a fully managed, serverless poller hosted by Microsoft. No Azure Function App, Key Vault, storage account, or DCE/DCR deployment is required. Data is automatically ingested into the `CommvaultAlertsCCF_CL` custom log table.
 
 Installation
 ------------
 
-**1\. Create Access Token in Commvault:**
+**1\. Create an API Token in Commvault:**
 
-*   Follow the instructions in [Creating an Access Token / Refresh Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
+*   Follow the instructions in [Creating an Access Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
 *   Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
+*   Copy the generated **QSDK Token** — you will need it in Step 5.
 
-**2\. Create KeyVault:**
-
-*   Azure Portal -> KeyVault -> Create -> Basics (select subscription, RG).
-
-**3\. Create KeyVault Secrets:**
-
-*   Go to Azure Portal -> KeyVault -> Secrets
-*   Create following secrets each by clicking on Generate/Import -> Manual:
-
-| Name | Value | Enabled | Action |
-|---|---|---|---|
-| `"access-token"` | (Your Commvault/Metallic access token) | Yes | Create |
-| `"refresh-token"` | (Your Commvault/Metallic refresh token) | Yes | Create |
-| `"environment-endpoint-url"` | (Your Commvault/Metallic endpoint's URL) | Yes | Create |
-
-**4\. Install Commvault Cloud Solution:**
+**2\. Install Commvault Cloud Solution:**
 
 *   Sentinel -> [Your Workspace] -> Content hub -> Search "Commvault Cloud" -> Install.
 
-**5\. Configure Data Connector:**
+**3\. Open the Data Connector:**
 
-*   Commvault Cloud -> CommvaultSecurityIQ (using Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
-*   For a detailed step-by-step guide and post-deployment steps, refer to [DataConnector.md](./DataConnector.md).
-*   The deployment creates the following resources:
-    - Azure Function App with System-Assigned Managed Identity
-    - Data Collection Endpoint (DCE)
-    - Data Collection Rule (DCR)
-    - Custom Log Analytics Table (`CommvaultAlerts_CL`)
-    - Storage Account for Function App
-    - Application Insights for monitoring
-    - Role assignment for Managed Identity on DCR
+*   Sentinel -> Data connectors -> Search "Commvault Security IQ" -> Open connector page.
 
+**4\. Configure the Connection:**
 
-### Configurable Environment Variables ( Optional )
+*   Under **Configuration**, enter the following:
+    - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL (e.g., `https://hostname/commandcenter/api`)
+    - **QSDK Token**: The API token generated in Step 1
+*   Click **Connect**.
 
-The following environment variables can be optionally configured to customize the Function App behavior:
-
-| Variable Name | Default Value | Description |
-|---------------|---------------|-------------|
-| `NumberOfDaysToBackfill` | 7 | Number of days to backfill data on initial run |
-| `ShowAllEvents` | false | Include all events (true/false) |
-| `AZURE_CLIENT_ID` | - | Managed Identity Client ID (uses DefaultAzureCredential if not set) |
-
-**Configuration Notes:**
-- These variables are optional - the Function App will work with default values if not specified
-- **By default, only security-relevant events are collected**: The data connector filters for Commvault events related to anomalies and malware/ransomware threats as documented in the [Threat Indicators Dashboard](https://documentation.commvault.com/2024e/commcell-console/threat_indicators_dashboard.html) . Use `ShowAllEvents` to disable filtering of events. It is recommended to have data retention policy, when allowing all events , so the log analytics workspace is not bloated with events.
-- Event level filters control which Commvault events are collected based on severity
-- `NumberOfDaysToBackfill` determines how far back to collect events on the first run only
-- `AZURE_CLIENT_ID` is only needed if using a specific Managed Identity instead of the default
+The connector will begin polling the Commvault `/Client/Anomaly` API every 30 minutes and ingesting threat anomaly events into the `CommvaultAlertsCCF_CL` table in your Log Analytics workspace.
 
 ### Incident Detection and Response Setup Steps
 
@@ -98,16 +60,15 @@ The following environment variables can be optionally configured to customize th
 
 *   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "Commvault Cloud Alert" -> Create Rule -> Next -> Save.
 
-**7\. Create Playbooks:**
+**6\. Create Playbooks:**
 
-*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "logic-app-disable-data-aging" -> Configuration -> "Commvault Disable Data Aging Logic App Playbook" -> Create Playbook -> Next -> Enter keyvaultName -> Create Playbook.
+*   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> select a playbook -> Configuration -> Create Playbook -> Next -> Create.
 *   Repeat for other playbooks.
 
-**8\. Add Additional Permissions:**
+**7\. Add Additional Permissions:**
 
 *   After completing all the steps, ensure that the necessary additional permissions are configured.
 *   Follow the instructions in [Permissions.md](./Permissions.md) to grant the required permissions for the Logic Apps.
-*   Additionally, refer to **6. Post-Deployment Steps** in [DataConnector.md](./DataConnector.md) to ensure the Function App has the necessary permissions to access the Key Vault.
 
 ## Using Commvault Security Investigation Agent
 
