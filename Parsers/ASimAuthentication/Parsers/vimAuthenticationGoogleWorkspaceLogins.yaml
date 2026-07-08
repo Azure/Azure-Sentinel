@@ -6,12 +6,12 @@ Product:
   Name: Google Workspace
 Normalization:
   Schema: Authentication
-  Version: '0.1.3'
+  Version: '0.1.4'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Google Workspace documentation
   Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/login#login
 - Title: Developer
@@ -80,20 +80,25 @@ ParserQuery: |
                 "suspicious_programmatic_login",
                 "user_signed_out_due_to_suspicious_session_cookie"
                 )
+            | extend EventParametersJson = parse_json(EventParameters)
+            | extend
+                LoginType = tostring(EventParametersJson.login_type),
+                SensitiveActionName = tostring(EventParametersJson.sensitive_action_name),
+                Challenges = iff(
+                    isempty(tostring(EventParametersJson.login_challenge_method)),
+                    dynamic(["none"]),
+                    EventParametersJson.login_challenge_method
+                )
             | where (isnull(starttime) or TimeGenerated >= starttime)
                 and (isnull(endtime) or TimeGenerated <= endtime)
                 and (array_length(targetusername_has_any) == 0 or ActorEmail has_any (targetusername_has_any))
-                and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
-                and (array_length(login_challenge_has_any) == 0 or tostring(parse_json(EventParameters).login_challenge_method) has_any (login_challenge_has_any))
+                and (array_length(srcipaddr_has_any_prefix) == 0
+                    or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+                    or ipv6_is_in_any_range(SrcIpAddr, srcipaddr_has_any_prefix))
+                and (array_length(login_challenge_has_any) == 0 or Challenges has_any (login_challenge_has_any))
             | extend
                 EventVendor = "Google",
                 Dvc = "Google Workspace",
-                EventParametersJson = parse_json(EventParameters),
-                Challenges = iff(
-                    isempty(tostring(parse_json(EventParameters).login_challenge_method)),
-                    dynamic(["none"]),
-                    parse_json(EventParameters).login_challenge_method
-                ),
                 EventUid = _ItemId,
                 EventProduct = "Google Workspace",
                 EventSchema = "Authentication",
@@ -107,9 +112,9 @@ ParserQuery: |
                     EventName == "login_success",
                         strcat(ActorEmail, " logged in."),
                     EventName == "risky_sensitive_action_allowed",
-                        strcat(ActorEmail, " was allowed to attempt sensitive action: ", tostring(parse_json(EventParameters).sensitive_action_name), ". This action might be restricted based on privileges or other limitations."),
+                        strcat(ActorEmail, " was allowed to attempt sensitive action: ", SensitiveActionName, ". This action might be restricted based on privileges or other limitations."),
                     EventName == "risky_sensitive_action_blocked",
-                        strcat(ActorEmail, " wasn't allowed to attempt sensitive action: ", tostring(parse_json(EventParameters).sensitive_action_name), "."),
+                        strcat(ActorEmail, " wasn't allowed to attempt sensitive action: ", SensitiveActionName, "."),
                     EventName == "logout",
                         strcat(ActorEmail, " logged out."),
                     EventName == "suspicious_login",
@@ -147,11 +152,11 @@ ParserQuery: |
                 )
             | extend LogonMethod = case(
                 HasMFA, "Multi factor authentication",
-                tostring(parse_json(EventParameters).login_type) == "google_password", "Username & Password",
+                LoginType == "google_password", "Username & Password",
                 "Other"
                 ),
                 LogonProtocol = case(
-                    tostring(parse_json(EventParameters).login_type) == "saml", "SAML",
+                    LoginType == "saml", "SAML",
                     Challenges has_any ("saml"), "SAML",
                     Challenges has_any ("oidc"), "OpenID Connect",
                     "Other"
@@ -169,13 +174,13 @@ ParserQuery: |
                 pack == true,
                 bag_merge(
                     bag_pack(
-                        "LoginType", tostring(parse_json(EventParameters).login_type),
+                        "LoginType", LoginType,
                         "LoginChallengeMethods", Challenges
                     ),
                     iff(
-                        isempty(tostring(parse_json(EventParameters).sensitive_action_name)),
+                        isempty(SensitiveActionName),
                         dynamic({}),
-                        bag_pack("SensitiveActionName", tostring(parse_json(EventParameters).sensitive_action_name))
+                        bag_pack("SensitiveActionName", SensitiveActionName)
                     )
                 ),
                 dynamic(null)
