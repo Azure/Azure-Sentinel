@@ -26,7 +26,7 @@ Before beginning the installation, ensure you have:
 
 ## Required Azure Resources
 
-The **Commvault Security IQ** data connector uses Microsoft's **Codeless Connector Framework (CCF)** — a fully managed, serverless poller hosted by Microsoft. No Azure Function App, Key Vault, storage account, or DCE/DCR deployment is required. Data is automatically ingested into the `CommvaultAlertsCCF_CL` custom log table.
+The **Commvault Security IQ** data connector uses Microsoft's **Codeless Connector Framework (CCF)** — a fully managed, serverless poller hosted by Microsoft. No Azure Function App, Key Vault, or storage account is required. The solution package automatically deploys the required Data Collection Rule (DCR) and custom log table (`CommvaultAlertsCCF_CL`) into your workspace. A Data Collection Endpoint (DCE) must exist in your subscription; provide its resource ID as the `dceId` parameter during deployment.
 
 Installation
 ------------
@@ -56,7 +56,7 @@ The connector will begin polling the Commvault `/Client/Anomaly` API every 30 mi
 
 ### Incident Detection and Response Setup Steps
 
-**6\. Create Analytic Rules:**
+**5\. Create Analytic Rules:**
 
 *   Sentinel -> Content hub -> "Commvault Cloud" -> Manage -> "Commvault Cloud Alert" -> Create Rule -> Next -> Save.
 
