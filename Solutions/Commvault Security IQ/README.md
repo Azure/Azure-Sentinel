@@ -5,9 +5,9 @@ This SOAR integration connects Commvault Cloud with Microsoft Sentinel to enable
 
 ## Overview
 This solution provides:
-- **Data Ingestion**: Automated collection of Commvault security events and anomalies
-- **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault security events
-- **AI Powered Insights**: AI-driven coorelation of Commvault Threat Scan and Risk Analysis events with Sentinel Data Lake signals from tools like CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation.
+- **Data Ingestion**: Automated collection of Commvault client anomaly events via the Codeless Connector Framework
+- **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault anomaly detections
+- **AI Powered Insights**: Use the Commvault Security Investigation Agent in Microsoft Security Copilot to correlate Commvault anomaly events with signals from tools like CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation.
 - **Incident Response**: Playbooks for automated remediation actions (disable users, disable data aging, etc.)
 
 ## Prerequisites
@@ -35,7 +35,7 @@ Installation
 
 *   Follow the instructions in [Creating an Access Token](https://documentation.commvault.com/2024e/essential/creating_access_token.html).
 *   Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
-*   Copy the generated **QSDK Token** — you will need it in Step 5.
+*   Copy the generated **QSDK Token** — you will need it in Step 4.
 
 **2\. Install Commvault Cloud Solution:**
 
