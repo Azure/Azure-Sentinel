@@ -1,12 +1,15 @@
+> **⚠️ DEPRECATED — Ruby version**
+> This documentation describes the deprecated Ruby version (1.x.x) of the Microsoft Sentinel Logstash output plugin. The plugin has since been refactored from Ruby to Java (2.x.x and later), and the Ruby version is no longer actively maintained. For the current version and documentation, see [microsoft-sentinel-log-analytics-logstash-output-plugin_java](../microsoft-sentinel-log-analytics-logstash-output-plugin_java/README.md).
+
 # Microsoft Sentinel output plugin for Logstash 
 
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v2.1.0  
-Released on: 2026-04-14
+Plugin version: v1.2.0
+Released on: 2026-02-05
 
-This plugin is currently in development and is free to use. We request and appreciate feedback from users.
+This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
 ## Installation Instructions
 1) Install the plugin
@@ -26,12 +29,14 @@ If you do not have a direct internet connection, you can install the plugin to a
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
-- 8.0 - 8.9
-- 8.11 - 8.15
-- 8.19.2
-- 9.0.8
-- 9.1.10
-- 9.2.4 - 9.2.5
+- 8.0 - 8.9 (NOTE: these versions require a security update, according to Logstash!)
+- 8.11 - 8.15 (NOTE: these versions require a security update, according to Logstash!)
+- 8.19.2 (NOTE: this version requires a security update, according to Logstash!)
+- 9.0.8 (NOTE: this version requires a security update, according to Logstash!)
+- 9.1.10 (NOTE: this version requires a security update, according to Logstash!)
+- 9.2.4 - 9.2.5 (NOTE: these versions require a security update, according to Logstash! [Security Update](https://discuss.elastic.co/t/logstash-8-19-14-9-2-8-9-3-3-security-update-esa-2026-29/385816))
+
+Note: The Ruby version of this plugin is deprecated. It may work with newer, up-to-date Logstash versions beyond those listed above, but compatibility with such versions is not something we guarantee or support, since this version is no longer actively maintained. For ongoing support and the latest Logstash version compatibility, use the [Java version of the plugin](../microsoft-sentinel-log-analytics-logstash-output-plugin_java/README.md).
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -55,7 +60,7 @@ Note: make sure that the path exists before creating the sample file.
 ### Configurations:
 The following parameters are optional and should be used to create a sample file.
 - **create_sample_file** - Boolean, False by default. When enabled, up to 10 events will be written to a sample json file.
-- **sample_file_path** - Number, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
+- **sample_file_path** - String, Empty by default. Required when create_sample_file is enabled. Should include a valid path in which to place the sample file generated.
 
 ### Complete example
 1. set the pipeline.conf with the following configuration:
@@ -94,6 +99,13 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 1) To ingest the data to a custom table use [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs>) tutorial. Note that as part of creating the table and the DCR you will need to provide the sample file that you've created in the previous section.
 2) To ingest the data to a standard table like Syslog or CommonSecurityLog use [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api>).
 
+*Note:* The identity (service principal or managed identity) must have the **Monitoring Metrics Publisher** role on the target DCR:
+
+    az role assignment create \
+      --assignee <object-id-of-identity> \
+      --role "Monitoring Metrics Publisher" \
+      --scope "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.Insights/dataCollectionRules/<dcr-name>"
+
 
 ## 4. Configure Logstash configuration file
 
@@ -115,7 +127,7 @@ Here is an example for the output plugin configuration section:
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
-        client_app_Id => "<enter your client_app_id value here>"
+        client_app_Id => "<enter your client_app_Id value here>"
         client_app_secret => "<enter your client_app_secret value here>"
         tenant_id => "<enter your tenant id here>"
         data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
@@ -175,7 +187,6 @@ output {
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics.
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed.
-- **retransmission_delay** - Number, 2 by default. The delay in seconds between each retry attempt when sending log data fails. Increase this value to reduce request rate during throttling (HTTP 429) scenarios.
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
 - **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Microsoft Entra ID service. Overrides the proxy setting.
@@ -199,7 +210,7 @@ Here is an example configuration that parses Syslog incoming data into a custom 
 ```
 input {
     beats {
-        port => "5044"
+        port => 5044
     }
 }
  filter {
@@ -222,8 +233,8 @@ output {
 ```
 input {
     tcp {
-        port => "514"
-        type => syslog #optional, will effect log type in table
+        port => 514
+        type => syslog #optional, will affect log type in table
     }
 }
  filter {

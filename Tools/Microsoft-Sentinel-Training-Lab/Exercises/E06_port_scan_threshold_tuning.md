@@ -8,7 +8,7 @@
 
 ## Objective
 
-Learn how to detect network reconnaissance by aggregating firewall deny logs and applying threshold-based alerting. Understand how to tune detection thresholds to balance alert fidelity vs coverage.
+Tune a port scan detection rule to reduce false positives while still catching real reconnaissance. You will establish a baseline, choose a threshold based on observed data, and update the detection query with enrichment fields that help analysts during triage.
 
 ## Background
 
@@ -16,107 +16,121 @@ Port scanning is one of the most common reconnaissance techniques (MITRE T1046).
 
 Palo Alto firewalls log denied connections with the action `drop`, `deny`, or `reset-both`. When traffic has an `incomplete` application protocol, it indicates the session never completed — a strong indicator of scanning rather than legitimate traffic.
 
-## Techniques Covered
-
-### KQL Aggregation — `summarize` and `dcount`
-
-```kusto
-CommonSecurityLog
-| where Activity in ("drop", "deny", "reset-both")
-| where ApplicationProtocol == "incomplete"
-| summarize
-    DistinctPorts = dcount(DestinationPort),
-    PortList = make_set(DestinationPort, 25),
-    EventCount = count()
-    by SourceIP, DestinationIP
-| where DistinctPorts > 20
-```
-
-| Function | Purpose |
-|---|---|
-| `dcount()` | Counts distinct values — ideal for detecting diversity (many ports = scan) |
-| `make_set()` | Collects distinct values into an array — useful for alert enrichment |
-| `count()` | Total events — measures volume |
-| `by` clause | Groups results per source-destination pair |
-
-### Threshold Tuning
-
-The current threshold is **20 distinct ports**. Consider:
-
-| Threshold | Trade-off |
-|---|---|
-| `> 5` | High sensitivity — catches slow scans but may alert on legitimate services |
-| `> 20` | Balanced — catches horizontal scans, filters legitimate multi-port services |
-| `> 50` | Low sensitivity — only catches aggressive wide scans |
-
-> **Best practice:** Start with a higher threshold to reduce noise, then lower it as you understand your environment's baseline.
-
-### Time Window Impact
-
-The `ago(4h)` lookback matches the 1-hour schedule frequency (4x lookback is default). A slower scan across 24h would be missed. For slow scans, consider:
-
-```kusto
-// Wider window for slow scans
-| where TimeGenerated > ago(24h)
-// With a 24h schedule frequency to match
-```
-
 ## Steps
 
-### Step 1 — Analyse the Baseline
+### Step 1 — Establish a Baseline
 
-Run this query in Advanced Hunting to understand normal port diversity:
+Before choosing a threshold, understand the normal port diversity in your environment. Run this query in Advanced Hunting:
 
 ```kusto
 CommonSecurityLog
 | where TimeGenerated > ago(24h)
 | where DeviceVendor == "Palo Alto Networks"
 | where Activity in ("drop", "deny", "reset-both")
+| where ApplicationProtocol == "incomplete"
 | summarize DistinctPorts = dcount(DestinationPort) by SourceIP, DestinationIP
 | summarize
     avg_ports = avg(DistinctPorts),
     p50 = percentile(DistinctPorts, 50),
     p90 = percentile(DistinctPorts, 90),
+    p95 = percentile(DistinctPorts, 95),
     p99 = percentile(DistinctPorts, 99),
     max_ports = max(DistinctPorts)
 ```
 
-This tells you the normal distribution of port diversity — set your threshold above the p99 to avoid false positives.
+**What to look for:**
 
-### Step 2 — Modify the Threshold
+| Percentile | Meaning |
+|---|---|
+| **p50** | Median behaviour — this is "normal" |
+| **p90 / p95** | Higher-end but still relatively common |
+| **p99** | Boundary where activity becomes rare |
+| **max_ports** | Most extreme observed case |
 
-1. Open the rule in Defender → **Hunting** → **Custom detection rules**
-2. Click **Modify query**
-3. Change the threshold from `20` to your chosen value
-4. Run the query to preview results
+**How to pick a threshold:**
 
-### Step 3 — Add Time-Based Enrichment
+| If p99 is... | Start with threshold... |
+|---|---|
+| 10 or lower | `> 15` |
+| 11–20 | `> 20` |
+| Above 20 | p99 + 20%, rounded up |
 
-Extend the query to calculate scan **speed** (ports per minute):
+> **Goal:** Reduce noise while still surfacing suspicious scanning behaviour.
 
-```kusto
-| extend ScanDurationMinutes = datetime_diff('minute', LastSeen, FirstSeen)
-| extend PortsPerMinute = iff(ScanDurationMinutes > 0,
-    toreal(DistinctPorts) / toreal(ScanDurationMinutes), toreal(DistinctPorts))
-```
+### Step 2 — Update the Rule with the Tuned Query
 
-A fast scan (>10 ports/minute) is more likely adversarial than a slow one.
+Open the rule in Defender → **Hunting** → **Custom detection rules** → find `Lab Stage E2 - Port Scan Detection (Palo Alto)` → **Edit**.
 
-### Step 4 — Enable and Verify
-
-1. Save the modified query
-2. Enable the rule
-3. Verify alerts appear with the `DistinctPorts` and `PortList` enrichment
-
-## Solution
-
-The deployed rule already works with a threshold of 20. The extension challenge is adding `PortsPerMinute` to the output:
+Replace the query with the following complete detection query. Change the threshold on the `where DistinctPorts >` line to match the value you chose in Step 1:
 
 ```kusto
+CommonSecurityLog
+| where TimeGenerated > ago(4h)
+| where DeviceVendor == "Palo Alto Networks"
+| where Activity in ("drop", "deny", "reset-both")
+| where ApplicationProtocol == "incomplete"
+| summarize
+    FirstSeen = min(TimeGenerated),
+    LastSeen = max(TimeGenerated),
+    DistinctPorts = dcount(DestinationPort),
+    PortList = make_set(DestinationPort, 25),
+    EventCount = count()
+    by SourceIP, DestinationIP, SourceHostName, SourceUserName
 | extend ScanDurationMinutes = datetime_diff('minute', LastSeen, FirstSeen)
-| extend PortsPerMinute = iff(ScanDurationMinutes > 0,
-    toreal(DistinctPorts) / toreal(ScanDurationMinutes), toreal(DistinctPorts))
+| extend PortsPerMinute = iff(
+    ScanDurationMinutes > 0,
+    todouble(DistinctPorts) / todouble(ScanDurationMinutes),
+    todouble(DistinctPorts)
+)
+| where DistinctPorts > 20
+| project
+    FirstSeen,
+    LastSeen,
+    SourceIP,
+    DestinationIP,
+    DistinctPorts,
+    EventCount,
+    ScanDurationMinutes,
+    PortsPerMinute,
+    PortList,
+    SourceHostName,
+    SourceUserName
+| extend
+    TimeGenerated = FirstSeen,
+    AccountUpn = SourceUserName,
+    DeviceName = SourceHostName,
+    RemoteIP = DestinationIP,
+    ReportId = tostring(hash_sha256(strcat(SourceIP, DestinationIP, tostring(DistinctPorts))))
 ```
+
+> **Note:** Replace `> 20` with the threshold you chose based on your baseline analysis.
+
+**What each enrichment field provides:**
+
+| Field | Purpose |
+|---|---|
+| `DistinctPorts` | How many unique ports were targeted |
+| `PortList` | Which specific ports — helps identify the scan type |
+| `EventCount` | Total volume of denied connections |
+| `ScanDurationMinutes` | How long the scan lasted — distinguishes bursts from slow scans |
+| `PortsPerMinute` | Scan speed — fast (>10/min) is more likely adversarial |
+
+### Step 3 — Validate the Results
+
+After saving the updated rule:
+
+1. Run the query manually in Advanced Hunting to confirm it returns expected results
+2. Verify the threshold is appropriate — check that alert volume is manageable
+3. Confirm the enrichment fields (`PortList`, `PortsPerMinute`) appear in the output
+4. Wait for the rule to trigger (or click **Run** to execute immediately)
+
+**Validation checklist:**
+
+- [ ] Query returns realistic scan candidates
+- [ ] Alert volume is acceptable (not flooding the incident queue)
+- [ ] `PortList` and `DistinctPorts` help the analyst understand the activity quickly
+- [ ] `PortsPerMinute` adds useful triage context
+- [ ] No obvious false positives from legitimate multi-port services
 
 ## Key Takeaways
 

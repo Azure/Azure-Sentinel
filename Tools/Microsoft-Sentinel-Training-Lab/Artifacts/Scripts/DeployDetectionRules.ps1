@@ -167,9 +167,9 @@ foreach ($rule in $rules) {
             $detail     = $_.ErrorDetails.Message
             $isSyntaxError = $detail -match 'syntax errors'
 
-            if ($requiresOktaTable -and $isSyntaxError -and $attempt -lt $retryMaxAttempts) {
+            if ($isSyntaxError -and $attempt -lt $retryMaxAttempts) {
                 Write-Warning "  -> FAILED ($statusCode): $detail"
-                Write-Output "  -> Waiting $retryDelaySeconds seconds for OktaV2_CL to appear (attempt $attempt/$retryMaxAttempts)..."
+                Write-Output "  -> Waiting $retryDelaySeconds seconds for table to appear (attempt $attempt/$retryMaxAttempts)..."
                 Start-Sleep -Seconds $retryDelaySeconds
                 $attempt++
                 continue

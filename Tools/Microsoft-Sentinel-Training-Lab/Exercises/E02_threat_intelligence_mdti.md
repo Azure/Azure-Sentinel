@@ -33,28 +33,27 @@ When you enable the MDTI data connector, indicators are automatically ingested i
 
 ### Steps
 
-#### Step 1 — Enable the MDTI Data Connector
+#### Step 1 — Install the Threat Intelligence Solution and Enable the MDTI Data Connector
 
 1. Open the **Microsoft Defender portal** (https://security.microsoft.com)
-2. Navigate to **Microsoft Sentinel** → **Configuration** → **Data connectors**
-3. Search for **Microsoft Defender Threat Intelligence**
-4. Select the connector and click **Open connector page**
+2. Navigate to **Microsoft Sentinel** → **Content management** → **Content hub**
+3. Search for **Threat Intelligence** and select the **Threat Intelligence (NEW)** solution (marked as **Featured**)
+4. Click **Install/Update** to deploy the solution — this includes the MDTI data connector, analytics rules, workbooks, and hunting queries
 
 <p align="center">
-<img src="../Images/OnboardingImage24.png?raw=true" alt="MDTI data connector in the Content Hub" width="800">
+<img src="../Images/OnboardingImage24.png?raw=true" alt="Threat Intelligence (NEW) solution in the Content Hub" width="800">
 </p>
 
-5. On the connector page, review the **Prerequisites** section:
-   - Your workspace must have Microsoft Sentinel enabled
-   - You need at least **Security Reader** permissions
-
-6. Under **Configuration**, select **Connect** to enable the connector
+5. After installation, navigate to **Microsoft Sentinel** → **Configuration** → **Data connectors**
+6. Search for **Microsoft Defender Threat Intelligence**
+7. Select the connector and click **Open connector page**
+8. Under **Configuration**, select **Connect** to enable the connector
 
 <p align="center">
 <img src="../Images/OnboardingImage23.png?raw=true" alt="MDTI data connector configuration page" width="800">
 </p>
 
-7. Once connected, the **Status** changes to **Connected**. Indicators will begin ingesting within a few minutes.
+9. Once connected, the **Status** changes to **Connected**. Indicators will begin ingesting within a few minutes.
 
 > **Note:** It can take up to **15 minutes** for the first indicators to appear in the `ThreatIntelIndicators` table. The connector ingests indicators continuously after that.
 
@@ -64,11 +63,11 @@ Once the connector is enabled, verify that indicators are flowing into your work
 
 ```kusto
 ThreatIntelIndicators
-| summarize IndicatorCount = count() by IndicatorType
+| summarize IndicatorCount = count() by ObservableKey
 | sort by IndicatorCount desc
 ```
 
-You should see indicators of type `ipv4-addr`, `domain-name`, `url`, and `file` (with hash sub-types).
+You should see observable types like `ipv4-addr`, `domain-name`, `url`, and file hash patterns.
 
 Explore the most recent indicators:
 
@@ -77,35 +76,33 @@ ThreatIntelIndicators
 | where TimeGenerated > ago(24h)
 | project
     TimeGenerated,
-    IndicatorType,
-    IndicatorValue = coalesce(NetworkIP, DomainName, Url, FileHashValue),
+    ObservableKey,
+    ObservableValue,
     Confidence,
-    ThreatType,
-    Description,
-    Source
+    IsActive,
+    ValidFrom,
+    ValidUntil
 | sort by TimeGenerated desc
 | take 20
 ```
 
 #### Step 3 — Understand the ThreatIntelIndicators Schema
 
-The `ThreatIntelIndicators` table has a rich schema designed for correlation:
+The `ThreatIntelIndicators` table stores STIX-formatted threat intelligence indicators:
 
 | Column | Description | Example |
 |---|---|---|
-| `IndicatorType` | Type of IOC | `ipv4-addr`, `domain-name`, `file` |
-| `NetworkIP` | Malicious IP address | `198.51.100.42` |
-| `DomainName` | Malicious domain | `evil-c2-server.xyz` |
-| `Url` | Malicious URL | `https://phishing-site.com/login` |
-| `FileHashValue` | Malicious file hash | `e3b0c44298fc1c14...` |
-| `FileHashType` | Hash algorithm | `SHA256`, `SHA1`, `MD5` |
+| `ObservableKey` | Type of IOC (from the STIX pattern) | `ipv4-addr`, `domain-name`, `file:hashes.'SHA-256'` |
+| `ObservableValue` | The actual IOC value | `198.51.100.42`, `evil-c2-server.xyz` |
+| `Pattern` | Full STIX detection pattern | `[ipv4-addr:value = '198.51.100.42']` |
 | `Confidence` | Indicator confidence (0-100) | `85` |
-| `ThreatType` | Threat classification | `C2`, `Botnet`, `Phishing` |
-| `Description` | Human-readable description | `Known APT28 C2 infrastructure` |
-| `Source` | Intelligence provider | `Microsoft Threat Intelligence` |
+| `Data` | Full STIX object as dynamic JSON (contains additional context like threat type, description, labels) | `{"type":"indicator",...}` |
 | `ValidFrom` / `ValidUntil` | Indicator validity time window | Datetime values |
-| `Action` | Recommended action | `alert`, `block` |
 | `IsActive` | Whether the indicator is currently active | `true` |
+| `Created` / `Modified` | When the indicator was created/updated | Datetime values |
+| `Tags` | Sentinel-defined tags | Labels and categories |
+
+> **Tip:** Use the `Data` column to extract additional context like threat type and description: `| extend ThreatType = tostring(Data.indicator_types[0])`
 
 #### Step 4 — Match Indicators Against Your Telemetry
 
@@ -114,21 +111,18 @@ The real power of TI is correlating indicators against your environment's data. 
 ```kusto
 let ti_ips = ThreatIntelIndicators
 | where IsActive == true
-| where IndicatorType == "ipv4-addr"
+| where ObservableKey == "ipv4-addr"
 | where Confidence > 50
-| project NetworkIP, Confidence, ThreatType, Description, Source;
+| project ObservableValue, Confidence;
 CommonSecurityLog
 | where DeviceVendor == "Palo Alto Networks"
-| join kind=inner ti_ips on $left.DestinationIP == $right.NetworkIP
+| join kind=inner ti_ips on $left.DestinationIP == $right.ObservableValue
 | project
     TimeGenerated,
     SourceIP,
     DestinationIP,
     DeviceAction,
-    TI_Confidence = Confidence,
-    TI_ThreatType = ThreatType,
-    TI_Description = Description,
-    TI_Source = Source
+    TI_Confidence = Confidence
 | sort by TimeGenerated desc
 ```
 
@@ -137,20 +131,24 @@ Try the same for AWS CloudTrail:
 ```kusto
 let ti_ips = ThreatIntelIndicators
 | where IsActive == true
-| where IndicatorType == "ipv4-addr"
+| where ObservableKey == "ipv4-addr"
 | where Confidence > 50
-| project NetworkIP, Confidence, ThreatType;
+| project ObservableValue, Confidence;
 AWSCloudTrail
-| join kind=inner ti_ips on $left.SourceIpAddress == $right.NetworkIP
+| join kind=inner ti_ips on $left.SourceIpAddress == $right.ObservableValue
 | project
     TimeGenerated,
     UserIdentityUserName,
     EventName,
     SourceIpAddress,
-    TI_Confidence = Confidence,
-    TI_ThreatType = ThreatType
+    TI_Confidence = Confidence
 | sort by TimeGenerated desc
 ```
+
+
+> **Note:** These queries may return **empty results** in the lab environment -- this is expected. The lab's pre-ingested telemetry uses synthetic IP addresses that are unlikely to appear in Microsoft's real-world threat intelligence feed. In a production environment with live traffic, these joins are how you detect connections to known-malicious infrastructure.
+>
+> **What to take away:** The query *pattern* is what matters -- `join kind=inner` between a TI indicator table and your telemetry. You can apply this same pattern to any data source (firewall logs, cloud trails, identity events) in your production workspace where real traffic will match real indicators.
 
 #### Step 5 — Explore Indicator Statistics
 
@@ -161,9 +159,8 @@ ThreatIntelIndicators
 | where IsActive == true
 | summarize
     TotalIndicators = count(),
-    AvgConfidence = avg(Confidence),
-    Sources = make_set(Source)
-    by IndicatorType
+    AvgConfidence = avg(Confidence)
+    by ObservableKey
 | sort by TotalIndicators desc
 ```
 

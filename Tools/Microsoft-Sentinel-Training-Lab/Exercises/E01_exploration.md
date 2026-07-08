@@ -234,10 +234,6 @@ Run this query in Advanced Hunting to verify it returns results.
 
 6. Select **Create** to save the rule
 
-<p align="center">
-<img src="../Images/OnboardingImage32.png?raw=true" alt="Custom detection rules list showing the new rule" width="800">
-</p>
-
 #### Step 9 — Verify the Rule
 
 1. Navigate to **Hunting** → **Custom detection rules**

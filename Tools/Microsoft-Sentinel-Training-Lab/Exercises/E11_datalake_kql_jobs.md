@@ -40,7 +40,7 @@ The Lab already uses this pattern. The detection rule `Lab Stage S8 - Data Lake 
 
 ### Data Lake Ingestion Latency
 
-The data lake tier stores data in cold storage. There is a typical latency of **up to 15 minutes** before newly ingested data is available for querying. When scheduling KQL jobs, you must account for this latency by including a delay parameter in your queries:
+The data lake tier has a typical ingestion latency of **up to 15 minutes** before newly ingested data is available for querying. When scheduling KQL jobs, you must account for this latency by including a delay parameter in your queries:
 
 ```kusto
 let delay = 15m;
