@@ -71,19 +71,6 @@ with open(path, 'w') as f:
     json.dump(ui, f, indent=4)
 print('Patched createUiDefinition.json')
 "
-# Step 3b: Remove unreferenced script-injected parameters
-python3 -c "
-import json
-path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
-with open(path) as f:
-    t = json.load(f)
-t['parameters'].pop('resourceGroupName', None)
-t['parameters'].pop('subscription', None)
-t['parameters'].pop('dcrConfig', None)
-with open(path, 'w') as f:
-    json.dump(t, f, indent=4)
-print('Removed unreferenced parameters: resourceGroupName, subscription, dcrConfig')
-"
 
 # Step 3: patch the Package mainTemplate.json parameters
 python3 -c "
@@ -159,8 +146,24 @@ with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Fixed DCR dataCollectionEndpointId')
 "
-# Step 4: Regenerate the zip from the patched files
+# Step 3e-fix: Replace blank dcrConfig defaults with non-empty placeholder text
+python3 -c "
+import json
+path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
+with open(path) as f:
+    t = json.load(f)
 
+t['parameters']['dcrConfig']['defaultValue'] = {
+    'dataCollectionEndpoint': 'data collection Endpoint',
+    'dataCollectionRuleImmutableId': 'data collection rule immutableId'
+}
+
+with open(path, 'w') as f:
+    json.dump(t, f, indent=4)
+print('Replaced blank dcrConfig defaults with placeholder text')
+"
+
+# Step 4
 python3 -c "
 import json
 path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
@@ -176,8 +179,30 @@ with open(path, 'w') as f:
     json.dump(t, f, indent=4)
 print('Fixed apitoken defaultValue in contentTemplate')
 "
+#step 5
+python3 -c "
+import json
+path = '/Users/shay.n/Azure-Sentinel-Panorays/Solutions/Panorays/Package/mainTemplate.json'
+with open(path) as f:
+    t = json.load(f)
 
-# Step 5: Regenerate the zip from the patched files
+for r in t['resources']:
+    if r.get('properties', {}).get('contentKind') == 'ResourcesDataConnector':
+        nested = r['properties']['mainTemplate']
+        if 'dcrConfig' in nested.get('parameters', {}):
+            nested['parameters']['dcrConfig']['defaultValue'] = \"[parameters('dcrConfig')]\"
+        for nres in nested.get('resources', []):
+            props = nres.get('properties', {})
+            if 'dcrConfig' in props and 'streamName' in props['dcrConfig']:
+                props['dcrConfig']['dataCollectionEndpoint'] = \"[parameters('dcrConfig').dataCollectionEndpoint]\"
+                props['dcrConfig']['dataCollectionRuleImmutableId'] = \"[parameters('dcrConfig').dataCollectionRuleImmutableId]\"
+
+with open(path, 'w') as f:
+    json.dump(t, f, indent=4)
+print('Re-applied dcrConfig reference chain')
+"
+
+# Step 6: Regenerate the zip from the patched files
 python3 -c "
 import zipfile, os, glob
 
