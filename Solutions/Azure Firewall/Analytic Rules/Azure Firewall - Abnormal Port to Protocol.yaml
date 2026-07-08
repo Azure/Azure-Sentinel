@@ -26,7 +26,9 @@ relevantTechniques:
   - T1571
 query: |
   let LearningPeriod = 7d;
+  let RunTime = 1h;
   let StartLearningPeriod = LearningPeriod + RunTime;
+  let DetectionWindowStart = ago(RunTime);
   let LearningPortToProtocol1 =  (AzureDiagnostics
   | where OperationName == "AzureFirewallApplicationRuleLog"
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
@@ -44,16 +46,19 @@ query: |
   | where isnotempty(DestinationPort)
   | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
   let AlertTimePortToProtocol1 = (AzureDiagnostics
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where OperationName == "AzureFirewallApplicationRuleLog"
   | extend msg_s= column_ifexists('msg_s',Message)
   | parse msg_s with Protocol " request from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int "." *
   | where isnotempty(DestinationPort)
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   let AlertTimePortToProtocol2 = (AZFWNetworkRule
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where isnotempty(DestinationPort)
   | extend Fqdn = DestinationIp
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   let AlertTimePortToProtocol3 = (AZFWApplicationRule
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where isnotempty(DestinationPort)
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   (union isfuzzy=true 
@@ -61,7 +66,8 @@ query: |
   | join kind=leftouter (LearningPortToProtocol1) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
   | where LearningTimeProtocol != AlertTimeProtocol),
   (AlertTimePortToProtocol2 
-  | join kind=leftanti (LearningPortToProtocol2) on $left.AlertTimeDstPort == $right.LearningTimeDstPort, $left.AlertTimeProtocol == $right.LearningTimeProtocol),
+  | join kind=leftouter (LearningPortToProtocol2) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol),
   (AlertTimePortToProtocol3 
   | join kind=leftouter (LearningPortToProtocol3) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
   | where LearningTimeProtocol != AlertTimeProtocol))
