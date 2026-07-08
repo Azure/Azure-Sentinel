@@ -26,7 +26,7 @@ Before beginning the installation, ensure you have:
 
 ## Required Azure Resources
 
-The **Commvault Security IQ** data connector uses Microsoft's **Codeless Connector Framework (CCF)** — a fully managed, serverless poller hosted by Microsoft. No Azure Function App, Key Vault, or storage account is required. The solution package automatically deploys the required Data Collection Rule (DCR) and custom log table (`CommvaultAlertsCCF_CL`) into your workspace. A Data Collection Endpoint (DCE) must exist in your subscription; provide its resource ID as the `dceId` parameter during deployment.
+The **Commvault Security IQ** data connector uses Microsoft's **Codeless Connector Framework (CCF)** — a fully managed, serverless poller hosted by Microsoft. No Azure Function App, Key Vault, or storage account is required. The solution package automatically deploys the required Data Collection Rule (DCR) and custom log table (`CommvaultAlertsCCF_CL`) into your workspace. A Data Collection Endpoint (DCE) must already exist in the same subscription and resource group; its name can be provided via the `dataCollectionEndpointName` parameter during deployment (defaults to the workspace name if omitted).
 
 Installation
 ------------
