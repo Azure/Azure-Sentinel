@@ -22,11 +22,11 @@ Description: |
   Note: The HalcyonEventsV2_CL table must be configured on the Log Analytics workspace's Analytics plan to use this parser. The Basic Logs plan does not support invocation of user-defined functions, which is required for ASIM parser consumption.
 Exceptions:
 - Field: DvcFQDN
-  Warning: Empty value in mandatory field
-  Exception: Halcyon events provide only a short device hostname; no fully-qualified domain is included in the source data.
+  Warning: Empty value in optional field
+  Exception: DvcFQDN is derived when device.hostname is a fully-qualified domain name; when Halcyon emits a short hostname (no domain suffix), DvcFQDN is empty.
 - Field: DvcDomain
-  Warning: Empty value in mandatory field
-  Exception: Halcyon events do not include a device domain; only a short device hostname and device identifier are available in the source data, so DvcDomain cannot be derived.
+  Warning: Empty value in recommended field
+  Exception: DvcDomain is derived when device.hostname is a fully-qualified domain name; when Halcyon emits a short hostname (no domain suffix), DvcDomain is empty.
 ParserName: ASimDnsHalcyon
 EquivalentBuiltInParser: _ASim_Dns_Halcyon
 ParserParams:
@@ -35,7 +35,7 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (disabled:bool=false) {
-      // DNS query class name -> numeric class lookup (not hardcoded).
+      // DNS query class name -> numeric class ID lookup (standard DNS CLASS values).
       let DnsClassLookup = datatable(DnsQueryClassName:string, DnsQueryClass:int)
       [
           "IN", 1, "CH", 3, "HS", 4, "NONE", 254, "ANY", 255
@@ -48,11 +48,9 @@ ParserQuery: |
       | extend
           EventType           = case(activity_id == 1, "Query", activity_id == 2, "Response", activity_id == 6, "Traffic", "Query"),
           DnsQuery            = tostring(query.hostname),                              // OCSF query.hostname
-          DnsQueryTypeName    = tostring(answers[0].type),                             // OPTIONAL: inferred from first answer; query.type is not emitted // validate
           DnsResponseCode     = toint(rcode_id),                                       // OCSF rcode_id (constant 0 = NoError; resolution succeeded)
           DnsResponseCodeName = coalesce(tostring(rcode), tostring(_ASIM_LookupDnsResponseCode(toint(rcode_id)))),  // Halcyon emits rcode "NoError"; datatable fallback on rcode_id
           DnsResponseName     = tostring(answers[0].rdata),
-          SrcHostname         = tostring(src_endpoint.hostname),                       // src_endpoint has hostname/uid only (no IP)
           SrcUsername         = tostring(actor.user.name),
           SrcUserId           = tostring(actor.user.uid),
           SrcProcessName      = tostring(actor.process.file.name),
@@ -85,8 +83,11 @@ ParserQuery: |
                                 isempty(SrcUserId), "",
                                 SrcUserId startswith "S-1-", "SID",
                                 "Other"),
-          Src             = SrcHostname,
-          Hostname        = SrcHostname,
+          // src_endpoint.hostname == device.hostname in Halcyon events, so source-side host fields mirror the resolved device fields.
+          SrcHostname     = DvcHostname,                                               // short hostname (ASIM Hostname type - no dots)
+          SrcFQDN         = DvcFQDN,                                                    // FQDN when device.hostname is fully-qualified, else empty
+          Src             = DvcHostname,                                               // Src alias for Hostname
+          Hostname        = DvcHostname,                                               // required alias
           Process         = SrcProcessName,
           User            = SrcUsername,
           // All events in this class are security-flagged detections.
