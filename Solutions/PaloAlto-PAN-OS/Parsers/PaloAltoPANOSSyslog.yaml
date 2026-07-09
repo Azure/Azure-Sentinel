@@ -1,0 +1,110 @@
+id: 8c5a3b7e-6f2d-4a9c-b1e8-3d5f7c9a2e4b
+Function:
+  Title: Parser for PaloAltoPANOSSyslog
+  Version: '1.0.0'
+  LastUpdated: '2026-07-09'
+Category: Microsoft Sentinel Parser
+FunctionName: PaloAltoPANOSSyslog
+FunctionAlias: PaloAltoPANOSSyslog
+FunctionQuery: |
+    // PAN-OS Syslog Parser
+    // Parses Palo Alto Networks PAN-OS syslog messages (TRAFFIC and THREAT log types)
+    // into structured fields compatible with existing analytic rules and hunting queries.
+    // Reference: https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions
+    let PaloAltoSyslogTraffic = Syslog
+    | where SyslogMessage has "TRAFFIC"
+    | extend LogFields = split(SyslogMessage, ",")
+    | where array_length(LogFields) > 46
+    | where tostring(LogFields[3]) == "TRAFFIC"
+    | extend
+        DeviceVendor = "Palo Alto Networks",
+        DeviceProduct = "PAN-OS",
+        Activity = "TRAFFIC",
+        DeviceEventClassID = tostring(LogFields[4]),
+        SourceIP = tostring(LogFields[7]),
+        DestinationIP = tostring(LogFields[8]),
+        SourceTranslatedAddress = tostring(LogFields[9]),
+        DestinationTranslatedAddress = tostring(LogFields[10]),
+        NetworkRuleName = tostring(LogFields[11]),
+        SourceUserName = tostring(LogFields[12]),
+        SourceUserID = tostring(LogFields[12]),
+        DestinationUserName = tostring(LogFields[13]),
+        DestinationUserID = tostring(LogFields[13]),
+        ApplicationProtocol = tostring(LogFields[14]),
+        VirtualSystem = tostring(LogFields[15]),
+        SourceZone = tostring(LogFields[16]),
+        DestinationZone = tostring(LogFields[17]),
+        DeviceInboundInterface = tostring(LogFields[18]),
+        DeviceOutboundInterface = tostring(LogFields[19]),
+        SourcePort = toint(LogFields[24]),
+        DestinationPort = toint(LogFields[25]),
+        SourceTranslatedPort = toint(LogFields[26]),
+        DestinationTranslatedPort = toint(LogFields[27]),
+        Protocol = tostring(LogFields[29]),
+        DeviceAction = tostring(LogFields[30]),
+        SimplifiedDeviceAction = tostring(LogFields[30]),
+        SentBytes = tolong(LogFields[32]),
+        ReceivedBytes = tolong(LogFields[33]),
+        StartTime = tostring(LogFields[35]),
+        ElapsedTime = tostring(LogFields[36]),
+        Category = tostring(LogFields[37]),
+        PacketsSent = tolong(LogFields[44]),
+        PacketsReceived = tolong(LogFields[45]),
+        SessionEndReason = tostring(LogFields[46]),
+        DeviceName = Computer,
+        FileHash = "",
+        RequestURL = "",
+        LogSeverity = "",
+        ThreatContentName = "",
+        Direction = ""
+    | extend AdditionalExtensions = strcat("reason=", SessionEndReason)
+    | project-away LogFields;
+    let PaloAltoSyslogThreat = Syslog
+    | where SyslogMessage has "THREAT"
+    | extend LogFields = split(SyslogMessage, ",")
+    | where array_length(LogFields) > 43
+    | where tostring(LogFields[3]) == "THREAT"
+    | extend
+        DeviceVendor = "Palo Alto Networks",
+        DeviceProduct = "PAN-OS",
+        Activity = "THREAT",
+        DeviceEventClassID = tostring(LogFields[4]),
+        SourceIP = tostring(LogFields[7]),
+        DestinationIP = tostring(LogFields[8]),
+        SourceTranslatedAddress = tostring(LogFields[9]),
+        DestinationTranslatedAddress = tostring(LogFields[10]),
+        NetworkRuleName = tostring(LogFields[11]),
+        SourceUserName = tostring(LogFields[12]),
+        SourceUserID = tostring(LogFields[12]),
+        DestinationUserName = tostring(LogFields[13]),
+        DestinationUserID = tostring(LogFields[13]),
+        ApplicationProtocol = tostring(LogFields[14]),
+        VirtualSystem = tostring(LogFields[15]),
+        SourceZone = tostring(LogFields[16]),
+        DestinationZone = tostring(LogFields[17]),
+        DeviceInboundInterface = tostring(LogFields[18]),
+        DeviceOutboundInterface = tostring(LogFields[19]),
+        SourcePort = toint(LogFields[24]),
+        DestinationPort = toint(LogFields[25]),
+        SourceTranslatedPort = toint(LogFields[26]),
+        DestinationTranslatedPort = toint(LogFields[27]),
+        Protocol = tostring(LogFields[29]),
+        DeviceAction = tostring(LogFields[30]),
+        SimplifiedDeviceAction = tostring(LogFields[30]),
+        RequestURL = tostring(LogFields[31]),
+        ThreatContentName = tostring(LogFields[32]),
+        Category = tostring(LogFields[33]),
+        LogSeverity = tostring(LogFields[34]),
+        Direction = tostring(LogFields[35]),
+        FileHash = tostring(LogFields[43]),
+        DeviceName = Computer,
+        SentBytes = long(null),
+        ReceivedBytes = long(null),
+        StartTime = "",
+        ElapsedTime = "",
+        PacketsSent = long(null),
+        PacketsReceived = long(null),
+        SessionEndReason = "",
+        AdditionalExtensions = ""
+    | project-away LogFields;
+    union PaloAltoSyslogTraffic, PaloAltoSyslogThreat

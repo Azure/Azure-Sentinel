@@ -1,0 +1,134 @@
+{
+    "id": "PaloAltoNetworksSyslogAma",
+    "title": "Palo Alto Networks (Firewall) via Syslog via AMA",
+    "publisher": "Palo Alto Networks",
+    "descriptionMarkdown": "The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks PAN-OS logs with Microsoft Sentinel using the Azure Monitor Agent (AMA) and native syslog forwarding. Palo Alto Networks has deprecated CEF format for PAN-OS versions after 10.0; this connector uses the recommended native syslog format. This gives you more insight into your organization's network and improves your security operation capabilities.",
+    "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "PaloAlto PAN-OS",
+            "baseQuery": "PaloAltoPANOSSyslog"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All logs",
+            "query": "PaloAltoPANOSSyslog\n| sort by TimeGenerated"
+        },
+        {
+            "description": "TRAFFIC logs",
+            "query": "PaloAltoPANOSSyslog\n| where Activity == \"TRAFFIC\"\n| sort by TimeGenerated"
+        },
+        {
+            "description": "THREAT activity",
+            "query": "PaloAltoPANOSSyslog\n| where Activity == \"THREAT\"\n| sort by TimeGenerated"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "PaloAltoPANOSSyslog\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(3d)"
+            ]
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "Syslog (PaloAlto PAN-OS)",
+            "lastDataReceivedQuery": "PaloAltoPANOSSyslog\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "read": true,
+                    "write": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
+            },
+            {
+                "description": "Syslog via AMA data connector must be installed. [Learn more](https://learn.microsoft.com/azure/sentinel/connect-cef-syslog-ama)"
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias **PaloAltoPANOSSyslog** and load the function code. The function usually takes 10-15 minutes to activate after solution installation/update.",
+            "instructions": []
+        },
+        {
+            "title": "",
+            "description": "",
+            "instructions": [
+                {
+                    "parameters": {
+                        "title": "1. Kindly follow the steps to configure the data connector",
+                        "instructionSteps": [
+                            {
+                                "title": "Step A. Configure the Syslog via AMA data connector",
+                                "description": "_Note:- Syslog logs are collected only from Linux Agents_\n\n1. Navigate to Microsoft Sentinel workspace ---> configuration ---> Data connector blade.\n\n2. Search for 'Syslog via AMA' data connector and open it.\n\n3. Check if there is no existing DCR configured to collect required facility of logs, Create a new DCR (Data Collection Rule).\n\n\t_Note:- It is recommended to install minimum 1.27 version of AMA agent [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal) and ensure there is no duplicate DCR as it can cause log duplication._\n\n4. Configure the DCR to collect **LOG_USER** facility at appropriate severity levels.",
+                                "instructions": []
+                            },
+                            {
+                                "title": "Step B. Configure Palo Alto Networks PAN-OS to send syslog",
+                                "description": "Configure your Palo Alto Networks firewall to forward syslog messages in **native syslog format** (not CEF) to your Linux syslog agent.\n\n> **Important:** Palo Alto Networks has deprecated CEF format for PAN-OS versions after 10.0. Use native syslog format for PAN-OS 10.1 and later.\n\n1. Log in to the PAN-OS web interface.\n2. Navigate to **Device > Server Profiles > Syslog**.\n3. Create a new syslog server profile with the IP address of your Linux agent with AMA installed.\n4. Set the **Transport** to **UDP** (port 514) or **TCP** (port 514).\n5. Set the **Format** to **BSD** (recommended).\n6. Navigate to **Objects > Log Forwarding** and create a profile that forwards Traffic and Threat logs to the syslog server profile.\n7. Apply the log forwarding profile to the appropriate security policy rules.\n8. Commit the configuration.\n\nFor detailed instructions, see [Configure Syslog Monitoring](https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/configure-syslog-monitoring).",
+                                "instructions": []
+                            },
+                            {
+                                "title": "Step C. Validate connection",
+                                "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the Syslog schema.\n\nIt may take about 20 minutes until the connection streams data to your workspace.\n\nRun the following query to verify PAN-OS syslog data is being received:\n\n```\nSyslog | where SyslogMessage has \"TRAFFIC\" or SyslogMessage has \"THREAT\" | take 10\n```",
+                                "instructions": []
+                            }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]
+        },
+        {
+            "title": "2. Secure your machine ",
+            "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+        }
+    ],
+    "metadata": {
+        "id": "b4d8e1f2-6c3a-5f9b-a0d7-2e4f6b8c0d1a",
+        "version": "1.0.0",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "community"
+        },
+        "author": {
+            "name": "Palo Alto Networks"
+        },
+        "support": {
+            "name": "Palo Alto Networks",
+            "link": "https://www.paloaltonetworks.com/company/contact-support",
+            "tier": "developer"
+        }
+    }
+}
