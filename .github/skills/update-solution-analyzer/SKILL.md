@@ -12,6 +12,7 @@ Always review the relevant script documentation in `Tools/Solutions Analyzer/scr
 ## Script Documentation Updates
 
 When updating a script, update the corresponding doc in `script-docs/` to reflect:
+
 - Script parameters added or changed
 - Output file changes — for new/renamed/removed CSV columns, **edit the per-CSV page in `script-docs/csv/<csv-name>.md`** (the script doc only lists CSVs as a summary table with links; it does not duplicate column tables)
 - Changes to analysis methods or logic
@@ -22,6 +23,7 @@ When updating a script, update the corresponding doc in `script-docs/` to reflec
 **Required for feature additions and behavior changes; optional for small bug fixes.** New features, changed analysis logic, new/renamed/removed CSV columns, parameter changes, and other user-visible behavior changes must appear in the changelog. Pure bug fixes — such as correcting a typo, fixing a crash, escape-character tweaks, regex corrections, or one-line fixes that restore intended behavior without changing it — may be logged at your discretion but are not required.
 
 When a changelog entry is warranted, update the `## Version History` section in `Tools/Solutions Analyzer/README.md`:
+
 - Add the change under the **latest version heading** at the top of the changelog
 - If the latest version has not been committed yet (i.e., it already has uncommitted changes in the changelog), add to that existing version — do **not** create a new version entry
 - If the latest version was already committed, create a new version entry with an incremented version number and a short descriptive title
@@ -31,6 +33,7 @@ When a changelog entry is warranted, update the `## Version History` section in 
 ## CSV Output Changes
 
 When adding or removing a CSV output file from the mapper:
+
 - Update `upload_to_kusto.py` → `SOLUTION_ANALYZER_FILES` list to add/remove the file
 
 ## Static and Interactive Index Synchronization
@@ -41,6 +44,7 @@ The documentation generator produces **two parallel sets of index pages** that m
 2. **Interactive index** (`generate_interactive_docs.py`): HTML page with DataTables.js — `index.html` with tabs for Solutions, Connectors, Tables, and Content.
 
 **When modifying any index generation logic**, apply the same change to BOTH:
+
 - Data filtering/inclusion rules (which connectors or tables to show)
 - Status classification logic (Active/Deprecated/Unpublished/Discovered)
 - Icon usage and legend entries
@@ -57,6 +61,7 @@ The doc generator produces **both static markdown and HTML versions** of every e
 - **HTML entity pages** (`generate_interactive_docs.py` → `_generate_html_pages()`): Auto-generated from markdown via Python `markdown` library.
 
 In most cases, changing `generate_connector_docs.py` is sufficient because HTML pages derive from markdown. But if the change involves:
+
 - Navigation or link targets
 - HTML-specific rendering (e.g., DataTables on schema tables)
 - Heading structure changes
