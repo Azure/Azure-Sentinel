@@ -1,9 +1,9 @@
----
+﻿---
   id: 231a04da-9a8d-4cd6-8a20-2da7ded173ba
   Function:
     Title: Parser for BoxEvents
-    Version: 2.0.0
-    LastUpdated: 2024-09-24
+    Version: 2.1.0
+    LastUpdated: 2026-07-10
   Category: Microsoft Sentinel Parser
   FunctionName: BoxEvents
   FunctionAlias: BoxEvents
@@ -68,11 +68,20 @@
              additional_details_collab_id_s:string,
              additional_details_role_s:string,
              additional_details_is_performed_by_admin_b:bool,
-             session_id_s:string
+             session_id_s:string,
+             additional_details_invitation_message_s:string,
+             source_classification_name_s:string,
+             source_classification_color_s:string,
+             source_classification_definition_s:string,
+             additional_details_action_by_login_s:string,
+             additional_details_shared_link_access_s:string
     )[];
     let BoxEventsv1 = union isfuzzy=true BoxEvents_CL, BoxEventsv1_empty
            | extend
-           additional_details_annotation_id_s=column_ifexists('additional_details_annotation_id_s', ''),
+           additional_details_annotation_id_d=coalesce(
+             todouble(column_ifexists('additional_details_annotation_id_d', double(null))),
+             todouble(column_ifexists('additional_details_annotation_id_s', ''))
+           ),
            additional_details_group_id_s=column_ifexists('additional_details_group_id_s', ''),
            additional_details_group_name_s=column_ifexists('additional_details_group_name_s', ''),
            source_user_email_s=column_ifexists('source_user_email_s', ''),
@@ -96,7 +105,11 @@
            source_parent_name_s=column_ifexists('source_parent_name_s', ''),
            source_parent_id_s=column_ifexists('source_parent_id_s', ''),
            source_owned_by_type_s=column_ifexists('source_owned_by_type_s', ''),
-           source_owned_by_id_s=column_ifexists('source_owned_by_id_s', ''),
+           source_owned_by_id_s=iff(
+             column_ifexists('source_owned_by_id_s', '') == column_ifexists('source_owned_by_type_s', ''),
+             '',
+             column_ifexists('source_owned_by_id_s', '')
+           ),
            source_owned_by_name_s=column_ifexists('source_owned_by_name_s', ''),
            source_owned_by_login_s=column_ifexists('source_owned_by_login_s', ''),
            created_by_type_s=column_ifexists('created_by_type_s', ''),
@@ -104,7 +117,10 @@
            created_by_name_s=column_ifexists('created_by_name_s', ''),
            created_by_login_s=column_ifexists('created_by_login_s', ''),
            created_at_t=column_ifexists('created_at_t', ''),
-           event_id_g=column_ifexists('event_id_g', ''),
+           event_id_g=coalesce(
+             column_ifexists('event_id_g', guid(null)),
+             column_ifexists('event_id_g_guid', guid(null))
+           ),
            event_type_s=column_ifexists('event_type_s', ''),
            ip_address_s=column_ifexists('ip_address_s', ''),
            type_s=column_ifexists('type_s', ''),
@@ -131,9 +147,15 @@
            additional_details_collab_id_s=column_ifexists('additional_details_collab_id_s', ''),
            additional_details_role_s=column_ifexists('additional_details_role_s', ''),
            additional_details_is_performed_by_admin_b=column_ifexists('additional_details_is_performed_by_admin_b', ''),
-           session_id_s=column_ifexists('session_id_s', '')
+           session_id_s=column_ifexists('session_id_s', ''),
+           additional_details_invitation_message_s=column_ifexists('additional_details_invitation_message_s', ''),
+           source_classification_name_s=column_ifexists('source_classification_name_s', ''),
+           source_classification_color_s=column_ifexists('source_classification_color_s', ''),
+           source_classification_definition_s=column_ifexists('source_classification_definition_s', ''),
+           additional_details_action_by_login_s=column_ifexists('additional_details_action_by_login_s', ''),
+           additional_details_shared_link_access_s=column_ifexists('additional_details_shared_link_access_s', '')
            | project-rename
-           AdditionalDetailsAnnotationId=additional_details_annotation_id_s,
+           AdditionalDetailsAnnotationId=additional_details_annotation_id_d,
            AdditionalDetailsGroupId=additional_details_group_id_s,
            AdditionalDetailsGroupName=additional_details_group_name_s,
            SourceUserEmail=source_user_email_s,
@@ -192,22 +214,32 @@
            AdditionalDetailsCollabId=additional_details_collab_id_s,
            AdditionalDetailsRole=additional_details_role_s,
            AdditionalDetailsIsPerformedByAdmin=additional_details_is_performed_by_admin_b,
-           UserSessionId=session_id_s;
-         let BoxEventsv2 = union isfuzzy=true BoxEventsv1_empty, BoxEventsV2_CL |
-         extend additional_details_annotation_id_s=tostring(additional_details.annotation_id),
-       additional_details_group_id_s=tostring(additional_details.group_id),
-       additional_details_group_name_s=tostring(additional_details.group_name),
+           UserSessionId=session_id_s,
+           AdditionalDetailsInvitationMessage=additional_details_invitation_message_s,
+           SourceClassificationName=source_classification_name_s,
+           SourceClassificationColor=source_classification_color_s,
+           SourceClassificationDefinition=source_classification_definition_s,
+           AdditionalDetailsActionByLogin=additional_details_action_by_login_s,
+           AdditionalDetailsSharedLinkAccess=additional_details_shared_link_access_s
+           | extend _boxSourcePriority=0;
+        let BoxEventsv2 = union isfuzzy=true BoxEventsv1_empty, BoxEventsV2_CL |
+        extend _rawAdditionalDetails=todynamic(column_ifexists('additional_details', dynamic(null))),
+      _rawSource=todynamic(column_ifexists('source', dynamic(null))),
+      _rawActionBy=todynamic(column_ifexists('action_by', dynamic(null)))
+      | extend additional_details_annotation_id_d=todouble(_rawAdditionalDetails.annotation_id),
+       additional_details_group_id_s=tostring(_rawAdditionalDetails.group_id),
+       additional_details_group_name_s=tostring(_rawAdditionalDetails.group_name),
        source_user_email_s=source_user_email,
-       additional_details_comment_id_d=todouble(additional_details.comment_id),
-       additional_details_message_s=tostring(additional_details.message),
-       additional_details_task_id_d=todouble(additional_details.task.id),
-       additional_details_task_message_s=tostring(additional_details.task.message),
-       additional_details_task_created_by_id_d=todouble(additional_details.task.created_by.id),
-       additional_details_task_created_by_login_s=tostring(additional_details.task.created_by.login),
-       additional_details_task_assignment_assigned_to_id_d=todouble(additional_details.task_assignment.assigned_to.id),
-       additional_details_task_assignment_assigned_to_login_s=tostring(additional_details.task_assignment.assigned_to.login),
-       additional_details_task_assignment_status_s=tostring(additional_details.task_assignment.status),
-       additional_details_task_assignment_message_s=tostring(additional_details.task_assignment.message),
+       additional_details_comment_id_d=todouble(_rawAdditionalDetails.comment_id),
+       additional_details_message_s=tostring(_rawAdditionalDetails.message),
+       additional_details_task_id_d=todouble(_rawAdditionalDetails.task.id),
+       additional_details_task_message_s=tostring(_rawAdditionalDetails.task.message),
+       additional_details_task_created_by_id_d=todouble(_rawAdditionalDetails.task.created_by.id),
+       additional_details_task_created_by_login_s=tostring(_rawAdditionalDetails.task.created_by.login),
+       additional_details_task_assignment_assigned_to_id_d=todouble(_rawAdditionalDetails.task_assignment.assigned_to.id),
+       additional_details_task_assignment_assigned_to_login_s=tostring(_rawAdditionalDetails.task_assignment.assigned_to.login),
+       additional_details_task_assignment_status_s=tostring(_rawAdditionalDetails.task_assignment.status),
+       additional_details_task_assignment_message_s=tostring(_rawAdditionalDetails.task_assignment.message),
        source_file_id_s=source_file_id,
        source_file_name_s=source_file_name,
        source_parent_name_g=source_parent_name,
@@ -218,29 +250,33 @@
        source_parent_name_s=source_parent_name,
        source_parent_id_s=source_parent_id,
        source_owned_by_type_s=source_owned_by_type,
-       source_owned_by_id_s=source_owned_by_id,
+       source_owned_by_id_s=iff(
+         source_owned_by_id == source_owned_by_type,
+         '',
+         coalesce(tostring(_rawSource.owned_by.id), tostring(source_owned_by_id))
+       ),
        source_owned_by_name_s=source_owned_by_name,
        source_owned_by_login_s=source_owned_by_login,
        created_by_type_s=created_by_type,
        created_by_id_s=created_by_id,
        created_by_name_s=created_by_name,
        created_by_login_s=created_by_login,
-       created_at_t=created_at,
-       event_id_g=event_id,
+       created_at_t=todatetime(created_at),
+      event_id_g=toguid(tostring(event_id)),
        event_type_s=event_type,
        ip_address_s=ip_address,
-       type_s=event_type,
-       additional_details_size_d=todouble(additional_details.size),
-       additional_details_ekm_id_g=toguid(additional_details.ekm_id),
-       additional_details_version_id_s=tostring(additional_details.version_id),
-       additional_details_service_id_s=tostring(additional_details.service_id),
-       additional_details_service_name_s=tostring(additional_details.service_name),
+          type_s='event',
+       additional_details_size_d=todouble(_rawAdditionalDetails.size),
+       additional_details_ekm_id_g=toguid(_rawAdditionalDetails.ekm_id),
+       additional_details_version_id_s=tostring(_rawAdditionalDetails.version_id),
+       additional_details_service_id_s=tostring(_rawAdditionalDetails.service_id),
+       additional_details_service_name_s=tostring(_rawAdditionalDetails.service_name),
        source_type_s=source_type,
        source_id_s=source_id,
        source_name_s=source_name,
        source_login_s=source_login,
-       additional_details_access_token_identifier_s=tostring(additional_details.access_token_identifier),
-       additional_details_shared_link_id_s=tostring(additional_details.shared_link_id),
+       additional_details_access_token_identifier_s=tostring(_rawAdditionalDetails.access_token_identifier),
+       additional_details_shared_link_id_s=tostring(_rawAdditionalDetails.shared_link_id),
        source_folder_id_s=source_folder_id,
        source_folder_name_s=source_folder_name,
        source_user_id_s=source_user_id,
@@ -249,13 +285,24 @@
        accessible_by_id_s=accessible_by_id,
        accessible_by_name_s=accessible_by_name,
        accessible_by_login_s=accessible_by_login,
-       additional_details_type_s=tostring(additional_details.type),
-       additional_details_collab_id_s=tostring(additional_details.collab_id),
-       additional_details_role_s=tostring(additional_details.role),
-       additional_details_is_performed_by_admin_b=toboolean(additional_details.is_performed_by_admin),
-       session_id_s=session_id
+       additional_details_type_s=tostring(_rawAdditionalDetails.type),
+       additional_details_collab_id_s=tostring(_rawAdditionalDetails.collab_id),
+       additional_details_role_s=tostring(_rawAdditionalDetails.role),
+       additional_details_is_performed_by_admin_b=toboolean(_rawAdditionalDetails.is_performed_by_admin),
+       session_id_s=session_id,
+       additional_details_invitation_message_s=tostring(_rawAdditionalDetails.invitation_message),
+         source_classification_name_s=coalesce(
+           tostring(_rawAdditionalDetails.classification.name),
+           tostring(column_ifexists('source_classification_name', '')),
+           extract(@'"path":"\\/Box__Security__Classification__Key","value":"([^"]+)"', 1, tostring(_rawAdditionalDetails.metadata.operationParams)),
+           extract(@'"path":"/Box__Security__Classification__Key","value":"([^"]+)"', 1, tostring(_rawAdditionalDetails.metadata.operationParams))
+         ),
+       source_classification_color_s=coalesce(tostring(_rawAdditionalDetails.classification.color), tostring(column_ifexists('source_classification_color', ''))),
+       source_classification_definition_s=coalesce(tostring(_rawAdditionalDetails.classification.definition), tostring(column_ifexists('source_classification_definition', ''))),
+       additional_details_action_by_login_s=coalesce(tostring(_rawAdditionalDetails.action_by.login), tostring(_rawActionBy.login)),
+       additional_details_shared_link_access_s=tostring(_rawAdditionalDetails.shared_link_access)
          | project-rename
-             AdditionalDetailsAnnotationId=additional_details_annotation_id_s,
+             AdditionalDetailsAnnotationId=additional_details_annotation_id_d,
            AdditionalDetailsGroupId=additional_details_group_id_s,
            AdditionalDetailsGroupName=additional_details_group_name_s,
            SourceUserEmail=source_user_email_s,
@@ -286,7 +333,7 @@
            SrcUserSid=created_by_id_s,
            SrcUserName=created_by_name_s,
            SrcUserUpn=created_by_login_s,
-           EventEndTime=TimeGenerated,
+           EventEndTime=created_at_t,
            EventId=event_id_g,
            EventType=event_type_s,
            SrcIpAddr=ip_address_s,
@@ -314,7 +361,96 @@
            AdditionalDetailsCollabId=additional_details_collab_id_s,
            AdditionalDetailsRole=additional_details_role_s,
            AdditionalDetailsIsPerformedByAdmin=additional_details_is_performed_by_admin_b,
-           UserSessionId=session_id_s
-             | project-away created_at, event_category, additional_details*, event_id, event_type, ip_address, source*, created_by*, accessible_by*, created_at_t;
-       union isfuzzy=true BoxEventsv2, BoxEventsv1
+           UserSessionId=session_id_s,
+           AdditionalDetailsInvitationMessage=additional_details_invitation_message_s,
+           SourceClassificationName=source_classification_name_s,
+           SourceClassificationColor=source_classification_color_s,
+           SourceClassificationDefinition=source_classification_definition_s,
+           AdditionalDetailsActionByLogin=additional_details_action_by_login_s,
+           AdditionalDetailsSharedLinkAccess=additional_details_shared_link_access_s
+             | extend _boxSourcePriority=1
+             | project-away created_at, event_category, additional_details*, event_id, event_type, ip_address, source*, created_by*, accessible_by*;
+       let BoxEventsUnified = union isfuzzy=true BoxEventsv2, BoxEventsv1
+       | extend _dedup_key=tostring(EventId)
+       | summarize
+           arg_max(_boxSourcePriority, *),
+           _anyClassificationName=maxif(SourceClassificationName, isnotempty(SourceClassificationName)),
+           _anyClassificationColor=maxif(SourceClassificationColor, isnotempty(SourceClassificationColor)),
+           _anyClassificationDef=maxif(SourceClassificationDefinition, isnotempty(SourceClassificationDefinition))
+         by _dedup_key
+       | extend
+           SourceClassificationName=iff(isempty(SourceClassificationName), _anyClassificationName, SourceClassificationName),
+           SourceClassificationColor=iff(isempty(SourceClassificationColor), _anyClassificationColor, SourceClassificationColor),
+           SourceClassificationDefinition=iff(isempty(SourceClassificationDefinition), _anyClassificationDef, SourceClassificationDefinition)
+       | project-away _dedup_key, _boxSourcePriority, _anyClassificationName, _anyClassificationColor, _anyClassificationDef;
+       let BoxClassificationLookup = BoxEventsUnified
+       | where isnotempty(SourceItemId) and isnotempty(SourceClassificationName) and SourceClassificationName !startswith 'securityClassification'
+       | summarize arg_max(EventEndTime, SourceClassificationName) by SourceItemId
+       | project SourceItemId, LookupSourceClassificationName=SourceClassificationName;
+       BoxEventsUnified
+       | lookup kind=leftouter BoxClassificationLookup on SourceItemId
        | project-reorder EventEndTime, Source*
+         | extend
+           _rawAdditionalDetailsSafe=todynamic(column_ifexists('_rawAdditionalDetails', dynamic(null))),
+           _rawActionBySafe=todynamic(column_ifexists('_rawActionBy', dynamic(null)))
+         | extend
+           TimeGenerated=coalesce(todatetime(column_ifexists('TimeGenerated', datetime(null))), todatetime(column_ifexists('EventEndTime', datetime(null)))),
+           SourceClassificationName=iff(
+             isempty(SourceClassificationName) and EventType in ('METADATA_CASCADE_POLICY_CREATE', 'METADATA_CASCADE_POLICY_APPLY'),
+             LookupSourceClassificationName,
+             SourceClassificationName
+           ),
+           Additional_Details_Invitation_Message_s=coalesce(column_ifexists('Additional_Details_Invitation_Message_s', ''), AdditionalDetailsInvitationMessage),
+           Additional_Details_Shared_Link_Access_s=coalesce(column_ifexists('Additional_Details_Shared_Link_Access_s', ''), AdditionalDetailsSharedLinkAccess),
+           Additional_Details_Action_By_Login_s=coalesce(column_ifexists('Additional_Details_Action_By_Login_s', ''), AdditionalDetailsActionByLogin),
+           Source_Classification_Name_s=coalesce(column_ifexists('Source_Classification_Name_s', ''), SourceClassificationName),
+           Source_Classification_Color_s=coalesce(column_ifexists('Source_Classification_Color_s', ''), SourceClassificationColor),
+           Source_Classification_Definition_s=coalesce(column_ifexists('Source_Classification_Definition_s', ''), SourceClassificationDefinition),
+           additional_details_metadata_type_s=coalesce(column_ifexists('additional_details_metadata_type_s', ''), tostring(_rawAdditionalDetailsSafe.metadata.type)),
+           additional_details_metadata_operationParams_s=coalesce(column_ifexists('additional_details_metadata_operationParams_s', ''), tostring(_rawAdditionalDetailsSafe.metadata.operationParams)),
+           additional_details_metadata_cascade_policy_s=coalesce(column_ifexists('additional_details_metadata_cascade_policy_s', ''), tostring(_rawAdditionalDetailsSafe.metadata_cascade_policy)),
+           additional_details_invitation_message_s=coalesce(column_ifexists('additional_details_invitation_message_s', ''), AdditionalDetailsInvitationMessage),
+           additional_details_sharedLinkSettings_newVisibilityStatus_s=coalesce(column_ifexists('additional_details_sharedLinkSettings_newVisibilityStatus_s', ''), tostring(_rawAdditionalDetailsSafe.sharedLinkSettings.newVisibilityStatus)),
+           additional_details_sharedLinkSettings_newIsPasswordProtected_b=coalesce(column_ifexists('additional_details_sharedLinkSettings_newIsPasswordProtected_b', bool(null)), tobool(_rawAdditionalDetailsSafe.sharedLinkSettings.newIsPasswordProtected)),
+           additional_details_sharedLinkSettings_newCanPreview_b=coalesce(column_ifexists('additional_details_sharedLinkSettings_newCanPreview_b', bool(null)), tobool(_rawAdditionalDetailsSafe.sharedLinkSettings.newCanPreview)),
+           additional_details_sharedLinkSettings_newCanEdit_b=coalesce(column_ifexists('additional_details_sharedLinkSettings_newCanEdit_b', bool(null)), tobool(_rawAdditionalDetailsSafe.sharedLinkSettings.newCanEdit)),
+           additional_details_sharedLinkSettings_newCanDownload_b=coalesce(column_ifexists('additional_details_sharedLinkSettings_newCanDownload_b', bool(null)), tobool(_rawAdditionalDetailsSafe.sharedLinkSettings.newCanDownload)),
+           additional_details_sharedLinkSettings_newIsExpirationDateSet_b=coalesce(column_ifexists('additional_details_sharedLinkSettings_newIsExpirationDateSet_b', bool(null)), tobool(_rawAdditionalDetailsSafe.sharedLinkSettings.newIsExpirationDateSet)),
+           additional_details_collection_user_id_d=coalesce(column_ifexists('additional_details_collection_user_id_d', double(null)), todouble(_rawAdditionalDetailsSafe.collection.user.id)),
+           additional_details_collection_user_name_s=coalesce(column_ifexists('additional_details_collection_user_name_s', ''), tostring(_rawAdditionalDetailsSafe.collection.user.name)),
+           additional_details_collection_user_email_s=coalesce(column_ifexists('additional_details_collection_user_email_s', ''), tostring(_rawAdditionalDetailsSafe.collection.user.email)),
+           additional_details_collection_collection_id_d=coalesce(column_ifexists('additional_details_collection_collection_id_d', double(null)), todouble(_rawAdditionalDetailsSafe.collection.collection.id)),
+           additional_details_collection_collection_name_s=coalesce(column_ifexists('additional_details_collection_collection_name_s', ''), tostring(_rawAdditionalDetailsSafe.collection.collection.name)),
+           additional_details_file_path_s=coalesce(column_ifexists('additional_details_file_path_s', ''), tostring(_rawAdditionalDetailsSafe.file_path)),
+           additional_details_file_hash_s=coalesce(column_ifexists('additional_details_file_hash_s', ''), tostring(_rawAdditionalDetailsSafe.file_hash)),
+           additional_details_hash_type_s=coalesce(column_ifexists('additional_details_hash_type_s', ''), tostring(_rawAdditionalDetailsSafe.hash_type)),
+           additional_details_ekm_id_g_string=coalesce(column_ifexists('additional_details_ekm_id_g_string', ''), tostring(_rawAdditionalDetailsSafe.ekm_id)),
+           additional_details_ekm_id_g_guid=coalesce(column_ifexists('additional_details_ekm_id_g_guid', guid(null)), toguid(_rawAdditionalDetailsSafe.ekm_id)),
+           action_by_type_s=coalesce(column_ifexists('action_by_type_s', ''), tostring(_rawActionBySafe.type), tostring(_rawAdditionalDetailsSafe.action_by.type)),
+           action_by_id_s=coalesce(column_ifexists('action_by_id_s', ''), tostring(_rawActionBySafe.id), tostring(_rawAdditionalDetailsSafe.action_by.id)),
+           action_by_name_s=coalesce(column_ifexists('action_by_name_s', ''), tostring(_rawActionBySafe.name), tostring(_rawAdditionalDetailsSafe.action_by.name)),
+           action_by_login_s=coalesce(column_ifexists('action_by_login_s', ''), AdditionalDetailsActionByLogin, tostring(_rawActionBySafe.login), tostring(_rawAdditionalDetailsSafe.action_by.login)),
+           event_id_s=coalesce(column_ifexists('event_id_s', ''), tostring(column_ifexists('EventId', guid(null)))),
+           additional_details_metadata_template_id_g=coalesce(column_ifexists('additional_details_metadata_template_id_g', ''), tostring(_rawAdditionalDetailsSafe.metadata_template.id)),
+           additional_details_metadata_template_type_s=coalesce(column_ifexists('additional_details_metadata_template_type_s', ''), tostring(_rawAdditionalDetailsSafe.metadata_template.type)),
+           additional_details_metadata_template_operationParams_s=coalesce(column_ifexists('additional_details_metadata_template_operationParams_s', ''), tostring(_rawAdditionalDetailsSafe.metadata_template.operationParams)),
+           additional_details_metadata_template_templateKey_s=coalesce(column_ifexists('additional_details_metadata_template_templateKey_s', ''), tostring(_rawAdditionalDetailsSafe.metadata_template.templateKey)),
+           additional_details_metadata_template_scope_s=coalesce(column_ifexists('additional_details_metadata_template_scope_s', ''), tostring(_rawAdditionalDetailsSafe.metadata_template.scope)),
+           event_id_g_string=coalesce(column_ifexists('event_id_g_string', ''), tostring(column_ifexists('EventId', guid(null)))),
+           event_id_g_guid=coalesce(column_ifexists('event_id_g_guid', guid(null)), column_ifexists('EventId', guid(null))),
+           additional_details_content_recovery_event_content_recovery_report_id_s=coalesce(column_ifexists('additional_details_content_recovery_event_content_recovery_report_id_s', ''), tostring(_rawAdditionalDetailsSafe.content_recovery_event.content_recovery_report_id)),
+           additional_details_content_recovery_event_target_user_user_d=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_user_d', double(null)), todouble(_rawAdditionalDetailsSafe.content_recovery_event.target_user.user)),
+           additional_details_content_recovery_event_target_user_userAsLong_d=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_userAsLong_d', double(null)), todouble(_rawAdditionalDetailsSafe.content_recovery_event.target_user.userAsLong)),
+           additional_details_content_recovery_event_target_user_email_s=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_email_s', ''), tostring(_rawAdditionalDetailsSafe.content_recovery_event.target_user.email)),
+           additional_details_content_recovery_event_target_user_login_s=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_login_s', ''), tostring(_rawAdditionalDetailsSafe.content_recovery_event.target_user.login)),
+           additional_details_content_recovery_event_target_user_name_s=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_name_s', ''), tostring(_rawAdditionalDetailsSafe.content_recovery_event.target_user.name)),
+           additional_details_content_recovery_event_target_user_runmodeGroups_s=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_runmodeGroups_s', ''), tostring(_rawAdditionalDetailsSafe.content_recovery_event.target_user.runmodeGroups)),
+           additional_details_content_recovery_event_target_user_enterprise_d=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_enterprise_d', double(null)), todouble(_rawAdditionalDetailsSafe.content_recovery_event.target_user.enterprise)),
+           additional_details_content_recovery_event_target_user_userType_d=coalesce(column_ifexists('additional_details_content_recovery_event_target_user_userType_d', double(null)), todouble(_rawAdditionalDetailsSafe.content_recovery_event.target_user.userType)),
+           additional_details_content_recovery_event_from_date_t=coalesce(column_ifexists('additional_details_content_recovery_event_from_date_t', datetime(null)), todatetime(_rawAdditionalDetailsSafe.content_recovery_event.from_date)),
+           additional_details_content_recovery_event_to_date_t=coalesce(column_ifexists('additional_details_content_recovery_event_to_date_t', datetime(null)), todatetime(_rawAdditionalDetailsSafe.content_recovery_event.to_date)),
+           additional_details_annotation_id_d=coalesce(column_ifexists('additional_details_annotation_id_d', double(null)), todouble(AdditionalDetailsAnnotationId)),
+           UserSessionId_dynamic=coalesce(column_ifexists('UserSessionId_dynamic', dynamic(null)), todynamic(column_ifexists('UserSessionId', ''))),
+           UserSessionId_string=coalesce(column_ifexists('UserSessionId_string', ''), tostring(column_ifexists('UserSessionId', ''))),
+           session_id=coalesce(column_ifexists('session_id', ''), tostring(column_ifexists('UserSessionId', '')))
+         | project-away _raw*, LookupSourceClassificationName
