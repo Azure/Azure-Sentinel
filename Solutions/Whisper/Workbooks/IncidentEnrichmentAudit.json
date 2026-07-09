@@ -5,7 +5,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Whisper Security - Incident Enrichment Audit\nThis workbook provides operational visibility into the Whisper Security enrichment playbooks running in Microsoft Sentinel. Track success and failure rates, monitor latency percentiles, review enrichment volume trends, and investigate error patterns to ensure reliable threat intelligence enrichment."
+        "json": "## Whisper Security - Incident Enrichment Audit\nThis workbook provides operational visibility into the Whisper Security enrichment playbooks running in Microsoft Sentinel. Track success and failure rates, monitor latency percentiles, review enrichment volume trends, and investigate error patterns to ensure reliable threat intelligence enrichment.\n\n> **Prerequisite:** Populates from the `AzureDiagnostics` table. Enable **Diagnostic Settings** on each Whisper Logic App (send `WorkflowRuntime` to this workspace) so playbook runs are recorded. Panels stay empty until the first diagnostic records arrive."
       },
       "name": "header-markdown"
     },
@@ -13,7 +13,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s in ('Succeeded', 'Failed')\n| summarize Succeeded = countif(status_s == 'Succeeded'), Failed = countif(status_s == 'Failed') by resource_workflowName_s\n| extend Total = Succeeded + Failed\n| extend SuccessRate = round(100.0 * Succeeded / Total, 1)\n| project PlaybookName = resource_workflowName_s, Succeeded, Failed, Total, SuccessRate\n| order by Total desc",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| extend WorkflowName = column_ifexists('resource_workflowName_s', ''), Status = column_ifexists('status_s', '')\n| where WorkflowName has 'Whisper'\n| where Status in ('Succeeded', 'Failed')\n| summarize Succeeded = countif(Status == 'Succeeded'), Failed = countif(Status == 'Failed') by WorkflowName\n| extend Total = Succeeded + Failed\n| extend SuccessRate = round(100.0 * Succeeded / Total, 1)\n| project PlaybookName = WorkflowName, Succeeded, Failed, Total, SuccessRate\n| order by Total desc",
         "size": 0,
         "title": "Enrichment Playbook Success and Failure Rates",
         "queryType": 0,
@@ -44,7 +44,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s == 'Succeeded'\n| where isnotempty(duration_s)\n| extend DurationMs = toreal(extract(@'(\\d+\\.?\\d*)', 1, duration_s))\n| summarize P50 = percentile(DurationMs, 50), P90 = percentile(DurationMs, 90), P95 = percentile(DurationMs, 95), P99 = percentile(DurationMs, 99) by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| extend WorkflowName = column_ifexists('resource_workflowName_s', ''), Status = column_ifexists('status_s', ''), Duration = column_ifexists('duration_s', '')\n| where WorkflowName has 'Whisper'\n| where Status == 'Succeeded'\n| where isnotempty(Duration)\n| extend DurationMs = toreal(extract(@'(\\d+\\.?\\d*)', 1, Duration))\n| summarize P50 = percentile(DurationMs, 50), P90 = percentile(DurationMs, 90), P95 = percentile(DurationMs, 95), P99 = percentile(DurationMs, 99) by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
         "size": 0,
         "title": "Enrichment Latency Percentiles Over Time",
         "queryType": 0,
@@ -57,7 +57,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s in ('Succeeded', 'Failed')\n| summarize EnrichmentCount = count() by bin(TimeGenerated, 1d), status_s\n| order by TimeGenerated asc",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| extend WorkflowName = column_ifexists('resource_workflowName_s', ''), Status = column_ifexists('status_s', '')\n| where WorkflowName has 'Whisper'\n| where Status in ('Succeeded', 'Failed')\n| summarize EnrichmentCount = count() by bin(TimeGenerated, 1d), Status\n| order by TimeGenerated asc",
         "size": 0,
         "title": "Enrichment Volume Over Time",
         "queryType": 0,
@@ -70,7 +70,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| where resource_workflowName_s has 'Whisper'\n| where status_s == 'Failed'\n| extend ErrorCode = coalesce(error_code_s, code_s, 'Unknown')\n| extend ErrorMessage = coalesce(error_message_s, 'No message available')\n| summarize ErrorCount = count() by resource_workflowName_s, ErrorCode, ErrorMessage\n| order by ErrorCount desc",
+        "query": "AzureDiagnostics\n| where ResourceProvider == 'MICROSOFT.LOGIC'\n| extend WorkflowName = column_ifexists('resource_workflowName_s', ''), Status = column_ifexists('status_s', '')\n| where WorkflowName has 'Whisper'\n| where Status == 'Failed'\n| extend ErrorCode = coalesce(column_ifexists('error_code_s', ''), column_ifexists('code_s', ''), 'Unknown')\n| extend ErrorMessage = coalesce(column_ifexists('error_message_s', ''), 'No message available')\n| summarize ErrorCount = count() by WorkflowName, ErrorCode, ErrorMessage\n| order by ErrorCount desc",
         "size": 0,
         "title": "Error Breakdown by Playbook and Error Type",
         "queryType": 0,
