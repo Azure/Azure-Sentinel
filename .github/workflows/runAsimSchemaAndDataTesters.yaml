@@ -9,7 +9,7 @@
 # - Fork PRs require explicit "SafeToRun" label approval from maintainer
 # - Label is auto-removed on new commits (synchronize event) to prevent TOCTOU
 # - All validation scripts are re-downloaded from master branch before execution
-name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
+name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared-Canary" workspace
 on:
   pull_request_target:
     types: [labeled, synchronize]
@@ -58,8 +58,10 @@ jobs:
       issues: write
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
+      write_access_verified: ${{ steps.verify-write-access.outputs.write_access_verified }}
     steps:
       - name: Verify approver has write access (fork + SafeToRun)
+        id: verify-write-access
         # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
         # Only collaborators can add labels, but a triage-only account could still apply
         # SafeToRun; this rejects anyone without write/maintain/admin from approving a
@@ -94,6 +96,7 @@ jobs:
             if (!allowed.includes(perm.permission)) {
               core.setFailed(`@${approver} lacks write access (has '${perm.permission}') and is not authorized to approve fork PR test runs`);
             } else {
+              core.setOutput('write_access_verified', 'true');
               log('success', `@${approver} is authorized to approve fork PR test runs`);
             }
 
@@ -396,11 +399,13 @@ jobs:
           # Execute the script
           python "$filePath"
   Run-ASim-Sample-Data-Ingest:
-    needs: Run-ASim-TemplateValidation
+    needs: [security-gate, Run-ASim-TemplateValidation]
     name: Run ASim Sample Data Ingestion
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
-       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
+       (needs.security-gate.outputs.write_access_verified == 'true' &&
+        github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     permissions:
       id-token: write
