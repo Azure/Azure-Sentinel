@@ -350,7 +350,7 @@ async function validateYamlSyntax(filePath: string, _fileKind: string): Promise<
   try {
     // Dynamic import for js-yaml since it may not be typed
     const yamlModule = await import("js-yaml");
-    const yamlLoad = yamlModule.default?.safeLoad || yamlModule.safeLoad;
+    const yamlLoad = yamlModule.default?.load || yamlModule.load;
     yamlLoad(fs.readFileSync(filePath, "utf8"));
     return { validator: "YAML Syntax", filePath, passed: true };
   } catch (e: unknown) {
