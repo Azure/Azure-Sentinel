@@ -1,41 +1,89 @@
 id: 3fa2808e-1d5d-4421-9d24-6b1a948b3f90
 Function:
   Title: Parser for InfobloxInsight
-  Version: '1.0.0'
-  LastUpdated: '2024-03-06'
+  Version: '1.1.0'
+  LastUpdated: '2025-07-09'
 Category: Microsoft Sentinel Parser
 FunctionName: InfobloxInsight
 FunctionAlias: InfobloxInsight
 FunctionQuery: |
     InfobloxInsight_CL
-    | where InfobloxInsightLogType_s == "Insight"
+    // Filter for Insight records (legacy connector) or all records (new CCF connector which only has insights)
+    | where column_ifexists('InfobloxInsightLogType_s', 'Insight') == "Insight"
     | extend 
-    InfobloxInsightID=column_ifexists('insightId_g', ''),
-    InfobloxInsightLogType=column_ifexists('InfobloxInsightLogType_s', ''),
-    BlockedCount=toint(column_ifexists('eventsBlockedCount_s', '')),
-    FeedSource=column_ifexists('feedSource_s', ''),
-    Status=column_ifexists('status_s', ''),
-    LastSeen=column_ifexists('mostRecentAt_t', ''),
-    NotBlockedCount=toint(column_ifexists('eventsNotBlockedCount_s', '')),
-    EventsCount=toint(column_ifexists('numEvents_s', '')),
-    Persistent=column_ifexists('persistent_b', ''),
-    PersistentDate=column_ifexists('persistentDate_t', ''),
-    Spreading=column_ifexists('spreading_b', ''),
-    SpreadingDate=column_ifexists('spreadingDate_t', ''),
-    FirstSeen=column_ifexists('startedAt_t', ''),
-    ThreatClass=column_ifexists('tClass_s', ''),
-    ThreatProperty=column_ifexists('tFamily_s', ''),
-    ThreatFamily=column_ifexists('tFamily_s', ''),
-    ThreatType=column_ifexists('threatType_s', ''),
-    Priority=column_ifexists('priorityText_s', ''),
-    DateChanged=column_ifexists('dateChanged_t ', ''),
-    CommentChanger=column_ifexists('changer_s', ''),
-    Comment=column_ifexists('userComment_s', '')
-    | extend IncidentSeverity = case(Priority=="CRITICAL", "High",
-                       Priority=="HIGH", "High",
-                       Priority=="MEDIUM", "Medium",
-                       Priority =="LOW","Low",
-                       Priority =="INFO","Informational",
-                       "N/A" )
-    | project-away 
-    *_*
+        // Use coalesce to support both legacy (_s, _g, _t suffixes) and new CCF column names
+        InfobloxInsightID = coalesce(
+            column_ifexists('InsightId', ''),
+            column_ifexists('insightId_g', '')
+        ),
+        InfobloxInsightLogType = column_ifexists('InfobloxInsightLogType_s', 'Insight'),
+        BlockedCount = toint(coalesce(
+            column_ifexists('EventsBlockedCount', ''),
+            column_ifexists('eventsBlockedCount_s', '')
+        )),
+        FeedSource = coalesce(
+            column_ifexists('FeedSource', ''),
+            column_ifexists('feedSource_s', '')
+        ),
+        Status = coalesce(
+            column_ifexists('Status', ''),
+            column_ifexists('status_s', '')
+        ),
+        LastSeen = coalesce(
+            column_ifexists('MostRecentAt', datetime(null)),
+            todatetime(column_ifexists('mostRecentAt_t', ''))
+        ),
+        NotBlockedCount = toint(coalesce(
+            column_ifexists('EventsNotBlockedCount', ''),
+            column_ifexists('eventsNotBlockedCount_s', '')
+        )),
+        EventsCount = toint(coalesce(
+            column_ifexists('NumEvents', ''),
+            column_ifexists('numEvents_s', '')
+        )),
+        Persistent = column_ifexists('persistent_b', ''),
+        PersistentDate = column_ifexists('persistentDate_t', ''),
+        Spreading = column_ifexists('spreading_b', ''),
+        SpreadingDate = column_ifexists('spreadingDate_t', ''),
+        FirstSeen = coalesce(
+            column_ifexists('StartedAt', datetime(null)),
+            todatetime(column_ifexists('startedAt_t', ''))
+        ),
+        ThreatClass = coalesce(
+            column_ifexists('TClass', ''),
+            column_ifexists('tClass_s', '')
+        ),
+        ThreatProperty = coalesce(
+            column_ifexists('TFamily', ''),
+            column_ifexists('tFamily_s', '')
+        ),
+        ThreatFamily = coalesce(
+            column_ifexists('TFamily', ''),
+            column_ifexists('tFamily_s', '')
+        ),
+        ThreatType = coalesce(
+            column_ifexists('ThreatType', ''),
+            column_ifexists('threatType_s', '')
+        ),
+        Priority = coalesce(
+            column_ifexists('PriorityText', ''),
+            column_ifexists('priorityText_s', '')
+        ),
+        DateChanged = coalesce(
+            column_ifexists('DateChanged', datetime(null)),
+            todatetime(column_ifexists('dateChanged_t', ''))
+        ),
+        CommentChanger = column_ifexists('changer_s', ''),
+        Comment = column_ifexists('userComment_s', ''),
+        // New CCF-specific fields
+        ConnectorName = column_ifexists('ConnectorName', ''),
+        TenantHost = column_ifexists('TenantHost', '')
+    | extend IncidentSeverity = case(
+        Priority == "CRITICAL", "High",
+        Priority == "HIGH", "High",
+        Priority == "MEDIUM", "Medium",
+        Priority == "LOW", "Low",
+        Priority == "INFO", "Informational",
+        "N/A"
+    )
+    | project-away *_*
