@@ -1,0 +1,87 @@
+Parser:
+  Title: Authentication ASIM parser for Cisco FTD Syslog Message
+  Version: '0.1.0'
+  LastUpdated: Jun 29, 2026
+Product:
+  Name: Cisco FTD
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: About Cisco FTD System Log Messages
+  Link: https://www.cisco.com/c/en/us/td/docs/security/firepower/Syslogs/fptd_syslog_guide/about.html
+Description: |
+  This ASIM parser supports normalizing authentication events, collected from Cisco FTD devices using the AMA agent into Syslog to the ASIM Authentication schema.
+ParserName: ASimAuthenticationCiscoFTD
+EquivalentBuiltInParser: _ASim_Authentication_CiscoFTD
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false) {
+  let FTDLogs = Syslog
+  | where not(disabled)
+  | where SyslogMessage startswith "%FTD-5-199017"
+  | extend EventType = "Logon";
+  let LogonSuccessful = FTDLogs
+  | where SyslogMessage has "Accepted password"
+  | parse SyslogMessage with * "Accepted password for " TargetUsername " from " SrcIpAddr " port " SrcPortNumber:int " " *
+  | extend EventResult = "Success";
+  let LogonFailure = FTDLogs
+  | where SyslogMessage has "Failed password"
+  | parse SyslogMessage with * "Failed password for invalid user " TargetUsername " from " SrcIpAddr " port " SrcPortNumber:int " " *
+  | extend EventResult = "Failure",
+    EventResultDetails = "Incorrect password";
+  union LogonSuccessful, LogonFailure
+  | extend
+    EventVendor = "Cisco",
+    EventProduct = "FTD",
+    EventSchema = "Authentication",
+    EventSchemaVersion = "0.1.4",
+    EventStartTime = TimeGenerated,
+    EventEndTime = TimeGenerated,
+    EventCount = int(1),
+    Type = "Syslog",
+    DvcHostname = coalesce(Computer, HostName)
+  | project-rename
+    TargetIpAddr = HostIP,
+    EventOriginalSeverity = SeverityLevel,
+    EventOriginalResultDetails = SyslogMessage
+  | extend
+    EventSeverity = _ASIM_LookupSyslogSeverityLevel(EventOriginalSeverity),
+    TargetUsernameType = "Simple",
+    User = TargetUsername,
+    IpAddr = SrcIpAddr,
+    Dvc = TargetIpAddr
+  | project
+    TimeGenerated,
+    Type,
+    EventVendor,
+    EventProduct,
+    EventSchema,
+    EventSchemaVersion,
+    EventStartTime,
+    EventEndTime,
+    EventCount,
+    EventType,
+    EventResult,
+    DvcHostname,
+    TargetIpAddr,
+    EventOriginalSeverity,
+    EventSeverity,
+    TargetUsername,
+    SrcIpAddr,
+    SrcPortNumber,
+    EventOriginalResultDetails,
+    EventResultDetails,
+    TargetUsernameType,
+    User,
+    IpAddr,
+    Dvc
+  };
+  parser(disabled=disabled)
