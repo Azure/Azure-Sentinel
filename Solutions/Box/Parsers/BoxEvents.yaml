@@ -111,7 +111,7 @@ FunctionQuery: >
          created_by_id_s=column_ifexists('created_by_id_s', ''),
          created_by_name_s=column_ifexists('created_by_name_s', ''),
          created_by_login_s=column_ifexists('created_by_login_s', ''),
-         created_at_t=column_ifexists('created_at_t', ''),
+         created_at_t=todatetime(column_ifexists('created_at_t', datetime(null))),
          event_id_g=coalesce(
            toguid(tostring(column_ifexists('event_id_g', ''))),
            toguid(tostring(column_ifexists('event_id_g_guid', '')))
@@ -285,8 +285,7 @@ FunctionQuery: >
        source_classification_name_s=coalesce(
          tostring(_rawAdditionalDetails.classification.name),
          tostring(column_ifexists('source_classification_name', '')),
-         extract(@'"path":"\\/Box__Security__Classification__Key","value":"([^"]+)"', 1, tostring(_rawAdditionalDetails.metadata.operationParams)),
-         extract(@'"path":"/Box__Security__Classification__Key","value":"([^"]+)"', 1, tostring(_rawAdditionalDetails.metadata.operationParams))
+         extract(@'"path":"\\?/Box__Security__Classification__Key","value":"([^"]+)"', 1, tostring(_rawAdditionalDetails.metadata.operationParams))
        ),
      source_classification_color_s=coalesce(tostring(_rawAdditionalDetails.classification.color), tostring(column_ifexists('source_classification_color', ''))),
      source_classification_definition_s=coalesce(tostring(_rawAdditionalDetails.classification.definition), tostring(column_ifexists('source_classification_definition', ''))),
@@ -386,8 +385,8 @@ FunctionQuery: >
        );
      let BoxClassificationLookup = BoxEventsUnified
      | where isnotempty(SourceItemId) and isnotempty(SourceClassificationName) and SourceClassificationName !startswith 'securityClassification'
-     | summarize arg_max(EventEndTime, SourceClassificationName) by SourceItemId
-     | project SourceItemId, LookupSourceClassificationName=SourceClassificationName;
+     | summarize arg_max(EventEndTime, SourceClassificationName, SourceClassificationColor, SourceClassificationDefinition) by SourceItemId
+     | project SourceItemId, LookupSourceClassificationName=SourceClassificationName, LookupSourceClassificationColor=SourceClassificationColor, LookupSourceClassificationDefinition=SourceClassificationDefinition;
      BoxEventsUnified
      | lookup kind=leftouter BoxClassificationLookup on SourceItemId
      | project-reorder EventEndTime, Source*
@@ -400,6 +399,16 @@ FunctionQuery: >
            isempty(SourceClassificationName) and EventType in ('METADATA_CASCADE_POLICY_CREATE', 'METADATA_CASCADE_POLICY_APPLY'),
            LookupSourceClassificationName,
            SourceClassificationName
+         ),
+         SourceClassificationColor=iff(
+           isempty(SourceClassificationColor) and EventType in ('METADATA_CASCADE_POLICY_CREATE', 'METADATA_CASCADE_POLICY_APPLY'),
+           LookupSourceClassificationColor,
+           SourceClassificationColor
+         ),
+         SourceClassificationDefinition=iff(
+           isempty(SourceClassificationDefinition) and EventType in ('METADATA_CASCADE_POLICY_CREATE', 'METADATA_CASCADE_POLICY_APPLY'),
+           LookupSourceClassificationDefinition,
+           SourceClassificationDefinition
          ),
          Additional_Details_Invitation_Message_s=coalesce(column_ifexists('Additional_Details_Invitation_Message_s', ''), AdditionalDetailsInvitationMessage),
          Additional_Details_Shared_Link_Access_s=coalesce(column_ifexists('Additional_Details_Shared_Link_Access_s', ''), AdditionalDetailsSharedLinkAccess),
@@ -454,4 +463,4 @@ FunctionQuery: >
          UserSessionId_dynamic=coalesce(column_ifexists('UserSessionId_dynamic', dynamic(null)), todynamic(column_ifexists('UserSessionId', ''))),
          UserSessionId_string=coalesce(column_ifexists('UserSessionId_string', ''), tostring(column_ifexists('UserSessionId', ''))),
          session_id=coalesce(column_ifexists('session_id', ''), tostring(column_ifexists('UserSessionId', '')))
-       | project-away _raw*, LookupSourceClassificationName
+       | project-away _raw*, LookupSourceClassificationName, LookupSourceClassificationColor, LookupSourceClassificationDefinition
