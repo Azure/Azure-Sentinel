@@ -2,6 +2,22 @@
 
 Run the same CI validation checks that GitHub Actions performs — **locally**, without GitHub API access, PR context, or secrets.
 
+---
+
+## ✨ Validate with GitHub Copilot (Recommended)
+
+Open **GitHub Copilot chat in Agent mode** and paste the prompt below. The agent will run validation, show you the full report, plan and confirm any fixes with you, re-run until all checks pass, then prompt you to open a PR.
+
+```
+Validate my solution and fix any issues so it's ready for a PR. Solution: [Solution Name]
+```
+
+> Replace `[Solution Name]` with the folder name under `Solutions/` (partial names are fine — e.g., `"CrowdStrike"` or `"1Password"`).
+>
+> The agent follows the workflow defined in `.script/local-validation/agentinstructions.md`.
+
+---
+
 ## Quick Start
 
 ```bash
