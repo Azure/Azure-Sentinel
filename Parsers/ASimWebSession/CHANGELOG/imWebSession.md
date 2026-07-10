@@ -1,5 +1,9 @@
 # Changelog for imWebSession.yaml
 
+## Version 0.6.5
+
+- (2026-06-11) Add parser for AWS Web Application Firewall (WAF) logs. - [PR #14496](https://github.com/Azure/Azure-Sentinel/pull/14496)
+
 ## Version 0.6.4
 
 - (2026-06-05) Add filtering parser for Salesforce Service Cloud web session and API request logs
@@ -39,4 +43,3 @@
 ## Version 0.1
 
 - (2021-12-01) Dev/normalization/web-frame-only - [PR #3625](https://github.com/Azure/Azure-Sentinel/pull/3625)
-
