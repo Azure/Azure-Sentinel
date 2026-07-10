@@ -1,42 +1,41 @@
 {
     "id": "PaloAltoNetworksSyslogAma",
-    "title": "Palo Alto Networks (Firewall) via Syslog via AMA",
+    "title": "Palo Alto Networks (PAN-OS) via Syslog via AMA",
     "publisher": "Palo Alto Networks",
-    "descriptionMarkdown": "The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks PAN-OS logs with Microsoft Sentinel using the Azure Monitor Agent (AMA) and native syslog forwarding. Palo Alto Networks has deprecated CEF format for PAN-OS versions after 10.0; this connector uses the recommended native syslog format. This gives you more insight into your organization's network and improves your security operation capabilities.",
-    "additionalRequirementBanner": "These queries and workbooks are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+    "descriptionMarkdown": "The Palo Alto Networks (PAN-OS) Syslog via AMA connector allows you to ingest PAN-OS firewall logs into Microsoft Sentinel's CommonSecurityLog table using native syslog format with an ingest-time Data Collection Rule (DCR) transformation.\n\n**Why this connector?** Palo Alto Networks has [deprecated CEF logging](https://docs.paloaltonetworks.com/resources/cef) for PAN-OS versions after 10.0. Customers running PAN-OS 10.1 or later should use standard syslog and this connector to continue ingesting logs into CommonSecurityLog.\n\n**How it works:** PAN-OS sends logs in CSV format via syslog to a Linux forwarder running Azure Monitor Agent (AMA). A DCR ingest-time transformation parses the CSV fields and maps them to CommonSecurityLog columns at ingestion. This ensures all existing analytic rules, workbooks, and hunting queries continue to work without modification.\n\nFor more information, see the [Palo Alto Networks syslog documentation](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-admin/monitoring/use-syslog-for-monitoring).",
     "graphQueries": [
         {
             "metricName": "Total data received",
-            "legend": "PaloAlto PAN-OS",
-            "baseQuery": "PaloAltoPANOSSyslog"
+            "legend": "Palo Alto Networks",
+            "baseQuery": "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceProduct has \"PAN-OS\""
         }
     ],
     "sampleQueries": [
         {
-            "description": "All logs",
-            "query": "PaloAltoPANOSSyslog\n| sort by TimeGenerated"
+            "description": "All PAN-OS logs",
+            "query": "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceProduct has \"PAN-OS\"\n| sort by TimeGenerated"
         },
         {
             "description": "TRAFFIC logs",
-            "query": "PaloAltoPANOSSyslog\n| where Activity == \"TRAFFIC\"\n| sort by TimeGenerated"
+            "query": "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where Activity == \"TRAFFIC\"\n| sort by TimeGenerated"
         },
         {
-            "description": "THREAT activity",
-            "query": "PaloAltoPANOSSyslog\n| where Activity == \"THREAT\"\n| sort by TimeGenerated"
+            "description": "THREAT logs",
+            "query": "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where Activity == \"THREAT\"\n| sort by TimeGenerated"
         }
     ],
     "connectivityCriterias": [
         {
             "type": "IsConnectedQuery",
             "value": [
-                "PaloAltoPANOSSyslog\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(3d)"
+                "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceProduct has \"PAN-OS\"\n| extend sent_by_ama = column_ifexists('CollectorHostName','')\n| where isnotempty(sent_by_ama)\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(3d)"
             ]
         }
     ],
     "dataTypes": [
         {
-            "name": "Syslog (PaloAlto PAN-OS)",
-            "lastDataReceivedQuery": "PaloAltoPANOSSyslog\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            "name": "CommonSecurityLog (PaloAlto)",
+            "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceProduct has \"PAN-OS\"\n| extend sent_by_ama = column_ifexists('CollectorHostName','')\n| where isnotempty(sent_by_ama)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
     ],
     "availability": {
@@ -69,66 +68,34 @@
         "customs": [
             {
                 "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
-            },
-            {
-                "description": "Syslog via AMA data connector must be installed. [Learn more](https://learn.microsoft.com/azure/sentinel/connect-cef-syslog-ama)"
             }
         ]
     },
     "instructionSteps": [
         {
-            "title": "",
-            "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias **PaloAltoPANOSSyslog** and load the function code. The function usually takes 10-15 minutes to activate after solution installation/update.",
-            "instructions": []
+            "title": "1. Configure PAN-OS Syslog Forwarding",
+            "description": "Configure your Palo Alto firewall to forward logs via syslog (BSD format, CSV payload) to your Linux syslog forwarder.\n\n1. Log in to the Palo Alto Networks firewall web interface.\n2. Navigate to **Device > Server Profiles > Syslog** and click **Add**.\n3. Enter a name, the IP address of your Linux syslog forwarder, transport (UDP/TCP), port (default 514), and select facility (e.g., `LOG_USER`).\n4. Navigate to **Device > Log Settings** and assign the Syslog server profile to the desired log types (Traffic, Threat, System, Config, GlobalProtect).\n5. Use the **default (CSV) log format** — do not configure CEF custom log format.\n6. Commit the configuration.\n\nFor detailed instructions, see [Configure Syslog Monitoring](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-admin/monitoring/use-syslog-for-monitoring/configure-syslog-monitoring)."
         },
         {
-            "title": "",
-            "description": "",
+            "title": "2. Install Azure Monitor Agent (AMA)",
+            "description": "Install the Azure Monitor Agent on your Linux syslog forwarder machine.\n\n1. For Azure VMs, install AMA via the Azure Portal (VM > Extensions > Add Azure Monitor Agent).\n2. For non-Azure machines, first install Azure Arc, then install AMA.\n\n[Learn more about AMA installation](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage)"
+        },
+        {
+            "title": "3. Create a Data Collection Rule (DCR) with Ingest-Time Transform",
+            "description": "Create a Data Collection Rule that collects syslog from the forwarder and uses an ingest-time KQL transformation to parse the PAN-OS CSV format into CommonSecurityLog fields.\n\n**DCR Configuration:**\n- **Data Source:** Syslog, facility matching your PAN-OS configuration (e.g., `LOG_USER`)\n- **Destination:** Your Log Analytics workspace\n- **Output Stream:** `Microsoft-CommonSecurityLog`\n- **Transform KQL:** Use the transformation below to parse the PAN-OS CSV syslog into CommonSecurityLog columns.\n\n**Ingest-Time Transform KQL:**\n\n```kql\nsource\n| extend Fields = split(SyslogMessage, \",\")\n| extend\n    DeviceVendor = \"Palo Alto Networks\",\n    DeviceProduct = \"PAN-OS\",\n    DeviceVersion = tostring(Fields[0]),\n    Activity = case(\n        SyslogMessage has \"TRAFFIC\", \"TRAFFIC\",\n        SyslogMessage has \"THREAT\", \"THREAT\",\n        SyslogMessage has \"SYSTEM\", \"SYSTEM\",\n        SyslogMessage has \"CONFIG\", \"CONFIG\",\n        SyslogMessage has \"GLOBALPROTECT\", \"GLOBALPROTECT\",\n        \"UNKNOWN\"\n    ),\n    DeviceEventClassID = tostring(Fields[4]),\n    SourceIP = tostring(Fields[7]),\n    DestinationIP = tostring(Fields[8]),\n    SourceTranslatedAddress = tostring(Fields[9]),\n    DestinationTranslatedAddress = tostring(Fields[10]),\n    SourceUserName = tostring(Fields[12]),\n    DestinationUserName = tostring(Fields[13]),\n    ApplicationProtocol = tostring(Fields[14]),\n    SourcePort = toint(Fields[24]),\n    DestinationPort = toint(Fields[25]),\n    SourceTranslatedPort = toint(Fields[26]),\n    DestinationTranslatedPort = toint(Fields[27]),\n    Protocol = tostring(Fields[29]),\n    DeviceAction = tostring(Fields[30]),\n    SentBytes = tolong(Fields[31]),\n    ReceivedBytes = tolong(Fields[32]),\n    RequestURL = tostring(Fields[39]),\n    DeviceCustomString1 = tostring(Fields[11]),\n    DeviceCustomString1Label = \"RuleName\",\n    DeviceCustomString2 = tostring(Fields[16]),\n    DeviceCustomString2Label = \"SourceZone\",\n    DeviceCustomString3 = tostring(Fields[17]),\n    DeviceCustomString3Label = \"DestinationZone\",\n    LogSeverity = tostring(Fields[33]),\n    SimplifiedDeviceAction = tostring(Fields[30])\n| project-away Fields\n```\n\n> **Note:** The field positions above are based on PAN-OS 10.1+ syslog CSV format. Verify against your PAN-OS version's [syslog field descriptions](https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions).\n\n[Learn more about DCR ingest-time transformations](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-transformations)",
             "instructions": [
                 {
                     "parameters": {
-                        "title": "1. Kindly follow the steps to configure the data connector",
-                        "instructionSteps": [
-                            {
-                                "title": "Step A. Configure the Syslog via AMA data connector",
-                                "description": "_Note:- Syslog logs are collected only from Linux Agents_\n\n1. Navigate to Microsoft Sentinel workspace ---> configuration ---> Data connector blade.\n\n2. Search for 'Syslog via AMA' data connector and open it.\n\n3. Check if there is no existing DCR configured to collect required facility of logs, Create a new DCR (Data Collection Rule).\n\n\t_Note:- It is recommended to install minimum 1.27 version of AMA agent [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal) and ensure there is no duplicate DCR as it can cause log duplication._\n\n4. Configure the DCR to collect **LOG_USER** facility at appropriate severity levels.",
-                                "instructions": []
-                            },
-                            {
-                                "title": "Step B. Configure Palo Alto Networks PAN-OS to send syslog",
-                                "description": "Configure your Palo Alto Networks firewall to forward syslog messages in **native syslog format** (not CEF) to your Linux syslog agent.\n\n> **Important:** Palo Alto Networks has deprecated CEF format for PAN-OS versions after 10.0. Use native syslog format for PAN-OS 10.1 and later.\n\n1. Log in to the PAN-OS web interface.\n2. Navigate to **Device > Server Profiles > Syslog**.\n3. Create a new syslog server profile with the IP address of your Linux agent with AMA installed.\n4. Set the **Transport** to **UDP** (port 514) or **TCP** (port 514).\n5. Set the **Format** to **BSD** (recommended).\n6. Navigate to **Objects > Log Forwarding** and create a profile that forwards Traffic and Threat logs to the syslog server profile.\n7. Apply the log forwarding profile to the appropriate security policy rules.\n8. Commit the configuration.\n\nFor detailed instructions, see [Configure Syslog Monitoring](https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/configure-syslog-monitoring).",
-                                "instructions": []
-                            },
-                            {
-                                "title": "Step C. Validate connection",
-                                "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the Syslog schema.\n\nIt may take about 20 minutes until the connection streams data to your workspace.\n\nRun the following query to verify PAN-OS syslog data is being received:\n\n```\nSyslog | where SyslogMessage has \"TRAFFIC\" or SyslogMessage has \"THREAT\" | take 10\n```",
-                                "instructions": []
-                            }
-                        ]
+                        "linkType": "OpenCreateDataCollectionRule",
+                        "dataCollectionRuleType": 6
                     },
-                    "type": "InstructionStepsGroup"
+                    "type": "InstallAgent"
                 }
             ]
         },
         {
-            "title": "2. Secure your machine ",
-            "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+            "title": "4. Validate Data Ingestion",
+            "description": "After configuration, verify that PAN-OS logs are being ingested into CommonSecurityLog:\n\n```kql\nCommonSecurityLog\n| where DeviceVendor == \"Palo Alto Networks\"\n| where DeviceProduct has \"PAN-OS\"\n| take 10\n```\n\nIf data appears, all existing analytic rules, workbooks, and hunting queries for Palo Alto PAN-OS will work automatically."
         }
-    ],
-    "metadata": {
-        "id": "b4d8e1f2-6c3a-5f9b-a0d7-2e4f6b8c0d1a",
-        "version": "1.0.0",
-        "kind": "dataConnector",
-        "source": {
-            "kind": "community"
-        },
-        "author": {
-            "name": "Palo Alto Networks"
-        },
-        "support": {
-            "name": "Palo Alto Networks",
-            "link": "https://www.paloaltonetworks.com/company/contact-support",
-            "tier": "developer"
-        }
-    }
+    ]
 }
