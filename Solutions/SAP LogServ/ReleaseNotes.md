@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.5       | 10-06-2026                     | DCR KQL transforms route logs to standard tables (Syslog, WindowsEvent, ASimDnsActivityLogs, ASimWebSessionLogs, ABAPAuditLog and more) |
+| 3.0.5       | 10-07-2026                     | DCR KQL transforms route logs to standard tables (Syslog, WindowsEvent, ASimDnsActivityLogs, ASimWebSessionLogs, ABAPAuditLog and more) |
 | 3.0.4       |  11-08-2025                    | Connector UI updates |
 | 3.0.3       |  17-07-2025                    | Observability Workbook added |
 | 3.0.2       |  25-06-2025                    | Analytic Rules for HANA DB added |
