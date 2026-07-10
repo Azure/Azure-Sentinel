@@ -113,8 +113,8 @@ FunctionQuery: >
          created_by_login_s=column_ifexists('created_by_login_s', ''),
          created_at_t=column_ifexists('created_at_t', ''),
          event_id_g=coalesce(
-           column_ifexists('event_id_g', guid(null)),
-           column_ifexists('event_id_g_guid', guid(null))
+           toguid(tostring(column_ifexists('event_id_g', ''))),
+           toguid(tostring(column_ifexists('event_id_g_guid', '')))
          ),
          event_type_s=column_ifexists('event_type_s', ''),
          ip_address_s=column_ifexists('ip_address_s', ''),
@@ -220,7 +220,6 @@ FunctionQuery: >
          | extend _boxSourcePriority=0;
       let BoxEventsv2 = union isfuzzy=true BoxEventsv1_empty, BoxEventsV2_CL |
       extend _rawAdditionalDetails=todynamic(column_ifexists('additional_details', dynamic(null))),
-    _rawSource=todynamic(column_ifexists('source', dynamic(null))),
     _rawActionBy=todynamic(column_ifexists('action_by', dynamic(null)))
     | extend additional_details_annotation_id_d=todouble(_rawAdditionalDetails.annotation_id),
      additional_details_group_id_s=tostring(_rawAdditionalDetails.group_id),
@@ -368,11 +367,11 @@ FunctionQuery: >
          BoxEventsCombined
          | where isnotempty(tostring(EventId))
          | extend _dedup_key=tostring(EventId)
-         | summarize
+         | summarize hint.shufflekey=_dedup_key
              arg_max(_boxSourcePriority, *),
-             _anyClassificationName=maxif(SourceClassificationName, isnotempty(SourceClassificationName)),
-             _anyClassificationColor=maxif(SourceClassificationColor, isnotempty(SourceClassificationColor)),
-             _anyClassificationDef=maxif(SourceClassificationDefinition, isnotempty(SourceClassificationDefinition))
+             _anyClassificationName=take_anyif(SourceClassificationName, isnotempty(SourceClassificationName)),
+             _anyClassificationColor=take_anyif(SourceClassificationColor, isnotempty(SourceClassificationColor)),
+             _anyClassificationDef=take_anyif(SourceClassificationDefinition, isnotempty(SourceClassificationDefinition))
            by _dedup_key
          | extend
              SourceClassificationName=iff(isempty(SourceClassificationName), _anyClassificationName, SourceClassificationName),
