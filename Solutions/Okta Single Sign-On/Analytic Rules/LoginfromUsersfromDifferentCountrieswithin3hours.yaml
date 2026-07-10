@@ -1,7 +1,7 @@
 id: 2954d424-f786-4677-9ffc-c24c44c6e7d5
 name: User Login from Different Countries within 3 hours
 description: |
-  'This query searches for successful user logins to the Okta Console from different countries within 3 hours.'
+  This rule detects successful user logins to the Okta Console from different countries within 3 hours. This may indicate a compromised account or an account being used by multiple individuals in different locations.
 severity: High
 status: Available
 requiredDataConnectors:
@@ -26,12 +26,23 @@ query: |
   | where column_ifexists('published_t', now()) >= timeframe
   | where eventType_s =~ "user.session.start"
   | where outcome_result_s =~ "SUCCESS"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), NumOfCountries = dcount(column_ifexists('client_geographicalContext_country_s', int(null))) by actor_alternateId_s
+  | where isnotempty(column_ifexists('client_geographicalContext_country_s', ''))
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), NumOfCountries = dcount(tostring(column_ifexists('client_geographicalContext_country_s', ''))) by actor_alternateId_s
   | where NumOfCountries >= threshold
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: actor_alternateId_s
-version: 1.1.1
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+customDetails:
+  StartTime: StartTime
+  EndTime: EndTime
+  NumOfCountries: NumOfCountries
+alertDetailsOverride:
+  alertDisplayNameFormat: 'User {{actor_alternateId_s}} logged in from {{NumOfCountries}} countries within 3 hours'
+  alertDescriptionFormat: 'User {{actor_alternateId_s}} authenticated successfully from {{NumOfCountries}} countries within 3 hours.'
+version: 1.1.2
 kind: Scheduled
