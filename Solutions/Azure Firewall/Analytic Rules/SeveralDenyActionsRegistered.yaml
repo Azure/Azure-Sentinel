@@ -25,27 +25,29 @@ relevantTechniques:
   - T1071
   - T1210
 query: |
-  let threshold = 1;
+  let threshold = 3;
+  let AzFWNetworkRuleThreshold = 5;
   union isfuzzy=true(
   AZFWApplicationRule
   | where Action == "Deny"
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AZFWNetworkRule
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
-  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | summarize StartTime = min(TimeGenerated), count(), Protocols = make_set(Protocol) by SourceIp, Fqdn, Action
+  | where count_ >= AzFWNetworkRuleThreshold
+  | extend Protocol = strcat_array(Protocols, "/")),
   (AZFWFlowTrace
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AZFWIdpsSignature
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AzureDiagnostics
   | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
   | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
@@ -56,7 +58,7 @@ query: |
   | where Action == "Deny"
   | extend Fqdn = iff(DestinationIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",DestinationIp)
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"])
+  | where count_ >= threshold)
 entityMappings:
   - entityType: IP
     fieldMappings:
