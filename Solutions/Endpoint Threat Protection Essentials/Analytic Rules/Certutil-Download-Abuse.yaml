@@ -1,0 +1,129 @@
+id: 4a9d3c2e-7f1b-4e58-9a0c-2d5b8e3f1a7c
+name: CertUtil Used for File Download (Living off the Land)
+description: |
+  Detects certutil.exe being used to download files from remote URLs via the
+  -urlcache or -verifyctl flags. CertUtil is a signed Windows binary (LOLBin)
+  that attackers abuse to download payloads while bypassing application
+  whitelisting and network controls.
+
+  This technique is documented in the LOLBAS project and maps to MITRE ATT&CK
+  T1105 (Ingress Tool Transfer) and T1218 (Signed Binary Proxy Execution).
+
+  False positives are possible in environments where certutil is used
+  legitimately for certificate management. Tune the allowlist filter below
+  for known-good domains used by your PKI infrastructure.
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+kind: Scheduled
+tactics:
+  - CommandAndControl
+  - DefenseEvasion
+relevantTechniques:
+  - T1105
+  - T1218
+  - T1140
+query: |
+  // CertUtil LOLBin Download Detection
+  // Looks for certutil.exe making outbound URL requests via process events
+  // Adjust the allowlisted domains below to match your PKI/CA infrastructure
+  let AllowlistedDomains = dynamic([
+      "windowsupdate.microsoft.com",
+      "download.microsoft.com",
+      "dl.delivery.mp.microsoft.com",
+      "ctldl.windowsupdate.com"
+  ]);
+  // Branch 1: Defender for Endpoint (DeviceProcessEvents)
+  let MDE_Results =
+      DeviceProcessEvents
+      | where TimeGenerated > ago(1h)
+      | where FileName =~ "certutil.exe"
+      | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+      | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
+      // Filter out known-good Microsoft update domains
+      | where not(ProcessCommandLine has_any (AllowlistedDomains))
+      | extend
+          AccountName     = InitiatingProcessAccountName,
+          AccountDomain   = InitiatingProcessAccountDomain,
+          ParentProcess   = InitiatingProcessFileName,
+          ParentCmdLine   = InitiatingProcessCommandLine,
+          HostName        = DeviceName,
+          EventTime       = TimeGenerated,
+          Source          = "MDE"
+      | project
+          EventTime, HostName, AccountName, AccountDomain,
+          ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
+  // Branch 2: Windows Security Events (Event ID 4688 - process creation)
+  let SecEvent_Results =
+      SecurityEvent
+      | where TimeGenerated > ago(1h)
+      | where EventID == 4688
+      | where NewProcessName endswith "\\certutil.exe"
+      | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+      | where CommandLine has_any ("http://", "https://", "ftp://")
+      | where not(CommandLine has_any (AllowlistedDomains))
+      | extend
+          AccountName     = SubjectUserName,
+          AccountDomain   = SubjectDomainName,
+          ParentProcess   = ParentProcessName,
+          ParentCmdLine   = "",
+          HostName        = Computer,
+          EventTime       = TimeGenerated,
+          ProcessCommandLine = CommandLine,
+          Source          = "SecurityEvent"
+      | project
+          EventTime, HostName, AccountName, AccountDomain,
+          ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
+  // Union both sources
+  union MDE_Results, SecEvent_Results
+  | sort by EventTime desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+alertDetailsOverride:
+  alertDisplayNameFormat: "CertUtil download attempt on {{HostName}} by {{AccountName}}"
+  alertDescriptionFormat: |
+    CertUtil.exe was used to download a remote file on host {{HostName}}.
+    Command line: {{ProcessCommandLine}}
+    Parent process: {{ParentProcess}}
+    This is a Living off the Land (LotL) technique to transfer tools while
+    evading detection. Investigate the URL in the command line immediately.
+customDetails:
+  CommandLine: ProcessCommandLine
+  ParentProcess: ParentProcess
+  DataSource: Source
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities:
+      - Host
+      - Account
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+version: 1.0.0
