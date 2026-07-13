@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.2.1       | 13-07-2026                     | Fixed **CCP data connector** polling window (`queryWindowInMin`) increased from 5 to 1440 minutes to correctly capture assets from daily scan cycles. |
 | 3.2.0       | 05-03-2026                     | Added new Rapid7InsightVM **CCP data connector**.                              |
 | 3.1.1       | 05-02-2026                     | Update Az Func packages related to **InsightVMCloudData Connector**            |
 | 3.1.0       | 03-02-2026                     | Update **Data Connector** to use latest 4.x Azure Functions extension bundles  |
