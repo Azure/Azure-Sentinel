@@ -50,6 +50,7 @@ Click the button below to deploy all required Azure resources (DCE, custom table
 | Parameter                        | Description                                                     |
 |----------------------------------|-----------------------------------------------------------------|
 | `WorkspaceName`                  | Name of your Log Analytics / Sentinel workspace                 |
+| `WorkspaceResourceGroup`         | *(optional)* Resource group containing that workspace, if different from the one you deploy into. Defaults to the deployment's own resource group. |
 | `UpwindOrgId`                    | Upwind Organization ID (Settings → Organization)                |
 | `UpwindClientId`                 | Upwind API Client ID (Settings → API Keys)                      |
 | `UpwindClientSecret`             | Upwind API Client Secret                                        |

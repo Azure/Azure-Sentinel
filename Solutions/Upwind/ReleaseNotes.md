@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                 |
 |-------------|--------------------------------|------------------------------------------------------------------------------------|
+| 3.0.3       | 13-07-2026                     | Fixed a deployment failure reported by a customer whose Log Analytics workspace lives in a different resource group than the one they deploy this connector into: added an optional `WorkspaceResourceGroup` parameter (defaults to the deployment's own resource group, so existing single-resource-group deployments are unaffected) and moved the `UpwindLogsAssets_CL` table into a nested deployment scoped to that resource group. Validated end-to-end against a live cross-resource-group deployment. |
 | 3.0.2       | 28-04-2026                     | Fixed Function App deployment: restructured zip package to flat layout and removed separate App Service Plan for correct code deployment. |
 | 3.0.1       | 12-04-2026                     | Updated **SolutionMetadata** publisherId to align the solution package metadata with publisher validation requirements. |
 | 3.0.0       | 10-03-2026                     | Initial solution release.                                                          |
