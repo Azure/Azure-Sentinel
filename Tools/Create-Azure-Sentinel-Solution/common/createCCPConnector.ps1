@@ -81,7 +81,9 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
 
-            $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "OAuthForm") {
             $newParameter = [PSCustomObject]@{
@@ -133,9 +135,28 @@ function New-ParametersForConnectorInstuctions($instructions) {
 
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
+        elseif ($instruction.type -eq "Radio") {
+            # Add a parameter for the radio field itself
+            $newParameter = [PSCustomObject]@{
+                defaultValue = $instruction.parameters.options[0].value;
+                type         = "securestring";
+                minLength    = 1;
+            }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match $instruction.parameters.name)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
+            }
+
+            # Process nested instructions from all options, deduplicating by name
+            foreach ($option in $instruction.parameters.options) {
+                if ($null -ne $option.instructions) {
+                    New-ParametersForConnectorInstuctions $option.instructions
+                }
+            }
+        }
         else {
             $instructionType = $instruction.type;
-            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
+            Write-Host "Info: Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm, ContextPane and Radio!"
         }
     }
 }
@@ -938,6 +959,60 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 $ccpTablesCounter += 1
             }
+
+            #========start: multi-connector additive tables fix===========
+            # GUARD: only engages for solutions that contain MORE THAN ONE CCP/CCF connector.
+            # For single-connector solutions this block is skipped entirely, so their output is
+            # unchanged. The legacy logic above only guarantees (a) each connector's single
+            # "primary" table (dataFlows[0]) and (b) a one-time dump of all remaining tables into
+            # the FIRST connector. Any additional connector that references MULTIPLE tables is
+            # therefore left missing tables in its own contentTemplate, which fails at connect
+            # time with InvalidOutputTable. This block is purely ADDITIVE and idempotent: it only
+            # ADDS tables that THIS connector's own DCR references but that are not already present
+            # in THIS connector's contentTemplate. A connector that already contains all of its
+            # referenced tables is left byte-for-byte unchanged.
+            if ($ccpDict.Count -gt 1 -and $null -ne $ccpItem.DCRFilePath -and $ccpItem.DCRFilePath -ne '') {
+                $dcrFileContentForTables = ReadFileContent -filePath $ccpItem.DCRFilePath
+                if ($null -ne $dcrFileContentForTables) {
+                    # Collect the table names referenced by this connector's DCR dataFlows.
+                    $referencedTableNames = @()
+                    foreach ($dcrObject in @($dcrFileContentForTables)) {
+                        if ($null -ne $dcrObject.properties -and $null -ne $dcrObject.properties.dataFlows) {
+                            foreach ($dataFlow in $dcrObject.properties.dataFlows) {
+                                if ($null -ne $dataFlow.outputStream -and $dataFlow.outputStream -like 'Custom-*') {
+                                    $referencedTableNames += ($dataFlow.outputStream -replace '^Custom-', '')
+                                }
+                            }
+                        }
+                    }
+                    $referencedTableNames = @($referencedTableNames | Select-Object -Unique)
+
+                    if ($referencedTableNames.Count -gt 0 -and $null -ne $ccpItem.CCPBaseFolder -and (Test-Path $ccpItem.CCPBaseFolder)) {
+                        # Only inspect table files in THIS connector's own folder to avoid matching
+                        # a same-named table belonging to a different connector in the solution.
+                        foreach ($tableInputFile in $(Get-ChildItem -Path $ccpItem.CCPBaseFolder -Include *.json -Recurse)) {
+                            $tableFileContent = ReadFileContent -filePath $tableInputFile.FullName
+                            if ($null -eq $tableFileContent) { continue }
+                            foreach ($tableContentData in @($tableFileContent)) {
+                                if ($tableContentData.type -ne "Microsoft.OperationalInsights/workspaces/tables") { continue }
+                                $resourceName = $tableContentData.name
+                                if ($referencedTableNames -notcontains $resourceName) { continue }
+
+                                # Skip if this table is already present in THIS connector's contentTemplate.
+                                $hasTable = $templateContentConnectorDefinition.properties.mainTemplate.resources | Where-Object { $_.type -eq "Microsoft.OperationalInsights/workspaces/tables" -and $_.name -eq $resourceName }
+                                if ($hasTable) { continue }
+
+                                $armResource = Get-ArmResource $resourceName $tableContentData.type $tableContentData.kind $tableContentData.properties
+                                ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'tables' -minLength 1
+                                $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
+                                $tableCounter ++;
+                                Write-Host "Multi-connector additive tables fix: added referenced table '$resourceName' to connector '$($ccpItem.DCDefinitionId)' contentTemplate."
+                            }
+                        }
+                    }
+                }
+            }
+            #========end: multi-connector additive tables fix===========
             #========end: tables resource===========
 
             ## Build the full package resources
@@ -1226,8 +1301,56 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # TokenEndpoint is required for both formats
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'visaxpaytoken') {
+        # ApiKey (verified from Visa Threat Intelligence connector schema)
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ApiKey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # ApiSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ApiSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'ciscoduo') {
+        # ClientSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # APIKey
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'APIKey' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'commvault') {
+        # CommVault token-based credential. Confirm/adjust field name against the connector poller JSON.
+        # TokenEndpoint
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # RefreshToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'RefreshToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # AccessToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'barracudawaf') {
+        # Barracuda WAF token-based credential. Confirm/adjust field name against the connector poller JSON.
+        # UserName
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'UserName' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        
+        # Password
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'Password' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+        
+        # TokenEndpoint
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'edgegrid') {
+        # Akamai EdgeGrid credentials. Field names follow the standard EdgeGrid scheme;
+        # confirm/adjust them against the connector's data connector poller JSON.
+        # clientToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # clientSecret
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'ClientSecret' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+
+        # accessToken
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $false -fileType $fileType -minLength 4 -isCreateArray $false
+    }
     else {
-        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey' or 'JwtToken'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey', 'JwtToken', 'CiscoDuo', 'CommVault', 'VisaXpayToken', 'BarracudaWAF' or 'EdgeGrid'." -BackgroundColor Red
         exit 1;
     }
 

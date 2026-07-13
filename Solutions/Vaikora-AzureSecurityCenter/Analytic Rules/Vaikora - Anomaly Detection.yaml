@@ -1,0 +1,44 @@
+id: c0984707-0855-430e-9c36-5e2d0d0ce56f
+name: Vaikora - Behavioral anomaly detected
+description: |
+  Identifies AI agent actions flagged as behavioral anomalies by Vaikora that fall outside the high or critical severity buckets but still represent statistically unusual activity worth investigation.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VaikoraSecurityCenter
+    dataTypes:
+      - Vaikora_AgentSignals_CL
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Discovery
+  - LateralMovement
+  - Collection
+  - Exfiltration
+relevantTechniques: []
+query: |
+  Vaikora_AgentSignals_CL
+  | where TimeGenerated >= ago(6h)
+  | where is_anomaly_b == true
+  | where severity_s !in ("high", "critical")
+  | extend
+      ActionId     = action_id_s,
+      AgentId      = agent_id_s,
+      ActionType   = action_type_s,
+      Severity     = severity_s,
+      Status       = status_s,
+      AnomalyScore = anomaly_score_d
+  | project TimeGenerated, ActionId, AgentId, ActionType, Severity, Status, AnomalyScore
+  | order by AnomalyScore desc, TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AgentId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vaikora anomaly on agent {{agent_id_s}}: {{action_type_s}}"
+  alertDescriptionFormat: "Vaikora flagged a behavioral anomaly with score {{anomaly_score_d}}."
+version: 1.0.1
+kind: Scheduled
