@@ -1,0 +1,738 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "type": "string",
+            "defaultValue": "UpwindCatalog",
+            "metadata": {
+                "description": "Base name for all created resources. Must be globally unique (used in storage account and function app names)."
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics / Microsoft Sentinel workspace. Must live in the resource group specified by WorkspaceResourceGroup."
+            }
+        },
+        "WorkspaceResourceGroup": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": {
+                "description": "Resource group containing the target Log Analytics / Microsoft Sentinel workspace. Defaults to this deployment's own resource group, so existing single-resource-group deployments are unaffected. Set this explicitly if your workspace lives in a different resource group than the one you're deploying this connector into — the Function App, Storage, App Insights, DCE, and DCR are still created in this deployment's resource group; only the custom log table (a required child resource of the workspace) is created in WorkspaceResourceGroup. Requires write permission on both resource groups."
+            }
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Full Resource ID of the existing Log Analytics workspace for Application Insights (e.g. /subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...)."
+            }
+        },
+        "AzureClientObjectId": {
+            "type": "string",
+            "metadata": {
+                "description": "Object ID of the App Registration / Service Principal used by the Function App managed identity. Used to assign the Monitoring Metrics Publisher role on the DCR."
+            }
+        },
+        "UpwindOrgId": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Upwind Organization ID."
+            }
+        },
+        "UpwindClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "Upwind API client ID (from Upwind Settings → API Keys)."
+            }
+        },
+        "UpwindClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Upwind API client secret."
+            }
+        },
+        "UpwindAuthUrl": {
+            "type": "string",
+            "defaultValue": "https://auth.upwind.io/oauth/token",
+            "metadata": {
+                "description": "Upwind OAuth2 token endpoint."
+            }
+        },
+        "UpwindApiBaseUrl": {
+            "type": "string",
+            "defaultValue": "https://api.upwind.io",
+            "metadata": {
+                "description": "Upwind API base URL."
+            }
+        },
+        "UpwindPageSize": {
+            "type": "int",
+            "defaultValue": 100,
+            "metadata": {
+                "description": "Number of assets to request per page."
+            }
+        },
+        "UpwindMaxRetries": {
+            "type": "int",
+            "defaultValue": 4,
+            "metadata": {
+                "description": "Maximum number of retries on transient errors."
+            }
+        },
+        "UpwindInitialBackoffSeconds": {
+            "type": "int",
+            "defaultValue": 1,
+            "metadata": {
+                "description": "Initial backoff duration (seconds) for exponential retry."
+            }
+        },
+        "UpwindMaxBackoffSeconds": {
+            "type": "int",
+            "defaultValue": 60,
+            "metadata": {
+                "description": "Maximum backoff duration (seconds) for exponential retry."
+            }
+        },
+        "UpwindCatalogSchedule": {
+            "type": "string",
+            "defaultValue": "0 0 * * * *",
+            "metadata": {
+                "description": "CRON expression for the Function App timer trigger (default: top of every hour)."
+            }
+        },
+        "UpwindThreatLookbackMinutes": {
+            "type": "int",
+            "defaultValue": 90,
+            "metadata": {
+                "description": "How far back (in minutes) each run queries for threat detections, threat events, threat stories, and configuration findings. Should comfortably exceed the interval implied by UpwindCatalogSchedule so nothing is missed between runs; overlap just produces harmless duplicate rows. Inventory assets and vulnerability findings are always full current-state syncs and are not affected by this setting."
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageAccountName": "[take(concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id)), 24)]",
+        "endpointName": "[concat('upwind-dce-', uniqueString(resourceGroup().id))]",
+        "mainRuleName": "[concat('upwind-dcr-', uniqueString(resourceGroup().id))]",
+        "tableName": "UpwindCatalogAssets_CL",
+        "streamName": "Custom-UpwindCatalogAssets_CL",
+        "tableNameVulnerability": "UpwindVulnerabilityFindings_CL",
+        "streamNameVulnerability": "Custom-UpwindVulnerabilityFindings_CL",
+        "tableNameThreatDetections": "UpwindThreatDetections_CL",
+        "streamNameThreatDetections": "Custom-UpwindThreatDetections_CL",
+        "tableNameThreatEvents": "UpwindThreatEvents_CL",
+        "streamNameThreatEvents": "Custom-UpwindThreatEvents_CL",
+        "tableNameThreatStories": "UpwindThreatStories_CL",
+        "streamNameThreatStories": "Custom-UpwindThreatStories_CL",
+        "tableNameConfigFindings": "UpwindConfigurationFindings_CL",
+        "streamNameConfigFindings": "Custom-UpwindConfigurationFindings_CL",
+        "tableDeploymentName": "[concat('deploy-upwind-tables-', uniqueString(resourceGroup().id))]",
+        "logWsResId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('endpointName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "[variables('tableDeploymentName')]",
+            "resourceGroup": "[parameters('WorkspaceResourceGroup')]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "outer"
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableName'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableName')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",          "type": "datetime" },
+                                        { "name": "AssetId",                "type": "string" },
+                                        { "name": "Category",               "type": "string" },
+                                        { "name": "SubCategory",            "type": "string" },
+                                        { "name": "CloudProvider",          "type": "string" },
+                                        { "name": "CloudAccountId",         "type": "string" },
+                                        { "name": "ResourceType",           "type": "string" },
+                                        { "name": "CloudResourceId",        "type": "string" },
+                                        { "name": "Region",                 "type": "string" },
+                                        { "name": "AssetName",              "type": "string" },
+                                        { "name": "ProtectedBy",            "type": "string" },
+                                        { "name": "Status",                 "type": "string" },
+                                        { "name": "Tags",                   "type": "dynamic" },
+                                        { "name": "NetworkRisk",            "type": "dynamic" },
+                                        { "name": "DetectionRisk",          "type": "dynamic" },
+                                        { "name": "VulnerabilityRisk",      "type": "dynamic" },
+                                        { "name": "HighPrivilegeRisk",      "type": "dynamic" },
+                                        { "name": "Technologies",           "type": "dynamic" },
+                                        { "name": "PublicIpAddresses",      "type": "dynamic" },
+                                        { "name": "PrivateIpAddresses",     "type": "dynamic" },
+                                        { "name": "SensitiveDataAtRest",    "type": "dynamic" },
+                                        { "name": "SensitiveDataInTransit", "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableNameVulnerability'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableNameVulnerability')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",      "type": "datetime" },
+                                        { "name": "id",                 "type": "string" },
+                                        { "name": "cve_id",             "type": "string" },
+                                        { "name": "severity",           "type": "string" },
+                                        { "name": "status",             "type": "string" },
+                                        { "name": "first_seen_time",    "type": "datetime" },
+                                        { "name": "last_scan_time",     "type": "datetime" },
+                                        { "name": "resource",           "type": "dynamic" },
+                                        { "name": "package",            "type": "dynamic" },
+                                        { "name": "fix",                "type": "dynamic" },
+                                        { "name": "fix_available",      "type": "string" },
+                                        { "name": "exploitable",        "type": "string" },
+                                        { "name": "internet_exposure",  "type": "string" },
+                                        { "name": "source",             "type": "string" },
+                                        { "name": "image_name",         "type": "string" },
+                                        { "name": "remediation",        "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableNameThreatDetections'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableNameThreatDetections')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",       "type": "datetime" },
+                                        { "name": "id",                  "type": "string" },
+                                        { "name": "title_text",               "type": "string" },
+                                        { "name": "description",         "type": "string" },
+                                        { "name": "category",            "type": "string" },
+                                        { "name": "event_type",                "type": "string" },
+                                        { "name": "severity",            "type": "string" },
+                                        { "name": "status",              "type": "string" },
+                                        { "name": "first_seen_time",     "type": "datetime" },
+                                        { "name": "last_seen_time",      "type": "datetime" },
+                                        { "name": "occurrence_count",    "type": "long" },
+                                        { "name": "resource",            "type": "dynamic" },
+                                        { "name": "mitre_attacks",       "type": "dynamic" },
+                                        { "name": "triggers",            "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableNameThreatEvents'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableNameThreatEvents')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",    "type": "datetime" },
+                                        { "name": "id",               "type": "string" },
+                                        { "name": "title_text",            "type": "string" },
+                                        { "name": "category",         "type": "string" },
+                                        { "name": "event_type",             "type": "string" },
+                                        { "name": "severity",         "type": "string" },
+                                        { "name": "status",           "type": "string" },
+                                        { "name": "first_seen_time",  "type": "datetime" },
+                                        { "name": "last_seen_time",   "type": "datetime" },
+                                        { "name": "resource",         "type": "dynamic" },
+                                        { "name": "raw",              "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableNameThreatStories'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableNameThreatStories')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",     "type": "datetime" },
+                                        { "name": "id",                "type": "string" },
+                                        { "name": "title_text",             "type": "string" },
+                                        { "name": "status",            "type": "string" },
+                                        { "name": "severity",          "type": "string" },
+                                        { "name": "create_time",       "type": "datetime" },
+                                        { "name": "update_time",       "type": "datetime" },
+                                        { "name": "primary_resource",  "type": "dynamic" },
+                                        { "name": "summary",           "type": "string" },
+                                        { "name": "detection_ids",     "type": "dynamic" },
+                                        { "name": "event_ids",         "type": "dynamic" },
+                                        { "name": "risk_factors",      "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "name": "[concat(parameters('WorkspaceName'), '/', variables('tableNameConfigFindings'))]",
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('tableNameConfigFindings')]",
+                                    "columns": [
+                                        { "name": "TimeGenerated",     "type": "datetime" },
+                                        { "name": "id",                "type": "string" },
+                                        { "name": "title_text",             "type": "string" },
+                                        { "name": "status",            "type": "string" },
+                                        { "name": "severity",          "type": "string" },
+                                        { "name": "first_seen_time",   "type": "datetime" },
+                                        { "name": "evaluation_time",   "type": "datetime" },
+                                        { "name": "framework",         "type": "dynamic" },
+                                        { "name": "rule",              "type": "dynamic" },
+                                        { "name": "resource",          "type": "dynamic" },
+                                        { "name": "risk_categories",   "type": "dynamic" }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('mainRuleName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.Resources/deployments', variables('tableDeploymentName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "Custom-UpwindCatalogAssets_CL": {
+                        "columns": [
+                            { "name": "id",                       "type": "string" },
+                            { "name": "name",                     "type": "string" },
+                            { "name": "category",                 "type": "string" },
+                            { "name": "sub_category",              "type": "string" },
+                            { "name": "cloud_provider",            "type": "string" },
+                            { "name": "cloud_account_id",          "type": "string" },
+                            { "name": "resource_type",             "type": "string" },
+                            { "name": "cloud_resource_id",         "type": "string" },
+                            { "name": "region",                    "type": "string" },
+                            { "name": "protected_by",              "type": "string" },
+                            { "name": "status",                    "type": "string" },
+                            { "name": "tags",                      "type": "dynamic" },
+                            { "name": "network_risk",              "type": "dynamic" },
+                            { "name": "detection_risk",            "type": "dynamic" },
+                            { "name": "vulnerability_risk",        "type": "dynamic" },
+                            { "name": "high_privilege_risk",       "type": "dynamic" },
+                            { "name": "technologies",              "type": "dynamic" },
+                            { "name": "public_ip_addresses",       "type": "dynamic" },
+                            { "name": "private_ip_addresses",      "type": "dynamic" },
+                            { "name": "sensitive_data_at_rest",    "type": "dynamic" },
+                            { "name": "sensitive_data_in_transit", "type": "dynamic" }
+                        ]
+                    },
+                    "Custom-UpwindVulnerabilityFindings_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated",      "type": "datetime" },
+                            { "name": "id",                 "type": "string" },
+                            { "name": "cve_id",             "type": "string" },
+                            { "name": "severity",           "type": "string" },
+                            { "name": "status",             "type": "string" },
+                            { "name": "first_seen_time",    "type": "datetime" },
+                            { "name": "last_scan_time",     "type": "datetime" },
+                            { "name": "resource",           "type": "dynamic" },
+                            { "name": "package",            "type": "dynamic" },
+                            { "name": "fix",                "type": "dynamic" },
+                            { "name": "fix_available",      "type": "string" },
+                            { "name": "exploitable",        "type": "string" },
+                            { "name": "internet_exposure",  "type": "string" },
+                            { "name": "source",             "type": "string" },
+                            { "name": "image_name",         "type": "string" },
+                            { "name": "remediation",        "type": "dynamic" }
+                        ]
+                    },
+                    "Custom-UpwindThreatDetections_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated",       "type": "datetime" },
+                            { "name": "id",                  "type": "string" },
+                            { "name": "title_text",               "type": "string" },
+                            { "name": "description",         "type": "string" },
+                            { "name": "category",            "type": "string" },
+                            { "name": "event_type",                "type": "string" },
+                            { "name": "severity",            "type": "string" },
+                            { "name": "status",              "type": "string" },
+                            { "name": "first_seen_time",     "type": "datetime" },
+                            { "name": "last_seen_time",      "type": "datetime" },
+                            { "name": "occurrence_count",    "type": "long" },
+                            { "name": "resource",            "type": "dynamic" },
+                            { "name": "mitre_attacks",       "type": "dynamic" },
+                            { "name": "triggers",            "type": "dynamic" }
+                        ]
+                    },
+                    "Custom-UpwindThreatEvents_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated",    "type": "datetime" },
+                            { "name": "id",               "type": "string" },
+                            { "name": "title_text",            "type": "string" },
+                            { "name": "category",         "type": "string" },
+                            { "name": "event_type",             "type": "string" },
+                            { "name": "severity",         "type": "string" },
+                            { "name": "status",           "type": "string" },
+                            { "name": "first_seen_time",  "type": "datetime" },
+                            { "name": "last_seen_time",   "type": "datetime" },
+                            { "name": "resource",         "type": "dynamic" },
+                            { "name": "raw",              "type": "dynamic" }
+                        ]
+                    },
+                    "Custom-UpwindThreatStories_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated",     "type": "datetime" },
+                            { "name": "id",                "type": "string" },
+                            { "name": "title_text",             "type": "string" },
+                            { "name": "status",            "type": "string" },
+                            { "name": "severity",          "type": "string" },
+                            { "name": "create_time",       "type": "datetime" },
+                            { "name": "update_time",       "type": "datetime" },
+                            { "name": "primary_resource",  "type": "dynamic" },
+                            { "name": "summary",           "type": "string" },
+                            { "name": "detection_ids",     "type": "dynamic" },
+                            { "name": "event_ids",         "type": "dynamic" },
+                            { "name": "risk_factors",      "type": "dynamic" }
+                        ]
+                    },
+                    "Custom-UpwindConfigurationFindings_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated",     "type": "datetime" },
+                            { "name": "id",                "type": "string" },
+                            { "name": "title_text",             "type": "string" },
+                            { "name": "status",            "type": "string" },
+                            { "name": "severity",          "type": "string" },
+                            { "name": "first_seen_time",   "type": "datetime" },
+                            { "name": "evaluation_time",   "type": "datetime" },
+                            { "name": "framework",         "type": "dynamic" },
+                            { "name": "rule",              "type": "dynamic" },
+                            { "name": "resource",          "type": "dynamic" },
+                            { "name": "risk_categories",   "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('logWsResId')]",
+                            "name": "upwindWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "Custom-UpwindCatalogAssets_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now(), AssetId = tostring(id), AssetName = tostring(name), Category = tostring(category), SubCategory = tostring(sub_category), CloudProvider = tostring(cloud_provider), CloudAccountId = tostring(cloud_account_id), ResourceType = tostring(resource_type), CloudResourceId = tostring(cloud_resource_id), Region = tostring(region), ProtectedBy = tostring(protected_by), Status = tostring(status), Tags = tags, NetworkRisk = network_risk, DetectionRisk = detection_risk, VulnerabilityRisk = vulnerability_risk, HighPrivilegeRisk = high_privilege_risk, Technologies = technologies, PublicIpAddresses = public_ip_addresses, PrivateIpAddresses = private_ip_addresses, SensitiveDataAtRest = sensitive_data_at_rest, SensitiveDataInTransit = sensitive_data_in_transit | project TimeGenerated, AssetId, AssetName, Category, SubCategory, CloudProvider, CloudAccountId, ResourceType, CloudResourceId, Region, ProtectedBy, Status, Tags, NetworkRisk, DetectionRisk, VulnerabilityRisk, HighPrivilegeRisk, Technologies, PublicIpAddresses, PrivateIpAddresses, SensitiveDataAtRest, SensitiveDataInTransit",
+                        "outputStream": "Custom-UpwindCatalogAssets_CL"
+                    },
+                    {
+                        "streams": [ "Custom-UpwindVulnerabilityFindings_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-UpwindVulnerabilityFindings_CL"
+                    },
+                    {
+                        "streams": [ "Custom-UpwindThreatDetections_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-UpwindThreatDetections_CL"
+                    },
+                    {
+                        "streams": [ "Custom-UpwindThreatEvents_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-UpwindThreatEvents_CL"
+                    },
+                    {
+                        "streams": [ "Custom-UpwindThreatStories_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-UpwindThreatStories_CL"
+                    },
+                    {
+                        "streams": [ "Custom-UpwindConfigurationFindings_CL" ],
+                        "destinations": [ "upwindWorkspace" ],
+                        "transformKql": "source | extend TimeGenerated = now()",
+                        "outputStream": "Custom-UpwindConfigurationFindings_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('mainRuleName'), parameters('AzureClientObjectId'), variables('monitoringMetricsPublisherRoleId'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+                "principalId": "[parameters('AzureClientObjectId')]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": { "keyType": "Account", "enabled": true },
+                        "blob": { "keyType": "Account", "enabled": true }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "cors": { "corsRules": [] },
+                "deleteRetentionPolicy": { "enabled": false }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "cors": { "corsRules": [] }
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2019-08-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "kind": "functionapp",
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "reserved": true,
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": "1"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,linux",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "PYTHON_VERSION",
+                            "value": "3.11"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('FunctionName'))]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_ID",
+                            "value": "[parameters('AzureClientObjectId')]"
+                        },
+                        {
+                            "name": "DCE_ENDPOINT",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName')), '2021-09-01-preview').logsIngestion.endpoint]"
+                        },
+                        {
+                            "name": "DCR_IMMUTABLEID",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName')), '2021-09-01-preview').immutableId]"
+                        },
+                        {
+                            "name": "STREAM_NAME_INVENTORY",
+                            "value": "[variables('streamName')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_VULNERABILITY",
+                            "value": "[variables('streamNameVulnerability')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_THREAT_DETECTIONS",
+                            "value": "[variables('streamNameThreatDetections')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_THREAT_EVENTS",
+                            "value": "[variables('streamNameThreatEvents')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_THREAT_STORIES",
+                            "value": "[variables('streamNameThreatStories')]"
+                        },
+                        {
+                            "name": "STREAM_NAME_CONFIG_FINDINGS",
+                            "value": "[variables('streamNameConfigFindings')]"
+                        },
+                        {
+                            "name": "UPWIND_ORG_ID",
+                            "value": "[parameters('UpwindOrgId')]"
+                        },
+                        {
+                            "name": "UPWIND_CLIENT_ID",
+                            "value": "[parameters('UpwindClientId')]"
+                        },
+                        {
+                            "name": "UPWIND_CLIENT_SECRET",
+                            "value": "[parameters('UpwindClientSecret')]"
+                        },
+                        {
+                            "name": "UPWIND_AUTH_URL",
+                            "value": "[parameters('UpwindAuthUrl')]"
+                        },
+                        {
+                            "name": "UPWIND_API_BASE_URL",
+                            "value": "[parameters('UpwindApiBaseUrl')]"
+                        },
+                        {
+                            "name": "UPWIND_PAGE_SIZE",
+                            "value": "[string(parameters('UpwindPageSize'))]"
+                        },
+                        {
+                            "name": "UPWIND_MAX_RETRIES",
+                            "value": "[string(parameters('UpwindMaxRetries'))]"
+                        },
+                        {
+                            "name": "UPWIND_INITIAL_BACKOFF_SECONDS",
+                            "value": "[string(parameters('UpwindInitialBackoffSeconds'))]"
+                        },
+                        {
+                            "name": "UPWIND_MAX_BACKOFF_SECONDS",
+                            "value": "[string(parameters('UpwindMaxBackoffSeconds'))]"
+                        },
+                        {
+                            "name": "UPWIND_THREAT_LOOKBACK_MINUTES",
+                            "value": "[string(parameters('UpwindThreatLookbackMinutes'))]"
+                        },
+                        {
+                            "name": "UPWIND_CATALOG_SCHEDULE",
+                            "value": "[parameters('UpwindCatalogSchedule')]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://github.com/MitchellGulledge3/upwind/releases/download/v1.1.0/UpwindCatalogLoader.zip"
+                        }
+                    ],
+                    "linuxFxVersion": "Python|3.11",
+                    "python_version": "3.11"
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName')), '2021-09-01-preview').logsIngestion.endpoint]"
+        },
+        "dcrImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName')), '2021-09-01-preview').immutableId]"
+        },
+        "functionAppName": {
+            "type": "string",
+            "value": "[variables('FunctionName')]"
+        }
+    }
+}
