@@ -14,8 +14,8 @@ For more information, see:
 - [ASIM AgentEvent normalization schema reference](https://aka.ms/ASimAgentEventDoc)
 
 For the changelog, see:
-- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAgentEvent/CHANGELOG/ASimAgentEntity.md)
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAgentEvent/CHANGELOG/ASimAgentEvent.md)
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAgentEvent%2FARM%2FASimAgentEntity%2FASimAgentEntity.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAgentEvent%2FARM%2FASimAgentEntity%2FASimAgentEntity.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAgentEvent%2FARM%2FASimAgentEvent%2FASimAgentEvent.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAgentEvent%2FARM%2FASimAgentEvent%2FASimAgentEvent.json)
