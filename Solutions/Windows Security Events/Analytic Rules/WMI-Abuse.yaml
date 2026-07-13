@@ -1,29 +1,32 @@
 id: 3c8e5f0b-1d4a-4b69-9c2e-7f0d3a5e8b1f
 name: WMI Spawning Suspicious Child Process (Living off the Land)
 description: |
-  Detects WmiPrvSE.exe (the WMI Provider Host) spawning high-risk processes
+  'Detects WmiPrvSE.exe (the WMI Provider Host) spawning high-risk processes
   such as PowerShell, cmd.exe, cscript, or other LOLBins.
 
   WMI is a core Windows administration feature that attackers abuse for
-  remote code execution and lateral movement because it:
-    - Requires no external tools or dropped files
-    - Generates minimal forensic artifacts on disk
-    - Can execute code on remote systems over DCOM/RPC
-    - Bypasses many endpoint security controls
+  remote code execution and lateral movement because it requires no external
+  tools, generates minimal disk artifacts, and can execute code on remote
+  systems over DCOM/RPC while bypassing many endpoint security controls.
 
   Maps to MITRE ATT&CK:
-    T1047  - Windows Management Instrumentation
-    T1021  - Remote Services (lateral movement context)
-    T1059  - Command and Scripting Interpreter
+    T1047       - Windows Management Instrumentation
+    T1021.006   - Remote Services: Windows Remote Management
+    T1059.001   - PowerShell
+    T1059.003   - Windows Command Shell
+    T1059.005   - Visual Basic
 
-  Tune false positives by adding known-safe management tools
-  (SCCM, monitoring agents, backup software) to AllowlistedParentCmdLines.
+  Tune AllowlistedCmdPatterns to add known-safe management tools (SCCM, SCOM).
+  Adjust the Lookback variable to match queryPeriod if you change the schedule.'
 severity: High
 requiredDataConnectors:
   - connectorId: MicrosoftDefenderAdvancedThreatProtection
     dataTypes:
       - DeviceProcessEvents
   - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 1h
@@ -44,124 +47,92 @@ relevantTechniques:
   - T1059.005
 query: |
   // WMI Child Process Detection
-  // Flags any high-risk process spawned directly by WmiPrvSE.exe
-  // These are legitimate LOLBins that should almost never be WMI children
-  // in a non-administrative or non-management context
+  // Single Lookback variable — update this to match queryPeriod if schedule changes
+  let Lookback = 1h;
   let SuspiciousChildProcesses = dynamic([
-      "powershell.exe",
-      "pwsh.exe",
-      "cmd.exe",
-      "cscript.exe",
-      "wscript.exe",
-      "mshta.exe",
-      "certutil.exe",
-      "bitsadmin.exe",
-      "regsvr32.exe",
-      "rundll32.exe",
-      "msiexec.exe",
-      "installutil.exe",
-      "cmstp.exe",
-      "msbuild.exe",
-      "wmic.exe",         // WMI calling WMI — double-hop technique
-      "net.exe",
-      "net1.exe",
-      "nltest.exe",
-      "whoami.exe",
-      "ipconfig.exe",
-      "tasklist.exe",
-      "schtasks.exe",
-      "at.exe",
-      "sc.exe",
-      "reg.exe"
+      "powershell.exe", "pwsh.exe", "cmd.exe", "cscript.exe", "wscript.exe",
+      "mshta.exe", "certutil.exe", "bitsadmin.exe", "regsvr32.exe",
+      "rundll32.exe", "msiexec.exe", "installutil.exe", "cmstp.exe",
+      "msbuild.exe", "wmic.exe", "net.exe", "net1.exe", "nltest.exe",
+      "whoami.exe", "ipconfig.exe", "tasklist.exe", "schtasks.exe",
+      "at.exe", "sc.exe", "reg.exe"
   ]);
-  // Known-safe WMI child command line patterns from management tools
-  // Add your SCCM/monitoring agent signatures here
   let AllowlistedCmdPatterns = dynamic([
-      "ccmexec",           // SCCM
-      "SMSAgent",          // SCCM
-      "MOMAgent",          // SCOM
-      "nessus",            // Nessus scanner
-      "qualys"             // Qualys scanner
+      "ccmexec", "SMSAgent", "MOMAgent", "nessus", "qualys"
+  ]);
+  let NetworkIndicators = dynamic([
+      "http://", "https://", "ftp://", "Net.WebClient",
+      "DownloadString", "IEX", "Invoke-Expression",
+      "Invoke-RestMethod", "/transfer", "-urlcache"
+  ]);
+  let CredentialIndicators = dynamic([
+      "lsass", "mimikatz", "sekurlsa", "credential",
+      "dump", "sam", "ntds", "hash"
   ]);
   // Branch 1: Defender for Endpoint
   let MDE_Results =
       DeviceProcessEvents
-      | where TimeGenerated > ago(1h)
-      // WMI provider host is the parent
+      | where TimeGenerated > ago(Lookback)
       | where InitiatingProcessFileName =~ "WmiPrvSE.exe"
-      // Child is one of the high-risk LOLBins
+      // FileName is already just the leaf name in MDE — safe to use in~ directly
       | where FileName in~ (SuspiciousChildProcesses)
-      // Exclude known-safe management tool command line patterns
       | where not(ProcessCommandLine has_any (AllowlistedCmdPatterns))
       | extend
-          AccountName       = InitiatingProcessAccountName,
-          AccountDomain     = InitiatingProcessAccountDomain,
-          ChildProcess      = FileName,
-          ChildCmdLine      = ProcessCommandLine,
-          ParentProcess     = InitiatingProcessFileName,
-          ParentCmdLine     = InitiatingProcessCommandLine,
-          HostName          = DeviceName,
-          EventTime         = TimeGenerated,
-          // Flag if child immediately does something network-y or credential-y
-          NetworkActivity   = ProcessCommandLine has_any (
-              "http://", "https://", "ftp://",
-              "Net.WebClient", "DownloadString", "IEX",
-              "Invoke-Expression", "/transfer", "-urlcache"
-          ),
-          CredentialActivity = ProcessCommandLine has_any (
-              "lsass", "mimikatz", "sekurlsa", "credential",
-              "pass", "hash", "dump", "sam", "ntds"
-          ),
-          Source = "MDE"
+          ChildProcess       = FileName,
+          ChildCmdLine       = ProcessCommandLine,
+          AccountName        = InitiatingProcessAccountName,
+          AccountDomain      = InitiatingProcessAccountDomain,
+          ParentProcess      = InitiatingProcessFileName,
+          HostName           = DeviceName,
+          EventTime          = TimeGenerated,
+          NetworkActivity    = ProcessCommandLine has_any (NetworkIndicators),
+          CredentialActivity = ProcessCommandLine has_any (CredentialIndicators),
+          Source             = "MDE"
       | project
-          EventTime, HostName, AccountName, AccountDomain,
-          ChildProcess, ChildCmdLine, ParentProcess, ParentCmdLine,
-          NetworkActivity, CredentialActivity, Source;
-  // Branch 2: Windows Security Events (4688)
+          EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+          ChildCmdLine, ParentProcess, NetworkActivity, CredentialActivity, Source;
+  // Branch 2: Windows Security Events (Event ID 4688)
   let SecEvent_Results =
       SecurityEvent
-      | where TimeGenerated > ago(1h)
+      | where TimeGenerated > ago(Lookback)
       | where EventID == 4688
       | where ParentProcessName endswith "\\WmiPrvSE.exe"
-      | where NewProcessName has_any (SuspiciousChildProcesses)
+      // Extract leaf name FIRST, then filter with in~ (case-insensitive equality)
+      // Avoids unreliable has_any tokenisation on full paths containing \\ and .
+      | extend ChildProcess = tostring(split(NewProcessName, "\\")[-1])
+      | where ChildProcess in~ (SuspiciousChildProcesses)
       | where not(CommandLine has_any (AllowlistedCmdPatterns))
       | extend
-          AccountName       = SubjectUserName,
-          AccountDomain     = SubjectDomainName,
-          ChildProcess      = tostring(split(NewProcessName, "\\")[-1]),
-          ChildCmdLine      = CommandLine,
-          ParentProcess     = "WmiPrvSE.exe",
-          ParentCmdLine     = "",
-          HostName          = Computer,
-          EventTime         = TimeGenerated,
-          NetworkActivity   = CommandLine has_any (
-              "http://", "https://", "ftp://",
-              "Net.WebClient", "DownloadString", "IEX",
-              "Invoke-Expression", "/transfer", "-urlcache"
-          ),
-          CredentialActivity = CommandLine has_any (
-              "lsass", "mimikatz", "sekurlsa", "credential",
-              "pass", "hash", "dump", "sam", "ntds"
-          ),
-          Source = "SecurityEvent"
+          ChildCmdLine       = CommandLine,
+          AccountName        = SubjectUserName,
+          AccountDomain      = SubjectDomainName,
+          ParentProcess      = "WmiPrvSE.exe",
+          HostName           = Computer,
+          EventTime          = TimeGenerated,
+          NetworkActivity    = CommandLine has_any (NetworkIndicators),
+          CredentialActivity = CommandLine has_any (CredentialIndicators),
+          Source             = "SecurityEvent"
       | project
-          EventTime, HostName, AccountName, AccountDomain,
-          ChildProcess, ChildCmdLine, ParentProcess, ParentCmdLine,
-          NetworkActivity, CredentialActivity, Source;
-  // Union both sources
-  // Rank: credential activity is most urgent, then network, then plain execution
+          EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+          ChildCmdLine, ParentProcess, NetworkActivity, CredentialActivity, Source;
   union MDE_Results, SecEvent_Results
-  | extend RiskScore = case(
-      CredentialActivity == true, 3,
-      NetworkActivity    == true, 2,
-      true,                       1
-  )
+  | extend
+      HostName  = iif(HostName has '.', substring(HostName, 0, indexof(HostName, '.')), HostName),
+      DnsDomain = iif(HostName has '.', substring(HostName, indexof(HostName, '.') + 1), ''),
+      // Three-tier risk score: credential (3) > network (2) > plain execution (1)
+      RiskScore = case(
+          CredentialActivity == true, 3,
+          NetworkActivity    == true, 2,
+          true,                       1
+      )
   | sort by RiskScore desc, EventTime desc
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -175,15 +146,10 @@ entityMappings:
 alertDetailsOverride:
   alertDisplayNameFormat: "WMI spawned {{ChildProcess}} on {{HostName}}"
   alertDescriptionFormat: |
-    WmiPrvSE.exe spawned {{ChildProcess}} on {{HostName}} under account {{AccountName}}.
+    WmiPrvSE.exe spawned {{ChildProcess}} on {{HostName}} under {{AccountName}}.
     Child command line: {{ChildCmdLine}}
-    Network activity detected: {{NetworkActivity}}
-    Credential activity detected: {{CredentialActivity}}
-
-    WMI-spawned shells are a strong indicator of remote code execution or
-    lateral movement. Investigate the originating WMI subscription or
-    remote call using: Get-WMIObject -Class __EventFilter (PowerShell)
-    or check Windows Event ID 5857/5858/5860/5861 for WMI activity logs.
+    Network activity: {{NetworkActivity}}
+    Credential activity: {{CredentialActivity}}
 customDetails:
   ChildProcess: ChildProcess
   ChildCommandLine: ChildCmdLine
@@ -202,4 +168,4 @@ incidentConfiguration:
       - Account
 eventGroupingSettings:
   aggregationKind: SingleAlert
-version: 1.0.0
+version: 1.0.1
