@@ -288,7 +288,7 @@ For issues and support:
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 2.0.0 | 2026-06 | Initial release with CCF-based connectors |
+| 3.0.0 | 2026-07 | Initial release with CCF-based connectors, dropdown selectors for API domain and third-party exclusion, TMV1-Filter support, MITRE ATT&CK mappings, fixed parser metadata parentId issue |
 
 ---
 
