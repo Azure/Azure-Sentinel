@@ -1,191 +1,211 @@
 {
-    "name": "SAPLogServ-DCR",
-    "apiVersion": "2023-03-11",
-    "type": "Microsoft.Insights/dataCollectionRules",
-    "location": "{{location}}",
-    "properties": {
-        "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
-        "streamDeclarations": {
-            "Custom-SAPLogServ_CL": {
-                "columns": [
-                    {
-                        "name": "TimeGenerated",
-                        "type": "datetime"
-                    },
-                    {
-                        "name": "_raw",
-                        "type": "string"
-                    },
-                    {
-                        "name": "_time",
-                        "type": "real"
-                    },
-                    {
-                        "name": "source",
-                        "type": "string"
-                    },
-                    {
-                        "name": "host",
-                        "type": "string"
-                    },
-                    {
-                        "name": "sourcetype",
-                        "type": "string"
-                    },
-                    {
-                        "name": "index",
-                        "type": "string"
-                    },
-                    {
-                        "name": "cribl_breaker",
-                        "type": "string"
-                    },
-                    {
-                        "name": "region",
-                        "type": "string"
-                    },
-                    {
-                        "name": "clz_dir",
-                        "type": "string"
-                    },
-                    {
-                        "name": "clz_subdir",
-                        "type": "string"
-                    },
-                    {
-                        "name": "cribl_pipe",
-                        "type": "string"
-                    },
-                    {
-                        "name": "test",
-                        "type": "dynamic"
-                    },
-                    {
-                        "name": "test1",
-                        "type": "dynamic"
-                    }
-                ]
-            }
-        },
-        "destinations": {
-            "logAnalytics": [
-                {
-                    "workspaceResourceId": "{{workspaceResourceId}}",
-                    "name": "clv2ws1"
-                }
-            ]
-        },
-        "dataFlows": [
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"windows\" and clz_subdir == \"WinEventLog:Security\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Computer = host\n| extend EventData = _raw\n| extend EventSourceName = extract(@\"Provider Name='([^']+)'\", 1, _raw)\n| extend EventID = toint(extract(@\"<EventID[^>]*>(\\d+)\", 1, _raw))\n| extend Channel = extract(@\"<Channel>([^<]+)</Channel>\", 1, _raw)\n| extend Task = toint(extract(@\"<Task>(\\d+)</Task>\", 1, _raw))\n| extend Level = extract(@\"<Level>(\\d+)</Level>\", 1, _raw)\n| extend SourceSystem = \"SAPLogServ\"\n| project TimeGenerated, Computer, EventData, EventSourceName, EventID, Channel, Task, Level, SourceSystem",
-                "outputStream": "Microsoft-SecurityEvent"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"windows\" and clz_subdir != \"WinEventLog:Security\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Computer = host\n| extend RawEventData = _raw\n| extend Provider = extract(@\"Provider Name='([^']+)'\", 1, _raw)\n| extend EventID = toint(extract(@\"<EventID[^>]*>(\\d+)\", 1, _raw))\n| extend Channel = extract(@\"<Channel>([^<]+)</Channel>\", 1, _raw)\n| extend Task = toint(extract(@\"<Task>(\\d+)</Task>\", 1, _raw))\n| extend EventLevel = toint(extract(@\"<Level>(\\d+)</Level>\", 1, _raw))\n| extend ManagementGroupName = \"SAPLogServ\"\n| project TimeGenerated, Channel, Computer, RawEventData, Provider, EventID, Task, EventLevel, ManagementGroupName",
-                "outputStream": "Microsoft-WindowsEvent"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"linux\" and tolower(clz_subdir) !in (\"proxy\", \"pacemaker\", \"linux_secure\")\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend SyslogMessage = _raw\n| extend HostName = host\n| extend Computer = host\n| extend SourceSystem = \"Linux\"\n| extend CollectorHostName = \"SAPLogServ\"\n| extend Facility = case(tolower(clz_subdir) == \"cron\", \"cron\", tolower(clz_subdir) == \"slapd\", \"daemon\", tolower(clz_subdir) == \"sudolog\", \"authpriv\", \"\")\n| extend SeverityLevel = \"\"\n| extend ProcessName = case(tolower(clz_subdir) == \"sudolog\", \"sudo\", extract(@\"[+-]\\d{2}:\\d{2}\\s+\\S+\\s+(\\S+?)[\\[:]+\", 1, _raw))\n| extend ProcessID = toint(extract(@\"\\[(\\d+)\\]:\", 1, _raw))\n| project TimeGenerated, Computer, HostName, SourceSystem, CollectorHostName, Facility, SeverityLevel, SyslogMessage, ProcessName, ProcessID",
-                "outputStream": "Microsoft-Syslog"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"hana\" and clz_subdir == \"hanaaudit\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend SyslogMessage = _raw\n| extend HostName = host\n| extend Computer = host\n| extend SourceSystem = \"HANADB\"\n| extend CollectorHostName = \"SAPLogServ\"\n| extend Facility = \"\"\n| extend SeverityLevel = \"\"\n| extend ProcessName = extract(@\"[+-]\\d{2}:\\d{2}\\s+\\S+\\s+(\\S+?)[\\[:]+\", 1, _raw)\n| extend ProcessID = toint(extract(@\"\\[(\\d+)\\]:\", 1, _raw))\n| project TimeGenerated, Computer, HostName, SourceSystem, CollectorHostName, Facility, SeverityLevel, SyslogMessage, ProcessName, ProcessID",
-                "outputStream": "Microsoft-Syslog"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"dns\" and clz_subdir == \"binddns\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"Query\"\n| extend EventSubType = \"request\"\n| extend EventProduct = \"BIND\"\n| extend EventVendor = \"ISC\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.1.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend EventResultDetails = \"NA\"\n| extend EventSeverity = \"Informational\"\n| extend Dvc = host\n| extend DvcHostname = host\n| extend DnsQuery = extract(@\"query:\\s+(\\S+)\", 1, _raw)\n| extend SrcIpAddr = extract(@\"client\\s+\\S+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)\", 1, _raw)\n| extend Src = SrcIpAddr\n| extend SrcPortNumber = toint(extract(@\"client\\s+\\S+\\s+\\d+\\.\\d+\\.\\d+\\.\\d+#(\\d+)\", 1, _raw))\n| extend DnsQueryTypeName = extract(@\"\\s+IN\\s+(\\w+)\", 1, _raw)\n| extend DnsQueryClassName = \"IN\"\n| extend DnsFlagsRecursionDesired = extract(@\"query:\\s+\\S+\\s+IN\\s+\\S+\\s+([+-])\", 1, _raw) == \"+\"\n| extend DvcIpAddr = extract(@\"\\((\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\)\\s*$\", 1, _raw)\n| project TimeGenerated, EventType, EventSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, Dvc, DvcHostname, DnsQuery, Src, SrcIpAddr, SrcPortNumber, DnsQueryTypeName, DnsQueryClassName, DnsFlagsRecursionDesired, DvcIpAddr",
-                "outputStream": "Microsoft-ASimDnsActivityLogs"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"accesslog\"\n| parse kind=simple _raw with \"[\" TimeStr \"] \" ClientIp \" \\\"\" Method \" \" UrlPath \" HTTP/\" HttpVer \"\\\" {\" ReqHeaders \"} \" StatusCode:int \" \" RespBytes:long \" [\" Duration:int \"] {\" RespHeaders \"}\" *\n| where isnotempty(TimeStr) and isnotempty(Method)\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend HttpRequestMethod = Method\n| extend HttpVersion = HttpVer\n| extend DstBytes = RespBytes\n| extend NetworkDuration = Duration\n| extend HostHdr = extract(@\"\\[host\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend HostNoPort = tostring(split(HostHdr, \":\")[0])\n| extend HttpHost = HostHdr\n| extend DstFQDN = iff(HostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(HostNoPort contains \".\", HostNoPort, \"\"))\n| extend DstHostname = iff(HostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", HostNoPort, tostring(split(HostNoPort, \".\")[0]))\n| extend EventSeverity = \"Informational\"\n| extend HttpUserAgent = extract(@\"\\[user-agent\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend HttpReferrer = extract(@\"\\[referer\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend SrcBytes = tolong(extract(@\"\\[content-length\\s*:\\s*(\\d+)\\]\", 1, ReqHeaders))\n| extend HttpRequestXff = extract(@\"\\[x-forwarded-for\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend XffFirst = extract(@\"\\[x-forwarded-for\\s*:\\s*([^,\\]]+)\", 1, ReqHeaders)\n| extend SrcIpAddr = case(isnotempty(XffFirst), XffFirst, ClientIp != \"-\" and isnotempty(ClientIp), ClientIp, \"\")\n| extend Url = iff(isempty(HostHdr), UrlPath, strcat(\"https://\", HostHdr, UrlPath))\n| extend UrlOriginal = UrlPath\n| extend Dvc = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstHostname, DstFQDN, HttpHost, HttpUserAgent, HttpReferrer, HttpRequestXff, SrcBytes, DstBytes, NetworkDuration, Dvc",
-                "outputStream": "Microsoft-ASimWebSessionLogs"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"denylog\"\n| parse kind=simple _raw with TimeStr:string \" \" StatusCode:int \" \" UserName:string \" \" BytesIn:long \" \" BytesOut:long \" \" Duration:int \" \" * \" \" * \" \" * \" \" Rest:string\n| where isnotempty(TimeStr)\n| parse kind=simple Rest with SrcIp:string \" \" DstIp:string \" \" TlsVer:string \" \" HttpVer:string \" \" Method:string \" \" VHost:string \" \" UrlPath:string \" \" IcmHandler:string \" \" DenyAction:string\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventSubType = \"Blocked\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"Failure\"\n| extend EventSeverity = \"Low\"\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventOriginalResultDetails = IcmHandler\n| extend DenyActionRaw = extract(@\"(\\S+)\", 1, DenyAction)\n| extend DvcAction = case(DenyActionRaw has_cs \"BLOCK\", \"Block\", DenyActionRaw has_cs \"DROP\", \"Drop\", DenyActionRaw has_cs \"RESET\", \"Reset\", DenyActionRaw has_cs \"ALERT\", \"Alert\", \"Deny\")\n| extend HttpRequestMethod = Method\n| extend HttpVersion = iff(HttpVer startswith \"HTTP/\", substring(HttpVer, 5), HttpVer)\n| extend Url = iff(isempty(VHost), UrlPath, strcat(\"https://\", VHost, UrlPath))\n| extend UrlOriginal = UrlPath\n| extend SrcIpAddr = SrcIp\n| extend DstIpAddr = DstIp\n| extend HttpHost = VHost\n| extend DstFQDN = iff(VHost matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(VHost contains \".\", VHost, \"\"))\n| extend DstHostname = iff(VHost matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", VHost, tostring(split(VHost, \".\")[0]))\n| extend SrcBytes = BytesIn\n| extend DstBytes = BytesOut\n| extend NetworkDuration = Duration\n| extend AdditionalFields = pack(\"TlsVersion\", TlsVer)\n| extend SrcUsername = iff(UserName == \"-\", \"\", UserName)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend Dvc = host\n| project TimeGenerated, EventType, EventSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, EventOriginalResultDetails, DvcAction, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstIpAddr, DstHostname, DstFQDN, HttpHost, SrcBytes, DstBytes, NetworkDuration, AdditionalFields, SrcUsername, SrcUsernameType, Dvc",
-                "outputStream": "Microsoft-ASimWebSessionLogs"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"abap\" and clz_subdir == \"abapaudit\"\n| extend parsed = parse_json(_raw)\n| extend d = parsed.data\n| extend TimeGenerated = now()\n| extend UpdatedOn = todatetime(d.SLGDATTIM)\n| extend Instance = tostring(d.INSTANCE)\n| extend SystemId = tostring(d.SID), ClientId = tostring(d.SLGMAND), SystemNumber = extract(@\"_(\\d+)$\", 1, Instance), User = tostring(d.SLGUSER), Email = tostring(d.SMTP_ADDR), TransactionCode = tostring(d.SLGTC), AbapProgramName = tostring(d.SLGREPNA), AuditClassId = toreal(d.SUBCLASID), MessageId = tostring(d.MSG), MessageClass = tostring(d.AREA), MessageText = tostring(d.SAL_DATA), AlertSeverity = toreal(d.SEVERITY), AlertSeverityText = tostring(d.TXSEVERITY), SapProcessType = tostring(d.TASKTYPE), SapWorkProcessName = tostring(d.TASKNO), TerminalIpV6 = tostring(d.TERM_IPV6), SalDateChar8 = tostring(d.SAL_DATE), SalTimeChar6 = tostring(d.SAL_TIME), Variable1 = tostring(d.PARAM1), Variable2 = tostring(d.PARAM2), Variable3 = tostring(d.PARAM3), Variable4 = tostring(d.PARAMX), Host = tostring(parsed.sapHost), Computer = host, MonitorShortName = tostring(d.TXSUBCLSID), SourceSystem = \"SAPLogServ\"\n| project TimeGenerated, UpdatedOn, SystemId, Instance, SystemNumber, ClientId, User, Email, TransactionCode, AbapProgramName, AuditClassId, MessageId, MessageClass, MessageText, AlertSeverity, AlertSeverityText, SapProcessType, SapWorkProcessName, TerminalIpV6, SalDateChar8, SalTimeChar6, Variable1, Variable2, Variable3, Variable4, Host, Computer, MonitorShortName, SourceSystem",
-                "outputStream": "Microsoft-ABAPAuditLog"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"azure\" and clz_subdir == \"flowlogflowevent\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend t = split(_raw, \",\")\n| extend EventStartTime = (datetime(1970-01-01) + tolong(t[0]) * 1sec)\n| extend SrcIpAddr = tostring(t[1])\n| extend DstIpAddr = tostring(t[2])\n| extend SrcPortNumber = toint(t[3])\n| extend DstPortNumber = toint(t[4])\n| extend NetworkProtocol = case(tostring(t[5]) == \"T\", \"TCP\", tostring(t[5]) == \"U\", \"UDP\", tostring(t[5]))\n| extend NetworkDirection = case(tostring(t[6]) == \"I\", \"Inbound\", tostring(t[6]) == \"O\", \"Outbound\", tostring(t[6]))\n| extend EventOriginalSubType = tostring(t[7])\n| extend EventSubType = case(tostring(t[7]) == \"B\", \"Start\", tostring(t[7]) == \"E\", \"End\", \"\")\n| extend EncryptionRaw = tostring(t[8])\n| extend EncryptionStatus = case(EncryptionRaw == \"X\", \"Encrypted\", EncryptionRaw startswith \"NX\", \"Unencrypted\", \"Unknown\")\n| extend SrcPackets = tolong(t[9])\n| extend SrcBytes = tolong(t[10])\n| extend DstPackets = tolong(t[11])\n| extend DstBytes = tolong(t[12])\n| extend NetworkPackets = iff(isnull(SrcPackets), tolong(0), SrcPackets) + iff(isnull(DstPackets), tolong(0), DstPackets)\n| extend NetworkBytes = iff(isnull(SrcBytes), tolong(0), SrcBytes) + iff(isnull(DstBytes), tolong(0), DstBytes)\n| extend EventType = \"NetworkSession\"\n| extend EventProduct = \"AzureVNet\"\n| extend EventVendor = \"Microsoft\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.6\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend AdditionalFields = pack(\"EncryptionStatus\", EncryptionStatus, \"EncryptionRaw\", EncryptionRaw)\n| extend Dvc = host\n| project TimeGenerated, EventStartTime, EventType, EventSubType, EventOriginalSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, Dvc, NetworkDirection, NetworkProtocol, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, NetworkPackets, NetworkBytes, SrcPackets, SrcBytes, DstPackets, DstBytes, AdditionalFields",
-                "outputStream": "Microsoft-ASimNetworkSessionLogs"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where clz_dir == \"linux\" and tolower(clz_subdir) == \"proxy\" and _raw contains \"logformat=\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"Squid Proxy\"\n| extend EventVendor = \"Apache\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend StatusCode = toint(extract(@\"\\bstatus=(\\d+)\", 1, _raw))\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend EventOriginalResultDetails = extract(@\"vendor_action=(\\S+)\", 1, _raw)\n| extend DvcAction = iff(EventOriginalResultDetails contains \"DENIED\", \"Deny\", \"\")\n| extend HttpRequestMethod = extract(@\"http_method=(\\S+)\", 1, _raw)\n| extend Url = extract(@\"url=\"\"([^\"\"]+)\"\"\", 1, _raw)\n| extend SrcIpAddr = extract(@\"src_ip=(\\S+)\", 1, _raw)\n| extend SrcPortNumber = toint(extract(@\"src_port=(\\d+)\", 1, _raw))\n| extend DstIpAddr = extract(@\"dest_ip=(\\S+)\", 1, _raw)\n| extend DstPortNumber = toint(extract(@\"dest_port=(\\d+)\", 1, _raw))\n| extend SrcBytes = tolong(extract(@\"bytes_in=(\\d+)\", 1, _raw))\n| extend DstBytes = tolong(extract(@\"bytes_out=(\\d+)\", 1, _raw))\n| extend NetworkBytes = tolong(extract(@\"\\bbytes=(\\d+)\", 1, _raw))\n| extend NetworkDuration = toint(extract(@\"total_time_milliseconds=(\\d+)\", 1, _raw))\n| extend UserRaw = extract(@\"\\buser=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend SrcUsername = iff(UserRaw == \"-\", \"\", UserRaw)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend EventSeverity = \"Informational\"\n| extend UaRaw = extract(@\"http_user_agent=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend HttpUserAgent = iff(UaRaw == \"-\", \"\", UaRaw)\n| extend RefRaw = extract(@\"http_referrer=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend HttpReferrer = iff(RefRaw == \"-\", \"\", RefRaw)\n| extend Dvc = host\n| extend DvcHostname = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, EventOriginalResultDetails, DvcAction, HttpRequestMethod, Url, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, SrcBytes, DstBytes, NetworkBytes, NetworkDuration, SrcUsername, SrcUsernameType, HttpUserAgent, HttpReferrer, Dvc, DvcHostname",
-                "outputStream": "Microsoft-ASimWebSessionLogs"
-            },
-            {
-                "streams": [
-                    "Custom-SAPLogServ_CL"
-                ],
-                "destinations": [
-                    "clv2ws1"
-                ],
-                "transformKql": "source\n| where not(clz_dir == \"windows\")\n| where not(clz_dir == \"linux\" and tolower(clz_subdir) !in (\"proxy\", \"pacemaker\", \"linux_secure\"))\n| where not(clz_dir == \"hana\" and clz_subdir == \"hanaaudit\")\n| where not(clz_dir == \"dns\" and clz_subdir == \"binddns\")\n| where not(clz_dir == \"webdispatcher\" and tolower(clz_subdir) in (\"accesslog\", \"denylog\"))\n| where not(clz_dir == \"abap\" and clz_subdir == \"abapaudit\")\n| where not(clz_dir == \"azure\" and clz_subdir == \"flowlogflowevent\")\n| where not(clz_dir == \"linux\" and tolower(clz_subdir) == \"proxy\" and _raw contains \"logformat=\")\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Raw = _raw\n| extend UnixTimestamp = _time\n| project-away _raw, _time\n",
-                "outputStream": "Custom-SAPLogServ_CL"
-            }
+  "name": "SAPLogServ-DCR",
+  "apiVersion": "2023-03-11",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "location": "{{location}}",
+  "properties": {
+    "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+    "streamDeclarations": {
+      "Custom-SAPLogServ_CL": {
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "_raw",
+            "type": "string"
+          },
+          {
+            "name": "_time",
+            "type": "real"
+          },
+          {
+            "name": "source",
+            "type": "string"
+          },
+          {
+            "name": "host",
+            "type": "string"
+          },
+          {
+            "name": "sourcetype",
+            "type": "string"
+          },
+          {
+            "name": "index",
+            "type": "string"
+          },
+          {
+            "name": "cribl_breaker",
+            "type": "string"
+          },
+          {
+            "name": "region",
+            "type": "string"
+          },
+          {
+            "name": "clz_dir",
+            "type": "string"
+          },
+          {
+            "name": "clz_subdir",
+            "type": "string"
+          },
+          {
+            "name": "cribl_pipe",
+            "type": "string"
+          },
+          {
+            "name": "test",
+            "type": "dynamic"
+          },
+          {
+            "name": "test1",
+            "type": "dynamic"
+          }
         ]
-    }
+      }
+    },
+    "destinations": {
+      "logAnalytics": [
+        {
+          "workspaceResourceId": "{{workspaceResourceId}}",
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"windows\" and clz_subdir == \"WinEventLog:Security\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Computer = host\n| extend EventData = _raw\n| extend EventSourceName = extract(@\"Provider Name='([^']+)'\", 1, _raw)\n| extend EventID = toint(extract(@\"<EventID[^>]*>(\\d+)\", 1, _raw))\n| extend Channel = extract(@\"<Channel>([^<]+)</Channel>\", 1, _raw)\n| extend Task = toint(extract(@\"<Task>(\\d+)</Task>\", 1, _raw))\n| extend Level = extract(@\"<Level>(\\d+)</Level>\", 1, _raw)\n| extend SourceSystem = \"SAPLogServ\"\n| project TimeGenerated, Computer, EventData, EventSourceName, EventID, Channel, Task, Level, SourceSystem",
+        "outputStream": "Microsoft-SecurityEvent"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"windows\" and clz_subdir != \"WinEventLog:Security\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Computer = host\n| extend RawEventData = _raw\n| extend Provider = extract(@\"Provider Name='([^']+)'\", 1, _raw)\n| extend EventID = toint(extract(@\"<EventID[^>]*>(\\d+)\", 1, _raw))\n| extend Channel = extract(@\"<Channel>([^<]+)</Channel>\", 1, _raw)\n| extend Task = toint(extract(@\"<Task>(\\d+)</Task>\", 1, _raw))\n| extend EventLevel = toint(extract(@\"<Level>(\\d+)</Level>\", 1, _raw))\n| extend ManagementGroupName = \"SAPLogServ\"\n| project TimeGenerated, Channel, Computer, RawEventData, Provider, EventID, Task, EventLevel, ManagementGroupName",
+        "outputStream": "Microsoft-WindowsEvent"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"linux\" and tolower(clz_subdir) !in (\"proxy\", \"pacemaker\", \"linux_secure\")\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend SyslogMessage = _raw\n| extend HostName = host\n| extend Computer = host\n| extend SourceSystem = \"Linux\"\n| extend CollectorHostName = \"SAPLogServ\"\n| extend Facility = case(tolower(clz_subdir) == \"cron\", \"cron\", tolower(clz_subdir) == \"slapd\", \"daemon\", tolower(clz_subdir) == \"sudolog\", \"authpriv\", \"\")\n| extend SeverityLevel = \"\"\n| extend ProcessName = case(tolower(clz_subdir) == \"sudolog\", \"sudo\", extract(@\"[+-]\\d{2}:\\d{2}\\s+\\S+\\s+(\\S+?)[\\[:]+\", 1, _raw))\n| extend ProcessID = toint(extract(@\"\\[(\\d+)\\]:\", 1, _raw))\n| project TimeGenerated, Computer, HostName, SourceSystem, CollectorHostName, Facility, SeverityLevel, SyslogMessage, ProcessName, ProcessID",
+        "outputStream": "Microsoft-Syslog"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"hana\" and clz_subdir == \"hanaaudit\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend SyslogMessage = _raw\n| extend HostName = host\n| extend Computer = host\n| extend SourceSystem = \"HANADB\"\n| extend CollectorHostName = \"SAPLogServ\"\n| extend Facility = \"\"\n| extend SeverityLevel = \"\"\n| extend ProcessName = extract(@\"[+-]\\d{2}:\\d{2}\\s+\\S+\\s+(\\S+?)[\\[:]+\", 1, _raw)\n| extend ProcessID = toint(extract(@\"\\[(\\d+)\\]:\", 1, _raw))\n| project TimeGenerated, Computer, HostName, SourceSystem, CollectorHostName, Facility, SeverityLevel, SyslogMessage, ProcessName, ProcessID",
+        "outputStream": "Microsoft-Syslog"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"dns\" and clz_subdir == \"binddns\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"Query\"\n| extend EventSubType = \"request\"\n| extend EventProduct = \"BIND\"\n| extend EventVendor = \"ISC\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.1.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend EventResultDetails = \"NA\"\n| extend EventSeverity = \"Informational\"\n| extend Dvc = host\n| extend DvcHostname = host\n| extend DnsQuery = extract(@\"query:\\s+(\\S+)\", 1, _raw)\n| extend SrcIpAddr = extract(@\"client\\s+\\S+\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+)\", 1, _raw)\n| extend Src = SrcIpAddr\n| extend SrcPortNumber = toint(extract(@\"client\\s+\\S+\\s+\\d+\\.\\d+\\.\\d+\\.\\d+#(\\d+)\", 1, _raw))\n| extend DnsQueryTypeName = extract(@\"\\s+IN\\s+(\\w+)\", 1, _raw)\n| extend DnsQueryClassName = \"IN\"\n| extend DnsFlagsRecursionDesired = extract(@\"query:\\s+\\S+\\s+IN\\s+\\S+\\s+([+-])\", 1, _raw) == \"+\"\n| extend DvcIpAddr = extract(@\"\\((\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\)\\s*$\", 1, _raw)\n| project TimeGenerated, EventType, EventSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, Dvc, DvcHostname, DnsQuery, Src, SrcIpAddr, SrcPortNumber, DnsQueryTypeName, DnsQueryClassName, DnsFlagsRecursionDesired, DvcIpAddr",
+        "outputStream": "Microsoft-ASimDnsActivityLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"accesslog\"\n| parse kind=simple _raw with \"[\" TimeStr \"] \" ClientIp \" \\\"\" Method \" \" UrlPath \" HTTP/\" HttpVer \"\\\" {\" ReqHeaders \"} \" StatusCode:int \" \" RespBytes:long \" [\" Duration:int \"] {\" RespHeaders \"}\" *\n| where isnotempty(TimeStr) and isnotempty(Method)\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend HttpRequestMethod = Method\n| extend HttpVersion = HttpVer\n| extend DstBytes = RespBytes\n| extend NetworkDuration = Duration\n| extend HostHdr = extract(@\"\\[host\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend HostNoPort = tostring(split(HostHdr, \":\")[0])\n| extend HttpHost = HostHdr\n| extend DstFQDN = iff(HostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(HostNoPort contains \".\", HostNoPort, \"\"))\n| extend DstHostname = iff(HostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", HostNoPort, tostring(split(HostNoPort, \".\")[0]))\n| extend EventSeverity = \"Informational\"\n| extend HttpUserAgent = extract(@\"\\[user-agent\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend HttpReferrer = extract(@\"\\[referer\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend SrcBytes = tolong(extract(@\"\\[content-length\\s*:\\s*(\\d+)\\]\", 1, ReqHeaders))\n| extend HttpRequestXff = extract(@\"\\[x-forwarded-for\\s*:\\s*([^\\]]+)\\]\", 1, ReqHeaders)\n| extend XffFirst = extract(@\"\\[x-forwarded-for\\s*:\\s*([^,\\]]+)\", 1, ReqHeaders)\n| extend SrcIpAddr = case(isnotempty(XffFirst), XffFirst, ClientIp != \"-\" and isnotempty(ClientIp), ClientIp, \"\")\n| extend Url = iff(isempty(HostHdr), UrlPath, strcat(\"https://\", HostHdr, UrlPath))\n| extend UrlOriginal = UrlPath\n| extend Dvc = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstHostname, DstFQDN, HttpHost, HttpUserAgent, HttpReferrer, HttpRequestXff, SrcBytes, DstBytes, NetworkDuration, Dvc",
+        "outputStream": "Microsoft-ASimWebSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"accesslog\" and _raw contains \" sent \" and _raw contains \" ms to \"\n| parse kind=simple _raw with \"[\" TimeStr \"] \" ClientIp \" \" FwdIp \" - \" UserRaw \" to \" VHost \" \\\"\" Method \" \" UrlPath \" HTTP/\" HttpVer \"\\\" \" Rest:string\n| where isnotempty(TimeStr) and isnotempty(Method)\n| parse kind=simple Rest with StatusCode:int \" \" TlsVer \" \" Scheme \" sent \" RespBytes:long \" bytes in \" Duration:int \" ms to \" SysId \" on \" Handler\n| where isnotnull(StatusCode) and isnotempty(TlsVer)\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend EventSeverity = \"Informational\"\n| extend HttpRequestMethod = Method\n| extend HttpVersion = HttpVer\n| extend DstBytes = RespBytes\n| extend NetworkDuration = Duration\n| extend HttpHost = VHost\n| extend VHostNoPort = tostring(split(VHost, \":\")[0])\n| extend DstFQDN = iff(VHostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(VHostNoPort contains \".\", VHostNoPort, \"\"))\n| extend DstHostname = iff(VHostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", VHostNoPort, tostring(split(VHostNoPort, \".\")[0]))\n| extend SrcIpAddr = iff(FwdIp !in (\"-\", \"\"), FwdIp, iff(ClientIp == \"-\", \"\", ClientIp))\n| extend HttpRequestXff = iff(FwdIp == \"-\", \"\", FwdIp)\n| extend SrcUsername = iff(UserRaw == \"-\", \"\", UserRaw)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend AdditionalFields = pack(\"TlsVersion\", TlsVer, \"Scheme\", Scheme, \"BackendSystem\", SysId, \"IcmHandler\", Handler)\n| extend Url = strcat(\"https://\", VHost, UrlPath)\n| extend UrlOriginal = UrlPath\n| extend Dvc = host\n| extend DvcHostname = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstHostname, DstFQDN, HttpHost, HttpRequestXff, SrcUsername, SrcUsernameType, DstBytes, NetworkDuration, AdditionalFields, Dvc, DvcHostname",
+        "outputStream": "Microsoft-ASimWebSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"denylog\"\n| parse kind=simple _raw with TimeStr:string \" \" StatusCode:int \" \" UserName:string \" \" BytesIn:long \" \" BytesOut:long \" \" Duration:int \" \" * \" \" * \" \" * \" \" Rest:string\n| where isnotempty(TimeStr)\n| parse kind=simple Rest with SrcIp:string \" \" DstIp:string \" \" TlsVer:string \" \" HttpVer:string \" \" Method:string \" \" VHost:string \" \" UrlPath:string \" \" IcmHandler:string \" \" DenyAction:string\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventSubType = \"Blocked\"\n| extend EventProduct = \"SAP Web Dispatcher\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventResult = \"Failure\"\n| extend EventSeverity = \"Low\"\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventOriginalResultDetails = IcmHandler\n| extend DenyActionRaw = extract(@\"(\\S+)\", 1, DenyAction)\n| extend DvcAction = case(DenyActionRaw has_cs \"BLOCK\", \"Block\", DenyActionRaw has_cs \"DROP\", \"Drop\", DenyActionRaw has_cs \"RESET\", \"Reset\", DenyActionRaw has_cs \"ALERT\", \"Alert\", \"Deny\")\n| extend HttpRequestMethod = Method\n| extend HttpVersion = iff(HttpVer startswith \"HTTP/\", substring(HttpVer, 5), HttpVer)\n| extend Url = iff(isempty(VHost), UrlPath, strcat(\"https://\", VHost, UrlPath))\n| extend UrlOriginal = UrlPath\n| extend SrcIpAddr = SrcIp\n| extend DstIpAddr = DstIp\n| extend HttpHost = VHost\n| extend DstFQDN = iff(VHost matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(VHost contains \".\", VHost, \"\"))\n| extend DstHostname = iff(VHost matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", VHost, tostring(split(VHost, \".\")[0]))\n| extend SrcBytes = BytesIn\n| extend DstBytes = BytesOut\n| extend NetworkDuration = Duration\n| extend AdditionalFields = pack(\"TlsVersion\", TlsVer)\n| extend SrcUsername = iff(UserName == \"-\", \"\", UserName)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend Dvc = host\n| project TimeGenerated, EventType, EventSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, EventOriginalResultDetails, DvcAction, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstIpAddr, DstHostname, DstFQDN, HttpHost, SrcBytes, DstBytes, NetworkDuration, AdditionalFields, SrcUsername, SrcUsernameType, Dvc",
+        "outputStream": "Microsoft-ASimWebSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"abap\" and clz_subdir == \"abapaudit\"\n| extend parsed = parse_json(_raw)\n| extend d = parsed.data\n| extend TimeGenerated = now()\n| extend UpdatedOn = todatetime(d.SLGDATTIM)\n| extend Instance = tostring(d.INSTANCE)\n| extend SystemId = tostring(d.SID), ClientId = tostring(d.SLGMAND), SystemNumber = extract(@\"_(\\d+)$\", 1, Instance), User = tostring(d.SLGUSER), Email = tostring(d.SMTP_ADDR), TransactionCode = tostring(d.SLGTC), AbapProgramName = tostring(d.SLGREPNA), AuditClassId = toreal(d.SUBCLASID), MessageId = tostring(d.MSG), MessageClass = tostring(d.AREA), MessageText = tostring(d.SAL_DATA), AlertSeverity = toreal(d.SEVERITY), AlertSeverityText = tostring(d.TXSEVERITY), SapProcessType = tostring(d.TASKTYPE), SapWorkProcessName = tostring(d.TASKNO), TerminalIpV6 = tostring(d.TERM_IPV6), SalDateChar8 = tostring(d.SAL_DATE), SalTimeChar6 = tostring(d.SAL_TIME), Variable1 = tostring(d.PARAM1), Variable2 = tostring(d.PARAM2), Variable3 = tostring(d.PARAM3), Variable4 = tostring(d.PARAMX), Host = tostring(parsed.sapHost), Computer = host, MonitorShortName = tostring(d.TXSUBCLSID), SourceSystem = \"SAPLogServ\"\n| project TimeGenerated, UpdatedOn, SystemId, Instance, SystemNumber, ClientId, User, Email, TransactionCode, AbapProgramName, AuditClassId, MessageId, MessageClass, MessageText, AlertSeverity, AlertSeverityText, SapProcessType, SapWorkProcessName, TerminalIpV6, SalDateChar8, SalTimeChar6, Variable1, Variable2, Variable3, Variable4, Host, Computer, MonitorShortName, SourceSystem",
+        "outputStream": "Microsoft-ABAPAuditLog"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"abap\" and tolower(clz_subdir) == \"httpaccesslog\"\n| where _raw contains \"HTTP/\"\n| extend parts = split(_raw, '\"')\n| extend Pre = tostring(parts[0])\n| extend Req = tostring(parts[1])\n| extend Post = tostring(parts[2])\n| extend Method = extract(@\"^(\\S+)\\s\", 1, Req)\n| extend StatusCode = toint(extract(@\"^\\s*(\\d+)\\s\", 1, Post))\n| where isnotempty(Method) and isnotnull(StatusCode)\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend UrlPath = extract(@\"^\\S+\\s+(\\S+)\\s+HTTP/\", 1, Req)\n| extend HttpVer = extract(@\"HTTP/([\\d.]+)\", 1, Req)\n| extend ClientIp = extract(@\"^\\[[^\\]]+\\]\\s+(\\S+)\", 1, Pre)\n| extend UserRaw = extract(@\"^\\[[^\\]]+\\]\\s+\\S+\\s+(.*?)\\s+-\\s*$\", 1, Pre)\n| extend RespBytes = tolong(extract(@\"^\\s*\\d+\\s+(\\d+)\\s\", 1, Post))\n| extend Duration = toint(extract(@\"(\\d+)ms\", 1, Post))\n| extend VHost = extract(@\"\\d+ms\\s+(\\S+)\", 1, Post)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"SAP Internet Communication Manager\"\n| extend EventVendor = \"SAP\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend EventSeverity = \"Informational\"\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend HttpRequestMethod = Method\n| extend HttpVersion = HttpVer\n| extend DstBytes = RespBytes\n| extend NetworkDuration = Duration\n| extend HttpHost = iff(VHost == \"-\" or isempty(VHost), \"\", VHost)\n| extend VHostNoPort = tostring(split(HttpHost, \":\")[0])\n| extend DstFQDN = iff(VHostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", \"\", iff(VHostNoPort contains \".\", VHostNoPort, \"\"))\n| extend DstHostname = iff(VHostNoPort matches regex @\"^\\d+\\.\\d+\\.\\d+\\.\\d+$\", VHostNoPort, tostring(split(VHostNoPort, \".\")[0]))\n| extend SrcIpAddr = iff(ClientIp == \"-\" or isempty(ClientIp), \"\", ClientIp)\n| extend SrcUsername = iff(UserRaw == \"-\" or isempty(UserRaw), \"\", UserRaw)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend Url = iff(isempty(HttpHost), UrlPath, strcat(\"https://\", HttpHost, UrlPath))\n| extend UrlOriginal = UrlPath\n| extend Dvc = host\n| extend DvcHostname = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, HttpRequestMethod, HttpVersion, Url, UrlOriginal, SrcIpAddr, DstHostname, DstFQDN, HttpHost, SrcUsername, SrcUsernameType, DstBytes, NetworkDuration, Dvc, DvcHostname",
+        "outputStream": "Microsoft-ASimWebSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"azure\" and clz_subdir == \"flowlogflowevent\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend t = split(_raw, \",\")\n| extend EventStartTime = (datetime(1970-01-01) + tolong(t[0]) * 1sec)\n| extend SrcIpAddr = tostring(t[1])\n| extend DstIpAddr = tostring(t[2])\n| extend SrcPortNumber = toint(t[3])\n| extend DstPortNumber = toint(t[4])\n| extend NetworkProtocol = case(tostring(t[5]) == \"T\", \"TCP\", tostring(t[5]) == \"U\", \"UDP\", tostring(t[5]))\n| extend NetworkDirection = case(tostring(t[6]) == \"I\", \"Inbound\", tostring(t[6]) == \"O\", \"Outbound\", tostring(t[6]))\n| extend EventOriginalSubType = tostring(t[7])\n| extend EventSubType = case(tostring(t[7]) == \"B\", \"Start\", tostring(t[7]) == \"E\", \"End\", \"\")\n| extend EncryptionRaw = tostring(t[8])\n| extend EncryptionStatus = case(EncryptionRaw == \"X\", \"Encrypted\", EncryptionRaw startswith \"NX\", \"Unencrypted\", \"Unknown\")\n| extend SrcPackets = tolong(t[9])\n| extend SrcBytes = tolong(t[10])\n| extend DstPackets = tolong(t[11])\n| extend DstBytes = tolong(t[12])\n| extend NetworkPackets = iff(isnull(SrcPackets), tolong(0), SrcPackets) + iff(isnull(DstPackets), tolong(0), DstPackets)\n| extend NetworkBytes = iff(isnull(SrcBytes), tolong(0), SrcBytes) + iff(isnull(DstBytes), tolong(0), DstBytes)\n| extend EventType = \"NetworkSession\"\n| extend EventProduct = \"AzureVNet\"\n| extend EventVendor = \"Microsoft\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.6\"\n| extend EventCount = toint(1)\n| extend EventResult = \"NA\"\n| extend AdditionalFields = pack(\"EncryptionStatus\", EncryptionStatus, \"EncryptionRaw\", EncryptionRaw)\n| extend Dvc = host\n| project TimeGenerated, EventStartTime, EventType, EventSubType, EventOriginalSubType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, Dvc, NetworkDirection, NetworkProtocol, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, NetworkPackets, NetworkBytes, SrcPackets, SrcBytes, DstPackets, DstBytes, AdditionalFields",
+        "outputStream": "Microsoft-ASimNetworkSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where clz_dir == \"linux\" and tolower(clz_subdir) == \"proxy\" and _raw contains \"logformat=\"\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend EventType = \"HTTPsession\"\n| extend EventProduct = \"Squid Proxy\"\n| extend EventVendor = \"Apache\"\n| extend EventOwner = \"SAPLogServ\"\n| extend EventSchemaVersion = \"0.2.7\"\n| extend EventCount = toint(1)\n| extend StatusCode = toint(extract(@\"\\bstatus=(\\d+)\", 1, _raw))\n| extend EventResultDetails = tostring(StatusCode)\n| extend EventResult = case(StatusCode >= 200 and StatusCode < 400, \"Success\", StatusCode >= 400, \"Failure\", \"NA\")\n| extend EventOriginalResultDetails = extract(@\"vendor_action=(\\S+)\", 1, _raw)\n| extend DvcAction = iff(EventOriginalResultDetails contains \"DENIED\", \"Deny\", \"\")\n| extend HttpRequestMethod = extract(@\"http_method=(\\S+)\", 1, _raw)\n| extend Url = extract(@\"url=\"\"([^\"\"]+)\"\"\", 1, _raw)\n| extend SrcIpAddr = extract(@\"src_ip=(\\S+)\", 1, _raw)\n| extend SrcPortNumber = toint(extract(@\"src_port=(\\d+)\", 1, _raw))\n| extend DstIpAddr = extract(@\"dest_ip=(\\S+)\", 1, _raw)\n| extend DstPortNumber = toint(extract(@\"dest_port=(\\d+)\", 1, _raw))\n| extend SrcBytes = tolong(extract(@\"bytes_in=(\\d+)\", 1, _raw))\n| extend DstBytes = tolong(extract(@\"bytes_out=(\\d+)\", 1, _raw))\n| extend NetworkBytes = tolong(extract(@\"\\bbytes=(\\d+)\", 1, _raw))\n| extend NetworkDuration = toint(extract(@\"total_time_milliseconds=(\\d+)\", 1, _raw))\n| extend UserRaw = extract(@\"\\buser=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend SrcUsername = iff(UserRaw == \"-\", \"\", UserRaw)\n| extend SrcUsernameType = iff(isnotempty(SrcUsername), \"Simple\", \"\")\n| extend EventSeverity = \"Informational\"\n| extend UaRaw = extract(@\"http_user_agent=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend HttpUserAgent = iff(UaRaw == \"-\", \"\", UaRaw)\n| extend RefRaw = extract(@\"http_referrer=\"\"([^\"\"]*)\"\"\", 1, _raw)\n| extend HttpReferrer = iff(RefRaw == \"-\", \"\", RefRaw)\n| extend Dvc = host\n| extend DvcHostname = host\n| project TimeGenerated, EventType, EventProduct, EventVendor, EventOwner, EventSchemaVersion, EventCount, EventResult, EventResultDetails, EventSeverity, EventOriginalResultDetails, DvcAction, HttpRequestMethod, Url, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, SrcBytes, DstBytes, NetworkBytes, NetworkDuration, SrcUsername, SrcUsernameType, HttpUserAgent, HttpReferrer, Dvc, DvcHostname",
+        "outputStream": "Microsoft-ASimWebSessionLogs"
+      },
+      {
+        "streams": [
+          "Custom-SAPLogServ_CL"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| where not(clz_dir == \"windows\")\n| where not(clz_dir == \"linux\" and tolower(clz_subdir) !in (\"proxy\", \"pacemaker\", \"linux_secure\"))\n| where not(clz_dir == \"hana\" and clz_subdir == \"hanaaudit\")\n| where not(clz_dir == \"dns\" and clz_subdir == \"binddns\")\n| where not(clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"denylog\")\n| where not(clz_dir == \"webdispatcher\" and tolower(clz_subdir) == \"accesslog\" and (_raw contains \"{[\" or (_raw contains \" sent \" and _raw contains \" ms to \")))\n| where not(clz_dir == \"abap\" and clz_subdir == \"abapaudit\")\n| where not(clz_dir == \"abap\" and tolower(clz_subdir) == \"httpaccesslog\" and _raw contains \"HTTP/\")\n| where not(clz_dir == \"azure\" and clz_subdir == \"flowlogflowevent\")\n| where not(clz_dir == \"linux\" and tolower(clz_subdir) == \"proxy\" and _raw contains \"logformat=\")\n| extend TimeGenerated = (datetime(1970-01-01) + _time * 1sec)\n| extend Raw = _raw\n| extend UnixTimestamp = _time\n| project-away _raw, _time\n",
+        "outputStream": "Custom-SAPLogServ_CL"
+      }
+    ]
+  }
 }
