@@ -1,0 +1,170 @@
+{
+  "name": "ValenceSecurityCcfPush",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "ValenceSecurityCcfPush",
+      "title": "Valence Security",
+      "publisher": "Valence Security",
+      "logo": "ValenceSecurityLogo.svg",
+      "descriptionMarkdown": "The [Valence Security](https://valencesecurity.com/) connector enables ingestion of Valence SaaS security alerts and audit logs into Microsoft Sentinel using the Codeless Connector Framework (CCF) Push pattern. Valence's unified SSPM platform detects SaaS misconfigurations, identity risks, and data exposure across Microsoft 365, Google Workspace, Salesforce, GitHub, Slack, and more. This connector streams `ValenceAlerts_CL` (security alerts) and `ValenceAuditLogs_CL` (platform audit trail) into Microsoft Sentinel for analysis, alerting, and visualization.",
+      "graphQueriesTableName": "ValenceAlerts_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total alerts received",
+          "legend": "ValenceAlerts_CL",
+          "baseQuery": "ValenceAlerts_CL"
+        },
+        {
+          "metricName": "Total audit log events received",
+          "legend": "ValenceAuditLogs_CL",
+          "baseQuery": "ValenceAuditLogs_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All Valence Security alerts",
+          "query": "ValenceAlerts_CL\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Critical Valence Security alerts",
+          "query": "ValenceAlerts_CL\n | where severity == \"Critical\"\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Valence platform audit logs",
+          "query": "ValenceAuditLogs_CL\n | sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "ValenceAlerts_CL",
+          "lastDataReceivedQuery": "ValenceAlerts_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "ValenceAuditLogs_CL",
+          "lastDataReceivedQuery": "ValenceAuditLogs_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "union ValenceAlerts_CL, ValenceAuditLogs_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires the Entra ID Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to assign the Monitoring Metrics Publisher role on the data collection rule (DCR). Typically requires the Azure RBAC Owner or User Access Administrator role."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "Clicking **Deploy push connector resources** will create the Data Collection Endpoint (DCE), Data Collection Rule (DCR), and the custom log tables (`ValenceAlerts_CL` and `ValenceAuditLogs_CL`). It will also create a Microsoft Entra app registration with a client secret and grant it the Monitoring Metrics Publisher role on the DCR, enabling Valence to push data securely via the Azure Monitor Logs Ingestion API.\n\nThis replaces the legacy Workspace ID and Primary Key configuration — **no shared keys are used**.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated deployment of Azure resources\nClicking **Deploy push connector resources** creates the DCE, DCR, and custom log tables. An Entra app registration with a client secret is also created and granted the Monitoring Metrics Publisher role on the DCR."
+              }
+            },
+            {
+              "parameters": {
+                "label": "Deploy push connector resources",
+                "applicationDisplayName": "Valence Security Sentinel Integration"
+              },
+              "type": "DeployPushConnectorButton"
+            }
+          ]
+        },
+        {
+          "title": "2. Configure the Valence Platform",
+          "description": "Provide the values below to your Valence Security administrator. In the Valence Platform, navigate to **Settings → Configuration → SIEM Integration → Microsoft Sentinel** and enter these values to enable the CCF Push integration.",
+          "instructions": [
+            {
+              "parameters": {
+                "label": "Tenant ID",
+                "fillWith": ["TenantId"]
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Entra Application (Client) ID",
+                "fillWith": ["ApplicationId"],
+                "placeholder": "Deploy push connector to get the Application ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Entra Application Secret",
+                "fillWith": ["ApplicationSecret"],
+                "placeholder": "Deploy push connector to get the Application Secret"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Data Collection Endpoint URI (LogIngestionURL)",
+                "fillWith": ["DataCollectionEndpoint"],
+                "placeholder": "Deploy push connector to get the DCE URI"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "DCR Immutable ID",
+                "fillWith": ["DataCollectionRuleId"],
+                "placeholder": "Deploy push connector to get the DCR Immutable ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Alerts Stream Name",
+                "value": "Custom-ValenceAlerts"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Audit Logs Stream Name",
+                "value": "Custom-ValenceAuditLogs"
+              },
+              "type": "CopyableLabel"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
