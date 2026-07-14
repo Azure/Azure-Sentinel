@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.1.0       | 08-06-2026                     |Reworked BTP Cloud Integration artifact deployment rule to use audit.configuration events with richer artifact, actor, and tenant context|
 | 3.0.12      | 29-12-2025                     |Updated grid view UI with new subaccount onboarding properties|
 | 3.0.11      | 29-12-2025                     |Added queryWindowDelayInMin for SAP log delays and included the SAP CIS analytic rules.|
 | 3.0.10      | 03-10-2025                     |Resolves data connector duplicate handle pagination errors|

@@ -1,0 +1,52 @@
+id: 4bfbe654-d961-4712-b2a3-f1fd7eaa9da3
+name: AI Agents - Missing Tools in Instructions
+description: |
+  This query identifies AI agents that have tools configured which are not mentioned in their instructions.
+  When tools are enabled without being explicitly referenced, the agent may use capabilities that are not clearly governed or expected, increasing the risk of unintended behavior or misuse.
+  Recommended Action: Ensure all configured tools are clearly documented in the agent's instructions, including their purpose and usage constraints. Regularly review instructions and tool configurations to maintain alignment and reduce security risks.
+requiredDataConnectors: []
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1499
+  - T1562
+query: |
+  let IdentityIdtoUPN = materialize (
+      IdentityInfo
+      | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
+      | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn);
+  let LatestAgents = materialize (
+      AgentsInfo
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where LifecycleStatus != "Deleted");
+  let AgentToolNames =
+      LatestAgents
+      | where array_length(DeclaredTools) > 0
+      | mv-expand Tool = DeclaredTools
+      | extend ToolName = tostring(Tool.name)
+      | where isnotempty(ToolName)
+      | summarize ToolNames = make_set(ToolName) by AgentId;
+  LatestAgents
+  | where isnotempty(Instructions) and Instructions != "N/A"
+  | join kind=inner AgentToolNames on AgentId
+  | mv-apply ToolName = ToolNames to typeof(string) on (
+      where Instructions !has ToolName
+      | summarize MissingTools = make_list(ToolName))
+  | where array_length(MissingTools) > 0
+  | extend OwnerId = tostring(Owners[0])
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | project-away AgentId1, ToolNames, OwnerId, AccountObjectId
+  | project-reorder CreatedDateTime, AgentId, Name, Platform, Instructions, MissingTools, OwnerUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0
