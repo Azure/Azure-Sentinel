@@ -1,0 +1,80 @@
+id: d2e5f8a3-9c4b-4d7e-8f6a-3b2c4d5e6f7a
+name: StealthTalk - Account takeover sequence
+description: |
+  Identifies the classic three-stage account-takeover pattern for the same StealthTalk user within 24 hours: off-hours login, new device registration, and geo-anomaly login. All three together is high-confidence evidence of credential compromise.
+description-detailed: |
+  Materialises per-user lists of NewDeviceLogin and GeoAnomalyLogin events, joins them to
+  OffHoursLogin events on UserId, then uses mv-apply to expand and time-window-filter only
+  the relevant per-BF candidates - avoiding the cartesian fan-out a plain three-way join
+  would produce on high-volume users. Returns one row per matching triple with per-event
+  timestamps (T_offhours, T_device, T_geo), new device ID, login country and source IP, plus
+  computed StartTime/EndTime markers that bracket the full takeover sequence for SOC triage.
+  Any single one of these events is suspicious; all three for the same account inside a day
+  is high-confidence evidence of compromise (initial credential test -> attacker enrols
+  their own client -> attacker authenticates from a different region).
+requiredDataConnectors:
+  - connectorId: StealthTalkAnomalousAuth
+    dataTypes:
+      - StealthTalkAnomalousAuth_CL
+tactics:
+  - InitialAccess
+  - Persistence
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1098
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+query: |
+  let lookback   = 7d;
+  let TimeWindow = 24h;
+  let offHours = StealthTalkAnomalousAuth_CL
+      | where TimeGenerated >= ago(lookback)
+      | where EventType == "OffHoursLogin"
+      | project UserId, T_offhours = TimeGenerated;
+  let newDeviceByUser = materialize(
+      StealthTalkAnomalousAuth_CL
+      | where TimeGenerated >= ago(lookback)
+      | where EventType == "NewDeviceLogin"
+      | project UserId, T_device = TimeGenerated, NewDeviceId
+      | summarize DeviceEvents = make_list(pack("T_device", T_device, "NewDeviceId", NewDeviceId)) by UserId
+  );
+  let geoAnomalyByUser = materialize(
+      StealthTalkAnomalousAuth_CL
+      | where TimeGenerated >= ago(lookback)
+      | where EventType == "GeoAnomalyLogin"
+      | project UserId, T_geo = TimeGenerated, LoginCountry, IpAddress
+      | summarize GeoEvents = make_list(pack("T_geo", T_geo, "LoginCountry", LoginCountry, "IpAddress", IpAddress)) by UserId
+  );
+  offHours
+  | join kind=inner newDeviceByUser on UserId
+  | join kind=inner geoAnomalyByUser on UserId
+  | mv-apply DeviceEvent = DeviceEvents on (
+      extend
+          T_device    = todatetime(DeviceEvent.T_device),
+          NewDeviceId = tostring(DeviceEvent.NewDeviceId)
+      | where T_device between ((T_offhours - TimeWindow) .. (T_offhours + TimeWindow))
+    )
+  | mv-apply GeoEvent = GeoEvents on (
+      extend
+          T_geo        = todatetime(GeoEvent.T_geo),
+          LoginCountry = tostring(GeoEvent.LoginCountry),
+          IpAddress    = tostring(GeoEvent.IpAddress)
+      | where T_geo between ((T_offhours - TimeWindow) .. (T_offhours + TimeWindow))
+    )
+  | project UserId, T_offhours, T_device, T_geo, NewDeviceId, LoginCountry, IpAddress
+  | extend
+      AlertName = "AccountTakeoverSequence",
+      RiskLevel = "Critical",
+      StartTime = min_of(T_offhours, T_device, T_geo),
+      EndTime   = max_of(T_offhours, T_device, T_geo)
+  | distinct UserId, AlertName, RiskLevel, LoginCountry, IpAddress, NewDeviceId, T_offhours, T_device, T_geo, StartTime, EndTime
+version: 1.0.0
