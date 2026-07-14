@@ -75,6 +75,10 @@ function GetStartTime($CheckpointFile, $timeInterval){
     $firstStartTimeRecord = [datetime]::UtcNow.AddMinutes(-$timeInterval).ToString("yyyy-MM-ddTHH:mm:ssZ")
 
     if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
+        $checkpointDir = Split-Path -Path $CheckpointFile -Parent
+        if (-not (Test-Path -Path $checkpointDir)) {
+            New-Item -ItemType Directory -Path $checkpointDir -Force | Out-Null
+        }
         $CheckpointLog = @{}
         $CheckpointLog.Add('LastSuccessfulTime', $firstStartTimeRecord)
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
@@ -110,7 +114,7 @@ function UrlValidation{
 function QualysKB {
 
     $cwd = (Get-Location).Drive.Root
-    $CheckpointFile = "$($cwd)home\site\QualysKBCheckpoint.csv"
+    $CheckpointFile = "$($cwd)home\data\QualysKBCheckpoint.csv"
     $endTime = [datetime]::UtcNow
     $customerId = $env:workspaceId
     $sharedKey = $env:workspacekey
