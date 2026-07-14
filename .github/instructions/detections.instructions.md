@@ -58,7 +58,6 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 
 #### **description** (Rule Description)
 - **Required**: Yes (all rule types)
-- **Format**: Comprehensive narrative text (max 255 characters)
 - **Opening**: Must start with "This query searches for" or "Identifies"
 - **Length**: Should be maximum 5 sentences
 - **Rules**:

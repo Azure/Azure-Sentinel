@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                               |
 |-------------|--------------------------------|------------------------------------------------- |
+| 3.1.3       | 07-07-2026                     |  Promoted the Imperva Cloud WAF CCF Connector to General Availability |
+| 3.1.2       | 10-06-2026                     |  Modify to use `CommonEventFormatTransformer` to fix data ingestion issues |
+| 3.1.1       | 10-04-2026                     |  Add `"CsvEscapeMode": "NoEscape"` to prevent logs with embedded JSON from being dropped during ingestion |
 | 3.1.0       | 30-03-2026                     |  Promoted the Imperva Cloud WAF CCF connector to Public Preview |
 | 3.0.2       | 06-06-2025                     |  Migrated the **Function app** connector to **CCF** Data connector and updated **Parser**     |
 | 3.0.1       | 07-11-2024                     |  Added existing ***Parser* into the solution     | 

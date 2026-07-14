@@ -1,11 +1,11 @@
 id: 18667b4a-18e5-4982-ba75-92ace62bc79c
 name: Rare MFA Operations (Okta)
 description: |
-  'MFA prevents credential compromise. This query checks for rare MFA operations like deactivation, update, reset, and bypass attempts often used by adversaries to compromise networks/accounts.'
+  MFA operations such as deactivation, update, reset, and bypass attempts can indicate account compromise or adversary attempts to weaken authentication controls.
 description-detailed: |
-  'Multi-Factor Authentication (MFA) helps prevent credential compromise.This query searches for rare MFA operations like deactivating, updating, resetting and attempts to bypass MFA.
-   Adversaries often attempt these operations to compromise networks and high-value accounts.Please verify that the behavior is known and filter out anything that is expected.
-   Refrence: https://developer.okta.com/docs/reference/api/event-types/'
+  Multi-Factor Authentication (MFA) helps prevent credential compromise. This query searches for rare MFA operations like deactivating, updating, resetting and attempts to bypass MFA.
+  Adversaries often attempt these operations to compromise networks and high-value accounts. Please verify that the behavior is known and filter out anything that is expected.
+  Reference: https://developer.okta.com/docs/reference/api/event-types/
 requiredDataConnectors:
   - connectorId: OktaSSO
     dataTypes: 
@@ -14,29 +14,41 @@ requiredDataConnectors:
     dataTypes:
       - OktaSSO
 tactics:
-  - Persistence
+  - DefenseEvasion
+  - CredentialAccess
 relevantTechniques:
-  - T1098
+  - T1556
+  - T1556.006
 query: |
   let Events = dynamic(["user.mfa.factor.update", "system.mfa.factor.deactivate", "user.mfa.attempt_bypass", "user.mfa.factor.reset_all"]);
   OktaSSO
   | where eventType_s in (Events)
   | where outcome_result_s =~ "SUCCESS"
-  | extend Target=parsejson(target_s)
+  | extend Target=parse_json(target_s)
   | mvexpand bagexpansion=array (Target)
   | evaluate bag_unpack(Target)
   | extend Target_Id = tostring(column_ifexists('id', "")), Target_type = tostring(column_ifexists('type', "")), Target_user = tostring(column_ifexists('displayName', "")), Target_alternateId = tostring(column_ifexists('alternateId', ""))
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_id_s, actor_type_s, actor_alternateId_s, actor_displayName_s, Target_alternateId, Target_Id, Target_type, Target_user,debugContext_debugData_requestUri_s,
     debugContext_debugData_requestId_s, domain_s, authenticationContext_externalSessionId_s, eventType_s, displayMessage_s, transaction_id_s, uuid_g, client_userAgent_rawUserAgent_s, client_userAgent_os_s, client_userAgent_browser_s, 
     client_ipAddress_s, column_ifexists('client_geographicalContext_city_s', ""), column_ifexists('client_geographicalContext_state_s', ""), column_ifexists('client_geographicalContext_country_s', ""), column_ifexists('securityContext_isp_s', "")
+  | sort by EndTime desc
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  | extend TargetAccountName = tostring(split(Target_alternateId, "@")[0]), TargetAccountUPNSuffix = tostring(split(Target_alternateId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: actor_displayName_s
-      - identifier: FullName
-        columnName: Target_user
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: client_ipAddress_s
+version: 1.0.0

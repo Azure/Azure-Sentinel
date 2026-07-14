@@ -1,0 +1,60 @@
+id: a2ad014d-0a3a-45eb-ad58-b20532b86015
+name: Hunt for RMM tool execution following Teams messages
+description: |
+  Correlates inbound Microsoft Teams messages with subsequent execution of common Remote Monitoring and Management (RMM) tools (QuickAssist, AnyDesk, TeamViewer) 
+  on the recipient's device within a short time window. This pattern is associated with social engineering / tech-support-scam intrusions (e.g., Storm-1811 / Black 
+  Basta) where attackers lure victims via Teams chat and then convince them to launch an RMM tool to gain remote access.
+description-detailed: |
+  This hunting query joins Microsoft Defender XDR - MessageEvents (Teams messages) with DeviceProcessEvents on the recipients Entra (AAD) account object ID. It 
+  surfaces cases where a user received a Teams message and, within 30 minutes, an RMM binary (QuickAssist.exe, AnyDesk.exe, TeamViewer.exe) was executed on a device 
+  under the same user context. Tune the RMM list and time window to match your environment. Optionally uncomment the SenderDisplayName filters to focus on 
+  suspicious external senders or known lure keywords. 
+  https://www.microsoft.com/en-us/security/blog/2026/04/18/crosstenant-helpdesk-impersonation-data-exfiltration-human-operated-intrusion-playbook/?msockid=124ed88c09c862cd1a62ce6e08116306#hunting-queries
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - DeviceProcessEvents
+tactics:
+   - InitialAccess
+   - Execution
+relevantTechniques:
+   - T1566
+   - T1219
+query: |
+   let _timeFrame = 30m;
+   // Teams message signal
+   let _teams =
+       MessageEvents
+       | where Timestamp > ago(14d)
+       //| where SenderDisplayName contains "add keyword"
+       //          or SenderDisplayName contains "add keyword"
+       | extend Recipient = parse_json(RecipientDetails)
+       | mv-expand Recipient
+       | extend VictimAccountObjectId = tostring(Recipient.RecipientObjectId),
+                VictimRecipientDisplayName = tostring(Recipient.RecipientDisplayName)
+       | project
+           TTime = Timestamp,
+           SenderEmailAddress,
+           SenderDisplayName,
+           VictimRecipientDisplayName,
+           VictimAccountObjectId;
+   // RMM launches on endpoint side
+   let _rmm =
+       DeviceProcessEvents
+       | where Timestamp > ago(14d)
+       | where FileName in~ ("QuickAssist.exe", "AnyDesk.exe", "TeamViewer.exe")
+       | extend VictimAccountObjectId = tostring(InitiatingProcessAccountObjectId)
+       | project
+           DeviceName,
+           QTime = Timestamp,
+           RmmTool = FileName,
+           VictimAccountObjectId;
+   _teams
+   | where isnotempty(VictimAccountObjectId)
+   | join kind=inner _rmm on VictimAccountObjectId
+   | where isnotempty(DeviceName)
+   | where QTime between ((TTime) .. (TTime + (_timeFrame)))
+   | project DeviceName, SenderEmailAddress, SenderDisplayName, VictimRecipientDisplayName, VictimAccountObjectId, TTime, QTime, RmmTool
+   | order by QTime desc
+version: 1.0.0
