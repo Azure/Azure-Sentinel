@@ -1,0 +1,40 @@
+id: 09a380b3-45e5-408c-b14c-3787fa48d783
+name: Scheduled Task Executing from Abnormal Location
+description: |
+  This hunt package is designed to capture activity associated with a scheduled task which includes abnormal locations in its details for execution. This is often a mark of persistence or malicious tasks created by malware or attackers. details.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1053.005
+query: |
+  SecurityEvent
+  | where EventID == "4698"
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | extend EventName=tostring(EventData['@Name']), EventValue=EventData['#text']
+  // Add additional original event fields here to carry over to the final output. Ensure to add here and in the project statement
+  | evaluate pivot(EventName, any(EventValue), TimeGenerated, Computer, EventID, SourceComputerId, EventOriginId)
+  | extend TaskContent=replace_string(tostring(TaskContent), '<?xml version="1.0" encoding="UTF-16"?>', ' ')
+  | extend TaskContent = parse_xml(TaskContent).Task
+  // Add filters as necessary using field names from the TaskContent field in the form of TaskContent.Actions.Exec.Command as an example
+  | where TaskContent.Actions.Exec has_any (
+    "Users", 
+    "Public", 
+    "Perflogs",
+    "$Recycle",
+    "ProgramData",
+    "\\Fonts\\"
+    )
+  | where not(TaskContent.Actions.Exec has_any("\\Windows Defender\\", "\\Microsoft\\Windows\\Application", "\\Microsoft\\ClickToRun"))
+  | project TimeGenerated, Computer, EventID, SubjectUserName, TaskName, TaskContent.Actions.Exec.Command, TaskContent.Actions.Exec.Arguments, TaskContent, SourceComputerId, EventOriginId
+  | sort by TimeGenerated desc
+version: 1.0.0

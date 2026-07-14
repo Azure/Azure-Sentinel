@@ -1,0 +1,41 @@
+id: c7b320fb-ac67-45b0-92c4-b0f1e10b4e46
+name: Methods for Downloading Files with PowerShell
+description: |
+  This threat hunt package identifies instances where PowerShell is being used to download files from external sources, a common technique used in malware delivery and lateral movement. The hunt examines various methods by which PowerShell can be leveraged for file downloads, including the use of cmdlets such as Invoke-WebRequest (iwr), Invoke-RestMethod (irm), and Start-BitsTransfer (sbt), as well as direct utilization of .NET classes like System.Net.WebClient and HttpClient. The package also checks for potentially suspicious use of aliases (curl, wget) and other common executables that invoke PowerShell scripts to download malicious payloads.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1059.001
+  - T1105
+query: |
+  SecurityEvent
+  | where TimeGenerated >= ago(7d)
+  | project TimeGenerated, Computer, Activity, tostring(EventID), CommandLine, NewProcessName, processId = tolong(NewProcessId), ParentProcessName, parentProcessId = tolong(ProcessId), SubjectUserName, SubjectLogonId, SubjectUserSid, SourceComputerId
+  | where NewProcessName has_any (
+    "powershell.exe",
+    "pwsh.exe",
+    "powershell_ise.exe",
+    "pwsh-preview.exe"
+  )
+  | where CommandLine has_any (
+    "Invoke-WebRequest",
+    " iwr",
+    "curl",
+    "wget",
+    "Invoke-RestMethod",
+    " irm",
+    "Start-BitsTransfer",
+    " sbt",
+    "System.Net.WebClient",
+    "System.Net.Http.HttpClient"
+  )
+  | order by TimeGenerated
+version: 1.0.0
