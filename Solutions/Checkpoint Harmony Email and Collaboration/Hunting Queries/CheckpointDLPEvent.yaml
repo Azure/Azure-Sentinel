@@ -1,0 +1,30 @@
+---
+id: 0794a162-8635-43fd-81ed-2cf260457541
+name: DLP Detections
+version: 1.0.0
+relevantTechniques:
+  - T1566
+description: >
+  Search for DLP detections
+requiredDataConnectors:
+  - connectorId: CheckpointHECConnection
+    dataTypes:
+      - CheckpointHEC_CL
+tactics:
+  - InitialAccess
+query: |
+  CheckpointHEC_CL
+  | where TimeGenerated >= ago(1d)
+  | where EventCategory == "dlp"
+  | extend sr = (email_raw).entity_security_result
+  | mv-expand dlp = sr.dlp
+  | extend payload = todynamic(dlp.payload)
+  | mv-expand scan_detail = payload.scan_details
+  | extend
+      verdict = tostring(dlp.verdict),
+      status_description = tostring(dlp.status_description),
+      hit_count = toint(payload.hit_count),
+      scan_detail = tostring(scan_detail),
+      rule = tostring(payload.matches_dlp_rules[0])
+  | project TimeGenerated, EmailFromEmail, EmailSubject, EmailMessageId, verdict, status_description, hit_count, scan_detail, rules = payload.matches_dlp_rules
+  | order by TimeGenerated desc
