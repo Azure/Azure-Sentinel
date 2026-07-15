@@ -94,20 +94,13 @@ else
     --output none
 fi
 
-MI_PRINCIPAL_ID="$(az identity show \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${IDENTITY_NAME}" \
-  --query principalId -o tsv)"
-
-MI_TENANT_ID="$(az identity show \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${IDENTITY_NAME}" \
-  --query tenantId -o tsv)"
-
-MI_RESOURCE_ID="$(az identity show \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${IDENTITY_NAME}" \
-  --query id -o tsv)"
+IFS=$'\t' read -r MI_PRINCIPAL_ID MI_TENANT_ID MI_RESOURCE_ID < <(
+  az identity show \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${IDENTITY_NAME}" \
+    --query '[principalId, tenantId, id]' \
+    -o tsv
+)
 
 if [[ "${MI_TENANT_ID,,}" != "${ACTIVE_TENANT_ID,,}" ]]; then
   echo "[!] Tenant mismatch." >&2
@@ -164,7 +157,7 @@ if [[ "$(assignment_count)" == "0" ]]; then
   echo "[*] Granting ${APP_ROLE_VALUE}..."
 
   REQUEST_BODY="$(printf \
-    '{\"principalId\":\"%s\",\"resourceId\":\"%s\",\"appRoleId\":\"%s\"}' \
+    '{"principalId":"%s","resourceId":"%s","appRoleId":"%s"}' \
     "${MI_PRINCIPAL_ID}" "${GRAPH_SP_ID}" "${APP_ROLE_ID}")"
 
   if ! POST_OUTPUT="$(az rest \
