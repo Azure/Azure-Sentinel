@@ -27,10 +27,16 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has_any
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: eventtype_in
@@ -42,9 +48,6 @@ ParserParams:
   - Name: eventresult
     Type: string
     Default: '*'
-  - Name: login_challenge_has_any
-    Type: dynamic
-    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -55,12 +58,13 @@ ParserQuery: |
         let GoogleWorkspaceLoginParser = (
             starttime: datetime = datetime(null),
             endtime: datetime = datetime(null),
-            targetusername_has_any: dynamic = dynamic([]),
+            username_has_any: dynamic = dynamic([]),
+            targetappname_has_any: dynamic = dynamic([]),
             srcipaddr_has_any_prefix: dynamic = dynamic([]),
+            srchostname_has_any: dynamic = dynamic([]),
             eventtype_in: dynamic = dynamic([]),
             eventresultdetails_in: dynamic = dynamic([]),
             eventresult: string = '*',
-            login_challenge_has_any: dynamic = dynamic([]),
             disabled: bool = false,
             pack: bool = false
         )
@@ -80,6 +84,14 @@ ParserQuery: |
                 "suspicious_programmatic_login",
                 "user_signed_out_due_to_suspicious_session_cookie"
                 )
+            | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and (array_length(username_has_any) == 0 or ActorEmail has_any (username_has_any))
+            and (array_length(srcipaddr_has_any_prefix) == 0
+                or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+                or ipv6_is_in_any_range(SrcIpAddr, srcipaddr_has_any_prefix))
+            and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+            and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source        
             | extend EventParametersJson = parse_json(EventParameters)
             | extend
                 LoginType = tostring(EventParametersJson.login_type),
@@ -89,13 +101,6 @@ ParserQuery: |
                     dynamic(["none"]),
                     EventParametersJson.login_challenge_method
                 )
-            | where (isnull(starttime) or TimeGenerated >= starttime)
-                and (isnull(endtime) or TimeGenerated <= endtime)
-                and (array_length(targetusername_has_any) == 0 or ActorEmail has_any (targetusername_has_any))
-                and (array_length(srcipaddr_has_any_prefix) == 0
-                    or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
-                    or ipv6_is_in_any_range(SrcIpAddr, srcipaddr_has_any_prefix))
-                and (array_length(login_challenge_has_any) == 0 or Challenges has_any (login_challenge_has_any))
             | extend
                 EventVendor = "Google",
                 Dvc = "Google Workspace",
@@ -172,18 +177,12 @@ ParserQuery: |
                 SrcGeoRegion = NetworkInfoSubdivisionCode
             | extend AdditionalFields = iff(
                 pack == true,
-                bag_merge(
-                    bag_pack(
-                        "LoginType", LoginType,
-                        "LoginChallengeMethods", Challenges
-                    ),
-                    iff(
-                        isempty(SensitiveActionName),
-                        dynamic({}),
-                        bag_pack("SensitiveActionName", SensitiveActionName)
-                    )
+                bag_pack(
+                    "LoginType", LoginType,
+                    "LoginChallengeMethods", Challenges,
+                    "SensitiveActionName", SensitiveActionName
                 ),
-                dynamic(null)
+                dynamic({})
             )
             | project
                 TimeGenerated,
@@ -218,12 +217,13 @@ ParserQuery: |
         GoogleWorkspaceLoginParser(
             starttime = starttime,
             endtime = endtime,
-            targetusername_has_any = targetusername_has_any,
+            username_has_any = username_has_any,
+            targetappname_has_any = targetappname_has_any,
             srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+            srchostname_has_any = srchostname_has_any,
             eventtype_in = eventtype_in,
             eventresultdetails_in = eventresultdetails_in,
             eventresult = eventresult,
-            login_challenge_has_any = login_challenge_has_any,
             disabled = disabled,
             pack = pack
         )
