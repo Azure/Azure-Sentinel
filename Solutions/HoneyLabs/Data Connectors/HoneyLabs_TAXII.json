@@ -1,0 +1,157 @@
+{
+    "id": "HoneyLabsThreatIntelligenceTAXII",
+    "title": "HoneyLabs Threat Intelligence (TAXII)",
+    "publisher": "HoneyLabs",
+    "descriptionMarkdown": "HoneyLabs runs internet-facing honeypot sensors and publishes the resulting indicators over TAXII 2.1: source IPs observed running exploit or loader commands, and the malware infrastructure (loader and C2 URLs) extracted from captured payloads. Indicators are evidence-backed, exclude known research scanners, and expire on their own via valid_until. This connector uses Microsoft Sentinel's built-in **Threat Intelligence - TAXII** data connector; the steps below give you the values to paste in. A free HoneyLabs API key is the only prerequisite.",
+    "graphQueries": [
+        {
+            "metricName": "Total data received",
+            "legend": "ThreatIntelligenceIndicator",
+            "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\""
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All active HoneyLabs indicators",
+            "query": "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\" | where Active == true and ExpirationDateTime > now() | summarize arg_max(TimeGenerated, *) by IndicatorId"
+        },
+        {
+            "description": "HoneyLabs indicators ingested per day",
+            "query": "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\" | summarize count() by bin(TimeGenerated, 1d)"
+        },
+        {
+            "description": "Exploiter IPs seen in your firewall logs",
+            "query": "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\" and isnotempty(NetworkIP) | join kind=innerunique (CommonSecurityLog | where TimeGenerated >= ago(1d)) on $left.NetworkIP == $right.SourceIP | summarize count() by NetworkIP"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\" | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(7d)"
+            ]
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "ThreatIntelligenceIndicator",
+            "lastDataReceivedQuery": "ThreatIntelligenceIndicator | where SourceSystem startswith \"HoneyLabs\" | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "read": true,
+                    "write": true,
+                    "delete": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "HoneyLabs API key",
+                "description": "A free HoneyLabs API key, created at [honeylabs.net/dashboard](https://honeylabs.net/dashboard). The key is used as the HTTP Basic password when Sentinel polls the TAXII server."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "1. Get a HoneyLabs API key",
+            "description": "Sign in at [honeylabs.net/dashboard](https://honeylabs.net/dashboard) (accounts are free), open **API keys**, and create a key. Any HoneyLabs key works; the account it belongs to is what shows up in your HoneyLabs usage view."
+        },
+        {
+            "title": "2. Install the Threat Intelligence solution",
+            "description": "If your workspace does not have the **Threat Intelligence - TAXII** data connector yet, install the **Threat Intelligence** solution by Microsoft from the Content hub."
+        },
+        {
+            "title": "3. Connect the exploiters collection",
+            "description": "Open the **Threat Intelligence - TAXII** connector page and add a server with these values. The username can be any string; only the password (your API key) is checked. Hourly polling matches how often the collections change.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "label": "Friendly name",
+                        "value": "HoneyLabs exploiters"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "label": "API root URL",
+                        "value": "https://honeylabs.net/taxii2/api/"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "label": "Collection ID",
+                        "value": "253ff00b-4863-571f-8949-9d05616de5b7"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "label": "Username",
+                        "value": "taxii"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "4. Connect the malware infrastructure collection",
+            "description": "Repeat the previous step with a second server entry for the loader and C2 URLs.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "label": "Friendly name",
+                        "value": "HoneyLabs malware infrastructure"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "label": "API root URL",
+                        "value": "https://honeylabs.net/taxii2/api/"
+                    },
+                    "type": "CopyableLabel"
+                },
+                {
+                    "parameters": {
+                        "label": "Collection ID",
+                        "value": "e144c129-a19a-55c8-b926-dd2dfbbd8138"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "5. Verify",
+            "description": "Within a few minutes of the first poll, indicators appear in the **Threat intelligence** blade and in the ThreatIntelligenceIndicator table tagged with the friendly names above. Each indicator links back to its full HoneyLabs report (first seen, payloads, CVEs probed) at honeylabs.net/lookup."
+        }
+    ],
+    "metadata": {
+        "id": "0231ce71-bf41-452e-84a8-0f45be77e3fe",
+        "version": "1.0.0",
+        "kind": "dataConnector",
+        "source": {
+            "kind": "community"
+        },
+        "author": {
+            "name": "HoneyLabs"
+        },
+        "support": {
+            "name": "HoneyLabs",
+            "link": "https://honeylabs.net",
+            "tier": "community"
+        }
+    }
+}
