@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.10      | 16-07-2026                     | Fixed **Snowflake CCF connector** paging to use GET for subsequent page requests with a relative next-page token URL to close the paging gap.|
 | 3.0.9       | 03-02-2026                     | Updated the **analytic rule** query.|
 | 3.0.8       | 22-12-2025                     | Added a 120‑minute ingestion delay for the **Snowflake connector** and updated the parser KQL to surface accurate start/end timestamps.|
 | 3.0.7       | 10-12-2025                     | Resolved bug in **CCF Data Connector** related to Output stream for Snowflake tables.    |
