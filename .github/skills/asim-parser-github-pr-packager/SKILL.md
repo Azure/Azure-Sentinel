@@ -174,7 +174,7 @@ If there is no file, then we will need to create a file.
 
 ## Step 9. Generate a sample data file
 
-Extract the EventVendor and EventProduct from the parameter-less parser. Create a sample data file in the directory `SampleData/ASIM` with the following name:
+Extract the EventVendor and EventProduct from the parameter-less parser. Create a sample data file in the directory `Sample Data/ASIM` with the following name:
 `{EventVendor}_{EventProduct}_{ASIMSchema}_IngestedLogs.csv`
 
 The headers of the CSV file should match the name of the columns from the source table. The source table columns can be derived from Step 8.
