@@ -288,7 +288,8 @@ For issues and support:
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 3.0.0 | 2026-07 | Initial release with CCF-based connectors, dropdown selectors for API domain and third-party exclusion, TMV1-Filter support, MITRE ATT&CK mappings, fixed parser metadata parentId issue |
+| 3.1.1 | 2026-07 | Fixed ARM template bracket escaping, added token rotation warning, optimized workbook queries |
+| 3.0.0 | 2026-07 | Initial release with CCF-based connectors, dropdown selectors for API domain and third-party exclusion, TMV1-Filter support, MITRE ATT&CK mappings |
 
 ---
 
