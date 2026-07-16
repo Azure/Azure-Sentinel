@@ -9,6 +9,7 @@ from ..SharedCode import consts
 from ..SharedCode.infoblox_exception import InfobloxException
 from ..SharedCode.logger import applogger
 from ..SharedCode.state_manager import StateManager
+from ..SharedCode.table_checkpoint_manager import TableCheckpointManager
 from ..SharedCode.utils import Utils
 from ..SharedCode.sentinel import post_data
 
@@ -43,7 +44,25 @@ class InfobloxToAzureStorage(Utils):
         __method_name = inspect.currentframe().f_code.co_name
         try:
             checkpoint_file_name = consts.FILE_NAME + "-" + self.ioc_type
-            date_state_manager_obj = StateManager(consts.CONN_STRING, checkpoint_file_name, consts.FILE_SHARE_NAME)
+            date_state_manager_obj = TableCheckpointManager(
+                consts.CONN_STRING, checkpoint_file_name, consts.CHECKPOINT_TABLE_NAME
+            )
+            # Upgrade migration: if no table checkpoint exists, check old file-based location
+            # and migrate it so existing customers do not lose their progress.
+            if date_state_manager_obj.get() is None:
+                old_file_checkpoint = StateManager(consts.CONN_STRING, checkpoint_file_name, consts.FILE_SHARE_NAME)
+                old_value = old_file_checkpoint.get()
+                if old_value:
+                    applogger.info(
+                        self.log_format.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.azure_function_name,
+                            "Migrating checkpoint from file share to table. key={}".format(checkpoint_file_name),
+                        )
+                    )
+                    date_state_manager_obj.post(old_value)
+                    old_file_checkpoint.delete()
             self.initiate_and_iterate_through_response_obj(date_state_manager_obj)
 
         except InfobloxException:
@@ -78,7 +97,7 @@ class InfobloxToAzureStorage(Utils):
                     "Fetching checkpoint data",
                 )
             )
-            checkpoint_data = self.get_checkpoint_data(date_state_manager_obj, load_flag=True)
+            checkpoint_data = self.get_time_checkpoint(date_state_manager_obj, load_flag=True)
             to_date = None
             if checkpoint_data:
                 to_date = checkpoint_data.get("from_date", None)
@@ -86,7 +105,7 @@ class InfobloxToAzureStorage(Utils):
             if not to_date:
                 to_date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 data_to_post = {"from_date": to_date}
-                self.post_checkpoint_data(date_state_manager_obj, data_to_post, dump_flag=True)
+                self.post_time_checkpoint(date_state_manager_obj, data_to_post, dump_flag=True)
 
             # *Condition if historical data are fetched successfully till given start time
             end_date = consts.HISTORICAL_START_DATE + " 00:00:00.000"
@@ -110,12 +129,33 @@ class InfobloxToAzureStorage(Utils):
                 from_date, to_date, self.ioc_type
             )
 
-            self.checkpoint_for_from_and_to_dates = StateManager(
+            self.checkpoint_for_from_and_to_dates = TableCheckpointManager(
                 consts.CONN_STRING,
                 base_checkpoint_file_name_for_from_and_to_dates,
-                consts.FILE_SHARE_NAME_DATA,
+                consts.CHECKPOINT_TABLE_NAME,
             )
-            status_of_last_from_date = self.get_checkpoint_data(self.checkpoint_for_from_and_to_dates)
+            # Upgrade migration: if no table entry, check old file-based location
+            if self.checkpoint_for_from_and_to_dates.get() is None:
+                _old_retry_obj = StateManager(
+                    consts.CONN_STRING,
+                    base_checkpoint_file_name_for_from_and_to_dates,
+                    consts.FILE_SHARE_NAME_DATA,
+                )
+                _old_val = _old_retry_obj.get()
+                if _old_val:
+                    applogger.info(
+                        self.log_format.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.azure_function_name,
+                            "Migrating retry count from file share to table. key={}".format(
+                                base_checkpoint_file_name_for_from_and_to_dates
+                            ),
+                        )
+                    )
+                    self.checkpoint_for_from_and_to_dates.post(_old_val)
+                    _old_retry_obj.delete()
+            status_of_last_from_date = self.get_time_checkpoint(self.checkpoint_for_from_and_to_dates)
 
             if status_of_last_from_date:
                 status_of_last_from_date = int(status_of_last_from_date)
@@ -154,11 +194,11 @@ class InfobloxToAzureStorage(Utils):
                         from_date, to_date, self.ioc_type
                     )
                     data_to_post = {"from_date": to_date}
-                    self.post_checkpoint_data(date_state_manager_obj, data_to_post, dump_flag=True)
-                    self.checkpoint_for_from_and_to_dates = StateManager(
+                    self.post_time_checkpoint(date_state_manager_obj, data_to_post, dump_flag=True)
+                    self.checkpoint_for_from_and_to_dates = TableCheckpointManager(
                         consts.CONN_STRING,
                         base_checkpoint_file_name_for_from_and_to_dates,
-                        consts.FILE_SHARE_NAME_DATA,
+                        consts.CHECKPOINT_TABLE_NAME,
                     )
                     status_of_last_from_date = 1
                     applogger.info(
@@ -169,7 +209,7 @@ class InfobloxToAzureStorage(Utils):
                             "This from_date occur for the first time. Storing retry count = 1",
                         )
                     )
-                    self.post_checkpoint_data(
+                    self.post_time_checkpoint(
                         self.checkpoint_for_from_and_to_dates,
                         str(status_of_last_from_date),
                     )
@@ -183,7 +223,7 @@ class InfobloxToAzureStorage(Utils):
                             "Storing retry count = {}".format(status_of_last_from_date),
                         )
                     )
-                    self.post_checkpoint_data(
+                    self.post_time_checkpoint(
                         self.checkpoint_for_from_and_to_dates,
                         str(status_of_last_from_date),
                     )
@@ -197,7 +237,7 @@ class InfobloxToAzureStorage(Utils):
                         "This from_date occur for the first time. Storing retry count = 1",
                     )
                 )
-                self.post_checkpoint_data(self.checkpoint_for_from_and_to_dates, str(status_of_last_from_date))
+                self.post_time_checkpoint(self.checkpoint_for_from_and_to_dates, str(status_of_last_from_date))
 
             query_params = {"from_date": from_date, "to_date": to_date}
 
@@ -225,7 +265,7 @@ class InfobloxToAzureStorage(Utils):
                 )
             )
             data_to_post = {"from_date": from_date}
-            self.post_checkpoint_data(date_state_manager_obj, data_to_post, dump_flag=True)
+            self.post_time_checkpoint(date_state_manager_obj, data_to_post, dump_flag=True)
 
             self.checkpoint_for_from_and_to_dates.delete()
         except InfobloxException:
