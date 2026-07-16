@@ -26,7 +26,7 @@ requiredDataConnectors:
       - SecurityEvent
 queryFrequency: 1h
 queryPeriod: 1h
-triggerOperator: GreaterThan
+triggerOperator: gt
 triggerThreshold: 0
 status: Available
 kind: Scheduled
@@ -38,55 +38,51 @@ relevantTechniques:
   - T1218
   - T1140
 query: |
-  // CertUtil LOLBin Download Detection
-  // Single Lookback variable — update this to match queryPeriod if schedule changes
   let Lookback = 1h;
   let AllowlistedDomains = dynamic([
-      "windowsupdate.microsoft.com",
-      "download.microsoft.com",
-      "dl.delivery.mp.microsoft.com",
-      "ctldl.windowsupdate.com"
+    "windowsupdate.microsoft.com",
+    "download.microsoft.com",
+    "dl.delivery.mp.microsoft.com",
+    "ctldl.windowsupdate.com"
   ]);
-  // Branch 1: Defender for Endpoint (DeviceProcessEvents)
   let MDE_Results =
-      DeviceProcessEvents
-      | where TimeGenerated > ago(Lookback)
-      | where FileName =~ "certutil.exe"
-      | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
-      | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
-      | where not(ProcessCommandLine has_any (AllowlistedDomains))
-      | extend
-          AccountName    = InitiatingProcessAccountName,
-          AccountDomain  = InitiatingProcessAccountDomain,
-          ParentProcess  = InitiatingProcessFileName,
-          ParentCmdLine  = InitiatingProcessCommandLine,
-          HostName       = DeviceName,
-          EventTime      = TimeGenerated,
-          Source         = "MDE"
-      | project
-          EventTime, HostName, AccountName, AccountDomain,
-          ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
-  // Branch 2: Windows Security Events (Event ID 4688)
+    DeviceProcessEvents
+    | where TimeGenerated > ago(Lookback)
+    | where FileName =~ "certutil.exe"
+    | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+    | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
+    | where not(ProcessCommandLine has_any (AllowlistedDomains))
+    | extend
+        AccountName    = InitiatingProcessAccountName,
+        AccountDomain  = InitiatingProcessAccountDomain,
+        ParentProcess  = InitiatingProcessFileName,
+        ParentCmdLine  = InitiatingProcessCommandLine,
+        HostName       = DeviceName,
+        EventTime      = TimeGenerated,
+        Source         = "MDE"
+    | project
+        EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
   let SecEvent_Results =
-      SecurityEvent
-      | where TimeGenerated > ago(Lookback)
-      | where EventID == 4688
-      | where NewProcessName endswith "\\certutil.exe"
-      | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
-      | where CommandLine has_any ("http://", "https://", "ftp://")
-      | where not(CommandLine has_any (AllowlistedDomains))
-      | extend
-          AccountName    = SubjectUserName,
-          AccountDomain  = SubjectDomainName,
-          ParentProcess  = ParentProcessName,
-          ParentCmdLine  = "",
-          HostName       = Computer,
-          EventTime      = TimeGenerated,
-          ProcessCommandLine = CommandLine,
-          Source         = "SecurityEvent"
-      | project
-          EventTime, HostName, AccountName, AccountDomain,
-          ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
+    SecurityEvent
+    | where TimeGenerated > ago(Lookback)
+    | where EventID == 4688
+    | where NewProcessName endswith "\\certutil.exe"
+    | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+    | where CommandLine has_any ("http://", "https://", "ftp://")
+    | where not(CommandLine has_any (AllowlistedDomains))
+    | extend
+        AccountName    = SubjectUserName,
+        AccountDomain  = SubjectDomainName,
+        ParentProcess  = ParentProcessName,
+        ParentCmdLine  = "",
+        HostName       = Computer,
+        EventTime      = TimeGenerated,
+        ProcessCommandLine = CommandLine,
+        Source         = "SecurityEvent"
+    | project
+        EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
   union MDE_Results, SecEvent_Results
   | extend
       HostName  = iif(HostName has '.', substring(HostName, 0, indexof(HostName, '.')), HostName),
@@ -111,10 +107,7 @@ entityMappings:
         columnName: ProcessCommandLine
 alertDetailsOverride:
   alertDisplayNameFormat: "CertUtil download attempt on {{HostName}} by {{AccountName}}"
-  alertDescriptionFormat: |
-    CertUtil.exe was used to download a remote file on {{HostName}}.
-    Command line: {{ProcessCommandLine}}
-    Parent process: {{ParentProcess}}
+  alertDescriptionFormat: "CertUtil.exe was used to download a remote file on {{HostName}}. Command line: {{ProcessCommandLine}}"
 customDetails:
   CommandLine: ProcessCommandLine
   ParentProcess: ParentProcess
@@ -131,4 +124,4 @@ incidentConfiguration:
       - Account
 eventGroupingSettings:
   aggregationKind: SingleAlert
-version: 1.0.3
+version: 1.0.4
