@@ -1,0 +1,1124 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for AtlassianOrganizationAudit"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "AtlassianOrganizationAudit",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-atlassianorganizationaudit",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "AtlassianAuditEventsConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "AtlassianAuditEventsConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','AtlassianAuditEvents')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AtlassianAuditEvents')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('AtlassianAuditEvents-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "AtlassianAuditEvents-Parser"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Atlassian Organization Audit Events (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AtlassianAuditEventsConnector",
+                  "title": "Atlassian Organization Audit Events (via Codeless Connector Framework)",
+                  "publisher": "Atlassian",
+                  "descriptionMarkdown": "The Atlassian Organization Audit Events data connector provides the capability to ingest organization audit events from Atlassian Cloud into Microsoft Sentinel through the Polling API. This connector enables comprehensive security monitoring and compliance auditing across all Atlassian Cloud products including Jira (Software/Service Desk/Core), Confluence, Bitbucket, Trello, Opsgenie, Statuspage, and Loom. The connector ingests audit events covering user management, authentication activities, group changes, product access modifications, administrative actions, and policy changes. With 180 days of data retention in Atlassian Cloud, this connector provides visibility into user access granted/revoked, authentication failures and successes, MFA configuration changes, API token management, group membership changes, product license assignments, organization policy updates, and domain verification activities. The connector uses API Key authentication with read-only OAuth scope (read:events:admin) and is optimized for continuous polling with cursor-based pagination. This connector is built on Microsoft Sentinel Codeless Connector Platform and supports DCR-based ingestion time transformations for optimized query performance. Refer to Atlassian Organization Events API documentation for more information.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Atlassian Audit Events",
+                      "baseQuery": "AtlassianAuditEvents"
+                    },
+                    {
+                      "metricName": "Recent events",
+                      "legend": "Last 24 Hours",
+                      "baseQuery": "AtlassianAuditEvents | where TimeGenerated > ago(24h)"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Sample of recent audit events",
+                      "query": "AtlassianAuditEvents\n| take 20"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "AtlassianAuditEvents",
+                      "lastDataReceivedQuery": "AtlassianAuditEvents\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Atlassian Organization Events API access",
+                        "description": "An API key with the read-only `read:events:admin` OAuth scope is required to read organization audit events. See the [Atlassian Organization Events API documentation](https://developer.atlassian.com/cloud/admin/organization/rest/) for more information."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Prerequisites",
+                      "description": "Before setting up this connector, ensure you have the following:",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **Atlassian organization admin access** to create an API key with the `read:events:admin` OAuth scope.\r\n- **Your Atlassian Organization ID** (a UUID).\r\n- **Microsoft Sentinel workspace** with write permissions to configure the data connector."
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "1. Create API Key in Atlassian",
+                      "description": "Follow these steps to create an API key with the required permissions:",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Create API Key\r\n1. Navigate to [Atlassian Administration](https://admin.atlassian.com/)\r\n2. Select your organization (if you have multiple)\r\n3. Navigate to **Settings**, then select **API keys**\r\n4. Click **Create API key**\r\n5. Configure the API key:\r\n   - **Name:** Microsoft Sentinel Integration (or descriptive name)\r\n   - **Expiration:** Set expiration date (maximum 1 year from creation)\r\n   - **Scopes:** Select `read:events:admin` (read-only access to audit events)\r\n6. Click **Create**\r\n7. **IMPORTANT:** Copy the API key immediately - it will not be shown again"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Get Your Organization ID",
+                      "description": "Your Organization ID is required to connect to the Atlassian API:",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Locate Organization ID\r\nYour Organization ID is a UUID (e.g., `00000000-0000-0000-0000-000000000000`)\r\n\r\n**Option 1: From Atlassian Administration URL**\r\n- Look at the URL in your Atlassian Administration console\r\n- Format: `https://admin.atlassian.com/o/{orgId}/overview`\r\n- Copy the UUID between `/o/` and `/overview`\r\n\r\n**Option 2: During API Key Creation**\r\n- The Organization ID is displayed when you create an API key\r\n- Copy it along with your API key\r\n\r\n**Example:** `00000000-0000-0000-0000-000000000000`"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "3. Connect to Microsoft Sentinel",
+                      "description": "Add one connection per Atlassian organization (tenant). Each connection is identified by a unique Connection Alias and may target a different organization or API base URL, so you can ingest events from multiple Atlassian organizations side by side.",
+                      "instructions": [
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Connection Alias",
+                                "columnValue": "properties.addOnAttributes.friendlyName"
+                              },
+                              {
+                                "columnName": "Atlassian API Base URL",
+                                "columnValue": "properties.addOnAttributes.apiUrl"
+                              },
+                              {
+                                "columnName": "Organization ID",
+                                "columnValue": "properties.addOnAttributes.organizationId"
+                              },
+                              {
+                                "columnName": "Data Type",
+                                "columnValue": "properties.addOnAttributes.dataType"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "isPrimary": true,
+                            "label": "Add Connection",
+                            "title": "Configure Atlassian Connection",
+                            "subtitle": "Connect to an Atlassian organization to ingest audit events",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "title": "Connection Details",
+                                "description": "Enter the details for this Atlassian organization.",
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Connection Alias",
+                                      "placeholder": "e.g. Contoso Production",
+                                      "type": "text",
+                                      "name": "friendlyName",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Enter a unique alias to identify this Atlassian connection. **Important:** Use a different alias for each connection. To update an existing connection, delete it and recreate it with the same alias.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Atlassian API Base URL",
+                                      "placeholder": "https://api.atlassian.com",
+                                      "type": "text",
+                                      "name": "atlassianApiBaseUrl",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Enter the API base URL for this tenant without a trailing slash (e.g. `https://api.atlassian.com`). Use the region-specific base URL if your organization is assigned one.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Organization ID",
+                                      "placeholder": "00000000-0000-0000-0000-000000000000",
+                                      "type": "text",
+                                      "name": "organizationId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "API Key",
+                                      "placeholder": "Enter your Atlassian API Key",
+                                      "type": "password",
+                                      "name": "apiKey",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AtlassianAuditEventsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-AtlassianAuditEvents_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "message",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "links",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-AtlassianAuditEvents_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-AtlassianAuditEvents_CL",
+                    "transformKql": "source  | project TimeGenerated=now(),EventId=tostring(id),Action=tostring(attributes.action),EventMessage=tostring(message.content),ActorEmail=tostring(attributes.actor.email),ActorId=tostring(attributes.actor.id),ActorName=tostring(attributes.actor.name),AuthType=tostring(attributes.actor.auth.authType),AuthTokenLabel=tostring(attributes.actor.auth.tokenLabel),OnBehalfOfEmail=tostring(attributes.actor.onBehalfOf.email),AppId=tostring(attributes.actor.app.id),SrcIpAddr=tostring(attributes.location.ip),CountryName=tostring(attributes.location.countryName),CityName=tostring(attributes.location.city),Context=todynamic(attributes.context),Container=todynamic(attributes.container),ProcessedAt=todatetime(attributes.processedAt),EventUrl=tostring(links.self)"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "AtlassianAuditEvents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AtlassianAuditEvents_CL",
+                  "description": "Security-focused Atlassian organization audit events optimized for threat detection. Covers user management, authentication patterns, group changes, product access, policy updates, and administrative actions across Jira, Confluence, Bitbucket, Trello, Opsgenie, Statuspage, and Loom. Includes 18 core security columns: actor identification, authentication context, delegation detection, third-party app monitoring, network origin, geographic analysis, and context/container JSON for detailed investigation.",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "Unique identifier for the audit event - used for deduplication and correlation"
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string",
+                      "description": "Event action type - primary field for threat detection (e.g., user.access.granted, user.authentication.failed, policy.updated, api.token.created)"
+                    },
+                    {
+                      "name": "EventMessage",
+                      "type": "string",
+                      "description": "Human-readable security event description for investigation"
+                    },
+                    {
+                      "name": "ActorEmail",
+                      "type": "string",
+                      "description": "Primary identity - email of user who performed the action"
+                    },
+                    {
+                      "name": "ActorId",
+                      "type": "string",
+                      "description": "Actor unique identifier for correlation across events"
+                    },
+                    {
+                      "name": "ActorName",
+                      "type": "string",
+                      "description": "Human-readable actor name for investigation"
+                    },
+                    {
+                      "name": "AuthType",
+                      "type": "string",
+                      "description": "Authentication method - api-token, container-token, connect-token, OAuth (detects token vs interactive login)"
+                    },
+                    {
+                      "name": "AuthTokenLabel",
+                      "type": "string",
+                      "description": "Token/app identification - critical for detecting compromised API keys or unauthorized integrations"
+                    },
+                    {
+                      "name": "OnBehalfOfEmail",
+                      "type": "string",
+                      "description": "Delegation detection - identifies impersonation or privilege escalation scenarios"
+                    },
+                    {
+                      "name": "AppId",
+                      "type": "string",
+                      "description": "Third-party app monitoring - detects unauthorized app usage or OAuth token compromise"
+                    },
+                    {
+                      "name": "SrcIpAddr",
+                      "type": "string",
+                      "description": "Network origin - suspicious IP detection, IP allowlist validation, impossible travel"
+                    },
+                    {
+                      "name": "CountryName",
+                      "type": "string",
+                      "description": "Geo-analysis - impossible travel detection, geographic anomalies, country-based alerting"
+                    },
+                    {
+                      "name": "CityName",
+                      "type": "string",
+                      "description": "City-level tracking - location-based alerting, regional access patterns"
+                    },
+                    {
+                      "name": "Context",
+                      "type": "dynamic",
+                      "description": "Target identification - users, groups, policies affected by action (enables detailed investigation)"
+                    },
+                    {
+                      "name": "Container",
+                      "type": "dynamic",
+                      "description": "Scope context - organization, site, product where action occurred (multi-tenant environments)"
+                    },
+                    {
+                      "name": "ProcessedAt",
+                      "type": "datetime",
+                      "description": "Event processing timestamp - latency monitoring, detects API delays or event manipulation"
+                    },
+                    {
+                      "name": "EventUrl",
+                      "type": "string",
+                      "description": "Investigation link - direct access to full event details in Atlassian API"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AtlassianAuditEventsConnector",
+          "title": "Atlassian Organization Audit Events (via Codeless Connector Framework)",
+          "publisher": "Atlassian",
+          "descriptionMarkdown": "The Atlassian Organization Audit Events data connector provides the capability to ingest organization audit events from Atlassian Cloud into Microsoft Sentinel through the Polling API. This connector enables comprehensive security monitoring and compliance auditing across all Atlassian Cloud products including Jira (Software/Service Desk/Core), Confluence, Bitbucket, Trello, Opsgenie, Statuspage, and Loom. The connector ingests audit events covering user management, authentication activities, group changes, product access modifications, administrative actions, and policy changes. With 180 days of data retention in Atlassian Cloud, this connector provides visibility into user access granted/revoked, authentication failures and successes, MFA configuration changes, API token management, group membership changes, product license assignments, organization policy updates, and domain verification activities. The connector uses API Key authentication with read-only OAuth scope (read:events:admin) and is optimized for continuous polling with cursor-based pagination. This connector is built on Microsoft Sentinel Codeless Connector Platform and supports DCR-based ingestion time transformations for optimized query performance. Refer to Atlassian Organization Events API documentation for more information.",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Atlassian Audit Events",
+              "baseQuery": "AtlassianAuditEvents"
+            },
+            {
+              "metricName": "Recent events",
+              "legend": "Last 24 Hours",
+              "baseQuery": "AtlassianAuditEvents | where TimeGenerated > ago(24h)"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Sample of recent audit events",
+              "query": "AtlassianAuditEvents\n| take 20"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "AtlassianAuditEvents",
+              "lastDataReceivedQuery": "AtlassianAuditEvents\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Atlassian Organization Events API access",
+                "description": "An API key with the read-only `read:events:admin` OAuth scope is required to read organization audit events. See the [Atlassian Organization Events API documentation](https://developer.atlassian.com/cloud/admin/organization/rest/) for more information."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Prerequisites",
+              "description": "Before setting up this connector, ensure you have the following:",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **Atlassian organization admin access** to create an API key with the `read:events:admin` OAuth scope.\r\n- **Your Atlassian Organization ID** (a UUID).\r\n- **Microsoft Sentinel workspace** with write permissions to configure the data connector."
+                  }
+                }
+              ]
+            },
+            {
+              "title": "1. Create API Key in Atlassian",
+              "description": "Follow these steps to create an API key with the required permissions:",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Create API Key\r\n1. Navigate to [Atlassian Administration](https://admin.atlassian.com/)\r\n2. Select your organization (if you have multiple)\r\n3. Navigate to **Settings**, then select **API keys**\r\n4. Click **Create API key**\r\n5. Configure the API key:\r\n   - **Name:** Microsoft Sentinel Integration (or descriptive name)\r\n   - **Expiration:** Set expiration date (maximum 1 year from creation)\r\n   - **Scopes:** Select `read:events:admin` (read-only access to audit events)\r\n6. Click **Create**\r\n7. **IMPORTANT:** Copy the API key immediately - it will not be shown again"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Get Your Organization ID",
+              "description": "Your Organization ID is required to connect to the Atlassian API:",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Locate Organization ID\r\nYour Organization ID is a UUID (e.g., `00000000-0000-0000-0000-000000000000`)\r\n\r\n**Option 1: From Atlassian Administration URL**\r\n- Look at the URL in your Atlassian Administration console\r\n- Format: `https://admin.atlassian.com/o/{orgId}/overview`\r\n- Copy the UUID between `/o/` and `/overview`\r\n\r\n**Option 2: During API Key Creation**\r\n- The Organization ID is displayed when you create an API key\r\n- Copy it along with your API key\r\n\r\n**Example:** `00000000-0000-0000-0000-000000000000`"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "3. Connect to Microsoft Sentinel",
+              "description": "Add one connection per Atlassian organization (tenant). Each connection is identified by a unique Connection Alias and may target a different organization or API base URL, so you can ingest events from multiple Atlassian organizations side by side.",
+              "instructions": [
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Connection Alias",
+                        "columnValue": "properties.addOnAttributes.friendlyName"
+                      },
+                      {
+                        "columnName": "Atlassian API Base URL",
+                        "columnValue": "properties.addOnAttributes.apiUrl"
+                      },
+                      {
+                        "columnName": "Organization ID",
+                        "columnValue": "properties.addOnAttributes.organizationId"
+                      },
+                      {
+                        "columnName": "Data Type",
+                        "columnValue": "properties.addOnAttributes.dataType"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "isPrimary": true,
+                    "label": "Add Connection",
+                    "title": "Configure Atlassian Connection",
+                    "subtitle": "Connect to an Atlassian organization to ingest audit events",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "title": "Connection Details",
+                        "description": "Enter the details for this Atlassian organization.",
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Connection Alias",
+                              "placeholder": "e.g. Contoso Production",
+                              "type": "text",
+                              "name": "friendlyName",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Enter a unique alias to identify this Atlassian connection. **Important:** Use a different alias for each connection. To update an existing connection, delete it and recreate it with the same alias.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Atlassian API Base URL",
+                              "placeholder": "https://api.atlassian.com",
+                              "type": "text",
+                              "name": "atlassianApiBaseUrl",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Enter the API base URL for this tenant without a trailing slash (e.g. `https://api.atlassian.com`). Use the region-specific base URL if your organization is assigned one.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Organization ID",
+                              "placeholder": "00000000-0000-0000-0000-000000000000",
+                              "type": "text",
+                              "name": "organizationId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "API Key",
+                              "placeholder": "Enter your Atlassian API Key",
+                              "type": "password",
+                              "name": "apiKey",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Atlassian Organization Audit Events (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Atlassian Organization Audit Events (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "friendlyName": {
+              "defaultValue": "friendlyName",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "atlassianApiBaseUrl": {
+              "defaultValue": "atlassianApiBaseUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "organizationId": {
+              "defaultValue": "organizationId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiKey": {
+              "defaultValue": "apiKey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','Custom-AtlassianAuditEvents_CL' , uniqueString(parameters('friendlyName')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apiKey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat(parameters('atlassianApiBaseUrl'), '/admin/v1/orgs/', parameters('organizationId'), '/events-stream')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "retryCount": 4,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "queryParameters": {
+                    "limit": "200",
+                    "sortOrder": "asc"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "PersistentToken",
+                  "nextPageTokenJsonPath": "$.meta.next",
+                  "nextPageParaName": "cursor",
+                  "pageSize": 200
+                },
+                "connectorDefinitionName": "AtlassianAuditEventsConnector",
+                "dataType": "Custom-AtlassianAuditEvents_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AtlassianAuditEvents_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "friendlyName": "[[parameters('friendlyName')]",
+                  "apiUrl": "[[parameters('atlassianApiBaseUrl')]",
+                  "organizationId": "[[parameters('organizationId')]",
+                  "dataType": "AtlassianAuditEvents"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "parser_AtlassianAuditEventsAliasFunction Data Parser with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "AtlassianAuditEvents",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "AtlassianAuditEvents",
+                "query": "union isfuzzy=true AtlassianAuditEvents_CL, SentinelAtlassianAuditEvents",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "AtlassianAuditEvents"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AtlassianAuditEvents')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "AtlassianOrganizationAudit",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "AtlassianAuditEvents",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "AtlassianAuditEvents",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "AtlassianAuditEvents",
+        "query": "union isfuzzy=true AtlassianAuditEvents_CL, SentinelAtlassianAuditEvents",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "AtlassianAuditEvents"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'AtlassianAuditEvents')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "AtlassianOrganizationAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "AtlassianOrganizationAudit",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AtlassianOrganizationAudit/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Atlassian Organization Audit solution for Microsoft Sentinel enables ingestion of organization audit events from Atlassian Cloud into Microsoft Sentinel through the Codeless Connector Framework (CCF). It provides comprehensive security monitoring and compliance auditing across Atlassian Cloud products including Jira, Confluence, Bitbucket, Trello, Opsgenie, Statuspage, and Loom. Audit events cover user management, authentication activity, group changes, product access modifications, administrative actions, and policy changes. For more information about the Atlassian Organization Events API, see the official Atlassian documentation: <a href=\"https://developer.atlassian.com/cloud/admin/organization/rest/\">https://developer.atlassian.com/cloud/admin/organization/rest/</a></p>\n<p>Underlying Microsoft Technologies used:</p>\n<ul>\n<li>Microsoft Sentinel</li>\n<li>Azure Monitor Logs</li>\n<li>Data Collection Rules (DCR)</li>\n<li>Codeless Connector Framework (CCF)</li>\n</ul>\n<p>Dependencies:</p>\n<ul>\n<li>A valid Atlassian Cloud organization</li>\n<li>An Atlassian API key with the read-only <code>read:events:admin</code> OAuth scope</li>\n<li>API access to the Atlassian Organization Events API</li>\n</ul>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/atlassian.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "AtlassianOrganizationAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-07-06",
+        "providers": [
+          "Atlassian"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.0       | 01-07-2026                     | Added new **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** (ingests alerts via the GraphQL API) |
 | 3.0.10      | 03-06-2026                     | Updated CCP **Data Connector** to support multiple instances (multi-connection) for MSSP scenarios |
 | 3.0.9       | 14-04-2026                     | Deprecate SentinelOne (using Azure Function) |
 | 3.0.8       | 24-03-2026                     | Rename CCF solution to SentinelOne (via Codeless Connector Framework) |
