@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/vimAuthenticationPaloAltoPrismaCloud')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Authentication ASIM filtering parser for Palo Alto Prisma Cloud Compute",
+        "category": "ASIM",
+        "FunctionAlias": "vimAuthenticationPaloAltoPrismaCloud",
+        "query": "let parser = (\n    starttime: datetime = datetime(null),\n    endtime: datetime = datetime(null),\n    srcipaddr_has_any_prefix: dynamic = dynamic([]),\n    srchostname_has_any: dynamic = dynamic([]),\n    username_has_any: dynamic = dynamic([]),\n    targetappname_has_any: dynamic = dynamic([]),\n    eventtype_in: dynamic = dynamic([]),\n    eventresult: string = \"*\",\n    eventresultdetails_in: dynamic = dynamic([]),\n    disabled: bool = false,\n    pack: bool = false\n) {\nPrismaCloud_CL\n| where not(disabled)\n    and (isnull(starttime) or TimeGenerated >= starttime)\n    and (isnull(endtime) or TimeGenerated <= endtime)\n    and (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))\n    and (array_length(targetappname_has_any) == 0 or \"Prisma Cloud Compute\" has_any (targetappname_has_any))\n    and (array_length(srchostname_has_any) == 0)\n    and (array_length(eventtype_in) == 0 or \"Logon\" in~ (eventtype_in))\n| where SyslogMessage has 'type=\"management_audit\"'\n    and SyslogMessage has 'log_type=\"login\"'\n| parse-kv SyslogMessage as (\n    ['time']:string,\n    ['type']:string,\n    id:string,\n    log_type:string,\n    username:string,\n    source_ip:string,\n    api:string,\n    status:string\n)\nwith (pair_delimiter=' ', kv_delimiter='=', quote='\"')\n| where (array_length(username_has_any) == 0 or username in~ (username_has_any))\n    and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(source_ip, srcipaddr_has_any_prefix))\n| extend\n    EventStartTime = coalesce(todatetime(['time']), EventTime),\n    EventEndTime = coalesce(todatetime(['time']), EventTime),\n    EventResult = case(\n        status == \"successful login attempt\", \"Success\",\n        status in (\"invalid credentials\", \"expired token\"), \"Failure\",\n        \"NA\"\n    ),\n    EventResultDetails = case(\n        status == \"invalid credentials\", \"No such user or password\",\n        status == \"expired token\", \"Session expired\",\n        \"\"\n    ),\n    EventSeverity = case(\n        SeverityLevel =~ \"info\", \"Informational\",\n        SeverityLevel =~ \"warning\", \"Medium\",\n        SeverityLevel =~ \"error\", \"High\",\n        SeverityLevel =~ \"critical\", \"High\",\n        \"Informational\"\n    ),\n    SrcIpAddr = iff(isnotnull(parse_ipv4(source_ip)), source_ip, \"\"),\n    DvcIpAddr = iff(isnotnull(parse_ipv4(HostIP)), HostIP, \"\"),\n    DvcId = _ResourceId,\n    DvcIdType = iff(isnotempty(_ResourceId), \"AzureResourceId\", \"\"),\n    TargetUsername = username,\n    TargetUsernameType = iff(isnotempty(username), \"Simple\", \"\"),\n    TargetAppName = \"Prisma Cloud Compute\",\n    TargetAppType = \"Service\",\n    TargetHostname = iff(HostName matches regex @\"^[a-zA-Z0-9-]{1,61}$\", HostName, \"\"),\n    DvcHostname = iff(HostName matches regex @\"^[a-zA-Z0-9-]{1,61}$\", HostName, \"\"),\n    EventUid = hash_sha256(strcat(TenantId, EventTime, SyslogMessage, CollectorHostName))\n| where (eventresult == \"*\" or EventResult == eventresult)\n    and (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))\n| extend\n    Src = source_ip,\n    IpAddr = SrcIpAddr,\n    Dst = iff(isnotempty(TargetHostname), TargetHostname, TargetAppName),\n    Dvc = iff(isnotempty(DvcHostname), DvcHostname, TargetAppName),\n    User = TargetUsername,\n    Application = TargetAppName,\n    AdditionalFields = iff(\n        pack,\n        bag_pack(\n            \"MG\", MG,\n            \"HostIP\", HostIP,\n            \"HostName\", HostName,\n            \"Computer\", Computer,\n            \"Facility\", Facility,\n            \"CollectorHostName\", CollectorHostName,\n            \"ProcessName\", ProcessName,\n            \"ProcessID\", ProcessID,\n            \"SourceSystem\", SourceSystem,\n            \"WorkspaceId\", TenantId,\n            \"MessageId\", id\n        ),\n        dynamic({})\n    )\n| project\n    TimeGenerated,\n    Type,\n    EventCount = int(1),\n    EventStartTime,\n    EventEndTime,\n    EventType = \"Logon\",\n    EventResult,\n    EventResultDetails,\n    EventOriginalType = ['type'],\n    EventOriginalSubType = log_type,\n    EventOriginalResultDetails = status,\n    EventSeverity,\n    EventOriginalSeverity = SeverityLevel,\n    EventUid,\n    EventMessage = SyslogMessage,\n    EventProduct = \"Prisma Cloud Compute\",\n    EventVendor = \"Palo Alto\",\n    EventSchema = \"Authentication\",\n    EventSchemaVersion = \"0.1.4\",\n    LogonMethod = iff(api == \"/api/v1/authenticate\", \"Username & Password\", \"Other\"),\n    TargetUsername,\n    TargetUsernameType,\n    User,\n    SrcIpAddr,\n    Src,\n    IpAddr,\n    TargetAppName,\n    TargetAppType,\n    Application,\n    TargetHostname,\n    Dst,\n    DvcId,\n    DvcIdType,\n    DvcIpAddr,\n    DvcHostname,\n    DvcOs = SourceSystem,\n    Dvc,\n    AdditionalFields\n};\nparser(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, eventtype_in=eventtype_in, eventresult=eventresult, eventresultdetails_in=eventresultdetails_in, disabled=disabled, pack=pack)\n",
+        "version": 1,
+        "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),username_has_any:dynamic=dynamic([]),targetappname_has_any:dynamic=dynamic([]),srcipaddr_has_any_prefix:dynamic=dynamic([]),srchostname_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
