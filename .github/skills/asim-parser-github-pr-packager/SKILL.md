@@ -39,6 +39,8 @@ For example: `asim/networksession-cisco-asa`.
 
 Create a YAML file for **each** parser (parameter-less and parameterized) in the directory `Parsers/ASim<SchemaName>/Parsers/`.
 
+For the schema reference in both parser files, use the exact `SchemaTitle` and schema-specific `aka.ms` `SchemaLink` defined for the schema in `.script/tests/asimParsersTest/VerifyASimParserTemplate.py`. Do not substitute a Learn documentation URL.
+
 ### Parameter-less parser: `ASim<Schema><Vendor><Product>.yaml`
 
 ```yaml
@@ -53,7 +55,7 @@ Normalization:
   Version: <schema version>
 References:
 - Title: ASIM <schema name> Schema
-  Link: <link to the Learn Microsoft documentation for this specific ASIM schema>
+  Link: <schema-specific aka.ms SchemaLink from VerifyASimParserTemplate.py>
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 - Title: <vendor> <product> Documentation
@@ -88,7 +90,7 @@ Normalization:
   Version: <schema version>
 References:
 - Title: ASIM <schema name> Schema
-  Link: <link to the Learn Microsoft documentation for this specific ASIM schema>
+  Link: <schema-specific aka.ms SchemaLink from VerifyASimParserTemplate.py>
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 - Title: <vendor> <product> Documentation
