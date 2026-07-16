@@ -1,0 +1,160 @@
+id: 763fc00b-4971-43c2-9cd1-f12b58a542bd
+name: 'PROD (TM016.1) - GROUP - Added to Well-Known or Tier Model Group'
+description: |
+  Well-Known Groups are classified as Tier 0, and Tier Model groups that provide permission over Tier Model objects.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.002
+query: |
+  let adminGroups = dynamic([
+      "CN=Domain Admins,CN=Users",
+      "CN=Enterprise Admins,CN=Users",
+      "CN=Administrators,CN=Builtin",
+      "CN=Cert Publishers,CN=Users",
+      "CN=Cloneable Domain Controllers,CN=Users",
+      "CN=Denied RODC Password Replication Group,CN=Users",
+      "CN=DnsAdmins,CN=Users",
+      "CN=DnsUpdateProxy,CN=Users",
+      "CN=Domain Controllers,CN=Users",
+      "CN=Domain Guests,CN=Users",
+      "CN=Enterprise Key Admins,CN=Users",
+      "CN=Enterprise Read-only Domain Controllers,CN=Users",
+      "CN=External Trust Accounts,CN=Users",
+      "CN=Forest Trust Accounts,CN=Users",
+      "CN=Group Policy Creator Owners,CN=Users",
+      "CN=Key Admins,CN=Users",
+      "CN=RAS and IAS Servers,CN=Users",
+      "CN=Read-only Domain Controllers,CN=Users",
+      "CN=Schema Admins,CN=Users",
+      "CN=Access Control Assistance Operators,CN=Builtin",
+      "CN=Account Operators,CN=Builtin",
+      "CN=Backup Operators,CN=Builtin",
+      "CN=Certificate Service DCOM Access,CN=Builtin",
+      "CN=Cryptographic Operators,CN=Builtin",
+      "CN=Distributed COM Users,CN=Builtin",
+      "CN=Event Log Readers,CN=Builtin",
+      "CN=Guests,CN=Builtin",
+      "CN=Hyper-V Administrators,CN=Builtin",
+      "CN=IIS_IUSRS,CN=Builtin",
+      "CN=Incoming Forest Trust Builders,CN=Builtin",
+      "CN=Network Configuration Operators,CN=Builtin",
+      "CN=OpenSSH Users,CN=Builtin",
+      "CN=Performance Log Users,CN=Builtin",
+      "CN=Performance Monitor Users,CN=Builtin",
+      "CN=Pre-Windows 2000 Compatible Access,CN=Builtin",
+      "CN=Print Operators,CN=Builtin",
+      "CN=RDS Endpoint Servers,CN=Builtin",
+      "CN=RDS Management Servers,CN=Builtin",
+      "CN=RDS Remote Access Servers,CN=Builtin",
+      "CN=Remote Desktop Users,CN=Builtin",
+      "CN=Remote Management Users,CN=Builtin",
+      "CN=Replicator,CN=Builtin",
+      "CN=Server Operators,CN=Builtin",
+      "CN=Storage Replica Administrators,CN=Builtin",
+      "CN=Terminal Server License Servers,CN=Builtin",
+      "CN=Users,CN=Builtin",
+      "CN=Windows Authorization Access Group,CN=Builtin",
+      "CN=Tier 0 Admins,OU=Tier 0 Groups,OU=Tier 0,OU=Tier Model Administration",
+      "CN=Tier 0 Server Operators,OU=Tier 0 Groups,OU=Tier 0,OU=Tier Model Administration",
+      "CN=Tier 1 Admins,OU=Tier 1 Groups,OU=Tier 1,OU=Tier Model Administration",
+      "CN=Tier 1 Server Operators,OU=Tier 1 Groups,OU=Tier 1,OU=Tier Model Administration",
+      "CN=Tier 2 Admins,OU=Tier 2 Groups,OU=Tier 2,OU=Tier Model Administration"
+  ]);
+  SecurityEvent
+  | where EventID == 5136
+  | extend EventData = tostring(EventData)
+  | where EventData has_any(adminGroups)
+      and EventData has '"AttributeLDAPDisplayName">member'
+      and EventData has 'OperationType">%%14674'
+  | extend GroupName_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+  | extend GroupName = extract("(?i)CN=([^,]+)", 1, GroupName_e)
+  | extend GroupTier = case(
+      GroupName has "Tier 0", "Tier 0",
+      GroupName has "Tier 1", "Tier 1",
+      GroupName has "Tier 2", "Tier 2",
+      "Tier 0")
+  | extend ObjectName_e = extract("<Data Name=\"AttributeValue\">([^<]+)</Data>", 1, EventData)
+  | extend ObjectName = extract("(?i)CN=([^,]+)", 1, ObjectName_e)
+  | extend ObjectTier = case(
+      ObjectName_e has "Tier 0", "Tier 0",
+      ObjectName_e has "Tier 1", "Tier 1",
+      ObjectName_e has "Tier 2", "Tier 2",
+      "Outside Tier Model")
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend SubjectUserName = extract("<Data Name=\"SubjectUserName\">([^<]+)</Data>", 1, EventData)
+  | extend SubjectDomainName = extract("<Data Name=\"SubjectDomainName\">([^<]+)</Data>", 1, EventData)
+  | extend Account = strcat(SubjectDomainName, "\\", SubjectUserName)
+  | extend OperationType = iff(EventData has 'OperationType">%%14674', "Added", tostring(OperationType))
+  | project TimeGenerated 
+          , ObjectName
+          , ObjectTier
+          , ObjectType = AccountType
+          , GroupName
+          , GroupTier
+          , ActivityType
+          , OperationType
+          , Account
+          , Domain
+          , Computer
+          , Channel
+          , EventID
+          , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectType: ObjectType
+  GroupName: GroupName
+  GroupTier: GroupTier
+  ActivityType: ActivityType
+  OperationType: OperationType
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM016.1) A member was added to {{GroupName}} which is a Well-Known or Tier Model Group'
+  alertDescriptionFormat: 'The following object {{ObjectName}} was added to a {{ObjectTier}}  Well-Known or Tier Model high privilege group.'
+version: 1.0.0
+kind: Scheduled

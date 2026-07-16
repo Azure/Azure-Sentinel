@@ -1,0 +1,106 @@
+id: 05846968-15cc-4309-bddc-eaa296f84af1
+name: 'PROD (TM012.1) - GPO - Enforced Outside of Tier Model'
+description: |
+  Enforcing of a GPO could bypass or override Tier Model GPOs.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1484.001
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and not(EventData matches regex @"(?i)OU=Domain Controllers"
+          or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 1 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Accounts"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Devices"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Groups"
+          or EventData matches regex @"(?i)OU=Tier Model Administration"
+          or EventData matches regex @"(?i)OU=Tier Model Computer Quarantine")
+      and Activity has "modified" 
+      and EventData has '"ObjectClass">organizationalUnit'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">gPLink</Data>' 
+      and (EventData has ';0]' 
+          or EventData has ';1]' 
+          or EventData has ';2]')
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">((?i)OU=[^,]+(,OU=[^,]+)*),(?i)DC=", 1, EventData)
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+  | extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)
+  | extend AttributeValueDescription = case(
+      LastThreeChars == ";0", "Linked",
+      LastThreeChars == ";1", "Unlinked",
+      LastThreeChars == ";2", "Enforced",
+      "Unknown")
+  | where AttributeValueDescription == "Enforced"
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend ObjectTier = "Outside Tier Model"
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , ActivityType = AttributeValueDescription
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM012.1) A GPO was enforced and is overwriting the Tier Model GPOs'
+  alertDescriptionFormat: 'Enforcing a GPO outside the Tier Model can overwrite and bypass Tier Model GPO with security controls.'
+version: 1.0.0
+kind: Scheduled

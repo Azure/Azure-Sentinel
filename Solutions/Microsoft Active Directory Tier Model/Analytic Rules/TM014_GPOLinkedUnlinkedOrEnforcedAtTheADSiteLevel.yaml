@@ -1,0 +1,95 @@
+id: 38f2f6f4-2869-401c-8341-e3a5c11018a5
+name: 'PROD (TM014.1) - GPO - Linked, Unlinked, or Enforced at the AD Site Level'
+description: |
+  Monitoring AD Site GPOs being Linked, Unlinked, or Enforced.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1484.001
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and EventData matches regex @"(?i)CN=Sites"
+      and Activity has "modified" 
+      and EventData has '"ObjectClass">site'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">gPLink</Data>' 
+      and (EventData has ';0]' 
+          or EventData has ';1]' 
+          or EventData has ';2]')
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">((?i)CN=[^,]+(?:,(?i)CN=[^,]+)*),DC=", 1, EventData)
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+  | extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)
+  | extend AttributeValueDescription = case(
+      LastThreeChars == ";0", "Linked",
+      LastThreeChars == ";1", "Unlinked",
+      LastThreeChars == ";2", "Enforced",
+      "Unknown")
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectClass
+     , ActivityType = AttributeValueDescription
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectClass: ObjectClass
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM014.1) A GPO was {{ActivityType}} at the Active Directory Site Level'
+  alertDescriptionFormat: 'Site Level GPOs can overwrite Tier Model GPOs.'
+version: 1.0.0
+kind: Scheduled

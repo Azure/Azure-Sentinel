@@ -1,0 +1,121 @@
+id: b300c7f8-dc5e-4fc6-879b-63f0013358ce
+name: 'PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level'
+description: |
+  Added an object to a member of a Tier Model group that is outside of the same Tier. Example a Tier 0 user added to a Tier 1 group.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.002
+query: |
+  SecurityEvent 
+  | where EventID == 5136
+      and Activity has "modified"
+      and (EventData matches regex @"(?i)OU=Tier 0 Accounts" 
+           or EventData matches regex @"(?i)OU=Tier 1 Accounts" 
+           or EventData matches regex @"(?i)OU=Tier 2 Accounts"
+           or EventData matches regex @"(?i)OU=Tier 0 Service Accounts" 
+           or EventData matches regex @"(?i)OU=Tier 1 Service Accounts" 
+           or EventData matches regex @"(?i)OU=Tier 2 Service Accounts"
+           or EventData matches regex @"(?i)OU=Tier 0 Groups"
+           or EventData matches regex @"(?i)OU=Tier 1 Groups"
+           or EventData matches regex @"(?i)OU=Tier 2 Groups"
+           or EventData matches regex @"(?i)OU=Tier 0 PAW"
+           or EventData matches regex @"(?i)OU=Tier 1 PAW"
+           or EventData matches regex @"(?i)OU=Tier 2 PAW")
+      and EventData has '"AttributeLDAPDisplayName">member'
+      and EventData has 'OperationType">%%14674'
+  | extend GroupName_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+  | extend GroupName = extract("(?i)CN=([^,]+)", 1, GroupName_e)
+  | where GroupName != "Protected Users"
+  | where GroupName != "Allowed RODC Password Replication Group"
+  | extend GroupTier_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+  | extend GroupTier = extract("(?i)OU=(Tier [^ ]+)", 1, GroupTier_e)
+  | extend GroupTier = iff(isempty(GroupTier), "Outside Tier Model", GroupTier)
+  | extend ObjectName_e = extract("<Data Name=\"AttributeValue\">([^<]+)</Data>", 1, EventData)
+  | extend ObjectName = extract("(?i)CN=([^,]+)", 1, ObjectName_e)
+  | extend ObjectTier_e = extract("<Data Name=\"AttributeValue\">([^<]+)</Data>", 1, EventData)
+  | extend ObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, ObjectTier_e)
+  | extend ObjectTier = iff(isempty(ObjectTier), "Outside Tier Model", ObjectTier)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend OperationType = iff(EventData has 'OperationType">%%14674', "Added", tostring(OperationType))
+  | where GroupTier != ObjectTier
+  | project TimeGenerated 
+          , ObjectName
+          , ObjectTier
+          , ObjectType = AccountType
+          , GroupName
+          , GroupTier
+          , ActivityType
+          , OperationType
+          , Account
+          , Domain
+          , Computer
+          , Channel
+          , EventID
+          , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: SecurityGroup
+    fieldMappings:
+      - identifier: DistinguishedName
+        columnName: GroupName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectType: ObjectType
+  GroupName: GroupName
+  GroupTier: GroupTier
+  ActivityType: ActivityType
+  OperationType: OperationType
+  Account: Account
+  Domain: Domain
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5M
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - ObjectName
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM001.1) A {{ObjectTier}} object was added to non-{{ObjectTier}} group {{GroupName}}'
+  alertDescriptionFormat: |
+    Tier Model Alert TM001 - A {{ObjectTier}} object was added to non-{{ObjectTier}} group {{GroupName}}.
+
+    Resolution - Remove the object from the group
+version: 1.0.0
+kind: Scheduled
