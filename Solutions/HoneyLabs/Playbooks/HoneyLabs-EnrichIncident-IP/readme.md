@@ -16,7 +16,7 @@ comment with:
 ## Prerequisites
 
 - A HoneyLabs API key, created free at
-  [honeylabs.net/dashboard](https://honeylabs.net/dashboard) under API keys.
+  [honeylabs.net/dashboard?src=sentinel](https://honeylabs.net/dashboard?src=sentinel) under API keys.
   Lookup calls are metered against the key's daily credit quota.
 
 ## Post-deployment
