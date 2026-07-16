@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Palo Alto Prisma Cloud Compute.
 
-This ASIM parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the PrismaCloud_CL table. It supports successful logins, invalid credentials, and expired-token authentication failures.
+This ASIM parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table. It supports successful logins, invalid credentials, and expired-token authentication failures.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
