@@ -2,7 +2,7 @@
 
 ## Version 0.2.18
 
-- (2026-07-15) Add parser Google Workspace Logins Authentication - [PR #14638](https://github.com/Azure/Azure-Sentinel/pull/14638)
+- (2026-07-16) Add parser Google Workspace Logins Authentication - [PR #14638](https://github.com/Azure/Azure-Sentinel/pull/14638)
 
 ## Version 0.2.17
 
