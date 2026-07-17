@@ -19,14 +19,19 @@ query: |
       | where isnotempty(AccountObjectId) and isnotempty(ResolvedAccountUpn)
       | summarize arg_max(IdentityTimestamp, ResolvedAccountUpn) by AccountObjectId
       | project AccountObjectId = tostring(AccountObjectId), AccountUpn = ResolvedAccountUpn);
-  let CurrentState =
+  let CurrentState = materialize(
       AgentsInfo
       | where Timestamp > ago(recent)
       | summarize arg_max(Timestamp, *) by AgentId
       | where LifecycleStatus != "Deleted"
       | where array_length(coalesce(McpServers, dynamic([]))) > 0
       | project AgentId, Timestamp, Name, Platform, CreatedDateTime,
-                CurrentOwners = coalesce(Owners, dynamic([])), McpServers;
+                CurrentOwners = coalesce(Owners, dynamic([])), McpServers);
+  let CurrentMcp =
+      CurrentState
+      | mv-expand Mcp = McpServers
+      | extend McpName = tostring(Mcp.name)
+      | summarize McpServersConfigured = make_set_if(McpName, isnotempty(McpName)) by AgentId;
   let BaselineState =
       AgentsInfo
       | where Timestamp between (ago(lookback) .. ago(recent))
@@ -35,28 +40,19 @@ query: |
       | project AgentId, PreviousTimestamp = Timestamp,
                 PreviousOwners = coalesce(Owners, dynamic([]));
   CurrentState
+  | join kind=inner CurrentMcp on AgentId
   | join kind=inner BaselineState on AgentId
   | extend AddedOwners = set_difference(CurrentOwners, PreviousOwners)
   | where array_length(AddedOwners) > 0
   | mv-expand AddedOwnerId = AddedOwners to typeof(string)
   | join kind=leftouter IdentityIdtoUPN on $left.AddedOwnerId == $right.AccountObjectId
-  | summarize AddedOwnerUpns = make_set_if(AccountUpn, isnotempty(AccountUpn)),
-              UnresolvedAddedOwnerIds = make_set_if(AddedOwnerId, isempty(AccountUpn)),
-              take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
-                       PreviousOwners, CurrentOwners, AddedOwners, McpServers) by AgentId
-  | extend AddedOwnerUpns = array_sort_asc(AddedOwnerUpns),
-           AddedOwnerUpn = tostring(AddedOwnerUpns[0])
-  | mv-expand Mcp = McpServers
-  | extend McpName = tostring(Mcp.name)
-  | summarize McpServersConfigured = make_set_if(McpName, isnotempty(McpName)),
-             take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
-                      PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
-                      UnresolvedAddedOwnerIds, AddedOwnerUpn) by AgentId
+  | extend AddedOwnerUpn = AccountUpn,
+           UnresolvedAddedOwnerId = iff(isempty(AccountUpn), AddedOwnerId, "")
   | extend AddedOwnerAccountName = tostring(split(AddedOwnerUpn, "@")[0]),
            AddedOwnerAccountUPNSuffix = tostring(split(AddedOwnerUpn, "@")[1])
   | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
-           PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
-           UnresolvedAddedOwnerIds, AddedOwnerUpn, AddedOwnerAccountName,
+           PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerId,
+           UnresolvedAddedOwnerId, AddedOwnerUpn, AddedOwnerAccountName,
            AddedOwnerAccountUPNSuffix, McpServersConfigured
   | sort by Timestamp desc
 entityMappings:
@@ -66,4 +62,6 @@ entityMappings:
         columnName: AddedOwnerAccountName
       - identifier: UPNSuffix
         columnName: AddedOwnerAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: AddedOwnerId
 version: 1.0.0

@@ -48,13 +48,14 @@ query: |
   | join kind=inner Baseline on AgentId
   | extend AddedMcpServers = set_difference(CurrentMcpServers, BaselineMcpServers)
   | where array_length(AddedMcpServers) > 0
-  | extend OwnerId = tostring(Owners[0])
+  | extend OwnerIds = iff(array_length(coalesce(Owners, dynamic([]))) > 0, Owners, dynamic([""]))
+  | mv-expand OwnerId = OwnerIds to typeof(string)
   | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
   | project-rename OwnerUpn = AccountUpn
   | extend OwnerAccountName = tostring(split(OwnerUpn, "@")[0]),
            OwnerAccountUPNSuffix = tostring(split(OwnerUpn, "@")[1])
   | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
-           AddedMcpServers, BaselineMcpServers, CurrentMcpServers, OwnerUpn,
+           AddedMcpServers, BaselineMcpServers, CurrentMcpServers, OwnerId, OwnerUpn,
            OwnerAccountName, OwnerAccountUPNSuffix
   | sort by Timestamp desc
 entityMappings:
@@ -64,4 +65,6 @@ entityMappings:
         columnName: OwnerAccountName
       - identifier: UPNSuffix
         columnName: OwnerAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: OwnerId
 version: 1.0.0
