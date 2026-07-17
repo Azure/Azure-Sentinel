@@ -63,7 +63,7 @@ The solution installs the following 19 analytic rule templates. After installing
 | TM015 | ACL - Modified at KRBTGT or AdminSDHolder Object Level |
 | TM016 | GROUP - Added to Well-Known or Tier Model Group |
 | TM017 | GROUP - Tier 0 Added to Allow RODC Password Replication Group |
-| TM018 | DOMAIN - Child Domain prompted within the Forest |
+| TM018 | DOMAIN - Child Domain promoted within the Forest |
 | TM019 | TRUST - A new AD Trust has been established |
 
 ## Workbook
