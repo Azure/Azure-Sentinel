@@ -1,8 +1,8 @@
 id: 5e71c965-6875-4348-b98e-5ba38186be2e
 Function:
   Title: Parser for SecurityScorecard Issues
-  Version: '2.0.2'
-  LastUpdated: '2026-05-28'
+  Version: '2.0.3'
+  LastUpdated: '2026-06-26'
 Category: Microsoft Sentinel Parser
 FunctionName: SecurityScorecardIssue
 FunctionAlias: SecurityScorecardIssue
@@ -47,12 +47,8 @@ FunctionQuery: |
     };
     let SecurityScorecardIssueCCF = view () {
         SecurityScorecardIssuesHistory_CL
-        | lookup kind=leftouter (
-            SecurityScorecardRatingsHistory_CL
-            | where TimeGenerated > ago(365d)
-            | summarize arg_max(TimeGenerated, *) by domain
-            | project domain, rt_industry = industry, rt_portfolio_id = portfolio_id, rt_portfolio_name = portfolio_name
-          ) on domain
+        | where TimeGenerated > ago(365d)
+        | summarize arg_max(TimeGenerated, *) by id, portfolio_id
         | extend
             body_s = "Issue",
             eventID_d = todouble(id),
@@ -60,16 +56,16 @@ FunctionQuery: |
             subject_s = tostring(domain),
             date_s = tostring(issue_date),
             issueType_s = tostring(issue_type),
-            issueName_s = tostring(issue_type),
+            issueName_s = strcat_array(split(tostring(issue_type), "_"), " "),
             findingsCount_d = todouble(issue_count),
             groupStatus_s = tostring(group_status),
             totalScoreImpact_d = todouble(total_score_impact),
             severity_value_s = tostring(severity),
             detail_url_s = tostring(detail_url),
             ss_time_t = todatetime(issue_date),
-            industry_s = tostring(rt_industry),
-            portfolioId_g = toguid(rt_portfolio_id),
-            portfolioName_s = tostring(rt_portfolio_name)
+            industry_s = tostring(industry),
+            portfolioId_g = toguid(portfolio_id),
+            portfolioName_s = tostring(portfolio_name)
         | project
             TimeGenerated,
             body_s,

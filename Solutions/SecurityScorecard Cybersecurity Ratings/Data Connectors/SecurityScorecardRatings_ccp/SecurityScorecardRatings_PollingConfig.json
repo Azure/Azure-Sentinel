@@ -1,16 +1,18 @@
 [
     {
-        "name": "SecurityScorecardRatingsPoller",
-        "apiVersion": "2024-09-01",
         "type": "Microsoft.SecurityInsights/dataConnectors",
+        "apiVersion": "2024-09-01",
+        "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/SecurityScorecardRatings', uniqueString(parameters('PortfolioId')))]",
         "location": "{{location}}",
         "kind": "RestApiPoller",
         "properties": {
             "connectorDefinitionName": "SecurityScorecardRatingsCCPDefinition",
             "dataType": "SecurityScorecardRatingsHistory_CL",
             "addOnAttributes": {
-                "portfolio_id": "$portfolio_id$",
-                "portfolio_name": "$portfolio_name$"
+                "portfolio_id": "[[parameters('PortfolioId')]",
+                "portfolio_name": "[[parameters('PortfolioName')]",
+                "domain": "$company_domain$",
+                "industry": "$company_industry$"
             },
             "dcrConfig": {
                 "streamName": "Custom-SecurityScorecardRatingsHistory_CL",
@@ -19,17 +21,19 @@
             },
             "auth": {
                 "type": "APIKey",
-                "ApiKey": "{{ApiToken}}",
+                "ApiKey": "[[parameters('ApiToken')]",
                 "ApiKeyName": "Authorization",
                 "ApiKeyIdentifier": "Token"
             },
             "request": {
-                "apiEndpoint": "{{BaseUrl}}/portfolios",
+                "apiEndpoint": "[[concat(parameters('BaseUrl'), '/portfolios/', parameters('PortfolioId'), '/companies')]",
                 "httpMethod": "GET",
+                "queryWindowInMin": 10080,
+                "queryTimeFormat": "yyyy-MM-dd",
                 "rateLimitQPS": 1,
                 "retryCount": 3,
                 "timeoutInSeconds": 60,
-                "logResponseContent": true,
+                "logResponseContent": false,
                 "headers": {
                     "Content-Type": "application/json",
                     "Accept": "application/json; charset=utf-8",
@@ -47,25 +51,31 @@
                 "stepType": "Nested",
                 "nextSteps": [
                     {
-                        "stepId": "portfolioCompanies",
-                        "stepPlaceholdersParsingKql": "source | extend res = parse_json(data) | project portfolio_id = tostring(res['id']), portfolio_name = tostring(res['name'])"
+                        "stepId": "ratingsHistory",
+                        "stepPlaceholdersParsingKql": "source | extend res = parse_json(data) | project company_domain = tostring(res['domain']), company_industry = tostring(res['industry'])"
                     }
                 ]
             },
             "stepCollectorConfigs": {
-                "portfolioCompanies": {
+                "ratingsHistory": {
                     "request": {
-                        "apiEndpoint": "{{BaseUrl}}/portfolios/$portfolio_id$/companies",
+                        "apiEndpoint": "[[concat(parameters('BaseUrl'), '/companies/$company_domain$/history/score')]",
                         "httpMethod": "GET",
+                        "queryWindowInMin": 10080,
+                        "queryTimeFormat": "yyyy-MM-dd",
                         "rateLimitQPS": 1,
                         "retryCount": 3,
                         "timeoutInSeconds": 60,
-                        "logResponseContent": true,
+                        "logResponseContent": false,
                         "headers": {
                             "Content-Type": "application/json",
                             "Accept": "application/json; charset=utf-8",
                             "X-SSC-Application-Name": "Microsoft Sentinel",
                             "X-SSC-Application-Version": "1.0"
+                        },
+                        "queryParameters": {
+                            "from": "{_QueryWindowStartTime}",
+                            "to": "{_QueryWindowEndTime}"
                         }
                     },
                     "response": {
@@ -75,6 +85,61 @@
                         ]
                     }
                 }
+            }
+        }
+    },
+    {
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "apiVersion": "2024-09-01",
+        "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/SecurityScorecardRatingsOwn', uniqueString(parameters('Domain')))]",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "condition": "[[and(not(empty(parameters('Domain'))), not(equals(parameters('Domain'), 'Domain')))]",
+        "properties": {
+            "connectorDefinitionName": "SecurityScorecardRatingsCCPDefinition",
+            "dataType": "SecurityScorecardRatingsHistory_CL",
+            "addOnAttributes": {
+                "portfolio_id": "NA",
+                "portfolio_name": "My Scorecard",
+                "domain": "[[parameters('Domain')]",
+                "industry": "NA"
+            },
+            "dcrConfig": {
+                "streamName": "Custom-SecurityScorecardRatingsHistory_CL",
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+            },
+            "auth": {
+                "type": "APIKey",
+                "ApiKey": "[[parameters('ApiToken')]",
+                "ApiKeyName": "Authorization",
+                "ApiKeyIdentifier": "Token"
+            },
+            "request": {
+                "apiEndpoint": "[[concat(parameters('BaseUrl'), '/companies/', parameters('Domain'), '/history/score')]",
+                "httpMethod": "GET",
+                "queryWindowInMin": 10080,
+                "queryTimeFormat": "yyyy-MM-dd",
+                "rateLimitQPS": 1,
+                "retryCount": 3,
+                "timeoutInSeconds": 60,
+                "logResponseContent": false,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json; charset=utf-8",
+                    "X-SSC-Application-Name": "Microsoft Sentinel",
+                    "X-SSC-Application-Version": "1.0"
+                },
+                "queryParameters": {
+                    "from": "{_QueryWindowStartTime}",
+                    "to": "{_QueryWindowEndTime}"
+                }
+            },
+            "response": {
+                "format": "json",
+                "eventsJsonPaths": [
+                    "$.entries"
+                ]
             }
         }
     }
