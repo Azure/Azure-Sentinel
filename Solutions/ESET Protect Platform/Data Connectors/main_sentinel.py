@@ -14,7 +14,7 @@ class ServiceClientSentinel(ServiceClient):
         super().__init__()
 
     def _get_config(self) -> Config:
-        return Config("MS-Sentinel", "3.3.0")
+        return Config("MS-Sentinel", "3.3.2")
 
     def _get_env_vars(self) -> EnvVariablesSentinel:
         return EnvVariablesSentinel()

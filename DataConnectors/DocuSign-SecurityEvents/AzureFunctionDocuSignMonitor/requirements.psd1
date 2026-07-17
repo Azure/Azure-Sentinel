@@ -2,6 +2,6 @@
 # See https://aka.ms/functionsmanageddependency for additional information.
 #
 @{    
-	'Az' = '5.*'
+	'Az' = '11.*'
 	'AzTable' = '2.*'
 }
