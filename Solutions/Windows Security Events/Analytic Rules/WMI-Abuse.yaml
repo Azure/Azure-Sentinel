@@ -3,30 +3,22 @@ name: WMI Spawning Suspicious Child Process (Living off the Land)
 description: |
   Detects WmiPrvSE.exe (the WMI Provider Host) spawning high-risk processes
   such as PowerShell, cmd.exe, cscript, or other LOLBins.
-
-  Maps to MITRE ATT&CK:
-    T1047       - Windows Management Instrumentation
-    T1021.006   - Remote Services: Windows Remote Management
-    T1059.001   - PowerShell
-    T1059.003   - Windows Command Shell
-    T1059.005   - Visual Basic
+  WMI requires no external tools, generates minimal disk artifacts, and can
+  execute code on remote systems over DCOM/RPC while bypassing many controls.
+  Tune AllowlistedCmdPatterns for known-safe management tools such as SCCM.
 severity: High
+status: Available
 requiredDataConnectors:
-  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+  - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
   - connectorId: SecurityEvents
-    dataTypes:
-      - SecurityEvent
-  - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-status: Available
-kind: Scheduled
 tactics:
   - Execution
   - LateralMovement
@@ -52,16 +44,14 @@ query: |
   ]);
   let NetworkIndicators = dynamic([
     "http://", "https://", "ftp://", "Net.WebClient",
-    "DownloadString", "IEX", "Invoke-Expression",
-    "Invoke-RestMethod", "/transfer", "-urlcache"
+    "DownloadString", "IEX", "Invoke-Expression", "/transfer", "-urlcache"
   ]);
   let CredentialIndicators = dynamic([
-    "lsass", "mimikatz", "sekurlsa", "credential",
-    "dump", "sam", "ntds", "hash"
+    "lsass", "mimikatz", "sekurlsa", "dump", "sam", "ntds"
   ]);
   let MDE_Results =
     DeviceProcessEvents
-    | where TimeGenerated > ago(Lookback)
+    | where Timestamp >= ago(Lookback)
     | where InitiatingProcessFileName =~ "WmiPrvSE.exe"
     | where FileName in~ (SuspiciousChildProcesses)
     | where not(ProcessCommandLine has_any (AllowlistedCmdPatterns))
@@ -70,18 +60,15 @@ query: |
         ChildCmdLine       = ProcessCommandLine,
         AccountName        = InitiatingProcessAccountName,
         AccountDomain      = InitiatingProcessAccountDomain,
-        ParentProcess      = InitiatingProcessFileName,
         HostName           = DeviceName,
-        EventTime          = TimeGenerated,
+        EventTime          = Timestamp,
         NetworkActivity    = ProcessCommandLine has_any (NetworkIndicators),
-        CredentialActivity = ProcessCommandLine has_any (CredentialIndicators),
-        Source             = "MDE"
-    | project
-        EventTime, HostName, AccountName, AccountDomain, ChildProcess,
-        ChildCmdLine, ParentProcess, NetworkActivity, CredentialActivity, Source;
+        CredentialActivity = ProcessCommandLine has_any (CredentialIndicators)
+    | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+        ChildCmdLine, NetworkActivity, CredentialActivity;
   let SecEvent_Results =
     SecurityEvent
-    | where TimeGenerated > ago(Lookback)
+    | where TimeGenerated >= ago(Lookback)
     | where EventID == 4688
     | where ParentProcessName endswith "\\WmiPrvSE.exe"
     | extend ChildProcess = tostring(split(NewProcessName, "\\")[-1])
@@ -91,32 +78,23 @@ query: |
         ChildCmdLine       = CommandLine,
         AccountName        = SubjectUserName,
         AccountDomain      = SubjectDomainName,
-        ParentProcess      = "WmiPrvSE.exe",
         HostName           = Computer,
         EventTime          = TimeGenerated,
         NetworkActivity    = CommandLine has_any (NetworkIndicators),
-        CredentialActivity = CommandLine has_any (CredentialIndicators),
-        Source             = "SecurityEvent"
-    | project
-        EventTime, HostName, AccountName, AccountDomain, ChildProcess,
-        ChildCmdLine, ParentProcess, NetworkActivity, CredentialActivity, Source;
+        CredentialActivity = CommandLine has_any (CredentialIndicators)
+    | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+        ChildCmdLine, NetworkActivity, CredentialActivity;
   union MDE_Results, SecEvent_Results
-  | extend
-      HostName  = iif(HostName has '.', substring(HostName, 0, indexof(HostName, '.')), HostName),
-      DnsDomain = iif(HostName has '.', substring(HostName, indexof(HostName, '.') + 1), ''),
-      RiskScore = case(
-        CredentialActivity == true, 3,
-        NetworkActivity == true, 2,
-        1
-      )
+  | extend RiskScore = case(
+      CredentialActivity == true, 3,
+      NetworkActivity    == true, 2,
+      true,                       1)
   | sort by RiskScore desc, EventTime desc
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
+      - identifier: FullName
         columnName: HostName
-      - identifier: DnsDomain
-        columnName: DnsDomain
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -127,25 +105,5 @@ entityMappings:
     fieldMappings:
       - identifier: CommandLine
         columnName: ChildCmdLine
-alertDetailsOverride:
-  alertDisplayNameFormat: "WMI spawned {{ChildProcess}} on {{HostName}}"
-  alertDescriptionFormat: "WmiPrvSE.exe spawned {{ChildProcess}} on {{HostName}}."
-customDetails:
-  ChildProcess: ChildProcess
-  ChildCommandLine: ChildCmdLine
-  NetworkActivity: NetworkActivity
-  CredentialActivity: CredentialActivity
-  DataSource: Source
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: true
-    reopenClosedIncident: false
-    lookbackDuration: 5h
-    matchingMethod: AllEntities
-    groupByEntities:
-      - Host
-      - Account
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-version: 1.0.3
+version: 1.0.4
+kind: Scheduled
