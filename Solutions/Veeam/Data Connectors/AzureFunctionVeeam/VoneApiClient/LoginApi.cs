@@ -26,7 +26,6 @@ namespace VoneApiClient
 
             var requestBody = $"username={Uri.EscapeDataString(tokenLoginSpec.Username ?? "string")}" +
                               $"&password={Uri.EscapeDataString(tokenLoginSpec.Password ?? "string")}" +
-                              //$"&password={Uri.EscapeDataString("f")}" +
                               $"&grant_type={Uri.EscapeDataString(tokenLoginSpec.GrantType.ToString())}" +
                               $"&refresh_token={Uri.EscapeDataString(tokenLoginSpec.RefreshToken ?? "string")}";
 

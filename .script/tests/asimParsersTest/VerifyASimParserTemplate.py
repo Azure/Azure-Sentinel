@@ -1,3 +1,25 @@
+# VerifyASimParserTemplate.py
+#
+# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# For each modified parser, the following checks are performed against the parser
+# YAML and its corresponding union parser YAML:
+#
+# 1.  EventProduct  - ParserQuery must set EventProduct (exempt for _Native parsers)
+# 2.  EventVendor   - ParserQuery must set EventVendor (exempt for _Native parsers)
+# 3.  ParserName in union parser  - ParserName must appear in the union parser's ParserQuery
+# 4.  EquivalentBuiltInParser in union parser - must appear in the union parser's Parsers list
+# 5.  Parser.Title   - must be present
+# 6.  Parser.Version - must be present and in X.X.X format
+# 7.  Parser.LastUpdated - must be present and in "Mon DD, YYYY" format (e.g. Jun 29, 2024)
+# 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
+# 9.  Normalization.Version - must match the expected version for the schema in SCHEMA_INFO
+# 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
+# 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
+# 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
+# 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+#
+# Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
+
 import sys
 import os
 
@@ -8,7 +30,6 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir in sys.path:
     sys.path.remove(script_dir)
 
-import requests
 import yaml
 import re
 import subprocess
@@ -19,22 +40,24 @@ from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
+SAMPLE_DATA_PATH = 'Sample Data/ASIM/'
 parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
     {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
-    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
-    {"SchemaName": "Authentication", "SchemaVersion": "0.1.3","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
+    {"SchemaName": "AgentEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Agent Event Schema", "SchemaLink": "https://aka.ms/ASimAgentEventDoc"},
+    {"SchemaName": "AssetEntity", "SchemaVersion": "1.0.0", "SchemaTitle":"ASIM Asset Entity Schema", "SchemaLink": "https://aka.ms/ASimAssetEntityDoc"},
+    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
+    {"SchemaName": "Authentication", "SchemaVersion": "0.1.4","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
     {"SchemaName": "Dns", "SchemaVersion": "0.1.7", "SchemaTitle":"ASIM Dns Schema","SchemaLink": "https://aka.ms/ASimDnsDoc"},
-    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
-    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.1", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
-    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.6", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
+    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
+    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.2", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
+    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
     {"SchemaName": "ProcessEvent", "SchemaVersion": "0.1.4", "SchemaTitle":"ASIM Process Schema","SchemaLink": "https://aka.ms/ASimProcessEventDoc"},
-    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
-    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
-    {"SchemaName": "WebSession", "SchemaVersion": "0.2.6", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
+    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.3", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
+    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
+    {"SchemaName": "WebSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
     # Add more schemas as needed
 ]
 
@@ -52,10 +75,11 @@ RESET = '\033[0m'  # Reset to default color
 def run():
     """Main function to execute the script logic."""
     current_directory = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
-    commit_number = get_current_commit_number()
-    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
+    sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
     parser_yaml_files = filter_yaml_files(modified_files)
+    has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
         print(f"{YELLOW}{file}{RESET}")
@@ -76,41 +100,62 @@ def run():
              else :
                  # Skip the vim parser file as the corresponding ASim parser file is present and vim files will be tested with ASim files in upcoming steps.
                  continue 
-        asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{parser}'
-        print(f'{YELLOW}Constructed parser raw url:  {asim_parser_url}{RESET}') # uncomment for debugging
-        asim_union_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml'
-        print(f'{YELLOW}Constructed union parser raw url:  {asim_union_parser_url}{RESET}') # uncomment for debugging
-        asim_parser = read_github_yaml(asim_parser_url)
-        asim_union_parser = read_github_yaml(asim_union_parser_url)
+        asim_parser_path = os.path.join(repo_root, parser)
+        print(f'{YELLOW}Parser file path: {asim_parser_path}{RESET}')
+        asim_union_parser_path = os.path.join(repo_root, 'Parsers', f'ASim{schema_name}', 'Parsers', f'ASim{schema_name}.yaml')
+        print(f'{YELLOW}Union parser file path: {asim_union_parser_path}{RESET}')
+        asim_parser = read_local_yaml(asim_parser_path)
+        asim_union_parser = read_local_yaml(asim_union_parser_path)
         # Both ASim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(asim_parser, asim_parser_url) and check_parser_found(asim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(asim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", sample_data_path)
         print_results_table(results)
 
-        check_test_failures(results, asim_parser)
+        if check_test_failures(results, asim_parser):
+            has_failures = True
 
-        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser)
+        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_path, asim_union_parser_path)
         # Both vim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(vim_parser, asim_parser_url) and check_parser_found(vim_union_parser, asim_union_parser_url)):
+        if not (check_parser_found(vim_parser, asim_parser_path) and check_parser_found(vim_union_parser, asim_union_parser_path)):
             continue
         print_test_header(vim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", asim_parser_url, sample_data_url)
+        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", sample_data_path)
         print_results_table(results)
 
-        check_test_failures(results, vim_parser)
+        if check_test_failures(results, vim_parser):
+            has_failures = True
 
-def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ParserUrl, ASIMSampleDataURL):
+    if has_failures:
+        exit(1)
+
+def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIMSampleDataURL):
     """
-    Extracts properties from the given YAML files and checks if they exist in another YAML file.
+    Validates the template properties of an ASIM parser YAML file.
+
+    Checks performed:
+    - EventProduct and EventVendor are mapped in ParserQuery (or parser is _Native)
+    - ParserName is referenced in the union parser's ParserQuery
+    - EquivalentBuiltInParser is listed in the union parser's Parsers array
+    - Parser.Title is present
+    - Parser.Version is present and in X.X.X format
+    - Parser.LastUpdated is present and in 'Mon DD, YYYY' format
+    - Normalization.Schema matches a known ASIM schema name
+    - Normalization.Version matches the expected schema version
+    - References include correct schema-specific and ASIM doc links
+    - ParserName follows the naming convention <FileType><Schema>...
+    - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
+    - Sample data CSV file exists locally (ASim parsers only)
 
     Args:
-        yaml_file (dict): The YAML file to extract properties from.
-        another_yaml_file (dict): The YAML file to check for the existence of properties.
+        Parser_file (dict): Parsed YAML content of the parser file.
+        Union_Parser__file (dict): Parsed YAML content of the union parser file.
+        FileType (str): Parser type - 'ASim' or 'vim'.
+        ASIMSampleDataURL (str): Local path to the sample data directory.
 
     Returns:
-        list: A list of tuples containing the property name, the property type, and a boolean indicating if the property exists in another_yaml_file.
+        list: A list of (value, description, result) tuples where result is 'Pass' or 'Fail'.
     """
     results = []
     parser_name = Parser_file.get('ParserName')
@@ -263,13 +308,12 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if FileType == "ASim":
         # construct filename
         SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataUrl = ASIMSampleDataURL+SampleDataFile
-        # check if file exists
-        response = requests.get(SampleDataUrl)
-        if response.status_code == 200:
+        SampleDataFilePath = os.path.join(ASIMSampleDataURL, SampleDataFile)
+        # check if file exists locally
+        if os.path.exists(SampleDataFilePath):
             results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
     return results
 
 def filter_yaml_files(modified_files):
@@ -306,12 +350,16 @@ def extract_schema_name(parser):
     match = re.search(r'ASim(\w+)/', parser)
     return match.group(1) if match else None
 
-def read_github_yaml(url):
+def read_local_yaml(filepath):
     try:
-        response = requests.get(url)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f.read())
+    except FileNotFoundError:
+        print(f"::error::YAML file not found at {filepath}")
+        return None
     except Exception as e:
-        print(f"::error::An error occurred while trying to get content of YAML file located at {url}: {e}")
-    return yaml.safe_load(response.text) if response.status_code == 200 else None
+        print(f"::error::An error occurred while reading YAML file at {filepath}: {e}")
+        return None
 
 def print_test_header(parser_name):
     print("***********************************")
@@ -328,33 +376,27 @@ def check_test_failures(results, parser):
         exclusion_list = read_exclusion_list_from_csv()
         if parser.get('EquivalentBuiltInParser') in exclusion_list:
             print(f"::warning::The parser {parser.get('EquivalentBuiltInParser')} is listed in the exclusions file, so this workflow run will not fail because of it. To allow this parser to trigger a workflow failure, please remove its name from the exclusions list file located at: {parser_exclusion_file_path}")
+            return False
         else:
-            exit(1)
+            return True
     else:
         print(f"{GREEN}All tests successfully passed for this parser.{RESET}")
+        return False
 
-def check_parser_found(asim_parser,parser_url):
+def check_parser_found(asim_parser, parser_path):
     if asim_parser is None:
-        print(f"::error::Parser file not found. Please check the URL and try again: {parser_url}")
+        print(f"::error::Parser file not found at: {parser_path}")
         exit(1) # Uncomment this line to fail the workflow if parser file not found.
-    else:
-        return True
+    
+    return True
 
-def get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser):
-    # Split the URL into parts
-    parts = asim_parser_url.split('/')
+def get_vim_parsers(asim_parser_path, asim_union_parser_path):
     # Replace 'ASim' with 'vim' in the filename only
-    parts[-1] = parts[-1].replace('ASim', 'vim', 1)
-    # Join the parts back into a full URL for vim_parser_url
-    vim_parser_url = '/'.join(parts)
-    # Repeat the process for asim_union_parser_url
-    parts_union = asim_union_parser_url.split('/')
-    # Replace 'ASim' with 'im' in the filename only
-    parts_union[-1] = parts_union[-1].replace('ASim', 'im', 1)
-    # Join the parts back into a full URL for vim_union_parser_url
-    vim_union_parser_url = '/'.join(parts_union)
-    vim_parser = read_github_yaml(vim_parser_url)
-    vim_union_parser = read_github_yaml(vim_union_parser_url)
+    vim_parser_path = os.path.join(os.path.dirname(asim_parser_path), os.path.basename(asim_parser_path).replace('ASim', 'vim', 1))
+    # Replace 'ASim' with 'im' in the union parser filename only
+    vim_union_parser_path = os.path.join(os.path.dirname(asim_union_parser_path), os.path.basename(asim_union_parser_path).replace('ASim', 'im', 1))
+    vim_parser = read_local_yaml(vim_parser_path)
+    vim_union_parser = read_local_yaml(vim_union_parser_path)
     return vim_parser, vim_union_parser
 
 # Function to read Exclusion list for ASim Parser test from a CSV file

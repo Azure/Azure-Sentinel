@@ -11,7 +11,7 @@ from ..exports_store import (
 from ..azure_sentinel import MicrosoftSentinel
 from ..tenable_helper import TenableIO, TenableStatus, TenableChunkPartitioner
 from tenable.errors import APIError
-from azure.identity import AzureAuthorityHosts, DefaultAzureCredential
+from azure.identity import AzureAuthorityHosts, ClientSecretCredential
 from azure.monitor.ingestion import LogsIngestionClient
 import time
 
@@ -26,6 +26,10 @@ logs_starts_with = "TenableVM"
 function_name = "TenableVulnDownloadAndProcessChunks"
 vuln_table = ExportsTableStore(connection_string, vuln_table_name)
 MAX_EXECUTION_TIME = 570
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
+
 
 
 def download_chunk_details(job_id, chunk_id):
@@ -154,9 +158,18 @@ def send_chunk_details_to_sentinel(job_id, chunk_id, chunk, execution_start_time
                 )
 
                 if ".us" in scope:
-                    creds = DefaultAzureCredential(authority=AzureAuthorityHosts.AZURE_GOVERNMENT)
+                    creds = ClientSecretCredential(
+                        client_id=AZURE_CLIENT_ID,
+                        client_secret=AZURE_CLIENT_SECRET,
+                        tenant_id=AZURE_TENANT_ID,
+                        authority=AzureAuthorityHosts.AZURE_GOVERNMENT
+                    )
                 else:
-                    creds = DefaultAzureCredential()
+                    creds = ClientSecretCredential(
+                        client_id=AZURE_CLIENT_ID,
+                        client_secret=AZURE_CLIENT_SECRET,
+                        tenant_id=AZURE_TENANT_ID
+                    )
                 azure_client = LogsIngestionClient(azure_data_collection_endpoint, credential=creds, credential_scopes=[scope])
                 ms_sentinel_obj = MicrosoftSentinel(azure_client)
                 # Send to Azure Sentinel here

@@ -5,7 +5,7 @@ namespace Sentinel.Managers
 {
     public interface ILogAnalyticsManager
     {
-        Task SaveMalwareEventsToCustomTableAsync(SuspiciousActivityEventsResult malwareEvents, string vbrHostName);
+        Task SaveMalwareEventsToCustomTableAsync(List<MalwareEventsDTO> malwareEventsDtos, string vbrHostName);
 
         Task SaveBestPracticeAnalysisToCustomTableAsync(List<BestPracticeAnalysisDTO> analysis, string vbrHostName);
 

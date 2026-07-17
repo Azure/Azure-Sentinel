@@ -1,7 +1,6 @@
 """Get Mimecast Audit Data and Ingest into Sentinel."""
 
 from ..SharedCode.state_manager import StateManager
-import json
 import datetime
 import inspect
 import time
@@ -22,8 +21,6 @@ class MimeCastAuditToSentinel(Utils):
         self.check_environment_var_exist(
             [
                 {"Base_Url": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"Mimecast_Client_Id": consts.MIMECAST_CLIENT_ID},
                 {"Mimecast_Client_Secret": consts.MIMECAST_CLIENT_SECRET},
                 {"File_Path": consts.FILE_PATH},
@@ -415,8 +412,7 @@ class MimeCastAuditToSentinel(Utils):
 
                 data = response.get("data")
                 if len(data) > 0:
-                    data_to_post = json.dumps(data)
-                    sentinel.post_data(data_to_post, consts.TABLE_NAME["Audit"])
+                    sentinel.send_data_to_sentinel(data, consts.TABLE_NAME["Audit"])
                     applogger.info(
                         self.log_format.format(
                             consts.LOGS_STARTS_WITH,

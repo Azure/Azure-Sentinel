@@ -59,7 +59,10 @@ def lambda_handler(event, context):
         sanitized_stream_name = log_data['logStream'].replace('/', '_')
         first_timestamp = df['timestamp'].iloc[0]
         file_path = f'/tmp/{sanitized_stream_name}_{first_timestamp}.gz'
-        fileToS3.to_csv(file_path, index=False, header=False, compression='gzip', sep=' ', escapechar=' ', doublequote=False, quoting=csv.QUOTE_NONE)
+        
+        text_content = '\n'.join(fileToS3['message'].astype(str).values)
+        with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+            f.write(text_content)
  
         # Update S3 path with or without OUTPUT_FILE_NAME
         s3_key = f'{BUCKET_PREFIX}{current_date}/'

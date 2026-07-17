@@ -1,5 +1,9 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.5       | 09-07-2026                     | Updated **Parser** and **CCF Data Connector** DCR. |
+| 3.1.4       | 13-04-2026                     | Deprecate Box Events (using Azure Function) |
+| 3.1.3       | 24-03-2026                     | Rename to Box Events (via Codeless Connector Framework) |
+| 3.1.2       | 29-10-2025                     | Updated KQL queries in Workbook to use EventEndTime instead of TimeGenerated for time-based filtering |
 | 3.1.1       | 10-02-2025                     | Advancing CCP **Data Connector** from Public preview to Global Availability.|
 | 3.1.0       | 06-12-2024                     | Added new CCP **Data Connector** and modified **Parser**.           |
 | 3.0.1       | 18-08-2023                     | Added text 'using Azure Functions' in **Data Connector** page.      |

@@ -21,5 +21,7 @@ namespace Sentinel.Managers
         Task SaveCovewareTokensAsync(string covewareId, CovewareTokens tokens);
         
         Task<CovewareTokens> GetCovewareTokensAsync(string covewareId);
+        
+        Task<string> GetCovewareAuthUrlAsync(string covewareId);
     }
 }

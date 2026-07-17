@@ -179,7 +179,10 @@ class S3Client:
 
         marker_end = (ts_from - datetime.timedelta(minutes=60)).strftime("/%Y-%m-%d/%Y-%m-%d-%H-%M")
         
-        for o in folders.get('CommonPrefixes'):        
+        # Handle case where CommonPrefixes might be None or empty (newer boto3 behavior)
+        common_prefixes = folders.get('CommonPrefixes') or []
+        
+        for o in common_prefixes:        
             marker = o.get('Prefix') + s3_folder + marker_end   
             folder = o.get('Prefix') + s3_folder           
             while True:                
@@ -223,6 +226,9 @@ class S3Client:
                 extracted_file = gzip.GzipFile(fileobj=file_obj).read().decode('utf-8')                             
             elif '.json' in key.lower():
                 extracted_file = file_obj
+            else:
+                logging.error('Unsupported file type for key {}'.format(key))
+                return None
             return extracted_file
 
         except Exception as err:
@@ -249,7 +255,8 @@ class S3Client:
         return sorted(ls, key=lambda k: k['LastModified'])
 
     def process_obj(self, obj):        
-        key = obj['Key']        
+        key = obj['Key']
+        sortedLogEvents = []
         if '.json.gz' in key.lower():
             downloaded_obj = self.download_obj(key)
             json_file = self.unpack_file(downloaded_obj, key)

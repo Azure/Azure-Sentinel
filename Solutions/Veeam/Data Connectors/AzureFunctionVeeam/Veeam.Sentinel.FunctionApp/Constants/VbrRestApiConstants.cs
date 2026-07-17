@@ -9,5 +9,6 @@
         public const string VbrBaseUrlAlias = "Base URL";
         public const string ApiVersionHeaderLabel = "x-api-version";
         public const string ApiVersion = "1.1-rev1";
+        public const int DefaultPageSize = 100;
     }
 }

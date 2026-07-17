@@ -1,0 +1,154 @@
+{
+  "id": "BloodHoundEnterprise",
+  "title": "BloodHound Enterprise Data Connector (using Azure Functions)",
+  "publisher": "SpecterOps",
+  "descriptionMarkdown": "**[BloodHound Enterprise](https://bloodhoundenterprise.io/)** from **[SpecterOps](https://specterops.io/)** is an **Identity Attack Path Management** platform: it maps how attackers can move through identity relationships to reach critical assets so teams can **prioritize and remediate** those paths not only detect them. It brings clarity to identity sprawl in **Active Directory**, **Azure**, and beyond, including **Privilege Zone** style protection around what matters most in your environment.\n\nThis **Microsoft Sentinel** connector adds **BloodHound Enterprise attack path context** into your workspace alongside logs and alerts so you can **enrich investigations**, focus on high-value findings, and track exposure, audit activity, and **Tier Zero** assets in one place.\n\n**What this connector does**\n- Connects to the **BloodHound Enterprise REST API** using your configured credentials (see [Working with the API](https://bloodhound.specterops.io/integrations/bloodhound-api/working-with-api)) and runs on a **schedule** you set when the Azure Function is deployed. The data is collected through Azure Functions and stored in custom Log Analytics tables with dedicated Data Collection Rules (DCR) and Data Collection Endpoints (DCE).",
+  "additionalRequirementBanner": "Some **workbooks** and **analytics rules** in this solution rely on **Kusto (KQL)** over these custom tables. Deploy the full solution from Content Hub so templates, parsers (if present), rules, and workbooks stay in sync.",
+  "graphQueries": [
+    {
+      "metricName": "All attack path records",
+      "legend": "BHEAttackPathsData_CL",
+      "baseQuery": "BHEAttackPathsData_CL"
+    },
+    {
+      "metricName": "Attack paths with findings",
+      "legend": "BHEAttackPathsData_CL",
+      "baseQuery": "BHEAttackPathsData_CL\n| where isnotempty(Finding)"
+    },
+    {
+      "metricName": "Attack path timeline",
+      "legend": "BHEAttackPathsTimelineData_CL",
+      "baseQuery": "BHEAttackPathsTimelineData_CL"
+    },
+    {
+      "metricName": "Audit logs",
+      "legend": "BHEAuditLogsData_CL",
+      "baseQuery": "BHEAuditLogsData_CL"
+    },
+    {
+      "metricName": "Finding trends",
+      "legend": "BHEFindingTrendsData_CL",
+      "baseQuery": "BHEFindingTrendsData_CL"
+    },
+    {
+      "metricName": "Posture history",
+      "legend": "BHEPostureHistoryData_CL",
+      "baseQuery": "BHEPostureHistoryData_CL"
+    },
+    {
+      "metricName": "Tier Zero assets",
+      "legend": "BHETierZeroAssetsData_CL",
+      "baseQuery": "BHETierZeroAssetsData_CL"
+    }
+  ],
+  "sampleQueries": [],
+  "dataTypes": [
+    {
+      "name": "BHEAttackPathsData_CL",
+      "lastDataReceivedQuery": "BHEAttackPathsData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    },
+    {
+      "name": "BHEAttackPathsTimelineData_CL",
+      "lastDataReceivedQuery": "BHEAttackPathsTimelineData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    },
+    {
+      "name": "BHEAuditLogsData_CL",
+      "lastDataReceivedQuery": "BHEAuditLogsData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    },
+    {
+      "name": "BHEFindingTrendsData_CL",
+      "lastDataReceivedQuery": "BHEFindingTrendsData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    },
+    {
+      "name": "BHEPostureHistoryData_CL",
+      "lastDataReceivedQuery": "BHEPostureHistoryData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    },
+    {
+      "name": "BHETierZeroAssetsData_CL",
+      "lastDataReceivedQuery": "BHETierZeroAssetsData_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "union BHEAttackPathsData_CL, BHEAttackPathsTimelineData_CL, BHEAuditLogsData_CL, BHEFindingTrendsData_CL, BHEPostureHistoryData_CL, BHETierZeroAssetsData_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(3d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": true
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Microsoft.Web/sites permissions",
+        "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+      },
+      {
+        "name": "BloodHound Enterprise API access",
+        "description": "**Token ID**, **Token key**, and your tenant **base URL** are required to authenticate to the BloodHound Enterprise REST API (requests are signed per the SpecterOps API model see [Working with the API](https://bloodhound.specterops.io/integrations/bloodhound-api/working-with-api))."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "Step 1. Create BloodHound Enterprise API credentials",
+      "description": "In your BloodHound Enterprise tenant, create API credentials (**Token ID** and **Token key**) used to sign requests to the REST API. Follow [Working with the API](https://bloodhound.specterops.io/integrations/bloodhound-api/working-with-api) to create API credentials then store the values securely."
+    },
+    {
+      "title": "Step 2. Create Microsoft Entra application",
+      "description": "Create a Microsoft Entra ID (Azure AD) application used for ingestion to Log Analytics (for example DCE/DCR-related access). Follow [Create a Microsoft Entra application](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-microsoft-entra-application) to create Microsoft Entra application & its credentials then save **Application (client) ID**, **Client secret** value, and any other IDs your administrator requires. Store the client secret securely."
+    },
+    {
+      "title": "Step 3. Deploy Function App",
+      "description": ">**NOTE:** This connector uses Azure Functions to pull data from BloodHound Enterprise into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+    },
+    {
+      "title": "",
+      "description": ">**IMPORTANT:** Before deploying the BloodHound Enterprise connector, have the **Workspace name** (see below), **BloodHound Enterprise tenant URL**, **Token ID** and **Token key**, **Microsoft Entra Application (client) ID** and **client secret**, and your desired **environment** and **finding type** filters (or use template defaults such as **All**) ready.",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceName"
+            ],
+            "label": "Workspace Name"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "Deploy all the resources related to the data connector",
+      "description": "1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-BloodhoundEnterprise-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n3. Enter **Function App name**, **Log Analytics workspace name** (Microsoft Sentinel workspace), **BloodHound Enterprise tenant domain** (URL), **BloodHound Token ID** and **Token key** (secure parameters), **Microsoft Entra Application (client) ID**, and **Microsoft Entra application client secret**.\n4. Optional: set **Lookup days** (historical lookback), **Selected BloodHound environments** (comma-separated or **All**), and **Selected finding types** (or **All**) as described in the template.\n5. Click **Review + create**, then **Create** to deploy."
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "kind": "dataConnector"
+  }
+}

@@ -13,6 +13,9 @@ For more information, see:
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM ProcessEvent normalization schema reference](https://aka.ms/ASimProcessEventDoc)
 
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimProcessEvent/CHANGELOG/vimProcessTerminateMicrosoftSysmonWindowsEvent.md)
+
 <br>
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimProcessEvent%2FARM%2FvimProcessTerminateMicrosoftSysmonWindowsEvent%2FvimProcessTerminateMicrosoftSysmonWindowsEvent.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimProcessEvent%2FARM%2FvimProcessTerminateMicrosoftSysmonWindowsEvent%2FvimProcessTerminateMicrosoftSysmonWindowsEvent.json)

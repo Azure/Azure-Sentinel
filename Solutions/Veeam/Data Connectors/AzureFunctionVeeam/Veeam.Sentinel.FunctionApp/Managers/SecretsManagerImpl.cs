@@ -189,5 +189,10 @@ namespace Sentinel.Managers
 
             return new CovewareTokens(accessTokenValue.Value, refreshTokenValue.Value, idTokenValue.Value);
         }
+
+        public async Task<string> GetCovewareAuthUrlAsync(string covewareId)
+        {
+            return await _vbrSettingManager.GetCovewareBaseUrlAsync(covewareId);
+        }
     }
 }

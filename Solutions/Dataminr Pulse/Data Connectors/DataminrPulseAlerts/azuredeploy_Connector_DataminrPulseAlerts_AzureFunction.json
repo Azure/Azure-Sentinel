@@ -8,6 +8,13 @@
             "maxLength": 11,
             "type": "string"
         },
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
         "WorkspaceID": {
             "type": "string",
             "minLength": 1,
@@ -29,21 +36,28 @@
                 "description": "Enter Base URL starting with \"https://\" followed by hostname (Example: https://gateway.dataminr.com/)"
             }
         },
-        "ClientID":{
+        "ClientID": {
             "type": "string",
             "minLength": 1,
             "metadata": {
                 "description": "Enter your Dataminr account Client ID"
             }
         },
-        "ClientSecret":{
+        "ClientSecret": {
             "type": "securestring",
             "minLength": 1,
             "metadata": {
                 "description": "Enter your Dataminr account Client Secret"
             }
         },
-        "AlertsTableName":{
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
+            }
+        },
+        "AlertsTableName": {
             "type": "string",
             "minLength": 1,
             "defaultValue": "DataminrPulse_Alerts",
@@ -117,16 +131,4059 @@
         "AppInsightsWorkspaceResourceID": {
             "type": "string",
             "metadata": {
-                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{AzureWorkspaceName}'"
             }
         }
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')),'MainCollectionRule', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('AzureWorkspaceName'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('AzureWorkspaceName'), '/', parameters('AlertsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('AlertsTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "embedded",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_approvedData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_createdTimestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_parentAlertId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_AGENT_ASSESSMENT",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_AGENT_ASSESSMENT_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_ENTITIES",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_ENTITIES_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_LIVE_BRIEF",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_LIVE_BRIEF_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_version",
+                            "type": "real"
+                        },
+                        {
+                            "name": "embedded_document",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_labels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_labels_data_URLs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_addresses_ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_addresses_port",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_asOrgs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_asns",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_hashes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_malwares",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_orgs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_products",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_threats",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_vulnerabilities",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_targets",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "alertRelationships",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertRelationships_relatedTo",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertRelationships_relationshipType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertType",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "alertType_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertType_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alterations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "availableRelatedAlerts",
+                            "type": "real"
+                        },
+                        {
+                            "name": "buckets_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "categoriesMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_path",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "companies",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "crosspost_domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "crosspost_domainType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "crosspost_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "darkWeb",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_content",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_media",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayTweetIsDeleted",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_caption",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_dataminr_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_image_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_list_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_location_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_priority",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_source_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_timestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "equityRegions",
+                            "type": "string"
+                        },
+                        {
+                            "name": "esdcs_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "esdcs_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_global",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_global_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_needshl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_needshl_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert5_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_captions_to_write_route",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_contractor",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_domain_expert",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_freelancer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_upgrade",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate_conventional",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate_internal",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_odsstatus_candidate",
+                            "type": "string"
+                        },
+                        {
+                            "name": "focuses",
+                            "type": "string"
+                        },
+                        {
+                            "name": "followOnly",
+                            "type": "string"
+                        },
+                        {
+                            "name": "geos",
+                            "type": "string"
+                        },
+                        {
+                            "name": "hasDeletion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_modified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_originalText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_via",
+                            "type": "string"
+                        },
+                        {
+                            "name": "image_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "index",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_aiCaptionTranslationConfidence",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_alertMatchIndexedTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_headlineText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_sourceAttributionMds",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_sourceAttributionTwitter",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_transliterationTwitter",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_lastModificationTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_lastProcessedTime",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_sourceName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_sourceVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_redirectLinks_rawToRedirectedUrls",
+                            "type": "string"
+                        },
+                        {
+                            "name": "label",
+                            "type": "string"
+                        },
+                        {
+                            "name": "linkedAlerts",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_coordinates",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_latitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_longitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location_name2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location_places",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_probability",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_radius",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_radius2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "locations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "markTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_dataset",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_guid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_GUID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_continent_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_continent_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_region_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_region_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_dataset",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_attributes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_geometry_coordinates",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_geometry_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_relatedLocations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ngrams",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_abs_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_extraData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_extraData_displaySourceName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_languages",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_media_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_display_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_expandedData_expanded_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_media_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_sizes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_message_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_origin_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_source_channels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_source_display_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_entity_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_id_str",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_image",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_internal_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_thumbnail",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_verified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_tagMap",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "odsStatus_translatedText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_urls",
+                            "type": "string"
+                        },
+                        {
+                            "name": "publisherCategory",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "publisherCategory_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "publisherCategory_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "queriesMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "referenceTerms",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "referenceTerms_term",
+                            "type": "string"
+                        },
+                        {
+                            "name": "relatedAlerts",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "relatedStoryQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "requestsMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "saved",
+                            "type": "string"
+                        },
+                        {
+                            "name": "score",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sectors_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_idstr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "signatureQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source_type",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "storyQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "terms",
+                            "type": "string"
+                        },
+                        {
+                            "name": "timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "topicId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "topics_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_ticker",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type_",
+                            "type": "string"
+                        },
+                        {
+                                "name": "flag_",
+                                "type": "string"
+                            },
+                        {
+                            "name": "users",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "volume",
+                            "type": "real"
+                        },
+                        {
+                            "name": "watchlistsMatched",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_userProperties_omnilist",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('AzureWorkspaceName'), '/', parameters('AlertsTableName'), '_relAlerts_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('AlertsTableName'), '_relAlerts_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "embedded",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_approvedData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_createdTimestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_parentAlertId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_AGENT_ASSESSMENT",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_AGENT_ASSESSMENT_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_ENTITIES",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_ENTITIES_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_reviewData_LIVE_BRIEF",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "associatedEventTimeline_reviewData_LIVE_BRIEF_APPROVED",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_associatedEventTimeline_version",
+                            "type": "real"
+                        },
+                        {
+                            "name": "embedded_document",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_labels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "embedded_labels_data_URLs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_addresses_ip",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_addresses_port",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_asOrgs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_asns",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_hashes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_malwares",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_orgs",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_products",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_threats",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_vulnerabilities",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_targets",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "alertRelationships",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertRelationships_relatedTo",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertRelationships_relationshipType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertType",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "alertType_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alertType_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alterations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "availableRelatedAlerts",
+                            "type": "real"
+                        },
+                        {
+                            "name": "buckets_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "buckets_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "categoriesMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_path",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "categories_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "companies",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "crosspost_domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "crosspost_domainType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "crosspost_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "darkWeb",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_content",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_media",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dataMap_bullets_source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayTweetIsDeleted",
+                            "type": "string"
+                        },
+                        {
+                            "name": "embedded_labels_data_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_caption",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_dataminr_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_image_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_list_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_location_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_priority",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_source_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "enrichedFields_timestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "equityRegions",
+                            "type": "string"
+                        },
+                        {
+                            "name": "esdcs_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "esdcs_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_global",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_global_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert2_local_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert3_needshl_headline_followup",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_needshl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert4_needshl_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_general_alert5_headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_captions_to_write_route",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_contractor",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_domain_expert",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_desk_freelancer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_internal_alert_upgrade",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate_conventional",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_news_alert_candidate_internal",
+                            "type": "string"
+                        },
+                        {
+                            "name": "flagTimes_odsstatus_candidate",
+                            "type": "string"
+                        },
+                        {
+                            "name": "focuses",
+                            "type": "string"
+                        },
+                        {
+                            "name": "followOnly",
+                            "type": "string"
+                        },
+                        {
+                            "name": "geos",
+                            "type": "string"
+                        },
+                        {
+                            "name": "hasDeletion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headline",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_modified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_originalText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "headlineData_via",
+                            "type": "string"
+                        },
+                        {
+                            "name": "image_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "index",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_aiCaptionTranslationConfidence",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_alertMatchIndexedTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_headlineText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_sourceAttributionMds",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_sourceAttributionTwitter",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_headlineData_transliterationTwitter",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_lastModificationTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_lastProcessedTime",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_sourceName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_modelsets_sourceVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalOnly_redirectLinks_rawToRedirectedUrls",
+                            "type": "string"
+                        },
+                        {
+                            "name": "label",
+                            "type": "string"
+                        },
+                        {
+                            "name": "linkedAlerts",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_coordinates",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_latitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_longitude",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location_name2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "location_places",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "location_probability",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_radius",
+                            "type": "real"
+                        },
+                        {
+                            "name": "location_radius2",
+                            "type": "string"
+                        },
+                        {
+                            "name": "locations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "markTimestamp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_dataset",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_guid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_GUID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_continent_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_continent_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_region_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "associatedJurisdictions_properties_country_region_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_dataset",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventLocations_associatedJurisdictions_properties_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_associatedJurisdictions_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_attributes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_geometry_coordinates",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_geometry_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_eventLocations_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metadata_relatedLocations",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ngrams",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_abs_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_extraData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_extraData_displaySourceName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_languages",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_media_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_display_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_expandedData_expanded_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_media_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_sizes",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_media_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_message_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_origin_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_source_channels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "odsStatus_source_display_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_entity_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_id_str",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_image",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_internal_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_thumbnail",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_source_verified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_tagMap",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_text",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "odsStatus_translatedText",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "odsStatus_urls",
+                            "type": "string"
+                        },
+                        {
+                            "name": "publisherCategory",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "publisherCategory_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "publisherCategory_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "queriesMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "referenceTerms",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "referenceTerms_term",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alert_relatedTo",
+                            "type": "string"
+                        },
+                        {
+                            "name": "relatedStoryQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "requestsMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "saved",
+                            "type": "string"
+                        },
+                        {
+                            "name": "score",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sectors_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_idstr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sectors_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "signatureQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source_link",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source_type",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "storyQuery",
+                            "type": "string"
+                        },
+                        {
+                            "name": "terms",
+                            "type": "string"
+                        },
+                        {
+                            "name": "timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "topicId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "topics_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_idStr",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_retired",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_ticker",
+                            "type": "string"
+                        },
+                        {
+                            "name": "topics_topicType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "type_",
+                            "type": "string"
+                        },
+                        {
+                                "name": "flag_",
+                                "type": "string"
+                            },
+                        {
+                            "name": "users",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "volume",
+                            "type": "real"
+                        },
+                        {
+                            "name": "watchlistsMatched",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "watchlistsMatchedByType_userProperties_omnilist",
+                            "type": "string"
+                        }
+                    ]
+
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('AzureWorkspaceName'), '/', parameters('AlertsTableName'), '_vuln_prod_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('AlertsTableName'), '_vuln_prod_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "index",
+                            "type": "string"
+                        },
+                        {
+                            "name": "vulnerabilities_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "vulnerabilities_products",
+                            "type": "dynamic"
+                        }
+                    ]
+
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('AzureWorkspaceName'), '/', parameters('AlertsTableName'), '_vuln_prod_relAlert_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('AlertsTableName'), '_vuln_prod_relAlert_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "index",
+                            "type": "string"
+                        },
+                        {
+                            "name": "vulnerabilities_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "vulnerabilities_products",
+                            "type": "dynamic"
+                        }
+                    ]
+
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('AzureWorkspaceName'), '/', 'Failed_Indicators_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "Failed_Indicators_CL",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "confidence",
+                            "type": "real"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "threatTypes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "pattern",
+                            "type": "string"
+                        },
+                        {
+                            "name": "patternType",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('AlertsTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('AlertsTableName'), '_relAlerts_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('AlertsTableName'), '_vuln_prod_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('AlertsTableName'), '_vuln_prod_relAlert_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', 'Failed_Indicators_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('AlertsTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "embedded",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_approvedData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_createdTimestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_parentAlertId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_AGENT_ASSESSMENT",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_AGENT_ASSESSMENT_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_ENTITIES",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_ENTITIES_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_LIVE_BRIEF",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_LIVE_BRIEF_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_version",
+                                "type": "real"
+                            },
+                            {
+                                "name": "embedded_document",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_labels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_labels_data_URLs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_addresses_ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_addresses_port",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_asOrgs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_asns",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_hashes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_malwares",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_orgs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_products",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_threats",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_vulnerabilities",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_targets",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alertRelationships",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertRelationships_relatedTo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertRelationships_relationshipType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertType",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alertType_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertType_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alterations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "availableRelatedAlerts",
+                                "type": "real"
+                            },
+                            {
+                                "name": "buckets_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "categoriesMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_path",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "companies",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "crosspost_domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "crosspost_domainType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "crosspost_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "darkWeb",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_content",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_media",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayTweetIsDeleted",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_caption",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_dataminr_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_image_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_list_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_location_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_priority",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_source_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_timestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "equityRegions",
+                                "type": "string"
+                            },
+                            {
+                                "name": "esdcs_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "esdcs_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_global",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_global_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_needshl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_needshl_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert5_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_captions_to_write_route",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_contractor",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_domain_expert",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_freelancer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_upgrade",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate_conventional",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate_internal",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_odsstatus_candidate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "focuses",
+                                "type": "string"
+                            },
+                            {
+                                "name": "followOnly",
+                                "type": "string"
+                            },
+                            {
+                                "name": "geos",
+                                "type": "string"
+                            },
+                            {
+                                "name": "hasDeletion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_modified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_originalText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_via",
+                                "type": "string"
+                            },
+                            {
+                                "name": "image_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "index",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_aiCaptionTranslationConfidence",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_alertMatchIndexedTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_headlineText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_sourceAttributionMds",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_sourceAttributionTwitter",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_transliterationTwitter",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_lastModificationTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_lastProcessedTime",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_sourceName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_sourceVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_redirectLinks_rawToRedirectedUrls",
+                                "type": "string"
+                            },
+                            {
+                                "name": "label",
+                                "type": "string"
+                            },
+                            {
+                                "name": "linkedAlerts",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_coordinates",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_latitude",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_longitude",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location_name2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location_places",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_probability",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_radius",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_radius2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "locations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "markTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_dataset",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_guid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_GUID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_continent_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_continent_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_region_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_region_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_dataset",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_attributes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_geometry_coordinates",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_geometry_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_relatedLocations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ngrams",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_abs_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_extraData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_extraData_displaySourceName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_languages",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_media_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_display_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_expandedData_expanded_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_media_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_sizes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_message_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_origin_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_source_channels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_source_display_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_entity_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_id_str",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_image",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_internal_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_thumbnail",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_verified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_tagMap",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_timestamp",
+                                "type": "real"
+                            },
+                            {
+                                "name": "odsStatus_translatedText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_urls",
+                                "type": "string"
+                            },
+                            {
+                                "name": "publisherCategory",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "publisherCategory_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "publisherCategory_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "queriesMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "referenceTerms",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "referenceTerms_term",
+                                "type": "string"
+                            },
+                            {
+                                "name": "relatedAlerts",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "relatedStoryQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "requestsMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "saved",
+                                "type": "string"
+                            },
+                            {
+                                "name": "score",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "sectors_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_idstr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "signatureQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_type",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "storyQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "terms",
+                                "type": "string"
+                            },
+                            {
+                                "name": "timestamp",
+                                "type": "real"
+                            },
+                            {
+                                "name": "topicId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "topics_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_ticker",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type_",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flag_",
+                                "type": "string"
+                            },
+                            {
+                                "name": "users",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "volume",
+                                "type": "real"
+                            },
+                            {
+                                "name": "watchlistsMatched",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_userProperties_omnilist",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('AlertsTableName'), '_relAlerts')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "embedded",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_approvedData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_createdTimestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_parentAlertId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_AGENT_ASSESSMENT",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_AGENT_ASSESSMENT_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_ENTITIES",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_ENTITIES_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_reviewData_LIVE_BRIEF",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "associatedEventTimeline_reviewData_LIVE_BRIEF_APPROVED",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_associatedEventTimeline_version",
+                                "type": "real"
+                            },
+                            {
+                                "name": "embedded_document",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_labels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "embedded_labels_data_URLs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_addresses_ip",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_addresses_port",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_asOrgs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_asns",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_hashes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_malwares",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_orgs",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_products",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_threats",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_vulnerabilities",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_targets",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alertRelationships",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertRelationships_relatedTo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertRelationships_relationshipType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertType",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "alertType_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alertType_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alterations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "availableRelatedAlerts",
+                                "type": "real"
+                            },
+                            {
+                                "name": "buckets_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "buckets_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "categoriesMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_path",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "companies",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "crosspost_domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "crosspost_domainType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "crosspost_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "darkWeb",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_content",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_media",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dataMap_bullets_source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayTweetIsDeleted",
+                                "type": "string"
+                            },
+                            {
+                                "name": "embedded_labels_data_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_caption",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_dataminr_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_image_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_list_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_location_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_priority",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_source_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enrichedFields_timestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "equityRegions",
+                                "type": "string"
+                            },
+                            {
+                                "name": "esdcs_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "esdcs_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_global",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_global_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert2_local_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert3_needshl_headline_followup",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_needshl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert4_needshl_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_general_alert5_headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_captions_to_write_route",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_contractor",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_domain_expert",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_desk_freelancer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_internal_alert_upgrade",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate_conventional",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_news_alert_candidate_internal",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flagTimes_odsstatus_candidate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "focuses",
+                                "type": "string"
+                            },
+                            {
+                                "name": "followOnly",
+                                "type": "string"
+                            },
+                            {
+                                "name": "geos",
+                                "type": "string"
+                            },
+                            {
+                                "name": "hasDeletion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headline",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_modified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_originalText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "headlineData_via",
+                                "type": "string"
+                            },
+                            {
+                                "name": "image_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "index",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_aiCaptionTranslationConfidence",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_alertMatchIndexedTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_headlineText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_sourceAttributionMds",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_sourceAttributionTwitter",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_headlineData_transliterationTwitter",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_lastModificationTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_lastProcessedTime",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_sourceName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_modelsets_sourceVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalOnly_redirectLinks_rawToRedirectedUrls",
+                                "type": "string"
+                            },
+                            {
+                                "name": "label",
+                                "type": "string"
+                            },
+                            {
+                                "name": "linkedAlerts",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_coordinates",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_latitude",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_longitude",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location_name2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "location_places",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "location_probability",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_radius",
+                                "type": "real"
+                            },
+                            {
+                                "name": "location_radius2",
+                                "type": "string"
+                            },
+                            {
+                                "name": "locations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "markTimestamp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_dataset",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_guid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_GUID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_continent_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_continent_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_region_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "associatedJurisdictions_properties_country_region_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_dataset",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventLocations_associatedJurisdictions_properties_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_associatedJurisdictions_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_attributes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_geometry_coordinates",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_geometry_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_eventLocations_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metadata_relatedLocations",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ngrams",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_abs_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_extraData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_extraData_displaySourceName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_languages",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_media_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_display_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_expandedData_expanded_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_media_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_sizes",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_media_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_message_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_origin_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_source_channels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "odsStatus_source_display_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_entity_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_id_str",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_image",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_internal_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_thumbnail",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_source_verified",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_tagMap",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_text",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_timestamp",
+                                "type": "real"
+                            },
+                            {
+                                "name": "odsStatus_translatedText",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "odsStatus_urls",
+                                "type": "string"
+                            },
+                            {
+                                "name": "publisherCategory",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "publisherCategory_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "publisherCategory_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "queriesMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "referenceTerms",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "referenceTerms_term",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alert_relatedTo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "relatedStoryQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "requestsMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "saved",
+                                "type": "string"
+                            },
+                            {
+                                "name": "score",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "sectors_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_idstr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sectors_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "signatureQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_link",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_type",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "storyQuery",
+                                "type": "string"
+                            },
+                            {
+                                "name": "terms",
+                                "type": "string"
+                            },
+                            {
+                                "name": "timestamp",
+                                "type": "real"
+                            },
+                            {
+                                "name": "topicId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "topics_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_idStr",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_retired",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_ticker",
+                                "type": "string"
+                            },
+                            {
+                                "name": "topics_topicType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type_",
+                                "type": "string"
+                            },
+                            {
+                                "name": "flag_",
+                                "type": "string"
+                            },
+                            {
+                                "name": "users",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "volume",
+                                "type": "real"
+                            },
+                            {
+                                "name": "watchlistsMatched",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "watchlistsMatchedByType_userProperties_omnilist",
+                                "type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "index",
+                                "type": "string"
+                            },
+                            {
+                                "name": "vulnerabilities_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "vulnerabilities_products",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod_relAlert')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "index",
+                                "type": "string"
+                            },
+                            {
+                                "name": "vulnerabilities_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "vulnerabilities_products",
+                                "type": "dynamic"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', 'Failed_Indicators')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "confidence",
+                                "type": "real"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "threatTypes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "pattern",
+                                "type": "string"
+                            },
+                            {
+                                "name": "patternType",
+                                "type": "string"
+                            }
+                        ]
+
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('AlertsTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_embedded = parse_json(embedded), json_location = parse_json(location), json_publisherCategory = parse_json(publisherCategory), json_odsStatus = parse_json(odsStatus), json_alertType = parse_json(alertType)\n| extend json_embedded_associatedEventTimeline = parse_json(json_embedded.associatedEventTimeline), json_odsStatus_source = parse_json(json_odsStatus.source), json_odsStatus_extraData = parse_json(json_odsStatus.extraData)\n| extend json_embedded_associatedEventTimeline_reviewData = parse_json(json_embedded_associatedEventTimeline.reviewData)\n| extend embedded_labels = todynamic(json_embedded.labels), embedded_targets = todynamic(json_embedded.targets), embedded_associatedEventTimeline_parentAlertId = tostring(json_embedded_associatedEventTimeline.parentAlertId), embedded_associatedEventTimeline_version = toreal(json_embedded_associatedEventTimeline.version), embedded_associatedEventTimeline_createdTimestamp = todatetime(json_embedded_associatedEventTimeline.createdTimestamp), embedded_associatedEventTimeline_approvedData = todynamic(json_embedded_associatedEventTimeline.approvedData), location_coordinates = todynamic(json_location.coordinates), location_latitude = toreal(json_location.latitude), location_longitude = toreal(json_location.longitude), location_name = tostring(json_location.name), location_places = todynamic(json_location.places), location_probability = toreal(json_location.probability), location_radius = toreal(json_location.radius), publisherCategory_id = tostring(json_publisherCategory.id), publisherCategory_name = tostring(json_publisherCategory.name), odsStatus_type = tostring(json_odsStatus.type), odsStatus_timestamp = toreal(json_odsStatus.timestamp), odsStatus_languages = todynamic(json_odsStatus.languages), odsStatus_source_id = tostring(json_odsStatus_source.id), odsStatus_source_channels = todynamic(json_odsStatus_source.channels), odsStatus_source_id_str = tostring(json_odsStatus_source.id_str), odsStatus_link = tostring(json_odsStatus.link), odsStatus_media = todynamic(json_odsStatus.media), odsStatus_extraData_displaySourceName = tostring(json_odsStatus_extraData.displaySourceName), alertType_id = tostring(json_alertType.id), alertType_name = tostring(json_alertType.name)\n| project-away json_embedded, embedded, json_embedded_associatedEventTimeline, embedded_associatedEventTimeline, json_embedded_associatedEventTimeline_reviewData, embedded_associatedEventTimeline_reviewData, json_location, location, json_publisherCategory, publisherCategory, json_odsStatus, odsStatus, json_odsStatus_source, odsStatus_source, json_odsStatus_extraData, odsStatus_extraData, json_alertType, alertType",
+                        "outputStream": "[concat('Custom-', parameters('AlertsTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('AlertsTableName'), '_relAlerts')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_embedded = parse_json(embedded), json_location = parse_json(location), json_publisherCategory = parse_json(publisherCategory), json_odsStatus = parse_json(odsStatus), json_alertType = parse_json(alertType)\n| extend json_embedded_associatedEventTimeline = parse_json(json_embedded.associatedEventTimeline), json_odsStatus_source = parse_json(json_odsStatus.source), json_odsStatus_extraData = parse_json(json_odsStatus.extraData)\n| extend json_embedded_associatedEventTimeline_reviewData = parse_json(json_embedded_associatedEventTimeline.reviewData)\n| extend embedded_labels = todynamic(json_embedded.labels), embedded_targets = todynamic(json_embedded.targets), embedded_associatedEventTimeline_parentAlertId = tostring(json_embedded_associatedEventTimeline.parentAlertId), embedded_associatedEventTimeline_version = toreal(json_embedded_associatedEventTimeline.version), embedded_associatedEventTimeline_createdTimestamp = todatetime(json_embedded_associatedEventTimeline.createdTimestamp), embedded_associatedEventTimeline_approvedData = todynamic(json_embedded_associatedEventTimeline.approvedData), location_coordinates = todynamic(json_location.coordinates), location_latitude = toreal(json_location.latitude), location_longitude = toreal(json_location.longitude), location_name = tostring(json_location.name), location_places = todynamic(json_location.places), location_probability = toreal(json_location.probability), location_radius = toreal(json_location.radius), publisherCategory_id = tostring(json_publisherCategory.id), publisherCategory_name = tostring(json_publisherCategory.name), odsStatus_type = tostring(json_odsStatus.type), odsStatus_timestamp = toreal(json_odsStatus.timestamp), odsStatus_languages = todynamic(json_odsStatus.languages), odsStatus_source_id = tostring(json_odsStatus_source.id), odsStatus_source_channels = todynamic(json_odsStatus_source.channels), odsStatus_source_id_str = tostring(json_odsStatus_source.id_str), odsStatus_link = tostring(json_odsStatus.link), odsStatus_media = todynamic(json_odsStatus.media), odsStatus_extraData_displaySourceName = tostring(json_odsStatus_extraData.displaySourceName), alertType_id = tostring(json_alertType.id), alertType_name = tostring(json_alertType.name)\n| project-away json_embedded, embedded, json_embedded_associatedEventTimeline, embedded_associatedEventTimeline, json_embedded_associatedEventTimeline_reviewData, embedded_associatedEventTimeline_reviewData, json_location, location, json_publisherCategory, publisherCategory, json_odsStatus, odsStatus, json_odsStatus_source, odsStatus_source, json_odsStatus_extraData, odsStatus_extraData, json_alertType, alertType",
+                        "outputStream": "[concat('Custom-', parameters('AlertsTableName'), '_relAlerts_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod_relAlert')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('AlertsTableName'), '_vuln_prod_relAlert_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', 'Failed_Indicators')]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', 'Failed_Indicators_CL')]"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -230,7 +4287,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.9"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -261,8 +4318,11 @@
                         "Azure_Subscription_Id": "[parameters('AzureSubscriptionID')]",
                         "AlertsTableName": "[parameters('AlertsTableName')]",
                         "LogLevel": "[parameters('LogLevel')]",
+                        "SCOPE": "[variables('scope')]",
                         "Schedule": "[parameters('Schedule')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-DataminrPulseAlerts-functionapp"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-DataminrPulseAlertsUpdated-functionapp",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]"
                     }
                 }
             ]
@@ -301,6 +4361,47 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Main DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('mainRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
             }
         }
     ]

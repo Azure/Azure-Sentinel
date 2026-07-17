@@ -1,7 +1,7 @@
 id: 35846296-4052-4de2-8098-beb6bb5f2203
 name: User Session Impersonation(Okta)
 description: |
-    'A user has started a session impersonation, gaining access with the impersonated users permissions. This typically signifies Okta admin access and should only happen if anticipated and requested.'
+  This query detects instances of user session impersonation, where an attacker successfully initiates a session impersonation event. The query extracts detailed information about the target user and the actor involved in the impersonation, providing insights into potential privilege escalation activities.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -21,7 +21,7 @@ relevantTechniques:
   - T1134
   - T1134.003
 query: |
-  Okta_CL
+  OktaSSO
   | where eventType_s == "user.session.impersonation.initiate" and outcome_result_s == "SUCCESS"
   // Expand the JSON array in 'target_s' field to extract detailed information about the event
   | mv-expand parsed_json = todynamic(target_s) // Unpack and understand the details from the 'target_s' JSON array
@@ -30,17 +30,27 @@ query: |
            TargetUser_type = tostring(parsed_json.type), 
            TargetUser_alternateId = tostring(parsed_json.alternateId), 
            TargetUser_displayName = tostring(parsed_json.displayName), 
-           Target_detailEntry = tostring(parsed_json.detailEntry) 
+           Target_detailEntry = tostring(parsed_json.detailEntry)
+  // Filter out events with unknown target user IDs to focus on valid impersonation attempts
+  | where isnotempty(TargetUser_alternateId) and TargetUser_alternateId != "unknown"
   // Project event details to gain insights into the security context, including actor and target user information
-  | project TimeGenerated, actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, 
-                 TargetUser_displayName, TargetUser_type, TargetUser_id, 
-                 eventType_s, outcome_result_s
+  | project TimeGenerated, actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, TargetUser_displayName, TargetUser_type, TargetUser_id, eventType_s, outcome_result_s
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: actor_alternateId_s
-      - identifier: DisplayName
-        columnName: actor_displayName_s
-version: 1.0.0
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+customDetails:
+  ActorDisplayName: actor_displayName_s
+  TargetUserAltId: TargetUser_alternateId
+  TargetUserName: TargetUser_displayName
+  TargetUserType: TargetUser_type
+  EventType: eventType_s
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Okta session impersonation by {{actor_displayName_s}} for {{TargetUser_displayName}}'
+  alertDescriptionFormat: 'Okta user session impersonation succeeded. Actor {{actor_alternateId_s}} impersonated target {{TargetUser_alternateId}} during {{eventType_s}}.'
+version: 1.1.1
 kind: Scheduled

@@ -1,0 +1,449 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Check Point Exposure Management - Phishing Takedown",
+    "description": "When a new Microsoft Sentinel incident is created for a phishing website alert, this playbook extracts the phishing URL, evaluates confidence and severity thresholds, submits a takedown request to Check Point Exposure Management, and tracks the takedown status back to the incident.",
+    "prerequisites": [
+      "1. A valid Check Point Exposure Management API token and base URL.",
+      "2. The Logic App Managed Identity must be granted Microsoft Sentinel Responder role on the resource group."
+    ],
+    "postDeployment": [
+      "1. Grant the Logic App Managed Identity the **Microsoft Sentinel Responder** role.",
+      "2. Configure an automation rule in Microsoft Sentinel to trigger this playbook on phishing website incidents."
+    ],
+    "lastUpdateTime": "2026-02-25T00:00:00.000Z",
+    "entities": [
+      "URL"
+    ],
+    "tags": [
+      "Remediation",
+      "Response"
+    ],
+    "support": {
+      "tier": "Partner",
+      "name": "Check Point",
+      "link": "https://cyberint.com/customer-support/"
+    },
+    "source": {
+      "type": "solution",
+      "name": "Check Point Exposure Management Alerts"
+    },
+    "author": {
+      "name": "Check Point"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Check Point Exposure Management - Phishing Takedown",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "String",
+      "defaultValue": "Check_Point_EM_PhishingTakedown",
+      "metadata": {
+        "description": "Name of the Logic App / Playbook"
+      }
+    },
+    "API_Base_URL": {
+      "type": "String",
+      "metadata": {
+        "description": "Base URL of the Check Point Exposure Management API (e.g. https://app.cyberint.io)"
+      }
+    },
+    "API_Access_Token": {
+      "type": "SecureString",
+      "metadata": {
+        "description": "API token for Check Point Exposure Management"
+      }
+    },
+    "Min_Confidence_For_Auto_Takedown": {
+      "type": "Int",
+      "defaultValue": 80,
+      "metadata": {
+        "description": "Minimum confidence score (0-100) from alert to auto-submit takedown request"
+      }
+    },
+    "Min_Severity_For_Auto_Takedown": {
+      "type": "String",
+      "defaultValue": "high",
+      "allowedValues": [
+        "low",
+        "medium",
+        "high",
+        "very_high"
+      ],
+      "metadata": {
+        "description": "Minimum alert severity to auto-submit takedown request"
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "severityRank": {
+      "low": 1,
+      "medium": 2,
+      "high": 3,
+      "very_high": 4
+    },
+    "workspace-location-inline": "[resourceGroup().location]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[variables('workspace-location-inline')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Check_Point_EM_PhishingTakedown",
+        "hidden-SentinelTemplateVersion": "1.2"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "API_Base_URL": {
+              "defaultValue": "",
+              "type": "String"
+            },
+            "API_Access_Token": {
+              "defaultValue": "",
+              "type": "SecureString"
+            },
+            "Min_Confidence_For_Auto_Takedown": {
+              "defaultValue": 80,
+              "type": "Int"
+            },
+            "Min_Severity_For_Auto_Takedown": {
+              "defaultValue": "high",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_variable_-_AlertRefId": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AlertRefId",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Initialize_variable_-_PhishingUrl": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "PhishingUrl",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_variable_-_AlertRefId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_variable_-_TakedownStatus": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "TakedownStatus",
+                    "type": "string",
+                    "value": "not_submitted"
+                  }
+                ]
+              },
+              "runAfter": {
+                "Initialize_variable_-_PhishingUrl": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_incident_alerts": {
+              "type": "Compose",
+              "inputs": "@triggerBody()?['object']?['properties']?['alerts']",
+              "runAfter": {
+                "Initialize_variable_-_TakedownStatus": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each_alert": {
+              "type": "Foreach",
+              "foreach": "@outputs('Parse_incident_alerts')",
+              "actions": {
+                "Set_AlertRefId": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "AlertRefId",
+                    "value": "@{items('For_each_alert')?['properties']?['additionalData']?['Custom Details']?['ref_id']}"
+                  },
+                  "runAfter": {}
+                },
+                "Get_Alert_Details": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{parameters('API_Base_URL')}/api/v1/alerts/@{encodeURIComponent(variables('AlertRefId'))}",
+                    "headers": {
+                      "Accept": "application/json",
+                      "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                      "X-Integration-Type": "Azure Sentinel",
+                      "X-Integration-Version": "1.0"
+                    }
+                  },
+                  "runAfter": {
+                    "Set_AlertRefId": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Set_PhishingUrl": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "PhishingUrl",
+                    "value": "@{json(string(body('Get_Alert_Details')))?['alert_data']?['url']}"
+                  },
+                  "runAfter": {
+                    "Get_Alert_Details": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Add_enrichment_comment": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p><strong>CPEM Phishing Alert Details:</strong><br>URL: @{json(string(body('Get_Alert_Details')))?['alert_data']?['url']}<br>Title: @{json(string(body('Get_Alert_Details')))?['alert_data']?['title']}<br>A Record: @{json(string(body('Get_Alert_Details')))?['alert_data']?['a_record']}<br>Registrar: @{json(string(body('Get_Alert_Details')))?['alert_data']?['registrar']}<br>Has Password Field: @{json(string(body('Get_Alert_Details')))?['alert_data']?['has_password_field']}<br>Has SSL: @{json(string(body('Get_Alert_Details')))?['alert_data']?['has_ssl_certificate']}<br>Detection Reasons: @{json(string(body('Get_Alert_Details')))?['alert_data']?['detection_reasons']}<br>Confidence: @{json(string(body('Get_Alert_Details')))?['confidence']}<br>Severity: @{json(string(body('Get_Alert_Details')))?['severity']}</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  },
+                  "runAfter": {
+                    "Set_PhishingUrl": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Condition_-_Check_takedown_thresholds": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "greaterOrEquals": [
+                          "@int(coalesce(json(string(body('Get_Alert_Details')))?['confidence'], '0'))",
+                          "@parameters('Min_Confidence_For_Auto_Takedown')"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Submit_Takedown_Request": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('API_Base_URL')}/api/v1/submit",
+                        "headers": {
+                          "Content-Type": "application/json",
+                          "Accept": "application/json",
+                          "Cookie": "access_token=@{parameters('API_Access_Token')}",
+                          "X-Integration-Type": "Azure Sentinel",
+                          "X-Integration-Version": "1.0"
+                        },
+                        "body": {
+                          "url": "@{variables('PhishingUrl')}",
+                          "reason": "@{json(string(body('Get_Alert_Details')))?['alert_data']?['detection_reasons']}",
+                          "note": "Auto-submitted takedown via Microsoft Sentinel playbook",
+                          "alert_id": "@{variables('AlertRefId')}"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Set_TakedownStatus": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "TakedownStatus",
+                        "value": "@{json(string(body('Submit_Takedown_Request')))?['status']}"
+                      },
+                      "runAfter": {
+                        "Submit_Takedown_Request": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Add_takedown_comment": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p><strong>CPEM Takedown Request Submitted:</strong><br>URL: @{variables('PhishingUrl')}<br>Status: @{variables('TakedownStatus')}<br>Alert Ref: @{variables('AlertRefId')}</p>"
+                        },
+                        "path": "/Incidents/Comment"
+                      },
+                      "runAfter": {
+                        "Set_TakedownStatus": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Update_incident_tags": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "tagsToAdd": {
+                            "TagsToAdd": [
+                              "takedown-requested"
+                            ]
+                          }
+                        },
+                        "path": "/Incidents"
+                      },
+                      "runAfter": {
+                        "Add_takedown_comment": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Add_below_threshold_comment": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                            "message": "<p><strong>CPEM Phishing Takedown:</strong> Alert confidence (@{json(string(body('Get_Alert_Details')))?['confidence']}) is below auto-takedown threshold (@{parameters('Min_Confidence_For_Auto_Takedown')}). Manual review recommended.</p>"
+                          },
+                          "path": "/Incidents/Comment"
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Add_enrichment_comment": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_incident_alerts": [
+                  "Succeeded"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "API_Base_URL": {
+            "value": "[parameters('API_Base_URL')]"
+          },
+          "API_Access_Token": {
+            "value": "[parameters('API_Access_Token')]"
+          },
+          "Min_Confidence_For_Auto_Takedown": {
+            "value": "[parameters('Min_Confidence_For_Auto_Takedown')]"
+          },
+          "Min_Severity_For_Auto_Takedown": {
+            "value": "[parameters('Min_Severity_For_Auto_Takedown')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}

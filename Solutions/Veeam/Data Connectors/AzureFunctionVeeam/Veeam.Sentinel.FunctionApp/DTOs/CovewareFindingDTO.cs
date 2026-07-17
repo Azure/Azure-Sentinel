@@ -37,5 +37,7 @@ namespace Sentinel.DTOs
         [JsonProperty("ScanTime")] public DateTime ScanTime { get; set; }
 
         [JsonProperty("Username")] public string? Username { get; set; }
+        
+        [JsonProperty("EventId")] public string EventId { get; set; } = "";
     }
 }

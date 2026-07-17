@@ -1,0 +1,320 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string"
+        },
+        "awsConfigServiceResourceDeletionRuleGuid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        },
+        "suspiciousAwsCliCommandExecutionRuleGuid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        },
+        "nrtSecurityEventLogClearedRuleGuid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        },
+        "scheduledTaskHideRuleGuid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',parameters('awsConfigServiceResourceDeletionRuleGuid'))]",
+            "kind": "Scheduled",
+            "apiVersion": "2023-02-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "AWS Config Service Resource Deletion Attempts",
+                "description": "Detects attempts to remove a part of the AWS Config Service.The Threat Actor may manipulate the Config services decrease the visibility into the security posture of an account and / or its workload instances.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n| extend timestamp = StartTimeUtc",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionEnabled": false,
+                "suppressionDuration": "PT1H",
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            },
+                            {
+                                "identifier": "CloudAppAccountId",
+                                "columnName": "RecipientAccountId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',parameters('suspiciousAwsCliCommandExecutionRuleGuid'))]",
+            "kind": "Scheduled",
+            "apiVersion": "2023-02-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "Suspicious AWS CLI Command Execution",
+                "description": "This detection focuses on identifying potentially suspicious activities involving the execution of AWS Command Line Interface (CLI) commands, particularly focusing on reconnaissance operations.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let SuspiciousCommands= pack_array('iam.list-users', 'iam.list-groups', 'ec2.describe-vpcs', 'ec2.describe-subnets', 'route53.list-hosted-zones', 'kms.list-keys', 'kms.list-aliases', 'ecs.list-clusters', 'ecs.list-services', 'iam.list-roles', 'iam.get-user', 'iam.list-access-keys', 'ec2.describe-security-groups', 'ec2.describe-network-acls', 'ec2.describe-network-interfaces', 'ec2.describe-route-tables', 'ec2.describe-internet-gateways', 'ec2.describe-vpc-peering-connections', 'ec2.describe-network-interfaces', 'ec2.describe-network-interfaces', 'ec2.describe-transit-gateway-vpc-attachment', 'ec2.describe-vpc');\n// Retrieve AWS CloudTrail events\nAWSCloudTrail \n// Filter events with UserAgent starting with \"aws-cli\"\n| where UserAgent startswith \"aws-cli\" \n// Extract the command from the UserAgent using string splitting\n| extend command = tostring(split(UserAgent, \"off command/\", 1)[0])  \n// Filter events based on predefined suspicious command list\n| where command has_any (SuspiciousCommands)  \n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n// Summarize relevant information for further analysis\n| summarize \n    CommadCount = dcount(command), \n    EventCount = dcount(EventName), \n    commands = make_list(command), \n    Events = make_list(EventName) \n    by \n    bin(TimeGenerated, 1min), \n    RecipientAccountId, AccountName, AccountUPNSuffix, \n    UserIdentityUserName, \n    SourceIpAddress, \n    SessionMfaAuthenticated \n// Filter out results with a sufficient count of unique suspicious commands in 1 min time window\n| where CommadCount >= 8",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionEnabled": false,
+                "suppressionDuration": "PT1H",
+                "tactics": [
+                    "Reconnaissance"
+                ],
+                "techniques": [
+                    "T1595",
+                    "T1592",
+                    "T1589",
+                    "T1590",
+                    "T1591",
+                    "T1596"
+                ],
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            },
+                            {
+                                "identifier": "CloudAppAccountId",
+                                "columnName": "RecipientAccountId"
+                            }
+                        ]
+                    }
+                ],
+                "customDetails": {
+                    "SuspiciousCommand": "commands",
+                    "AWSUser": "UserIdentityUserName",
+                    "AWSUserIp": "SourceIpAddress"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',parameters('nrtSecurityEventLogClearedRuleGuid'))]",
+            "kind": "NRT",
+            "apiVersion": "2023-02-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "NRT Security Event log cleared",
+                "description": "Checks for event id 1102 which indicates the security event log was cleared. It uses Event Source Name \"Microsoft-Windows-Eventlog\" to avoid generating false positives from other sources, like AD FS servers for instance.",
+                "severity": "Medium",
+                "enabled": true,
+                "suppressionEnabled": false,
+                "suppressionDuration": "PT1H",
+                "query": "SecurityEvent\n| where EventID == 1102 and EventSourceName == \"Microsoft-Windows-Eventlog\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), EventCount = count() by Computer, Account, EventID, Activity\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])",
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1070"
+                ],
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "Account"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "NTDomain",
+                                "columnName": "AccountNTDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "Computer"
+                            },
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "HostNameDomain"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',parameters('scheduledTaskHideRuleGuid'))]",
+            "kind": "Scheduled",
+            "apiVersion": "2023-02-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "Scheduled Task Hide",
+                "description": "This query detects attempts by malware to hide the scheduled task by deleting the SD (Security Descriptor) value. Removal of SD value results in the scheduled task disappearing from schtasks /query and Task Scheduler. The query requires auditing to be turned on for HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree registry hive as well as audit policy for registry auditing to be turned on. Reference: https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/ Reference: https://4sysops.com/archives/audit-changes-in-the-windows-registry/",
+                "severity": "High",
+                "enabled": true,
+                "query": "SecurityEvent\n| where EventID == 4657\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)\n| extend ObjectName = column_ifexists('ObjectName', \"\"), OperationType = column_ifexists('OperationType', \"\"), ObjectValueName = column_ifexists('ObjectValueName', \"\")\n| where ObjectName has 'Schedule\\\\TaskCache\\\\Tree' and ObjectValueName == \"SD\" and OperationType == \"%%1906\"  // %%1906 - Registry value deleted\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(TargetAccount, @'\\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\\')[0])\n| extend timestamp = TimeGenerated",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionEnabled": false,
+                "suppressionDuration": "PT1H",
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "tags": [
+                    "Tarrask"
+                ],
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "TargetAccount"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "NTDomain",
+                                "columnName": "AccountNTDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "Computer"
+                            },
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "HostNameDomain"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

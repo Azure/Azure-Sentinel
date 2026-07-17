@@ -1,0 +1,30 @@
+id: "faa83502-2763-49ae-9216-e576fa1fdccb"
+name: Google Threat Intelligence - Threat Hunting IP
+description: |
+  'Google Threat Intelligence IP correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tags:
+  - GoogleThreatIntelligence
+query: |
+  _Im_NetworkSession
+  | where isnotempty(DstIpAddr)
+  | join kind= innerunique  (
+  ThreatIntelIndicators
+  | where ObservableKey == 'ipv4-addr:value'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  ) on $left.DstIpAddr == $right.ObservableValue
+  | project DstIpAddr
+  | extend IP_0_Address = DstIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+version: 1.0.0

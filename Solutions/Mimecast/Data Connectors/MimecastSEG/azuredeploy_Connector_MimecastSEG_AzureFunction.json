@@ -8,18 +8,46 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of Log Analytics workspace"
+                "description": "Enter Microsoft Sentinel Workspace Name of Log Analytics workspace"
             }
         },
-        "WorkspaceKey": {
+        "AzureClientID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client ID that you have created during app registration"
+            }
+        },
+        "AzureClientSecret": {
             "type": "securestring",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Primary Key of Log Analytics workspace"
+                "description": "Enter Azure Client Secret that you have created during creating the client secret"
+            }
+        },
+        "AzureTenantID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant ID of your Azure Active Directory"
+            }
+        },
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
             }
         },
         "MimecastBaseURL": {
@@ -41,6 +69,20 @@
             "minLength": 1,
             "metadata": {
                 "description": "Enter Mimecast Client Secret for Authentication"
+            }
+        },
+        "MimecastCGTableName": {
+            "type": "string",
+            "defaultValue": "Seg_Cg",
+            "metadata": {
+                "description": "Enter name of the table used to store CG data. Default is 'Seg_Cg'"
+            }
+        },
+        "MimecastDLPTableName": {
+            "type": "string",
+            "defaultValue": "Seg_Dlp",
+            "metadata": {
+                "description": "Enter name of the table used to store DLP data. Default is 'Seg_Dlp'"
             }
         },
         "StartDate": {
@@ -81,9 +123,651 @@
     "variables": {
         "FunctionName": "[concat(toLower(trim(parameters('FunctionName'))), uniqueString(resourceGroup().id))]",
         "StorageSuffix": "[environment().suffixes.storage]",
-        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(trim(parameters('WorkspaceID'))), '.ods.opinsights'))]"
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "mainRuleName": "[concat(toLower(parameters('FunctionName')),'MainCollectionRule', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },        
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastDLPTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastDLPTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "Name": "TimeGenerated",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "eventTime",
+                            "Type": "datetime"
+                        },
+                        {
+                            "Name": "senderAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "recipientAddress",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "subject",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "route",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "policy",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "action",
+                            "Type": "string"
+                        },
+                        {
+                            "Name": "messageId",
+                            "Type": "string"
+                        }
+                    ]
+                }
+            }
+        },        
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('MimecastCGTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('MimecastCGTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "urlCategory",
+                            "type": "string"
+                        },
+                        {
+                            "name": "scanResults",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileExtension",
+                            "type": "string"
+                        },
+                        {
+                            "name": "virusFound",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "senderDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "md5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "customThreatDictionary",
+                            "type": "string"
+                        },
+                        {
+                            "name": "itemsDetected",
+                            "type": "string"
+                        },
+                        {
+                            "name": "similarCustomExternalDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "taggedExternal",
+                            "type": "string"
+                        },
+                        {
+                            "name": "similarInternalDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "newDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "internalUserName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mimecastThreatDictionary",
+                            "type": "string"
+                        },
+                        {
+                            "name": "similarMimecastExternalDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "customNameMatch",
+                            "type": "string"
+                        },
+                        {
+                            "name": "taggedMalicious",
+                            "type": "string"
+                        },
+                        {
+                            "name": "replyMismatch",
+                            "type": "string"
+                        },
+                        {
+                            "name": "aggregateId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rejectionType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rejectionCode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rejectionInfo",
+                            "type": "string"
+                        },
+                        {
+                            "name": "delivered",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destinationIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Hostname",
+                            "type": "string"
+                        },
+                        {
+                            "name": "deliveryAttempts",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tlsUsed",
+                            "type": "string"
+                        },
+                        {
+                            "name": "deliveryErrors",
+                            "type": "string"
+                        },
+                        {
+                            "name": "attachments",
+                            "type": "string"
+                        },
+                        {
+                            "name": "route",
+                            "type": "string"
+                        },
+                        {
+                            "name": "processingId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "accountId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "action",
+                            "type": "string"
+                        },
+                        {
+                            "name": "timestamp",
+                            "type": "real"
+                        },
+                        {
+                            "name": "senderEnvelope",
+                            "type": "string"
+                        },
+                        {
+                            "name": "messageId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subject",
+                            "type": "string"
+                        },
+                        {
+                            "name": "totalSizeAttachments",
+                            "type": "string"
+                        },
+                        {
+                            "name": "numberAttachments",
+                            "type": "string"
+                        },
+                        {
+                            "name": "emailSize",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Logtype",
+                            "type": "string"
+                        },
+                        {
+                            "name": "subtype",
+                            "type": "string"
+                        },
+                        {
+                            "name": "monitoredDomainSource",
+                            "type": "string"
+                        },
+                        {
+                            "name": "similarDomain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "offset",
+                            "type": "real"
+                        },
+                        {
+                            "name": "partition",
+                            "type": "real"
+                        },
+                        {
+                            "name": "holdReason",
+                            "type": "string"
+                        },
+                        {
+                            "name": "recipients",
+                            "type": "string"
+                        },
+                        {
+                            "name": "senderIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "direction",
+                            "type": "string"
+                        },
+                        {
+                            "name": "senderHeader",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tlsVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tlsCipher",
+                            "type": "string"
+                        },
+                        {
+                            "name": "spamInfo",
+                            "type": "string"
+                        },
+                        {
+                            "name": "spamProcessingDetail",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },        
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('mainRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastDLPTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('MimecastCGTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('MimecastDLPTableName'))]": {
+                        "columns": [
+                            {
+                                "Name": "TimeGenerated",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "eventTime",
+                                "Type": "datetime"
+                            },
+                            {
+                                "Name": "senderAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "recipientAddress",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "subject",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "route",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "policy",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "action",
+                                "Type": "string"
+                            },
+                            {
+                                "Name": "messageId",
+                                "Type": "string"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('MimecastCGTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "urlCategory",
+                                "type": "string"
+                            },
+                            {
+                                "name": "scanResults",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileExtension",
+                                "type": "string"
+                            },
+                            {
+                                "name": "virusFound",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha1",
+                                "type": "string"
+                            },
+                            {
+                                "name": "senderDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "md5",
+                                "type": "string"
+                            },
+                            {
+                                "name": "customThreatDictionary",
+                                "type": "string"
+                            },
+                            {
+                                "name": "itemsDetected",
+                                "type": "string"
+                            },
+                            {
+                                "name": "similarCustomExternalDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "taggedExternal",
+                                "type": "string"
+                            },
+                            {
+                                "name": "similarInternalDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "newDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalUserName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mimecastThreatDictionary",
+                                "type": "string"
+                            },
+                            {
+                                "name": "similarMimecastExternalDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "customNameMatch",
+                                "type": "string"
+                            },
+                            {
+                                "name": "taggedMalicious",
+                                "type": "string"
+                            },
+                            {
+                                "name": "replyMismatch",
+                                "type": "string"
+                            },
+                            {
+                                "name": "aggregateId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rejectionType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rejectionCode",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rejectionInfo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "delivered",
+                                "type": "string"
+                            },
+                            {
+                                "name": "destinationIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Hostname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "deliveryAttempts",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tlsUsed",
+                                "type": "string"
+                            },
+                            {
+                                "name": "deliveryErrors",
+                                "type": "string"
+                            },
+                            {
+                                "name": "attachments",
+                                "type": "string"
+                            },
+                            {
+                                "name": "route",
+                                "type": "string"
+                            },
+                            {
+                                "name": "processingId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "accountId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "action",
+                                "type": "string"
+                            },
+                            {
+                                "name": "timestamp",
+                                "type": "real"
+                            },
+                            {
+                                "name": "senderEnvelope",
+                                "type": "string"
+                            },
+                            {
+                                "name": "messageId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "totalSizeAttachments",
+                                "type": "string"
+                            },
+                            {
+                                "name": "numberAttachments",
+                                "type": "string"
+                            },
+                            {
+                                "name": "emailSize",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "subtype",
+                                "type": "string"
+                            },
+                            {
+                                "name": "monitoredDomainSource",
+                                "type": "string"
+                            },
+                            {
+                                "name": "similarDomain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "_offset",
+                                "type": "real"
+                            },
+                            {
+                                "name": "_partition",
+                                "type": "real"
+                            },
+                            {
+                                "name": "holdReason",
+                                "type": "string"
+                            },
+                            {
+                                "name": "recipients",
+                                "type": "string"
+                            },
+                            {
+                                "name": "senderIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "direction",
+                                "type": "string"
+                            },
+                            {
+                                "name": "senderHeader",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tlsVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tlsCipher",
+                                "type": "string"
+                            },
+                            {
+                                "name": "spamInfo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "spamProcessingDetail",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastDLPTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('MimecastDLPTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('MimecastCGTableName'))]"
+                        ],
+                        "destinations": [
+                            "[concat('RuleDest', variables('suffix'))]"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()) | project-rename Logtype = ['type'], partition = ['_partition'], offset = ['_offset']",
+                        "outputStream": "[concat('Custom-', parameters('MimecastCGTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -187,7 +871,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -204,18 +888,24 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "Workspace_Id": "[trim(parameters('WorkspaceID'))]",
-                        "Workspace_Key": "[trim(parameters('WorkspaceKey'))]",
+                        "AZURE_CLIENT_ID": "[parameters('AzureClientID')]",
+                        "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
+                        "AZURE_TENANT_ID": "[parameters('AzureTenantID')]",
+                        "Azure_Workspace_Name": "[parameters('WorkspaceName')]",
                         "BaseURL": "[trim(parameters('MimecastBaseURL'))]",
                         "Mimecast_Client_Id": "[trim(parameters('MimecastClientID'))]",
                         "Mimecast_Client_Secret": "[trim(parameters('MimecastClientSecret'))]",
+                        "Mimecast_CG_Table_Name": "[trim(parameters('MimecastCGTableName'))]",
+                        "Mimecast_DLP_Table_Name": "[trim(parameters('MimecastDLPTableName'))]",
                         "File_Share_Name": "mimecast-checkpoints",
                         "Schedule": "[trim(parameters('Schedule'))]",
                         "Start_Date": "[trim(parameters('StartDate'))]",
                         "LogLevel": "[trim(parameters('LogLevel'))]",
                         "Connection_String": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-Mimecast_SEG-functionapp"
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-Mimecast_SEG_Updated-functionapp",
+                        "SCOPE": "[variables('scope')]",
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))).immutableId]"
                     }
                 }
             ]
@@ -254,6 +944,47 @@
             ],
             "properties": {
                 "shareQuota": 5120
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Main DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [
+                "[variables('dcrRoleId')]",
+                "[variables('mainRuleName')]"
+            ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
             }
         }
     ]

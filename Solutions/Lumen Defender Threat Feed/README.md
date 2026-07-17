@@ -30,7 +30,7 @@ Lumen Defender Threat Feed for Microsoft Sentinel offers powerful intelligence c
 ## Solution contents
 
 - Data Connector
-  - `Data Connectors/LumenThreatFeed` (ARM templates + Function App implementation)
+  - `Data Connectors/LumenThreatFeedv2` (ARM templates + Function App implementation)
 - Analytic Rules (examples)
   - `Lumen_DomainEntity_DNS.yaml`
   - `Lumen_IPEntity_CommonSecurityLog.yaml`

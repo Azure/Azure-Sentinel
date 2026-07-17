@@ -1,0 +1,117 @@
+id: 3a8d7f9e-4b2c-4e5d-8c6b-9f1a3d5e8c7b
+name: GCP Audit Logs - Storage Bucket Made Public
+description: |
+  'Detects when a Google Cloud Storage bucket is made publicly accessible by granting permissions to allUsers or allAuthenticatedUsers.
+  Making buckets public can expose sensitive data to unauthorized access and may indicate a misconfiguration or malicious activity.
+  Adversaries may make buckets public to exfiltrate data or as part of a data exposure attack.
+  This rule monitors setIamPermissions operations that add public access roles to storage buckets.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1530
+  - T1078.004
+  - T1567.002
+tags:
+  - GCP
+  - Storage
+  - Data Exposure
+  - Cloud Security
+query: |
+  GCPAuditLogs
+  | where ServiceName == "storage.googleapis.com"
+  | where MethodName == "storage.setIamPermissions"
+  | where GCPResourceType == "gcs_bucket"
+  | extend 
+      ServiceDataJson = parse_json(ServiceData),
+      RequestMetadataJson = parse_json(RequestMetadata),
+      AuthInfoJson = parse_json(AuthenticationInfo),
+      AuthzInfoJson = parse_json(AuthorizationInfo)
+  | extend PolicyDelta = ServiceDataJson.policyDelta.bindingDeltas
+  | mv-expand PolicyDelta
+  | extend 
+      Action = tostring(PolicyDelta.action),
+      Member = tostring(PolicyDelta.member),
+      Role = tostring(PolicyDelta.role)
+  | where Action == "ADD"
+  | where Member in~ ("allUsers", "allAuthenticatedUsers")
+  | extend 
+      BucketName = extract(@"buckets/([^/]+)", 1, GCPResourceName),
+      CallerIpAddress = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      AuthEmail = tostring(AuthInfoJson.principalEmail),
+      Permission = tostring(AuthzInfoJson[0].permission),
+      PermissionGranted = tostring(AuthzInfoJson[0].granted)
+  | extend 
+      PublicAccessType = case(
+          Member =~ "allUsers", "Public to Everyone",
+          Member =~ "allAuthenticatedUsers", "Public to All Authenticated Users",
+          "Unknown"),
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project TimeGenerated,
+            PrincipalEmail,
+            AuthEmail,
+            ProjectId,
+            BucketName,
+            ResourceName = GCPResourceName,
+            PublicAccessType,
+            Member,
+            Role,
+            CallerIpAddress,
+            UserAgent,
+            MethodName,
+            ServiceName,
+            Severity,
+            Permission,
+            PermissionGranted,
+            LogName,
+            InsertId,
+            AccountName,
+            AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+      - identifier: InstanceName
+        columnName: ResourceName
+customDetails:
+  ProjectId: ProjectId
+  BucketName: BucketName
+  ResourceName: ResourceName
+  PublicAccessType: PublicAccessType
+  RoleGranted: Role
+  UserAgent: UserAgent
+  Permission: Permission
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP Storage Bucket {{BucketName}} Made Public by {{PrincipalEmail}}"
+  alertDescriptionFormat: |-
+    User {{PrincipalEmail}} made storage bucket {{BucketName}} publicly accessible in project {{ProjectId}}.
+    This may expose sensitive data to unauthorized access. Investigate immediately to determine if this action was authorized and assess potential data exposure.
+    Review bucket contents and access logs for any unauthorized access attempts.
+version: 1.0.0
+kind: Scheduled

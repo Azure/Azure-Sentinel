@@ -7,6 +7,7 @@ This SOAR integration connects Commvault Cloud with Microsoft Sentinel to enable
 This solution provides:
 - **Data Ingestion**: Automated collection of Commvault security events and anomalies
 - **Incident Creation**: Automatic creation of Sentinel incidents based on Commvault security events
+- **AI Powered Insights**: AI-driven coorelation of Commvault Threat Scan and Risk Analysis events with Sentinel Data Lake signals from tools like CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation.
 - **Incident Response**: Playbooks for automated remediation actions (disable users, disable data aging, etc.)
 
 ## Prerequisites
@@ -47,19 +48,32 @@ Installation
 
 **3\. Create KeyVault Secrets:**
 
-*   Azure Portal -> KeyVault -> Secrets -> Generate/Import -> Manual:
-    *   Name: access-token, Value: (Your Commvault/Metallic access token), Enabled: Yes -> Create.
-    *   Name: refresh-token, Value: (Your Commvault/Metallic refresh token), Enabled: Yes -> Create.
-    *   Name: environment-endpoint-url, Value: (Your Commvault/Metallic endpoint's URL), Enabled: Yes -> Create.
+*   Go to Azure Portal -> KeyVault -> Secrets
+*   Create following secrets each by clicking on Generate/Import -> Manual:
+
+| Name | Value | Enabled | Action |
+|---|---|---|---|
+| `"access-token"` | (Your Commvault/Metallic access token) | Yes | Create |
+| `"refresh-token"` | (Your Commvault/Metallic refresh token) | Yes | Create |
+| `"environment-endpoint-url"` | (Your Commvault/Metallic endpoint's URL) | Yes | Create |
 
 **4\. Install Commvault Cloud Solution:**
 
-*   Sentinel -> Content hub -> Search "Commvault Cloud" -> Install.
+*   Sentinel -> [Your Workspace] -> Content hub -> Search "Commvault Cloud" -> Install.
 
 **5\. Configure Data Connector:**
 
 *   Commvault Cloud -> CommvaultSecurityIQ (using Azure Functions) -> Open connector page -> Deploy to Azure -> Fill details -> Create.
-*   For a detailed step-by-step guide, refer to [DataConnector.md](./DataConnector.md).
+*   For a detailed step-by-step guide and post-deployment steps, refer to [DataConnector.md](./DataConnector.md).
+*   The deployment creates the following resources:
+    - Azure Function App with System-Assigned Managed Identity
+    - Data Collection Endpoint (DCE)
+    - Data Collection Rule (DCR)
+    - Custom Log Analytics Table (`CommvaultAlerts_CL`)
+    - Storage Account for Function App
+    - Application Insights for monitoring
+    - Role assignment for Managed Identity on DCR
+
 
 ### Configurable Environment Variables ( Optional )
 
@@ -94,6 +108,16 @@ The following environment variables can be optionally configured to customize th
 *   After completing all the steps, ensure that the necessary additional permissions are configured.
 *   Follow the instructions in [Permissions.md](./Permissions.md) to grant the required permissions for the Logic Apps.
 *   Additionally, refer to **6. Post-Deployment Steps** in [DataConnector.md](./DataConnector.md) to ensure the Function App has the necessary permissions to access the Key Vault.
+
+## Using Commvault Security Investigation Agent
+
+1. Go to https://securitycopilot.microsoft.com/agents
+2. Search for “Commvault Security Investigation Agent”
+3. Click on “Set up” Agent
+4. Click on “Go to Agent”
+5. Click on “Run” => “One time”
+6. Provide “Hostname” and click “Submit”
+> Note: Hostname is the name of the server that we want to check for events of Commvault and partners like Netskope, CrowdStrike and Palo Alto.
 
 ## Automation Account and Runbooks Setup
 

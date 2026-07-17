@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                    |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
+| 3.0.15       | 22-06-2026                     | Refactor OAuth and device-code phishing hunting queries to construct login.microsoftonline.com and login.microsoftonline.us URLs via strcat() (resolves ARM-TTK 'DeploymentTemplate Must Not Contain Hardcoded Uri'); remove empty groupByAlertDetails/groupByCustomDetails arrays from PossibleWebpBufferOverflow analytic rule (resolves ARM-TTK 'Template Should Not Contain Blanks'). Updated `Microsoft Defender XDR` to Product Name filter in **Data Connector** queries. Added new **Hunting Queries** Hunt for RMM tool execution following Teams messages, Hunt for alerts correlated with Teams messages and Identify acting user for reported phish. Also updated **Hunting Query** Punycode chars lookalike and corrected the incorrect mapping of `dataTypes: EmailEvents` with `connectorId: OfficeATP` across multiple **Hunting Queries**. |
+| 3.0.14      | 09-02-2026                     | Added new **Hunting Query** Punycode chars lookalike domains.yaml.		       |
+| 3.0.13      | 22-01-2026                     | Updated Defender XDR solution with new **Hunting Queries**.				   |
 | 3.0.12      | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.11      | 16-12-2024                     | Updated **Analytic Rule** LocalAdminGroupChanges.yaml.<br> Updated **Workbook**.				   |
 | 3.0.10      | 25-10-2024                     | Added New **Hunting Queries**.				   |

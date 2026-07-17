@@ -34,7 +34,7 @@ This guide helps create the required **Client ID** and **Client Secret** in **Go
 2. Click **"Create Credentials"** → choose **"OAuth client ID"**
 3. Choose **"Web application"** as the type
 4. Give it a name: `Sentinel OAuth`
-5. Scroll to **Authorized redirect URIs** and paste this link:"https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights"
+5. Scroll to **Authorized redirect URIs** and paste the Redirect URI shared in your data connector experience
 6. Click **"Create"**
    
 ### Step 4: Save the Credentials

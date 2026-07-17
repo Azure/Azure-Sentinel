@@ -2,10 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "VectraIncidentTimelineUpdate",
-        "description": "This playbook will update the incident timeline by keeping most recent alerts and adding most recent detections from entities timeline to the incident timeline.",
+        "title": "Vectra Incident Timeline Update",
+        "description": "This playbook will update the incident timeline by keeping most recent alerts and adding most recent detections and defender alerts from entities timeline to the incident timeline.",
         "prerequisites": [
-            "1. The Vectra XDR data connector should be configured to send appropriate alerts to Microsoft Sentinel."
+            "1. The Vectra XDR data connector should be configured to send appropriate alerts to Microsoft Sentinel.",
+            "2. The Microsoft Defender XDR data connector should be configured and AlertInfo and AlertEvidence options should be enabled along with the analytics rule to add it's alerts to Vectra incident timeline ."
         ],
         "postDeployment": [
             "**a. Authorize connections**",
@@ -32,6 +33,7 @@
             "d. Vectra Priority Host Incidents",
             "e. Vectra Create Incident Based On Tag For Entity Type Account.",
             "f. Vectra Create Incident Based On Tag For Entity Type Host.",
+            "g. Defender Alert Evidence.",
             "2. In Microsoft Sentinel, Configure the automation rules to trigger the playbook.",
             "a. Go to Microsoft Sentinel → <your workspace> → Automation",
             "b. Click on Create → Automation rule",
@@ -314,6 +316,23 @@
                                 ]
                             }
                         },
+                        "Initialize_variables_defender_alerts_filter_variable":  {
+                            "runAfter":  {
+                                "Initialize_detection_filter_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "DefenderAlertsFilterVariable",
+                                        "type":  "string",
+                                        "value":  "Defender Alert Evidence"
+                                    }
+                                ]
+                            }
+                        },
                         "Iterate_to_find_host_or_account_entity_value": {
                             "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                             "actions": {
@@ -354,7 +373,7 @@
                                                         "type": "AppendToStringVariable",
                                                         "inputs": {
                                                             "name": "Entity",
-                                                            "value": "@concat(items('Iterate_to_find_host_or_account_entity_value')?['properties']?['accountName'],'@',items('Iterate_to_find_host_or_account_entity_value')?['properties']?['upnSuffix'])"
+                                                            "value": "@if(empty(items('Iterate_to_find_host_or_account_entity_value')?['properties']?['upnSuffix']), concat(items('Iterate_to_find_host_or_account_entity_value')?['properties']?['accountName']), concat(items('Iterate_to_find_host_or_account_entity_value')?['properties']?['accountName'],'@',items('Iterate_to_find_host_or_account_entity_value')?['properties']?['upnSuffix']))"
                                                         }
                                                     },
                                                     "Set_variable_flag_to_true_if_entity_account_is_available": {
@@ -409,7 +428,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "let alertIds = SecurityIncident\n| where TimeGenerated >= ago(30d)\n| where IncidentName == \"@{variables('ARM Name')}\"\n| top 1 by TimeGenerated desc\n| parse RelatedAnalyticRuleIds with '[\"' ruleId:string '\"]'\n| extend IncidentAlertType = ruleId\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind=inner(SecurityAlert) on $left.AlertId == $right.SystemAlertId;\nlet newalerts = SecurityAlert\n| where TimeGenerated >= ago(30d)\n| where SystemAlertId !in (alertIds)\n| where DisplayName startswith \"@{variables('DetectionNameStartsWith')}\"\n| parse-kv Entities as (HostName:string,Name:string) with (pair_delimiter=\",\", kv_delimiter=\":\", quote='\"')\n| where (HostName == \"@{variables('Entity')}\" and @{variables('IsEntityHostAvailable')} == @{true}) or (Name == \"@{variables('Entity')}\" and @{variables('IsEntityAccountAvailable')} == @{true}) ;\nlet detections = union alertIds, newalerts\n| where DisplayName startswith \"Vectra AI Detection\"\n| extend timetosort = iff(AlertType contains IncidentAlertType , StartTime, TimeGenerated)\n| summarize arg_max(timetosort, *) by DisplayName\n| project SystemAlertId;\nlet incidentalerts = union alertIds, newalerts\n| where DisplayName !startswith \"Vectra AI Detection\"\n| top 1 by StartTime\n| project SystemAlertId;\nunion detections, incidentalerts",
+                                "body": "let alertIds = SecurityIncident\n| where TimeGenerated >= ago(30d)\n| where IncidentName == \"@{variables('ARM Name')}\"\n| top 1 by TimeGenerated desc\n| parse RelatedAnalyticRuleIds with '[\"' ruleId:string '\"]'\n| extend IncidentAlertType = ruleId\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind=inner(SecurityAlert) on $left.AlertId == $right.SystemAlertId;\nlet newalerts = SecurityAlert\n| where TimeGenerated >= ago(30d)\n| where SystemAlertId !in (alertIds)\n| where DisplayName startswith \"@{variables('DetectionNameStartsWith')}\"\n| parse-kv Entities as (HostName:string,Name:string) with (pair_delimiter=\",\", kv_delimiter=\":\", quote='\"')\n| where (HostName == \"@{variables('Entity')}\" and @{variables('IsEntityHostAvailable')} == @{true}) or (Name == \"@{variables('Entity')}\" and @{variables('IsEntityAccountAvailable')} == @{true}) ;\nlet defenderalerts = SecurityAlert\n| where TimeGenerated >= ago(30d)\n| where SystemAlertId !in (alertIds)\n| where DisplayName startswith \"@{variables('DefenderAlertsFilterVariable')}\"\n| parse-kv Entities as (HostName:string,Name:string) with (pair_delimiter=\",\", kv_delimiter=\":\", quote='\"')\n| where (HostName == \"@{variables('Entity')}\" and @{variables('IsEntityHostAvailable')} == @{true}) or (Name == \"@{variables('Entity')}\" and @{variables('IsEntityAccountAvailable')} == @{true}) ;\nlet detections = union alertIds, newalerts\n| where DisplayName startswith \"Vectra AI Detection\"\n| extend timetosort = iff(AlertType contains IncidentAlertType , StartTime, TimeGenerated)\n| summarize arg_max(timetosort, *) by DisplayName\n| project SystemAlertId;\nlet defender = union alertIds, defenderalerts\n| where DisplayName startswith \"@{variables('DefenderAlertsFilterVariable')}\"\n| extend timetosort = iff(AlertType contains IncidentAlertType , StartTime, TimeGenerated)\n| summarize arg_max(timetosort, *) by DisplayName\n| project SystemAlertId;\nlet incidentalerts = union alertIds, newalerts\n| where DisplayName !startswith \"Vectra AI Detection\"\n| top 1 by StartTime\n| project SystemAlertId;\nunion detections, incidentalerts, defender",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
