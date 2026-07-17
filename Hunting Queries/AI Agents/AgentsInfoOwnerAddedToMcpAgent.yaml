@@ -1,0 +1,75 @@
+id: c35b5a60-71ee-448c-935d-f60f4a4c7f2b
+name: AI Agents - Owner added to MCP-enabled agent
+description: |
+  Identifies owners newly observed on existing AI agents with MCP servers configured. Review the added owners and audit records to confirm whether privileged access was authorized.
+requiredDataConnectors: []
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+query: |
+  let lookback = 14d;
+  let recent = 2d;
+  let IdentityIdtoUPN = materialize(
+      IdentityInfo
+      | extend ResolvedAccountUpn = tostring(column_ifexists("AccountUpn", column_ifexists("AccountUPN", ""))),
+               IdentityTimestamp = todatetime(column_ifexists("Timestamp", column_ifexists("TimeGenerated", datetime(null))))
+      | where isnotempty(AccountObjectId) and isnotempty(ResolvedAccountUpn)
+      | summarize arg_max(IdentityTimestamp, ResolvedAccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn = ResolvedAccountUpn);
+  let CurrentState =
+      AgentsInfo
+      | where Timestamp > ago(recent)
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where LifecycleStatus != "Deleted"
+      | where array_length(coalesce(McpServers, dynamic([]))) > 0
+      | project AgentId, Timestamp, Name, Platform, CreatedDateTime,
+                CurrentOwners = coalesce(Owners, dynamic([])), McpServers;
+  let BaselineState =
+      AgentsInfo
+      | where Timestamp between (ago(lookback) .. ago(recent))
+      | summarize arg_max(Timestamp, *) by AgentId
+      | project AgentId, PreviousTimestamp = Timestamp,
+                PreviousOwners = coalesce(Owners, dynamic([]));
+  CurrentState
+  | join kind=inner BaselineState on AgentId
+  | extend AddedOwners = set_difference(CurrentOwners, PreviousOwners)
+  | where array_length(AddedOwners) > 0
+  | mv-expand AddedOwnerId = AddedOwners to typeof(string)
+  | join kind=leftouter IdentityIdtoUPN on $left.AddedOwnerId == $right.AccountObjectId
+  | summarize AddedOwnerUpns = make_set_if(AccountUpn, isnotempty(AccountUpn)),
+              UnresolvedAddedOwnerIds = make_set_if(AddedOwnerId, isempty(AccountUpn)),
+              take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
+                       PreviousOwners, CurrentOwners, AddedOwners, McpServers) by AgentId
+  | extend AddedOwnerUpns = array_sort_asc(AddedOwnerUpns),
+           AddedOwnerUpn = tostring(AddedOwnerUpns[0])
+  | mv-expand Mcp = McpServers
+  | extend McpName = tostring(Mcp.name)
+  | summarize McpServersConfigured = make_set_if(McpName, isnotempty(McpName)),
+              take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
+                       PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
+                       UnresolvedAddedOwnerIds, AddedOwnerUpn) by AgentId
+  | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
+            PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
+            UnresolvedAddedOwnerIds, AddedOwnerUpn, McpServersConfigured
+  | sort by Timestamp desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AddedOwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Marcel Graewer
+  support:
+    tier: Community
+  categories:
+    domains: ["Security - Threat Protection"]

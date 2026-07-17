@@ -1,0 +1,70 @@
+id: 662eae7f-494f-41a8-bfef-23dd80361795
+name: AI Agents - Instructions changed on previously published agent
+description: |
+  Identifies instruction changes on AI agents that were published in both current and baseline snapshots. Review the changed prompt and audit records to confirm whether the update was authorized.
+requiredDataConnectors: []
+tactics:
+  - Impact
+relevantTechniques:
+  - T1565.001
+query: |
+  let lookback = 14d;
+  let recent = 2d;
+  let IdentityIdtoUPN = materialize(
+      IdentityInfo
+      | extend ResolvedAccountUpn = tostring(column_ifexists("AccountUpn", column_ifexists("AccountUPN", ""))),
+               IdentityTimestamp = todatetime(column_ifexists("Timestamp", column_ifexists("TimeGenerated", datetime(null))))
+      | where isnotempty(AccountObjectId) and isnotempty(ResolvedAccountUpn)
+      | summarize arg_max(IdentityTimestamp, ResolvedAccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn = ResolvedAccountUpn);
+  let CurrentState =
+      AgentsInfo
+      | where Timestamp > ago(recent)
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where LifecycleStatus != "Deleted"
+      | where PublishedStatus == "Published"
+      | where isnotempty(Instructions) and Instructions != "N/A"
+      | project AgentId, Timestamp, Name, Platform, CreatedDateTime, Owners,
+                CurrentInstructions = Instructions;
+  let BaselineState =
+      AgentsInfo
+      | where Timestamp between (ago(lookback) .. ago(recent))
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where PublishedStatus == "Published"
+      | where isnotempty(Instructions) and Instructions != "N/A"
+      | project AgentId, PreviousTimestamp = Timestamp,
+                PreviousInstructions = Instructions;
+  CurrentState
+  | join kind=inner BaselineState on AgentId
+  | where CurrentInstructions != PreviousInstructions
+  | extend PreviousInstructionsHash = hash_sha256(PreviousInstructions),
+           CurrentInstructionsHash = hash_sha256(CurrentInstructions),
+           InstructionsLengthDelta = strlen(CurrentInstructions) - strlen(PreviousInstructions),
+           PreviousInstructionsPreview = substring(PreviousInstructions, 0, 500),
+           CurrentInstructionsPreview = substring(CurrentInstructions, 0, 500)
+  | extend OwnerId = tostring(Owners[0])
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
+            PreviousInstructionsHash, CurrentInstructionsHash, InstructionsLengthDelta,
+            PreviousInstructionsPreview, CurrentInstructionsPreview, OwnerUpn
+  | sort by Timestamp desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Marcel Graewer
+  support:
+    tier: Community
+  categories:
+    domains: ["Security - Threat Protection"]
