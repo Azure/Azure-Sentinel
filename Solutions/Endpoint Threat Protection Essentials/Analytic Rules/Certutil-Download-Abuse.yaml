@@ -5,31 +5,20 @@ description: |
   -urlcache or -verifyctl flags. CertUtil is a signed Windows binary (LOLBin)
   that attackers abuse to download payloads while bypassing application
   whitelisting and network controls.
-
-  This technique maps to MITRE ATT&CK:
-    T1105  - Ingress Tool Transfer
-    T1218  - Signed Binary Proxy Execution
-    T1140  - Deobfuscate/Decode Files or Information
-
-  Tune AllowlistedDomains below to match your PKI/CA infrastructure.
-  Adjust the Lookback variable to match queryPeriod if you change the schedule.
+  Tune AllowlistedDomains to match your PKI/CA infrastructure.
 severity: High
+status: Available
 requiredDataConnectors:
-  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+  - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
   - connectorId: SecurityEvents
-    dataTypes:
-      - SecurityEvent
-  - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-status: Available
-kind: Scheduled
 tactics:
   - CommandAndControl
   - DefenseEvasion
@@ -47,54 +36,42 @@ query: |
   ]);
   let MDE_Results =
     DeviceProcessEvents
-    | where TimeGenerated > ago(Lookback)
+    | where Timestamp >= ago(Lookback)
     | where FileName =~ "certutil.exe"
     | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
     | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
     | where not(ProcessCommandLine has_any (AllowlistedDomains))
     | extend
-        AccountName    = InitiatingProcessAccountName,
-        AccountDomain  = InitiatingProcessAccountDomain,
-        ParentProcess  = InitiatingProcessFileName,
-        ParentCmdLine  = InitiatingProcessCommandLine,
-        HostName       = DeviceName,
-        EventTime      = TimeGenerated,
-        Source         = "MDE"
-    | project
-        EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
+        AccountName   = InitiatingProcessAccountName,
+        AccountDomain = InitiatingProcessAccountDomain,
+        HostName      = DeviceName,
+        EventTime     = Timestamp
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName;
   let SecEvent_Results =
     SecurityEvent
-    | where TimeGenerated > ago(Lookback)
+    | where TimeGenerated >= ago(Lookback)
     | where EventID == 4688
     | where NewProcessName endswith "\\certutil.exe"
     | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
     | where CommandLine has_any ("http://", "https://", "ftp://")
     | where not(CommandLine has_any (AllowlistedDomains))
     | extend
-        AccountName    = SubjectUserName,
-        AccountDomain  = SubjectDomainName,
-        ParentProcess  = ParentProcessName,
-        ParentCmdLine  = "",
-        HostName       = Computer,
-        EventTime      = TimeGenerated,
+        AccountName   = SubjectUserName,
+        AccountDomain = SubjectDomainName,
+        HostName      = Computer,
+        EventTime     = TimeGenerated,
         ProcessCommandLine = CommandLine,
-        Source         = "SecurityEvent"
-    | project
-        EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, ParentProcess, ParentCmdLine, Source;
+        InitiatingProcessFileName = ParentProcessName
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName;
   union MDE_Results, SecEvent_Results
-  | extend
-      HostName  = iif(HostName has '.', substring(HostName, 0, indexof(HostName, '.')), HostName),
-      DnsDomain = iif(HostName has '.', substring(HostName, indexof(HostName, '.') + 1), '')
   | sort by EventTime desc
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
+      - identifier: FullName
         columnName: HostName
-      - identifier: DnsDomain
-        columnName: DnsDomain
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -105,23 +82,5 @@ entityMappings:
     fieldMappings:
       - identifier: CommandLine
         columnName: ProcessCommandLine
-alertDetailsOverride:
-  alertDisplayNameFormat: "CertUtil download attempt on {{HostName}} by {{AccountName}}"
-  alertDescriptionFormat: "CertUtil.exe was used to download a remote file on {{HostName}}. Command line: {{ProcessCommandLine}}"
-customDetails:
-  CommandLine: ProcessCommandLine
-  ParentProcess: ParentProcess
-  DataSource: Source
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: true
-    reopenClosedIncident: false
-    lookbackDuration: 5h
-    matchingMethod: AllEntities
-    groupByEntities:
-      - Host
-      - Account
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-version: 1.0.4
+version: 1.0.5
+kind: Scheduled
