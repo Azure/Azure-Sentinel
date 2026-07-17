@@ -3,28 +3,22 @@ name: PowerShell Encoded Command Execution (Living off the Land)
 description: |
   Detects PowerShell or pwsh.exe launched with encoded command flags
   (-EncodedCommand, -enc, -ec, -enco). Attackers encode commands in Base64
-  to obfuscate malicious payloads and bypass script-based security controls.
-
-  Maps to MITRE ATT&CK:
-    T1059.001 - Command and Scripting Interpreter: PowerShell
-    T1027     - Obfuscated Files or Information
+  to obfuscate malicious payloads and bypass script-based controls.
+  Risk is elevated when a download cradle pattern is also detected.
+  Tune AllowlistedParents for known-safe management tools such as SCCM.
 severity: Medium
+status: Available
 requiredDataConnectors:
-  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+  - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
   - connectorId: SecurityEvents
-    dataTypes:
-      - SecurityEvent
-  - connectorId: WindowsSecurityEvents
     dataTypes:
       - SecurityEvent
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-status: Available
-kind: Scheduled
 tactics:
   - Execution
   - DefenseEvasion
@@ -35,11 +29,8 @@ query: |
   let Lookback = 1h;
   let EncodedFlagRegex = @'(?i)(^|\s)-(encodedcommand|enc|ec|enco)\b';
   let AllowlistedParents = dynamic([
-    "SqlServer.exe",
-    "ManagementStudio.exe",
-    "devenv.exe",
-    "ccmexec.exe",
-    "SMSAgent.exe"
+    "SqlServer.exe", "ManagementStudio.exe", "devenv.exe",
+    "ccmexec.exe", "SMSAgent.exe"
   ]);
   let DownloadCradlePatterns = dynamic([
     "Net.WebClient", "WebRequest", "DownloadString", "DownloadFile",
@@ -47,57 +38,44 @@ query: |
   ]);
   let MDE_Results =
     DeviceProcessEvents
-    | where TimeGenerated > ago(Lookback)
+    | where Timestamp >= ago(Lookback)
     | where FileName in~ ("powershell.exe", "pwsh.exe")
     | where ProcessCommandLine matches regex EncodedFlagRegex
     | where not(InitiatingProcessFileName has_any (AllowlistedParents))
     | extend
-        HasDownloadCradle  = ProcessCommandLine has_any (DownloadCradlePatterns),
-        AccountName        = InitiatingProcessAccountName,
-        AccountDomain      = InitiatingProcessAccountDomain,
-        ParentProcess      = InitiatingProcessFileName,
-        ParentCmdLine      = InitiatingProcessCommandLine,
-        HostName           = DeviceName,
-        EventTime          = TimeGenerated,
-        Source             = "MDE"
-    | project
-        EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, ParentProcess, ParentCmdLine,
-        HasDownloadCradle, Source;
+        HasDownloadCradle = ProcessCommandLine has_any (DownloadCradlePatterns),
+        AccountName       = InitiatingProcessAccountName,
+        AccountDomain     = InitiatingProcessAccountDomain,
+        HostName          = DeviceName,
+        EventTime         = Timestamp
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;
   let SecEvent_Results =
     SecurityEvent
-    | where TimeGenerated > ago(Lookback)
+    | where TimeGenerated >= ago(Lookback)
     | where EventID == 4688
-    | where NewProcessName endswith "\\powershell.exe" or NewProcessName endswith "\\pwsh.exe"
+    | where NewProcessName endswith "\\powershell.exe"
+        or NewProcessName endswith "\\pwsh.exe"
     | where CommandLine matches regex EncodedFlagRegex
     | where not(ParentProcessName has_any (AllowlistedParents))
     | extend
-        HasDownloadCradle  = CommandLine has_any (DownloadCradlePatterns),
-        AccountName        = SubjectUserName,
-        AccountDomain      = SubjectDomainName,
-        ParentProcess      = ParentProcessName,
-        ParentCmdLine      = "",
-        HostName           = Computer,
-        EventTime          = TimeGenerated,
-        ProcessCommandLine = CommandLine,
-        Source             = "SecurityEvent"
-    | project
-        EventTime, HostName, AccountName, AccountDomain,
-        ProcessCommandLine, ParentProcess, ParentCmdLine,
-        HasDownloadCradle, Source;
+        HasDownloadCradle     = CommandLine has_any (DownloadCradlePatterns),
+        AccountName           = SubjectUserName,
+        AccountDomain         = SubjectDomainName,
+        HostName              = Computer,
+        EventTime             = TimeGenerated,
+        ProcessCommandLine    = CommandLine,
+        InitiatingProcessFileName = ParentProcessName
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;
   union MDE_Results, SecEvent_Results
-  | extend
-      HostName  = iif(HostName has '.', substring(HostName, 0, indexof(HostName, '.')), HostName),
-      DnsDomain = iif(HostName has '.', substring(HostName, indexof(HostName, '.') + 1), ''),
-      RiskScore = iif(HasDownloadCradle, 2, 1)
+  | extend RiskScore = iif(HasDownloadCradle, 2, 1)
   | sort by RiskScore desc, EventTime desc
 entityMappings:
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
+      - identifier: FullName
         columnName: HostName
-      - identifier: DnsDomain
-        columnName: DnsDomain
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -108,24 +86,5 @@ entityMappings:
     fieldMappings:
       - identifier: CommandLine
         columnName: ProcessCommandLine
-alertDetailsOverride:
-  alertDisplayNameFormat: "PowerShell encoded command on {{HostName}} by {{AccountName}}"
-  alertDescriptionFormat: "PowerShell was launched with an encoded command on {{HostName}}."
-customDetails:
-  CommandLine: ProcessCommandLine
-  HasDownloadCradle: HasDownloadCradle
-  ParentProcess: ParentProcess
-  DataSource: Source
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: true
-    reopenClosedIncident: false
-    lookbackDuration: 5h
-    matchingMethod: AllEntities
-    groupByEntities:
-      - Host
-      - Account
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-version: 1.0.3
+version: 1.0.4
+kind: Scheduled
