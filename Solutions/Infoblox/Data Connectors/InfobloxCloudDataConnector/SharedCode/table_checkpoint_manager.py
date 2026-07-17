@@ -7,17 +7,24 @@ from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError, Ht
 
 class ExportsTableStore:
 
+    # Process-level cache of table names already ensured to exist, so create()
+    # skips the network round-trip on subsequent instantiations in a warm process.
+    _created_tables = set()
+
     def __init__(self, connection_string, table_name):
         self.connection_string = connection_string
         self.table_name = table_name
 
     def create(self):
+        if self.table_name in ExportsTableStore._created_tables:
+            return
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
             try:
                 table_client.create_table()
                 logging.info("Checkpoint Table created")
             except ResourceExistsError:
                 logging.warning("Table already exists")
+        ExportsTableStore._created_tables.add(self.table_name)
 
     def post(self, pk: str, rk: str, data: dict = None):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
@@ -29,10 +36,9 @@ class ExportsTableStore:
                 entity_template.update(data)
             try:
                 table_client.create_entity(entity_template)
-            except Exception as e:
-                logging.warning("could not post entity to table")
-                logging.warning(e)
-                raise e
+            except Exception:
+                logging.exception("could not post entity to table")
+                raise
 
     def get(self, pk: str, rk: str):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
@@ -58,14 +64,16 @@ class ExportsTableStore:
             self.merge(pk, rk, data)
 
     def query_by_partition_key(self, pk):
-        table_client = TableClient.from_connection_string(self.connection_string, self.table_name)
-        parameters = {u"key": pk}
-        name_filter = u"PartitionKey eq @key"
-        try:
-            return table_client.query_entities(name_filter, parameters=parameters)
-        except HttpResponseError as e:
-            print(e.message)
-            return []
+        with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
+            parameters = {u"key": pk}
+            name_filter = u"PartitionKey eq @key"
+            try:
+                # Materialize inside the context manager; query_entities is lazy and
+                # would fail if iterated after the client is closed.
+                return list(table_client.query_entities(name_filter, parameters=parameters))
+            except HttpResponseError as e:
+                logging.error("Failed to query entities by partition key {}: {}".format(pk, str(e)))
+                return []
 
     def batch(self, operations):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
