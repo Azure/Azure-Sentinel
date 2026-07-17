@@ -37,6 +37,13 @@ Installation
 *   Ensure the user creating the token has **Admin** or **Tenant Admin** privileges.
 *   Copy the generated **QSDK Token** — you will need it in Step 4.
 
+> **Important — Token Expiry:** QSDK tokens expire after **120 minutes** by default. Since the CCF connector stores the token as a static credential with no automatic refresh, the connector will stop ingesting data once the token expires. To avoid this, increase the token expiry **before** generating the token:
+> 1. In Commvault Command Center, go to **Manage** > **Company** and select your company.
+> 2. On the **Overview** tab, scroll down to the **Settings** tile and click **Add**.
+> 3. In the **Name** box, enter `AccessTokenExpiryInMinutes`. Set **Category** to `CommServDB.Console` and **Type** to `Integer`.
+> 4. In the **Value** box, enter `43200` (30 days) or your preferred duration in minutes (max: `43200`).
+> 5. Click **Save**, then generate the QSDK token — the new expiry will apply.
+
 **2\. Install Commvault Cloud Solution:**
 
 *   Sentinel -> [Your Workspace] -> Content hub -> Search "Commvault Cloud" -> Install.
