@@ -29,6 +29,7 @@ query: |
   let BaselineState =
       AgentsInfo
       | where Timestamp between (ago(lookback) .. ago(recent))
+      | where LifecycleStatus != "Deleted"
       | summarize arg_max(Timestamp, *) by AgentId
       | project AgentId, PreviousTimestamp = Timestamp,
                 PreviousOwners = coalesce(Owners, dynamic([]));
@@ -47,20 +48,21 @@ query: |
   | mv-expand Mcp = McpServers
   | extend McpName = tostring(Mcp.name)
   | summarize McpServersConfigured = make_set_if(McpName, isnotempty(McpName)),
-              take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
-                       PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
-                       UnresolvedAddedOwnerIds, AddedOwnerUpn) by AgentId
+             take_any(Timestamp, PreviousTimestamp, Name, Platform, CreatedDateTime,
+                      PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
+                      UnresolvedAddedOwnerIds, AddedOwnerUpn) by AgentId
+  | extend AddedOwnerAccountName = tostring(split(AddedOwnerUpn, "@")[0]),
+           AddedOwnerAccountUPNSuffix = tostring(split(AddedOwnerUpn, "@")[1])
   | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
-            PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
-            UnresolvedAddedOwnerIds, AddedOwnerUpn, McpServersConfigured
+           PreviousOwners, CurrentOwners, AddedOwners, AddedOwnerUpns,
+           UnresolvedAddedOwnerIds, AddedOwnerUpn, AddedOwnerAccountName,
+           AddedOwnerAccountUPNSuffix, McpServersConfigured
   | sort by Timestamp desc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AddedOwnerUpn
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: Name
+      - identifier: Name
+        columnName: AddedOwnerAccountName
+      - identifier: UPNSuffix
+        columnName: AddedOwnerAccountUPNSuffix
 version: 1.0.0

@@ -28,6 +28,7 @@ query: |
   let BaselineState =
       AgentsInfo
       | where Timestamp between (ago(lookback) .. ago(recent))
+      | where LifecycleStatus != "Deleted"
       | summarize arg_max(Timestamp, *) by AgentId
       | where not(set_has_element(coalesce(SharedWith, dynamic([])), "*"))
       | project AgentId, PreviousTimestamp = Timestamp, PreviousSharedWith = SharedWith;
@@ -37,17 +38,17 @@ query: |
   | extend OwnerId = tostring(Owners[0])
   | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
   | project-rename OwnerUpn = AccountUpn
+  | extend OwnerAccountName = tostring(split(OwnerUpn, "@")[0]),
+           OwnerAccountUPNSuffix = tostring(split(OwnerUpn, "@")[1])
   | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
-            PreviousSharedWith, SharedWith, McpServerCount, DeclaredToolCount,
-            HasElevatedCapabilities, OwnerUpn
+           PreviousSharedWith, SharedWith, McpServerCount, DeclaredToolCount,
+           HasElevatedCapabilities, OwnerUpn, OwnerAccountName, OwnerAccountUPNSuffix
   | sort by HasElevatedCapabilities desc, Timestamp desc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: OwnerUpn
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: Name
+      - identifier: Name
+        columnName: OwnerAccountName
+      - identifier: UPNSuffix
+        columnName: OwnerAccountUPNSuffix
 version: 1.0.0

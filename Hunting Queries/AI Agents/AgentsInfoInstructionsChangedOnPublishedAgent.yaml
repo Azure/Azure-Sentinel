@@ -29,6 +29,7 @@ query: |
   let BaselineState =
       AgentsInfo
       | where Timestamp between (ago(lookback) .. ago(recent))
+      | where LifecycleStatus != "Deleted"
       | summarize arg_max(Timestamp, *) by AgentId
       | where PublishedStatus == "Published"
       | where isnotempty(Instructions) and Instructions != "N/A"
@@ -39,23 +40,21 @@ query: |
   | where CurrentInstructions != PreviousInstructions
   | extend PreviousInstructionsHash = hash_sha256(PreviousInstructions),
            CurrentInstructionsHash = hash_sha256(CurrentInstructions),
-           InstructionsLengthDelta = strlen(CurrentInstructions) - strlen(PreviousInstructions),
-           PreviousInstructionsPreview = substring(PreviousInstructions, 0, 500),
-           CurrentInstructionsPreview = substring(CurrentInstructions, 0, 500)
+           InstructionsLengthDelta = strlen(CurrentInstructions) - strlen(PreviousInstructions)
   | extend OwnerId = tostring(Owners[0])
   | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
   | project-rename OwnerUpn = AccountUpn
+  | extend OwnerAccountName = tostring(split(OwnerUpn, "@")[0]),
+           OwnerAccountUPNSuffix = tostring(split(OwnerUpn, "@")[1])
   | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
-            PreviousInstructionsHash, CurrentInstructionsHash, InstructionsLengthDelta,
-            PreviousInstructionsPreview, CurrentInstructionsPreview, OwnerUpn
+           PreviousInstructionsHash, CurrentInstructionsHash, InstructionsLengthDelta,
+           OwnerUpn, OwnerAccountName, OwnerAccountUPNSuffix
   | sort by Timestamp desc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: OwnerUpn
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: Name
+      - identifier: Name
+        columnName: OwnerAccountName
+      - identifier: UPNSuffix
+        columnName: OwnerAccountUPNSuffix
 version: 1.0.0
