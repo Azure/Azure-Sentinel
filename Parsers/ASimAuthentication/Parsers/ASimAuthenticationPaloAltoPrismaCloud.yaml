@@ -46,9 +46,10 @@ ParserQuery: |
   )
   with (pair_delimiter=' ', kv_delimiter='=', quote='"')
   | where ['type'] == "management_audit" and log_type == "login"
+  | invoke _ASIM_ResolveDvcFQDN('HostName')
   | extend
-      EventStartTime = coalesce(todatetime(['time']), EventTime),
-      EventEndTime = coalesce(todatetime(['time']), EventTime),
+      EventStartTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
+      EventEndTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
       EventResult = case(
           status == "successful login attempt", "Success",
           status in ("invalid credentials", "expired token"), "Failure",
@@ -74,15 +75,16 @@ ParserQuery: |
       TargetUsernameType = iff(isnotempty(username), "Simple", ""),
       TargetAppName = "Prisma Cloud Compute",
       TargetAppType = "Service",
-      EventUid = hash_sha256(strcat(TenantId, EventTime, SyslogMessage))
-  | extend ValidatedHostname = iff(HostName matches regex @"^[a-zA-Z0-9-]{1,61}$", HostName, "")
+      EventUid = _ItemId
   | extend
-      TargetHostname = ValidatedHostname,
-      DvcHostname = ValidatedHostname,
+      TargetHostname = DvcHostname,
+      TargetDomain = DvcDomain,
+      TargetDomainType = DvcDomainType,
+      TargetFQDN = DvcFQDN,
       Src = source_ip,
       IpAddr = SrcIpAddr,
-      Dst = iff(isnotempty(ValidatedHostname), ValidatedHostname, TargetAppName),
-      Dvc = iff(isnotempty(ValidatedHostname), ValidatedHostname, TargetAppName),
+      Dst = coalesce(DvcFQDN, DvcHostname, TargetAppName),
+      Dvc = coalesce(DvcFQDN, DvcHostname, TargetAppName),
       User = TargetUsername,
       Application = TargetAppName,
       AdditionalFields = iff(
@@ -132,11 +134,17 @@ ParserQuery: |
       TargetAppType,
       Application,
       TargetHostname,
+      TargetDomain,
+      TargetDomainType,
+      TargetFQDN,
       Dst,
       DvcId,
       DvcIdType,
       DvcIpAddr,
       DvcHostname,
+      DvcDomain,
+      DvcDomainType,
+      DvcFQDN,
       DvcOs = SourceSystem,
       Dvc,
       AdditionalFields

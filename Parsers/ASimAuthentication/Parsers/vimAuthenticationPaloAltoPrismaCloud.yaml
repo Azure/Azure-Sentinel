@@ -15,7 +15,7 @@ References:
 - Title: Palo Alto Prisma Cloud Compute audit logging
   Link: https://docs.prismacloud.io/en/compute-edition/33/admin-guide/audit/logging
 Description: |
-  This ASIM filtering parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table and supports Authentication schema filters for time, source IP, source hostname, username, target application, event type, result, and result details.
+  This ASIM filtering parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table and supports Authentication schema filters for time, source IP, username, target application, event type, result, and result details.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: vimAuthenticationPaloAltoPrismaCloud
 EquivalentBuiltInParser: _Im_Authentication_PaloAltoPrismaCloud
@@ -73,7 +73,7 @@ ParserQuery: |
       and (isnull(endtime) or TimeGenerated <= endtime)
       and (array_length(username_has_any) == 0 or SyslogMessage has_any (username_has_any))
       and (array_length(targetappname_has_any) == 0 or "Prisma Cloud Compute" has_any (targetappname_has_any))
-      and (array_length(srchostname_has_any) == 0)
+      and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
       and (array_length(eventtype_in) == 0 or "Logon" in~ (eventtype_in))
   | where ProcessName == "Twistlock-Console"
   | parse-kv SyslogMessage as (
@@ -90,9 +90,10 @@ ParserQuery: |
   | where ['type'] == "management_audit" and log_type == "login"
   | where (array_length(username_has_any) == 0 or username in~ (username_has_any))
       and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(source_ip, srcipaddr_has_any_prefix))
+  | invoke _ASIM_ResolveDvcFQDN('HostName')
   | extend
-      EventStartTime = coalesce(todatetime(['time']), EventTime),
-      EventEndTime = coalesce(todatetime(['time']), EventTime),
+      EventStartTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
+      EventEndTime = coalesce(todatetime(['time']), EventTime, TimeGenerated),
       EventResult = case(
           status == "successful login attempt", "Success",
           status in ("invalid credentials", "expired token"), "Failure",
@@ -118,17 +119,18 @@ ParserQuery: |
       TargetUsernameType = iff(isnotempty(username), "Simple", ""),
       TargetAppName = "Prisma Cloud Compute",
       TargetAppType = "Service",
-      EventUid = hash_sha256(strcat(TenantId, EventTime, SyslogMessage))
+      EventUid = _ItemId
   | where (eventresult == "*" or EventResult == eventresult)
       and (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
-  | extend ValidatedHostname = iff(HostName matches regex @"^[a-zA-Z0-9-]{1,61}$", HostName, "")
   | extend
-      TargetHostname = ValidatedHostname,
-      DvcHostname = ValidatedHostname,
+      TargetHostname = DvcHostname,
+      TargetDomain = DvcDomain,
+      TargetDomainType = DvcDomainType,
+      TargetFQDN = DvcFQDN,
       Src = source_ip,
       IpAddr = SrcIpAddr,
-      Dst = iff(isnotempty(ValidatedHostname), ValidatedHostname, TargetAppName),
-      Dvc = iff(isnotempty(ValidatedHostname), ValidatedHostname, TargetAppName),
+      Dst = coalesce(DvcFQDN, DvcHostname, TargetAppName),
+      Dvc = coalesce(DvcFQDN, DvcHostname, TargetAppName),
       User = TargetUsername,
       Application = TargetAppName,
       AdditionalFields = iff(
@@ -178,11 +180,17 @@ ParserQuery: |
       TargetAppType,
       Application,
       TargetHostname,
+      TargetDomain,
+      TargetDomainType,
+      TargetFQDN,
       Dst,
       DvcId,
       DvcIdType,
       DvcIpAddr,
       DvcHostname,
+      DvcDomain,
+      DvcDomainType,
+      DvcFQDN,
       DvcOs = SourceSystem,
       Dvc,
       AdditionalFields

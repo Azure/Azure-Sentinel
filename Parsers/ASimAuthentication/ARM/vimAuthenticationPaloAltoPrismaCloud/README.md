@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Palo Alto Prisma Cloud Compute.
 
-This ASIM filtering parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table and supports Authentication schema filters for time, source IP, source hostname, username, target application, event type, result, and result details.
+This ASIM filtering parser normalizes Palo Alto Prisma Cloud Compute management audit login events from the Syslog table and supports Authentication schema filters for time, source IP, username, target application, event type, result, and result details.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 

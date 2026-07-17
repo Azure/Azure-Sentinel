@@ -3,6 +3,7 @@
 ## Version 0.3.16
 
 - (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication filtering parser.
+- (2026-07-17) Correct the Palo Alto PanOS disabled-parser watchlist key.
 
 ## Version 0.3.15
 
