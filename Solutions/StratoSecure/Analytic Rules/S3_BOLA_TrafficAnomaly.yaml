@@ -1,0 +1,50 @@
+id: 3c5be96e-2eeb-439a-9856-1c23aa72cfdd
+name: BOLA Finding with API Traffic Anomaly
+description: |
+  Detects applications with open BOLA/IDOR findings (OWASP API1, API3, API5)
+  that also show anomalous 4xx error traffic in Azure API Management.
+  Correlates StratoSecure BOLA findings with APIM gateway error spikes.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: StratoSecurePush
+    dataTypes:
+      - StratoSecure_Findings_CL
+queryFrequency: 1h
+queryPeriod: 75m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Discovery
+relevantTechniques:
+  - T1190
+  - T1083
+query: |
+  let lookback = 1h;
+  let enumThreshold = 100;
+  let BolaFindings = StratoSecure_Findings_CL
+      | where TimeGenerated >= ago(lookback)
+      | where FixStatus =~ "open"
+      | where OwaspCategory in ("API1", "API3", "API5")
+      | where Severity in ("Critical", "High")
+      | summarize FindingCount = count(), RuleIds = make_set(RuleId)
+          by ApplicationId, StraTenantId;
+  let TrafficAnomalies = ApiManagementGatewayLogs
+      | where TimeGenerated >= ago(lookback)
+      | where ResponseCode in (403, 401, 404)
+      | summarize ErrorCount = count(), DistinctCallers = dcount(CallerIpAddress),
+          Paths = make_set(Url, 30), LastSeen = max(TimeGenerated)
+          by ApiId, OperationId
+      | where ErrorCount >= enumThreshold;
+  BolaFindings
+      | join kind=inner TrafficAnomalies on $left.ApplicationId == $right.ApiId
+      | project TimeGenerated = LastSeen, ApplicationId, StraTenantId,
+          FindingCount, RuleIds, ErrorCount, DistinctCallers, Paths
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+version: 1.0.0
+kind: Scheduled
