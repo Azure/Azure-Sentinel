@@ -1,0 +1,66 @@
+id: f3a8c2d0-7b41-4e9a-9f6a-2d8a1c4e5b72
+name: Cisco ASA - Possible Data Exfiltration Detection
+description: |
+  'Detects potential data exfiltration when an internal source IP sends a large amount of outbound data to the internet, especially when the volume is significantly higher than its normal behavior.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoAsaAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1041
+  - T1048
+query: |
+  let Lookback = 1h;
+  let MinUploadBytes = 1073741824;
+  let MinUploadRatio = 95.0;
+  CommonSecurityLog
+  | where TimeGenerated > ago(Lookback)
+  | where isnotempty(SourceIP) and isnotempty(DestinationIP)
+  | where ipv4_is_private(SourceIP)
+  | where not(ipv4_is_private(DestinationIP))
+  | where DeviceAction in~ ("allow", "allowed", "accept", "accepted", "permitted")
+  | extend SentBytesLong = tolong(SentBytes)
+  | extend ReceivedBytesLong = tolong(ReceivedBytes)
+  | where isnotempty(SentBytesLong)
+  | summarize
+      TotalBytesSent = sum(SentBytesLong),
+      TotalBytesReceived = sum(coalesce(ReceivedBytesLong, 0)),
+      Connections = count(),
+      DestinationPorts = make_set(DestinationPort, 20),
+      Applications = make_set(ApplicationProtocol, 20),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by SourceIP, DestinationIP
+  | where TotalBytesSent >= MinUploadBytes
+  | extend TotalGBSent = round(TotalBytesSent / 1024.0 / 1024.0 / 1024.0, 2)
+  | extend TotalGBReceived = round(TotalBytesReceived / 1024.0 / 1024.0 / 1024.0, 2)
+  | extend UploadRatio = round(todouble(TotalBytesSent) / todouble(TotalBytesSent + TotalBytesReceived) * 100, 2)
+  | where UploadRatio >= MinUploadRatio
+  | project
+      TimeGenerated = LastSeen,
+      SourceIP,
+      DestinationIP,
+      TotalGBSent,
+      TotalGBReceived,
+      UploadRatio,
+      Connections,
+      DestinationPorts,
+      Applications,
+      FirstSeen,
+      LastSeen
+  | order by TotalGBSent desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.1
+kind: Scheduled
