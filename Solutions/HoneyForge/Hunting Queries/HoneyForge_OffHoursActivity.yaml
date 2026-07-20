@@ -1,0 +1,68 @@
+id: 5a15c525-6f7a-8b9c-2d3e-4f5a6b7c8d9e
+name: HoneyForge - Off-Hours Sensor Activity
+description: |
+  Surfaces HoneyForge sensor interactions that occurred outside normal business
+  hours (before 07:00 or after 19:00 UTC, Monday to Friday, and all day on
+  weekends). Off-hours activity from internal IPs is especially suspicious —
+  it may indicate a compromised device operating autonomously or an insider
+  threat.
+
+  Adjust the hour thresholds to match your organisation's working hours if
+  they differ from the defaults.
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Reconnaissance
+  - LateralMovement
+relevantTechniques: []
+query: |
+  let lookback = 7d;
+  let businessStart = 7;   // 07:00 UTC
+  let businessEnd   = 19;  // 19:00 UTC
+  CommonSecurityLog
+  | where TimeGenerated >= ago(lookback)
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SrcIpAddr  = tostring(SourceIP),
+      SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),
+      CustomerID = tostring(DeviceCustomString2),
+      HourUTC    = hourofday(TimeGenerated),
+      DayOfWeek  = dayofweek(TimeGenerated)
+  | extend
+      IsOffHours = case(
+          // Weekend (Saturday = 6d, Sunday = 0d)
+          DayOfWeek == 0d or DayOfWeek == 6d, true,
+          // Outside business hours on weekdays
+          HourUTC < businessStart or HourUTC >= businessEnd, true,
+          false
+      )
+  | where IsOffHours == true
+  | where isnotempty(SrcIpAddr)
+  | summarize
+      TotalEvents   = count(),
+      SensorsHit    = dcount(SensorName),
+      SensorList    = make_set(SensorName, 20),
+      FirstSeen     = min(TimeGenerated),
+      LastSeen      = max(TimeGenerated),
+      HoursActive   = make_set(HourUTC, 24),
+      Protocols     = make_set(tostring(Protocol), 10)
+      by SrcIpAddr, CustomerID
+  | sort by TotalEvents desc
+  | extend
+      SensorListStr = strcat_array(SensorList, ", "),
+      ProtocolStr   = strcat_array(Protocols, ", "),
+      HoursStr      = strcat_array(todynamic(tostring(HoursActive)), ", ")
+  | project
+      SrcIpAddr,
+      CustomerID,
+      TotalEvents,
+      SensorsHit,
+      FirstSeen,
+      LastSeen,
+      HoursStr,
+      SensorListStr,
+      ProtocolStr
+version: 1.0.0

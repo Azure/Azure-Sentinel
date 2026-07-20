@@ -1,0 +1,53 @@
+id: 795b6ec0-3e9a-4b12-8f4d-1a2b3c4d5e6f
+name: HoneyForge - Top Attacking Source IPs
+description: |
+  Identifies the source IP addresses that have interacted most frequently with
+  HoneyForge deception sensors over the past 7 days. Repeat offenders across
+  multiple sensors are especially high-priority — they indicate persistent
+  reconnaissance or an automated scanner that missed the exclusion list.
+
+  Use this query as a starting point for threat-intel enrichment and to decide
+  which IPs warrant a block rule or further investigation.
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Reconnaissance
+relevantTechniques: []
+query: |
+  CommonSecurityLog
+  | where TimeGenerated >= ago(7d)
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SrcIpAddr   = tostring(SourceIP),
+      SensorName  = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),
+      CustomerID  = tostring(DeviceCustomString2)
+  | where isnotempty(SrcIpAddr)
+  | summarize
+      TotalEvents      = count(),
+      SensorsHit       = dcount(SensorName),
+      CustomersAffected = dcount(CustomerID),
+      FirstSeen        = min(TimeGenerated),
+      LastSeen         = max(TimeGenerated),
+      SensorList       = make_set(SensorName, 20),
+      Protocols        = make_set(tostring(Protocol), 10),
+      DestPorts        = make_set(tostring(DestinationPort), 20)
+      by SrcIpAddr
+  | sort by TotalEvents desc
+  | extend
+      SensorListStr  = strcat_array(SensorList, ", "),
+      ProtocolStr    = strcat_array(Protocols, ", "),
+      DestPortStr    = strcat_array(DestPorts, ", ")
+  | project
+      SrcIpAddr,
+      TotalEvents,
+      SensorsHit,
+      CustomersAffected,
+      FirstSeen,
+      LastSeen,
+      SensorListStr,
+      ProtocolStr,
+      DestPortStr
+version: 1.0.0

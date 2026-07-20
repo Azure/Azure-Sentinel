@@ -1,0 +1,143 @@
+id: bb3b1339-c1fa-473a-8663-3fea78c2e7e2
+name: HoneyForge - Deception Sensor Interaction
+description: |
+  Detects an interaction with a HoneyForge deception sensor. Any activity
+  involving a HoneyForge sensor must be treated as potentially unauthorised
+  until validated by the security operations team.
+
+  HoneyForge sensors are passive decoy devices — legitimate systems and users
+  should never communicate with them. Any detected interaction may indicate
+  network scanning, lateral movement, or an actively compromised device.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - InitialAccess
+relevantTechniques: []
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SrcIpAddr = tostring(SourceIP),
+      DstIpAddr = tostring(DestinationIP),
+      SensorID = tostring(DeviceCustomString1),
+      CustomerID = tostring(DeviceCustomString2),
+      SensorName = iff(
+          isempty(tostring(DeviceCustomString3)),
+          tostring(Computer),
+          tostring(DeviceCustomString3)
+      ),
+      EventType = iff(
+          isempty(tostring(DeviceEventClassID)),
+          "unknown",
+          tostring(DeviceEventClassID)
+      ),
+      EventActivity = tostring(Activity),
+      EventProtocol = tostring(Protocol)
+  | where isnotempty(SrcIpAddr)
+  | where isnotempty(DstIpAddr)
+  | summarize
+      TimeGenerated = max(TimeGenerated),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      EventCount = count(),
+      SourcePorts = make_set(tostring(SourcePort), 20),
+      DestinationPorts = make_set(tostring(DestinationPort), 20),
+      Protocols = make_set(EventProtocol, 10),
+      Activities = make_set(EventActivity, 20),
+      CEFSeverities = make_set(tostring(LogSeverity), 10),
+      DeviceVersions = make_set(tostring(DeviceVersion), 10),
+      Collectors = make_set(tostring(CollectorHostName), 10)
+      by
+          SrcIpAddr,
+          DstIpAddr,
+          SensorID,
+          CustomerID,
+          SensorName,
+          EventType
+  | extend
+      SourcePortList = strcat_array(SourcePorts, ", "),
+      DestinationPortList = strcat_array(DestinationPorts, ", "),
+      ProtocolList = strcat_array(Protocols, ", "),
+      ActivityList = strcat_array(Activities, ", "),
+      CEFSeverityList = strcat_array(CEFSeverities, ", "),
+      DeviceVersionList = strcat_array(DeviceVersions, ", "),
+      CollectorList = strcat_array(Collectors, ", ")
+  | project
+      TimeGenerated,
+      FirstSeen,
+      LastSeen,
+      EventCount,
+      SrcIpAddr,
+      DstIpAddr,
+      SourcePortList,
+      DestinationPortList,
+      ProtocolList,
+      SensorID,
+      SensorName,
+      CustomerID,
+      EventType,
+      ActivityList,
+      CEFSeverityList,
+      DeviceVersionList,
+      CollectorList
+suppressionDuration: 5h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 4h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - CustomerID
+      - SensorID
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "HoneyForge: {{EventType}} from {{SrcIpAddr}} on {{SensorName}}"
+  alertDescriptionFormat: |
+    HoneyForge detected {{EventCount}} event(s) targeting {{DstIpAddr}}
+    using {{ProtocolList}}. Treat this activity as unauthorised until validated.
+customDetails:
+  CustomerID: CustomerID
+  SensorID: SensorID
+  SensorName: SensorName
+  EventType: EventType
+  Activity: ActivityList
+  SourcePorts: SourcePortList
+  DestinationPorts: DestinationPortList
+  Protocol: ProtocolList
+  EventCount: EventCount
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  DeviceVersion: DeviceVersionList
+  Collector: CollectorList
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SensorName
+version: 1.0.0
+kind: NRT

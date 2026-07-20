@@ -1,0 +1,58 @@
+id: 73cf5ff5-5e6f-7a8b-1c2d-3e4f5a6b7c8d
+name: HoneyForge - High-Frequency Sensor Interactions
+description: |
+  Detects source IPs generating an unusually high volume of events against
+  HoneyForge sensors in a short window (more than 50 events in any 10-minute
+  period). This pattern is characteristic of automated scanners, brute-force
+  tools, or worm-like lateral movement.
+
+  High-frequency hits deserve immediate triage — especially if the source is
+  an internal IP, which would indicate a compromised or misconfigured device
+  inside the network.
+requiredDataConnectors:
+  - connectorId: HoneyForge
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Reconnaissance
+  - LateralMovement
+relevantTechniques: []
+query: |
+  let lookback = 24h;
+  let burstWindow = 10m;
+  let burstThreshold = 50;
+  CommonSecurityLog
+  | where TimeGenerated >= ago(lookback)
+  | where DeviceVendor =~ "BUI"
+  | where DeviceProduct =~ "HoneyForge"
+  | extend
+      SrcIpAddr  = tostring(SourceIP),
+      SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),
+      CustomerID = tostring(DeviceCustomString2)
+  | where isnotempty(SrcIpAddr)
+  | summarize
+      BurstCount    = count(),
+      SensorsHit    = dcount(SensorName),
+      SensorList    = make_set(SensorName, 10),
+      Protocols     = make_set(tostring(Protocol), 5),
+      DestPorts     = make_set(tostring(DestinationPort), 10),
+      WindowStart   = min(TimeGenerated),
+      WindowEnd     = max(TimeGenerated)
+      by SrcIpAddr, CustomerID, bin(TimeGenerated, burstWindow)
+  | where BurstCount >= burstThreshold
+  | extend
+      SensorListStr = strcat_array(SensorList, ", "),
+      ProtocolStr   = strcat_array(Protocols, ", "),
+      DestPortStr   = strcat_array(DestPorts, ", ")
+  | sort by BurstCount desc
+  | project
+      SrcIpAddr,
+      CustomerID,
+      BurstCount,
+      SensorsHit,
+      WindowStart,
+      WindowEnd,
+      SensorListStr,
+      ProtocolStr,
+      DestPortStr
+version: 1.0.0

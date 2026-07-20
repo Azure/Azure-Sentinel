@@ -1,0 +1,123 @@
+id: b1b6b693-679e-4ebf-afc8-7faf6af266ab
+Function:
+  Title: HoneyForgeEvent
+  Version: '1.0.0'
+  LastUpdated: '2026-07-20'
+  Description: |
+    ASIM NetworkSession parser for HoneyForge Threat Detection Platform events.
+    Normalises CEF events from the CommonSecurityLog table (DeviceVendor="BUI",
+    DeviceProduct="HoneyForge") to the ASIM NetworkSession schema v0.2.6.
+  FunctionName: HoneyForgeEvent
+  FunctionAlias: HoneyForgeEvent
+  Category: Microsoft Sentinel Parser
+  FunctionQuery: |
+    let HoneyForgeEvent = (
+        starttime: datetime = datetime(null),
+        endtime: datetime = datetime(null),
+        srcipaddr_has_any_prefix: dynamic = dynamic([]),
+        dstipaddr_has_any_prefix: dynamic = dynamic([]),
+        ipaddr_has_any_prefix: dynamic = dynamic([]),
+        dstportnumber: int = int(null),
+        hostname_has_any: dynamic = dynamic([]),
+        dvcaction: dynamic = dynamic([]),
+        eventresult: string = '*',
+        disabled: bool = false
+    ) {
+        CommonSecurityLog
+        | where not(disabled)
+        | where DeviceVendor =~ "BUI"
+        | where DeviceProduct =~ "HoneyForge"
+        // Time filter
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+        | where (isnull(endtime) or TimeGenerated <= endtime)
+        // IP prefix filters
+        | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
+        | where (array_length(dstipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DestinationIP, dstipaddr_has_any_prefix))
+        | where (array_length(ipaddr_has_any_prefix) == 0
+            or has_any_ipv4_prefix(SourceIP, ipaddr_has_any_prefix)
+            or has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix))
+        // Port filter
+        | where (isnull(dstportnumber) or toint(DestinationPort) == dstportnumber)
+        // Sensor name filter
+        | extend _SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))
+        | where (array_length(hostname_has_any) == 0 or _SensorName has_any (hostname_has_any))
+        // ASIM field mappings
+        | extend
+            // Event metadata
+            EventVendor           = "BUI",
+            EventProduct          = "HoneyForge",
+            EventProductVersion   = tostring(DeviceVersion),
+            EventSchema           = "NetworkSession",
+            EventSchemaVersion    = "0.2.6",
+            EventType             = "NetworkSession",
+            EventResult           = "NA",
+            EventStartTime        = TimeGenerated,
+            EventEndTime          = TimeGenerated,
+            EventCount            = toint(1),
+            EventOriginalUid      = tostring(ExtID),
+            EventOriginalType     = tostring(DeviceEventClassID),
+            EventSeverity         = case(
+                                        toint(LogSeverity) >= 9, "Critical",
+                                        toint(LogSeverity) >= 7, "High",
+                                        toint(LogSeverity) >= 4, "Medium",
+                                        "Low"),
+            EventOriginalSeverity = tostring(LogSeverity),
+            EventMessage          = tostring(Activity),
+            // Source
+            SrcIpAddr             = tostring(SourceIP),
+            SrcPortNumber         = toint(SourcePort),
+            // Destination (the sensor)
+            DstIpAddr             = tostring(DestinationIP),
+            DstPortNumber         = toint(DestinationPort),
+            DstHostname           = _SensorName,
+            // Network
+            NetworkProtocol       = tostring(Protocol),
+            NetworkDirection      = "Inbound",
+            // Device (sensor)
+            DvcHostname           = tostring(Computer),
+            DvcId                 = tostring(DeviceCustomString1),
+            DvcIdType             = "Other",
+            // HoneyForge-specific custom fields (retained for hunting)
+            HoneyForgeSensorID    = tostring(DeviceCustomString1),
+            HoneyForgeCustomerID  = tostring(DeviceCustomString2),
+            HoneyForgeSensorName  = _SensorName
+        | project-away _SensorName
+        // Apply dvcaction filter (no action in HoneyForge events, pass-through)
+        | where (array_length(dvcaction) == 0)
+        // Apply eventresult filter
+        | where (eventresult == '*' or EventResult =~ eventresult)
+        | project
+            TimeGenerated,
+            EventVendor,
+            EventProduct,
+            EventProductVersion,
+            EventSchema,
+            EventSchemaVersion,
+            EventType,
+            EventResult,
+            EventSeverity,
+            EventOriginalSeverity,
+            EventOriginalUid,
+            EventOriginalType,
+            EventMessage,
+            EventStartTime,
+            EventEndTime,
+            EventCount,
+            SrcIpAddr,
+            SrcPortNumber,
+            DstIpAddr,
+            DstPortNumber,
+            DstHostname,
+            NetworkProtocol,
+            NetworkDirection,
+            DvcHostname,
+            DvcId,
+            DvcIdType,
+            HoneyForgeSensorID,
+            HoneyForgeCustomerID,
+            HoneyForgeSensorName
+    };
+    HoneyForgeEvent(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+        dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+        dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction,
+        eventresult=eventresult, disabled=disabled)

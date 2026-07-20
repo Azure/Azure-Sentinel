@@ -1,0 +1,228 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-0001-0000-0000-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 259200000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "a1b2c3d4-0002-0000-0000-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "CustomerID",
+            "label": "Customer",
+            "type": 2,
+            "isRequired": false,
+            "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend CustomerID = tostring(DeviceCustomString2)\n| where isnotempty(CustomerID)\n| distinct CustomerID\n| sort by CustomerID asc",
+            "value": "All",
+            "typeSettings": {
+              "additionalResourceOptions": ["value:All"],
+              "showDefault": false
+            },
+            "defaultValue": "value:All",
+            "timeContext": { "durationMs": 0 },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# HoneyForge Threat Detection\n---\nThis workbook provides operational visibility into HoneyForge deception sensor activity. Any event shown here represents a connection attempt against a passive decoy device — treat all interactions as suspicious until validated."
+      },
+      "name": "header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend CustomerID = tostring(DeviceCustomString2)\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| summarize\n    TotalEvents     = count(),\n    UniqueSources   = dcount(SourceIP),\n    SensorsHit      = dcount(iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))),\n    CustomersAffected = dcount(CustomerID)\n| extend\n    TotalEventsLabel    = tostring(TotalEvents),\n    UniqueSourcesLabel  = tostring(UniqueSources),\n    SensorsHitLabel     = tostring(SensorsHit),\n    CustomersLabel      = tostring(CustomersAffected)",
+        "size": 4,
+        "title": "Overview",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "TotalEventsLabel",
+            "formatter": 12,
+            "formatOptions": { "palette": "auto" }
+          },
+          "showBorder": false,
+          "tiles": [
+            { "id": "tile-events",   "title": "Total Events",        "query": "TotalEventsLabel" },
+            { "id": "tile-sources",  "title": "Unique Source IPs",   "query": "UniqueSourcesLabel" },
+            { "id": "tile-sensors",  "title": "Sensors Triggered",   "query": "SensorsHitLabel" },
+            { "id": "tile-customers","title": "Customers Affected",  "query": "CustomersLabel" }
+          ]
+        }
+      },
+      "name": "overview-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend CustomerID = tostring(DeviceCustomString2)\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| summarize Events = count() by bin(TimeGenerated, 1h)\n| sort by TimeGenerated asc",
+        "size": 0,
+        "title": "Event Timeline",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            { "seriesName": "Events", "color": "blue" }
+          ]
+        }
+      },
+      "name": "timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    CustomerID = tostring(DeviceCustomString2),\n    SrcIpAddr  = tostring(SourceIP),\n    SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| where isnotempty(SrcIpAddr)\n| summarize\n    TotalEvents  = count(),\n    SensorsHit   = dcount(SensorName),\n    SensorList   = strcat_array(make_set(SensorName, 10), \", \"),\n    LastSeen     = max(TimeGenerated)\n    by SrcIpAddr\n| sort by TotalEvents desc\n| take 25",
+        "size": 0,
+        "title": "Top 25 Attacking Source IPs",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalEvents",
+              "formatter": 8,
+              "formatOptions": { "palette": "redBright" }
+            }
+          ],
+          "sortBy": [{ "itemKey": "TotalEvents", "sortOrder": 2 }]
+        }
+      },
+      "name": "top-sources"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    CustomerID = tostring(DeviceCustomString2),\n    SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),\n    SensorID   = tostring(DeviceCustomString1)\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| summarize\n    TotalEvents   = count(),\n    UniqueSources = dcount(SourceIP),\n    LastEvent     = max(TimeGenerated)\n    by SensorName, SensorID, CustomerID\n| extend\n    MinutesSinceLast = datetime_diff('minute', now(), LastEvent),\n    Status = iff(datetime_diff('minute', now(), LastEvent) <= 10, \"🟢 Online\", \"🔴 Offline\")\n| sort by Status asc, TotalEvents desc\n| project\n    Status,\n    SensorName,\n    SensorID,\n    CustomerID,\n    TotalEvents,\n    UniqueSources,\n    LastEvent,\n    MinutesSinceLast",
+        "size": 0,
+        "title": "Sensor Fleet Health",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Status",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "TotalEvents",
+              "formatter": 8,
+              "formatOptions": { "palette": "blue" }
+            }
+          ]
+        }
+      },
+      "name": "sensor-health"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    CustomerID = tostring(DeviceCustomString2),\n    Severity = case(\n        toint(LogSeverity) >= 9, \"Critical\",\n        toint(LogSeverity) >= 7, \"High\",\n        toint(LogSeverity) >= 4, \"Medium\",\n        \"Low\"\n    )\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| summarize Events = count() by Severity\n| sort by Events desc",
+        "size": 3,
+        "title": "Events by Severity",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            { "seriesName": "Critical", "color": "redBright" },
+            { "seriesName": "High",     "color": "red" },
+            { "seriesName": "Medium",   "color": "orange" },
+            { "seriesName": "Low",      "color": "yellow" }
+          ]
+        }
+      },
+      "name": "severity-chart",
+      "styleSettings": { "maxWidth": "50%" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    CustomerID   = tostring(DeviceCustomString2),\n    EventProtocol = tostring(Protocol)\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| where isnotempty(EventProtocol)\n| summarize Events = count() by EventProtocol\n| sort by Events desc",
+        "size": 3,
+        "title": "Events by Protocol",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "protocol-chart",
+      "styleSettings": { "maxWidth": "50%" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\n| where {TimeRange}\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    CustomerID   = tostring(DeviceCustomString2),\n    SrcIpAddr    = tostring(SourceIP),\n    SensorName   = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3)),\n    HourUTC      = hourofday(TimeGenerated),\n    DayOfWeek    = dayofweek(TimeGenerated)\n| where \"{CustomerID}\" == \"All\" or CustomerID =~ \"{CustomerID}\"\n| extend IsOffHours = (DayOfWeek == 0d or DayOfWeek == 6d or HourUTC < 7 or HourUTC >= 19)\n| where IsOffHours == true\n| where isnotempty(SrcIpAddr)\n| summarize\n    Events       = count(),\n    SensorsHit   = dcount(SensorName),\n    FirstSeen    = min(TimeGenerated),\n    LastSeen     = max(TimeGenerated)\n    by SrcIpAddr, CustomerID\n| sort by Events desc\n| take 20",
+        "size": 0,
+        "title": "Off-Hours Activity (Top 20 Sources)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 8,
+              "formatOptions": { "palette": "orange" }
+            }
+          ]
+        }
+      },
+      "name": "offhours"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-HoneyForge",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
