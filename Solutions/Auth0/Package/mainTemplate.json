@@ -47,7 +47,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Auth0",
-    "_solutionVersion": "3.1.5",
+    "_solutionVersion": "3.2.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-auth0",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "Auth0",
@@ -60,11 +60,12 @@
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.1.5",
+    "dataConnectorCCPVersion": "3.2.0",
     "_dataConnectorContentIdConnectorDefinition2": "Auth0ConnectorCCPDefinition",
     "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
     "_dataConnectorContentIdConnections2": "Auth0ConnectorCCPDefinitionConnections",
     "dataConnectorTemplateNameConnections2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections2')))]",
+    "dataCollectionEndpointId2": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
     "parserObject1": {
       "_parserName1": "[concat(parameters('workspace'),'/','Auth0AM')]",
@@ -92,7 +93,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Auth0 data connector with template version 3.1.5",
+        "description": "Auth0 data connector with template version 3.2.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -473,7 +474,7 @@
                   "id": "Auth0ConnectorCCPDefinition",
                   "title": "Auth0 Logs (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector allows ingesting logs from Auth0 API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses Auth0 API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.",
+                  "descriptionMarkdown": "The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector ingests tenant log events from the Auth0 Management API into Microsoft Sentinel. Built on the Codeless Connector Framework, it supports connecting multiple Auth0 hosts and tags each record with its Auth0 domain.",
                   "graphQueries": [
                     {
                       "metricName": "Total logs received",
@@ -483,25 +484,32 @@
                   ],
                   "sampleQueries": [
                     {
-                      "description": "Get Sample of Auth0 logs",
-                      "query": "Auth0Logs_CL | take 10"
+                      "description": "All Auth0 logs",
+                      "query": "Auth0Logs_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get sample of 10 Auth0 logs",
+                      "query": "Auth0Logs_CL\n| take 10"
+                    },
+                    {
+                      "description": "Summary by Auth0 host",
+                      "query": "Auth0Logs_CL\n| summarize count() by Auth0Domain"
                     }
                   ],
                   "dataTypes": [
                     {
                       "name": "Auth0Logs_CL",
-                      "lastDataReceivedQuery": "Auth0Logs_CL\n       | where TimeGenerated > ago(12h)                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "lastDataReceivedQuery": "Auth0Logs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
                     {
-                      "type": "HasDataConnectors",
-                      "value": null
+                      "type": "HasDataConnectors"
                     }
                   ],
                   "availability": {
-                    "status": 1,
-                    "isPreview": false
+                    "isPreview": false,
+                    "status": 1
                   },
                   "permissions": {
                     "resourceProvider": [
@@ -511,67 +519,111 @@
                         "providerDisplayName": "Workspace",
                         "scope": "Workspace",
                         "requiredPermissions": {
-                          "read": true,
                           "write": true,
+                          "read": true,
                           "delete": true,
                           "action": false
                         }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Auth0 API credentials",
+                        "description": "**Auth0 Management API** credentials are required: Domain, Client ID, and Client Secret from a Machine-to-Machine application authorized for `read:logs` and `read:logs_users`."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
+                      "title": "Configure the Auth0 Management API application",
+                      "description": "Follow these steps to obtain the credentials:\n1. In the Auth0 Dashboard, go to **Applications > Applications**.\n2. Select (or create) a **Machine-to-Machine** application authorized against the Auth0 Management API with at least the **read:logs** and **read:logs_users** permissions.\n3. From the application settings, copy the **Domain** (it must start with `https://`), **Client ID**, and **Client Secret**.\n\nTo collect logs from multiple Auth0 hosts, add a separate connection for each host. Every record is tagged with its **Auth0Domain** so you can differentiate hosts.",
                       "instructions": [
                         {
-                          "type": "Markdown",
+                          "type": "DataConnectorsGrid",
                           "parameters": {
-                            "content": "#### STEP 1 - Configuration steps for the Auth0 Management API"
+                            "mapping": [
+                              {
+                                "columnName": "Auth0 Domain",
+                                "columnValue": "properties.addOnAttributes.Auth0Domain"
+                              },
+                              {
+                                "columnName": "Data Type",
+                                "columnValue": "properties.dataType"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
                           }
                         },
                         {
-                          "type": "Markdown",
+                          "type": "ContextPane",
                           "parameters": {
-                            "content": "Follow the instructions to obtain the credentials. \n 1. In Auth0 Dashboard, go to [**Applications > Applications**]\n 2. Select your Application. This should be a [**Machine-to-Machine**] Application configured with at least [**read:logs**] and [**read:logs_users**] permissions. \n 3. Copy [**Domain, ClientID, Client Secret**]"
+                            "label": "Add Auth0 host",
+                            "title": "Add Auth0 Connection",
+                            "subtitle": "Connect to the Auth0 Management API",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Markdown",
+                                    "parameters": {
+                                      "content": "## Authentication\n\nProvide the credentials from your Auth0 Machine-to-Machine application. These are used to obtain an OAuth2 access token for the Management API."
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Domain",
+                                      "placeholder": "e.g. https://example.auth0.com",
+                                      "type": "text",
+                                      "name": "domain",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client ID",
+                                      "placeholder": "Auth0 application Client ID",
+                                      "type": "text",
+                                      "name": "clientId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client Secret",
+                                      "placeholder": "Auth0 application Client Secret",
+                                      "type": "password",
+                                      "name": "clientSecret",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "InfoMessage",
+                                    "parameters": {
+                                      "text": "Create a separate connection for each Auth0 host you want to collect logs from.",
+                                      "visible": true,
+                                      "inline": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
                           }
-                        },
-                        {
-                          "parameters": {
-                            "label": "Base API URL",
-                            "placeholder": "https://example.auth0.com",
-                            "type": "text",
-                            "name": "Domain"
-                          },
-                          "type": "Textbox"
-                        },
-                        {
-                          "parameters": {
-                            "label": "Client ID",
-                            "placeholder": "Client ID",
-                            "type": "text",
-                            "name": "ClientId"
-                          },
-                          "type": "Textbox"
-                        },
-                        {
-                          "type": "Textbox",
-                          "parameters": {
-                            "label": "Client Secret",
-                            "placeholder": "API Token",
-                            "type": "password",
-                            "name": "ClientSecret"
-                          }
-                        },
-                        {
-                          "parameters": {
-                            "label": "toggle",
-                            "name": "toggle"
-                          },
-                          "type": "ConnectionToggleButton"
                         }
                       ]
                     }
-                  ],
-                  "isConnectivityCriteriasMatchSome": false
+                  ]
                 }
               }
             },
@@ -617,8 +669,9 @@
               "location": "[parameters('workspace-location')]",
               "kind": "[variables('blanks')]",
               "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId2')]",
                 "streamDeclarations": {
-                  "Custom-Auth0Logs": {
+                  "Custom-Auth0Logs_CL": {
                     "columns": [
                       {
                         "name": "date",
@@ -703,6 +756,10 @@
                       {
                         "name": "isMobile",
                         "type": "boolean"
+                      },
+                      {
+                        "name": "Auth0Domain",
+                        "type": "string"
                       }
                     ]
                   }
@@ -718,16 +775,15 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Custom-Auth0Logs"
+                      "Custom-Auth0Logs_CL"
                     ],
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source| extend TimeGenerated = ['date'] , EventType = type | project-rename Description = description, Connection = connection, ConnectionId = connection_id, ClientId = client_id, ClientName = client_name, SrcIpAddr = ip, HttpUserAgent = user_agent, SrcHostname = hostname, ActorUserId = user_id, ActorUsername = user_name, Audience = audience, Scope = scope, Strategy = strategy, StrategyType = strategy_type, LocationInfo = location_info, Details = details, LogId = log_id, TenantName = tenant_name, IsMobile = isMobile | project-away ['date'], type",
-                    "outputStream": "Custom-Auth0Logs_CL"
+                    "outputStream": "Custom-Auth0Logs_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnull(['date']), now(), todatetime(['date'])) , event_date = ['date'] , EventType = ['type'] , Description = ['description'] , Connection = ['connection'] , ConnectionId = ['connection_id'] , ClientId = ['client_id'] , ClientName = ['client_name'] , SrcIpAddr = ['ip'] , HttpUserAgent = ['user_agent'] , SrcHostname = ['hostname'] , ActorUserId = ['user_id'] , ActorUsername = ['user_name'] , Audience = ['audience'] , Scope = ['scope'] , Strategy = ['strategy'] , StrategyType = ['strategy_type'] , LocationInfo = ['location_info'] , Details = ['details'] , LogId = ['log_id'] , TenantName = ['tenant_name'] , IsMobile = ['isMobile'] | project TimeGenerated , event_date , EventType , Description , Connection , ConnectionId , ClientId , ClientName , SrcIpAddr , HttpUserAgent , SrcHostname , ActorUserId , ActorUsername , Audience , Scope , Strategy , StrategyType , LocationInfo , Details , LogId , TenantName , IsMobile , Auth0Domain"
                   }
-                ],
-                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+                ]
               }
             },
             {
@@ -739,94 +795,123 @@
               "properties": {
                 "schema": {
                   "name": "Auth0Logs_CL",
+                  "description": "Auth0 tenant log events collected from the Auth0 Management API.",
                   "columns": [
                     {
                       "name": "TimeGenerated",
-                      "type": "datetime"
+                      "type": "datetime",
+                      "description": "The time when the log entry was generated.",
+                      "isDefaultDisplay": true
                     },
                     {
                       "name": "event_date",
-                      "type": "datetime"
+                      "type": "datetime",
+                      "description": "Date and time when the event occurred (event-occurrence time)."
                     },
                     {
                       "name": "EventType",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Type of event."
                     },
                     {
                       "name": "Description",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Description of this event."
                     },
                     {
                       "name": "Connection",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Name of the connection the event relates to."
                     },
                     {
                       "name": "ConnectionId",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Identifier of the connection the event relates to."
                     },
                     {
                       "name": "ClientId",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Identifier of the application (client) that triggered the event."
                     },
                     {
                       "name": "ClientName",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Name of the application (client) that triggered the event."
                     },
                     {
                       "name": "SrcIpAddr",
-                      "type": "string"
+                      "type": "string",
+                      "description": "IP address of the log event source."
                     },
                     {
                       "name": "HttpUserAgent",
-                      "type": "string"
+                      "type": "string",
+                      "description": "User agent that triggered the event."
                     },
                     {
                       "name": "SrcHostname",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Hostname the event applies to."
                     },
                     {
                       "name": "ActorUserId",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Identifier of the user involved in the event."
                     },
                     {
                       "name": "ActorUsername",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Name of the user involved in the event."
                     },
                     {
                       "name": "Audience",
-                      "type": "string"
+                      "type": "string",
+                      "description": "API audience the event applies to."
                     },
                     {
                       "name": "Scope",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Scopes the event applies to."
                     },
                     {
                       "name": "Strategy",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Name of the strategy involved in the event."
                     },
                     {
                       "name": "StrategyType",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Type of strategy involved in the event."
                     },
                     {
                       "name": "LocationInfo",
-                      "type": "dynamic"
+                      "type": "dynamic",
+                      "description": "Geographical location information of the event source."
                     },
                     {
                       "name": "Details",
-                      "type": "dynamic"
+                      "type": "dynamic",
+                      "description": "Additional useful details related to the event, in JSON format."
                     },
                     {
                       "name": "LogId",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Unique identifier of the log event."
                     },
                     {
                       "name": "TenantName",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Name of the Auth0 tenant that produced the event."
                     },
                     {
                       "name": "IsMobile",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Indicates whether the event originated from a mobile device."
+                    },
+                    {
+                      "name": "Auth0Domain",
+                      "type": "string",
+                      "description": "Auth0 host/domain configured for this connection; hard-coded on every record so hosts can be differentiated."
                     }
                   ]
                 }
@@ -854,7 +939,7 @@
           "id": "Auth0ConnectorCCPDefinition",
           "title": "Auth0 Logs (via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector allows ingesting logs from Auth0 API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses Auth0 API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.",
+          "descriptionMarkdown": "The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector ingests tenant log events from the Auth0 Management API into Microsoft Sentinel. Built on the Codeless Connector Framework, it supports connecting multiple Auth0 hosts and tags each record with its Auth0 domain.",
           "graphQueries": [
             {
               "metricName": "Total logs received",
@@ -864,25 +949,32 @@
           ],
           "sampleQueries": [
             {
-              "description": "Get Sample of Auth0 logs",
-              "query": "Auth0Logs_CL | take 10"
+              "description": "All Auth0 logs",
+              "query": "Auth0Logs_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get sample of 10 Auth0 logs",
+              "query": "Auth0Logs_CL\n| take 10"
+            },
+            {
+              "description": "Summary by Auth0 host",
+              "query": "Auth0Logs_CL\n| summarize count() by Auth0Domain"
             }
           ],
           "dataTypes": [
             {
               "name": "Auth0Logs_CL",
-              "lastDataReceivedQuery": "Auth0Logs_CL\n       | where TimeGenerated > ago(12h)                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+              "lastDataReceivedQuery": "Auth0Logs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
             {
-              "type": "HasDataConnectors",
-              "value": null
+              "type": "HasDataConnectors"
             }
           ],
           "availability": {
-            "status": 1,
-            "isPreview": false
+            "isPreview": false,
+            "status": 1
           },
           "permissions": {
             "resourceProvider": [
@@ -892,67 +984,111 @@
                 "providerDisplayName": "Workspace",
                 "scope": "Workspace",
                 "requiredPermissions": {
-                  "read": true,
                   "write": true,
+                  "read": true,
                   "delete": true,
                   "action": false
                 }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Auth0 API credentials",
+                "description": "**Auth0 Management API** credentials are required: Domain, Client ID, and Client Secret from a Machine-to-Machine application authorized for `read:logs` and `read:logs_users`."
               }
             ]
           },
           "instructionSteps": [
             {
+              "title": "Configure the Auth0 Management API application",
+              "description": "Follow these steps to obtain the credentials:\n1. In the Auth0 Dashboard, go to **Applications > Applications**.\n2. Select (or create) a **Machine-to-Machine** application authorized against the Auth0 Management API with at least the **read:logs** and **read:logs_users** permissions.\n3. From the application settings, copy the **Domain** (it must start with `https://`), **Client ID**, and **Client Secret**.\n\nTo collect logs from multiple Auth0 hosts, add a separate connection for each host. Every record is tagged with its **Auth0Domain** so you can differentiate hosts.",
               "instructions": [
                 {
-                  "type": "Markdown",
+                  "type": "DataConnectorsGrid",
                   "parameters": {
-                    "content": "#### STEP 1 - Configuration steps for the Auth0 Management API"
+                    "mapping": [
+                      {
+                        "columnName": "Auth0 Domain",
+                        "columnValue": "properties.addOnAttributes.Auth0Domain"
+                      },
+                      {
+                        "columnName": "Data Type",
+                        "columnValue": "properties.dataType"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
                   }
                 },
                 {
-                  "type": "Markdown",
+                  "type": "ContextPane",
                   "parameters": {
-                    "content": "Follow the instructions to obtain the credentials. \n 1. In Auth0 Dashboard, go to [**Applications > Applications**]\n 2. Select your Application. This should be a [**Machine-to-Machine**] Application configured with at least [**read:logs**] and [**read:logs_users**] permissions. \n 3. Copy [**Domain, ClientID, Client Secret**]"
+                    "label": "Add Auth0 host",
+                    "title": "Add Auth0 Connection",
+                    "subtitle": "Connect to the Auth0 Management API",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Markdown",
+                            "parameters": {
+                              "content": "## Authentication\n\nProvide the credentials from your Auth0 Machine-to-Machine application. These are used to obtain an OAuth2 access token for the Management API."
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Domain",
+                              "placeholder": "e.g. https://example.auth0.com",
+                              "type": "text",
+                              "name": "domain",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client ID",
+                              "placeholder": "Auth0 application Client ID",
+                              "type": "text",
+                              "name": "clientId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client Secret",
+                              "placeholder": "Auth0 application Client Secret",
+                              "type": "password",
+                              "name": "clientSecret",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "InfoMessage",
+                            "parameters": {
+                              "text": "Create a separate connection for each Auth0 host you want to collect logs from.",
+                              "visible": true,
+                              "inline": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
                   }
-                },
-                {
-                  "parameters": {
-                    "label": "Base API URL",
-                    "placeholder": "https://example.auth0.com",
-                    "type": "text",
-                    "name": "Domain"
-                  },
-                  "type": "Textbox"
-                },
-                {
-                  "parameters": {
-                    "label": "Client ID",
-                    "placeholder": "Client ID",
-                    "type": "text",
-                    "name": "ClientId"
-                  },
-                  "type": "Textbox"
-                },
-                {
-                  "type": "Textbox",
-                  "parameters": {
-                    "label": "Client Secret",
-                    "placeholder": "API Token",
-                    "type": "password",
-                    "name": "ClientSecret"
-                  }
-                },
-                {
-                  "parameters": {
-                    "label": "toggle",
-                    "name": "toggle"
-                  },
-                  "type": "ConnectionToggleButton"
                 }
               ]
             }
-          ],
-          "isConnectivityCriteriasMatchSome": false
+          ]
         }
       }
     },
@@ -1031,18 +1167,18 @@
               },
               "type": "object"
             },
-            "Domain": {
-              "defaultValue": "Domain",
+            "domain": {
+              "defaultValue": "domain",
               "type": "securestring",
               "minLength": 1
             },
-            "ClientId": {
-              "defaultValue": "ClientId",
+            "clientId": {
+              "defaultValue": "clientId",
               "type": "securestring",
               "minLength": 1
             },
-            "ClientSecret": {
-              "defaultValue": "ClientSecret",
+            "clientSecret": {
+              "defaultValue": "clientSecret",
               "type": "securestring",
               "minLength": 1
             }
@@ -1078,31 +1214,32 @@
               }
             },
             {
-              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'Auth0Logs', parameters('guidValue'))]",
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','Auth0Logs' , uniqueString(parameters('domain')) )]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
               "properties": {
-                "connectorDefinitionName": "Auth0ConnectorCCPDefinition",
-                "dataType": "Auth0Logs_CL",
                 "auth": {
                   "type": "OAuth2",
-                  "ClientId": "[[parameters('ClientId')]",
-                  "ClientSecret": "[[parameters('ClientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
                   "GrantType": "client_credentials",
-                  "TokenEndpoint": "[[concat(parameters('Domain'),'/oauth/token')]",
+                  "TokenEndpoint": "[[concat(parameters('domain'), '/oauth/token')]",
                   "TokenEndpointQueryParameters": {
-                    "audience": "[[concat(parameters('Domain'),'/api/v2/')]"
+                    "audience": "[[concat(parameters('domain'), '/api/v2/')]"
                   }
                 },
                 "request": {
-                  "apiEndpoint": "[[concat(parameters('Domain'),'/api/v2/logs')]",
+                  "apiEndpoint": "[[concat(parameters('domain'), '/api/v2/logs')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 5,
+                  "queryWindowInMin": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 20,
                   "headers": {
                     "Accept": "application/json"
-                  },
-                  "httpMethod": "Get",
-                  "QueryParameters": {}
+                  }
                 },
                 "response": {
                   "eventsJsonPaths": [
@@ -1110,17 +1247,22 @@
                   ],
                   "format": "json"
                 },
+                "paging": {
+                  "pagingType": "PersistentToken",
+                  "nextPageTokenJsonPath": "$.[-1:].log_id",
+                  "nextPageParaName": "from",
+                  "pageSize": 100,
+                  "pageSizeParameterName": "take"
+                },
+                "connectorDefinitionName": "Auth0ConnectorCCPDefinition",
+                "dataType": "Auth0Logs",
                 "dcrConfig": {
-                  "streamName": "Custom-Auth0Logs",
+                  "streamName": "Custom-Auth0Logs_CL",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                 },
-                "Paging": {
-                  "pagingType": "PersistentToken",
-                  "nextPageParaName": "from",
-                  "nextPageTokenJsonPath": "$.[-1:].log_id",
-                  "PageSizeParameterName": "take",
-                  "PageSize": 100
+                "addOnAttributes": {
+                  "Auth0Domain": "[[parameters('domain')]"
                 }
               }
             }
@@ -1144,7 +1286,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Auth0AM Data Parser with template version 3.1.5",
+        "description": "Auth0AM Data Parser with template version 3.2.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -1276,7 +1418,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Auth0 Data Parser with template version 3.1.5",
+        "description": "Auth0 Data Parser with template version 3.2.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -1404,7 +1546,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.1.5",
+        "version": "3.2.0",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Auth0",
