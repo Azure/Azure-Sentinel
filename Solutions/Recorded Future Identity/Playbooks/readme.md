@@ -105,7 +105,7 @@ Permissions required to deploy Option B (Entra ID + Log Analytics + Incident Cre
         Either:
         <ol>
         <li><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#owner" target="_blank"><em><strong>Owner</strong></em></a> permissions on a <strong>Resource Group</strong> level.</li>
-        <li><strong>or</strong> <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Microsoft Sentinel Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Role Based Access Control Administrator</strong></em></a> on a <strong>Resource Group</strong> level.</li>
+        <li><strong>or</strong> <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Microsoft Sentinel Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#role-based-access-control-administrator" target="_blank"><em><strong>Role Based Access Control Administrator</strong></em></a> on a <strong>Resource Group</strong> level.</li>
         </ol>
       </td>
     </tr>
