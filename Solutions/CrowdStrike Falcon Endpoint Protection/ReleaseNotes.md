@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.8       | 20-07-2026                     | Fixed *CrowdStrike API Data Connector* Alerts and Detections polling to use `updated_timestamp` instead of `created_timestamp`, ensuring updated alerts are re-ingested into Sentinel |
 | 3.3.6       | 28-05-2026                     | Added support of multiple domains to **Crowdstrike API Data Connector** |
 | 3.3.5       | 20-05-2026                     | Updated **Analytic Rules** (v1.0.5): improved descriptions, added MITRE ATT&CK tactics, and optimized KQL queries. Updated **Workbook** to remove hardcoded resource IDs. Added non-analytics tier queries to *CrowdStrike Falcon Data Replicator (AWS S3)* **Data Connector** to support Basic/Auxiliary plan tables (Usage-based fallback, 14h window). |
 | 3.3.4       | 30-04-2026                     | remove deprecated tag. CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) is not deprecated |
