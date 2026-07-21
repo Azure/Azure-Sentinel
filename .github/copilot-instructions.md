@@ -88,6 +88,8 @@ When working with the Solutions Analyzer tools in `Tools/Solutions Analyzer/`, f
 - **`run-solution-analyzer`** — running the mapper, doc generator, ASIM browser, and `upload_to_kusto`; output locations; force-refresh and caching.
 - **`update-solution-analyzer`** — modifying scripts, updating `script-docs/`, README changelog rules, CSV output sync with `upload_to_kusto.py`, and static/interactive index plus markdown/HTML entity page synchronization.
 
+**MANDATORY:** Before editing ANY file under `Tools/Solutions Analyzer/` — including small fixes such as renames, regex/pattern tweaks, escaping changes, override additions, or one-line behavior changes — first load `.github/skills/update-solution-analyzer/SKILL.md` and follow it. A `## Version History` changelog entry in `Tools/Solutions Analyzer/README.md` is **required for feature additions and behavior changes** (new features, changed analysis logic, new/renamed/removed CSV columns, parameter changes); pure bug fixes — such as typo corrections, crash fixes, escape/regex tweaks, or one-line fixes that restore intended behavior — may be logged at your discretion but are not required.
+
 There are THREE different output scenarios - **never confuse them**:
 
 1. **Default (development):** CSVs are written to `Tools/Solutions Analyzer/` in the current branch
@@ -162,4 +164,3 @@ Use `--force-refresh` with these types when modifying analysis logic:
 - Any output file changes, including changes to CSV files (new columns, renamed columns, removed columns)
 - Any changes to analysis methods or logic
 - Update the primary readme.md if needed and add the change to the change log. Do not add a version if the previous version as manifested by the changelog, was not committed yet.
-

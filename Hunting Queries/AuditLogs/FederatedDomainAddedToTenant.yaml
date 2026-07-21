@@ -1,0 +1,78 @@
+id: 902e4b5a-4e6a-46e1-a897-4cdbda0693b3
+name: Federated domain added to Entra ID tenant
+description: Identifies federation configuration changes to Entra ID domains, a persistence technique that allows attackers to forge authentication tokens for any user account in the tenant without knowing their password.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1484.002
+query: |
+  let timeframe = 14d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName =~ "Set domain authentication"
+  | where Result =~ "success"
+  | extend DomainName = tostring(TargetResources[0].displayName)
+  | extend DomainId   = tostring(TargetResources[0].id)
+  | extend ActorUpn   = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp   = tostring(InitiatedBy.app.displayName)
+  | extend ActorIp    = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | extend PropName = tostring(ModProp.displayName)
+  | extend OldValue = tostring(ModProp.oldValue)
+  | extend NewValue = tostring(ModProp.newValue)
+  // Surface transitions to federated authentication only
+  | where NewValue has_any ("Federated", "federated")
+  | extend AccountName      = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      DomainName,
+      DomainId,
+      PropName,
+      OldValue,
+      NewValue,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

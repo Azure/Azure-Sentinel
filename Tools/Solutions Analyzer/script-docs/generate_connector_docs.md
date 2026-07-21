@@ -39,6 +39,7 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
 - **[Collection Methods Index](../connector-docs/collection-methods/collection-methods-index.md)** - Connectors grouped by data collection method
 - **[Statistics](../connector-docs/statistics.md)** - Comprehensive statistics and metrics
 - **[Interactive Index](../connector-docs/index.html)** - HTML page with DataTables.js for filtering, sorting, and searching across all entity types
+- **`artifact_doc_links.csv`** (in `Tools/Solutions Analyzer/` by default) - Per-artifact relative markdown and HTML links for deep-link integrations
 - **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](../connector-docs/solutions/) directory)
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](../connector-docs/connectors/) directory)
 - **Individual Table Pages** - Detailed pages for each table with metadata (in [`tables/`](../connector-docs/tables/) directory)
@@ -118,6 +119,7 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--html-output-dir` | Same as `--output-dir` | Output directory for interactive index.html, css/, js/. When set with a relative `--html-docs-path`, also generates HTML entity pages alongside the markdown docs. |
 | `--html-docs-path` | `''` (empty) | Relative or absolute URL path from index.html to the docs directory (e.g. `Solutions Docs/`). Must end with `/` if non-empty. When relative and `--html-output-dir` is set, HTML entity pages are generated and index.html links use `.html` extension. |
 | `--html-index-url` | `''` (empty) | Absolute URL for index.html used in HTML entity page navbars and static markdown navigation bars (e.g. `https://oshezaf.github.io/sentinelninja/index.html`). Falls back to a relative path from the entity page if not provided. |
+| `--artifact-links-csv` | `artifact_doc_links.csv` | Path for generated CSV containing relative markdown/html links for documentation artifacts. |
 
 ## Output Structure
 
@@ -163,6 +165,11 @@ connector-docs/
 │   ├── asim-index.md            # ASIM parsers organized by schema
 │   ├── asim-products-index.md   # ASIM parsers organized by product
 │   └── {parser-name}.md         # Individual ASIM parser pages
+├── logic-apps/                  # Logic Apps connectors / built-in actions
+│   ├── logic-apps-index.md      # Index of all managed/custom connectors and built-in action types referenced by playbooks, with playbook count, solution count, and a Microsoft Learn link when available
+│   ├── managed-{name}.md        # Per-managed-connector page listing every playbook + solution that uses it
+│   ├── custom-{name}.md         # Per-custom-connector page
+│   └── builtin-{name}.md        # Per-built-in-action page (Http, Function, Workflow, ApiManagement)
 ├── solutions/                   # Individual solution pages
 │   ├── 1password.md
 │   ├── aws-cloudfront.md
@@ -181,6 +188,8 @@ connector-docs/
 └── js/
     └── app.js                   # DataTables initialization and tab logic
 ```
+
+In addition to the documentation tree, the script writes `artifact_doc_links.csv` (default location: `Tools/Solutions Analyzer/artifact_doc_links.csv`) with one row per generated markdown artifact and relative markdown/html link targets.
 
 ### Generated Content
 
@@ -203,7 +212,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, deprecation date (for deprecated connectors), and a combined **Azure Marketplace** row using **"Rating:"** and **"Popularity:"** labels (from the `mp_*` columns) when the parent solution is published
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, companion DCR definition files (when present), CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, deprecation date (for deprecated connectors), and a combined **Azure Marketplace** row using **"Rating:"** and **"Popularity:"** labels (from the `mp_*` columns) when the parent solution is published
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria

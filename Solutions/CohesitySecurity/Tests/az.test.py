@@ -193,7 +193,6 @@ class TestCohesity(unittest.TestCase):
 
         alert_details = get_alert_details(alert_id, self.api_key)
         print("alert_id --> %s" % alert_id)
-        print("api_key --> %s" % self.api_key)
         self.assertEqual(
             alert_details["alertState"],
             "kSuppressed",

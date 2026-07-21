@@ -1,0 +1,34 @@
+id: a91f4d3c-1b7e-4f2a-9c1d-0e3b5f7c8d9a
+name: "Tailscale: First-seen actor making configuration changes"
+description: |
+  Identifies actors making their first configuration change in the lookback window. New legitimate admins look identical to compromised credentials - review whether each surfaced actor is expected to have admin rights.
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let lookback = 14d;
+  let baselineWindow = 14d;
+  Tailscale_Audit_CL
+  | where TimeGenerated > ago(lookback)
+  | extend ActorLogin = tostring(Actor.loginName)
+  | where isnotempty(ActorLogin)
+  | summarize FirstSeen = min(TimeGenerated), Actions = make_set(Action), Targets = make_set(tostring(Target.type)), TotalEvents = count() by ActorLogin
+  | join kind=leftanti (
+      Tailscale_Audit_CL
+      | where TimeGenerated between (ago(lookback + baselineWindow) .. ago(lookback))
+      | extend ActorLogin = tostring(Actor.loginName)
+      | distinct ActorLogin
+  ) on ActorLogin
+  | order by FirstSeen asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+version: 1.0.0

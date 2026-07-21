@@ -1,5 +1,9 @@
 # Changelog for imNetworkSession.yaml
 
+## Version 0.6.4
+
+- (2026-06-26) Add Cisco FTD parser to NetworkSession schema - [PR #14569](https://github.com/Azure/Azure-Sentinel/pull/14569)
+
 ## Version 0.6.3
 
 - (2026-03-30) Add Check Point - Smart Defense parser to NetworkSession schema - [PR #13950](https://github.com/Azure/Azure-Sentinel/pull/13950)

@@ -1,3 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.2       | 15-07-2026                     | Update publisher and support information in SolutionMetadata.json |
+| 3.0.1       | 25-05-2026                     | Added CCF Push **Data Connector** (OAuth2/Entra ID via DCE/DCR) alongside legacy connector; added backward-compatible **Parser** (`FortyTwoCrunchAPIProtection`) supporting both `apifirewall_log_1_CL` and `FortyTwoCrunchAPIProtectionV2_CL` schemas. Updated all 11 **Analytic Rules** to use the parser alias and PascalCase column names, added Migration Guide with end-to-end validated `ccf-forwarder` sample deployment, and refreshed **Workbook** metadata. |
 | 3.0.0       | 15-07-2024                     |	Missing Tactics and Techniques added     						|
