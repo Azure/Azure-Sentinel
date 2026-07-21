@@ -16,8 +16,9 @@ The default file lives at `Tools/Solutions Analyzer/solution_analyzer_overrides.
 ## Use Cases
 
 - **Set `collection_method` to AMA** for tables that the analyzer cannot infer otherwise (e.g., `Syslog`, `CommonSecurityLog`).
-- **Apply category labels** by table-name pattern (e.g., `.*AWS.*` → category `AWS`).
+- **Apply category labels** by table-name pattern (e.g., `.*AWS.*` → category `AWS`). The raw `category` value feeds the computed `category_primary` taxonomy; to pin the normalized value directly, override `category_primary` (e.g., `Table,<pattern>,category_primary,Cloud`).
 - **Mark a solution or connector deprecated** when description-based detection misses it.
+- **Redirect the marketplace lookup** for a solution whose live offer differs from its `SolutionMetadata.json` by overriding `solution_publisher_id` and/or `solution_offer_id` (see below).
 - **Inject a synthetic connector** for solutions whose connector definition isn't standard JSON in `Data Connectors/` (e.g., SAP).
 - **Correct downstream metadata** sourced from upstream documentation that has gaps.
 
@@ -37,6 +38,18 @@ The default file lives at `Tools/Solutions Analyzer/solution_analyzer_overrides.
 - Pattern matching is case insensitive.
 - Use `.*` for wildcards (e.g., `.*AWS.*` matches any table containing "AWS").
 - `Field` names must exactly match an existing column in the relevant output.
+
+### Marketplace lookup-key overrides (`solution` entity)
+
+The published status in [`solutions.csv`](solutions.md) is derived from the **public** Azure Marketplace catalog, keyed by the solution's `<solution_publisher_id>.<solution_offer_id>` legacy id. A `solution` override on either `solution_publisher_id` or `solution_offer_id` is applied **before** the marketplace availability check (unlike every other override, which is applied afterward), so it redirects *what* is looked up and lets the public catalog produce the correct `mp_is_published` / `is_published` verdict.
+
+Use it when a solution is live in the marketplace under a different offer than its repo `SolutionMetadata.json` records — a renamed/re-published offer, a publisher hand-off, or a repo folder with no `SolutionMetadata.json` at all. Prefer this over a blanket `is_published=true` override: because the answer still comes from the live catalog, it self-corrects on future marketplace changes. The mapper never calls the authenticated Content Hub APIs; an `is_published` override remains the last resort for content genuinely in the Content Hub but absent from the marketplace catalog.
+
+```csv
+Entity,Pattern,Field,Value,Comment
+Solution,Farsight DNSDB,solution_publisher_id,domaintoolsllc1647901527537,Republished under DomainTools
+Solution,Farsight DNSDB,solution_offer_id,farsight-dnsdb,Republished under DomainTools
+```
 
 ### Synthetic connector format
 

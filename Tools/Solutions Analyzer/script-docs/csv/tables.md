@@ -13,7 +13,7 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 - **Table catalog** — inventory every table actually used by any Sentinel solution.
 - **Capability filter** — find tables that support `supports_transformations`, `ingestion_api_supported`, or `lake_only_supported`.
 - **Detect Custom Log V1 (legacy) tables** — `is_clv1 == true` flags tables that should be migrated to DCR-based ingestion.
-- **Categorization** — group by `category` (Security, Audit, Azure Resources, etc.) for reporting.
+- **Categorization** — group by `category_primary` for reporting against the closed taxonomy (`Cloud`, `Endpoint`, `Syslog/CEF`, `3rd Party (SaaS)`, `Defender`, `ASIM`, `Internal`, `Unknown`); the raw `category` doc string is kept for traceability.
 - **Defender XDR vs Azure Monitor** — `source_azure_monitor` / `source_defender_xdr` identify the documentation surface for each table.
 - **Support tier rollup** — `support_tier` derives from solutions using the table; `Various` indicates mixed Microsoft/Partner/Community usage.
 - **Kusto upload** — uploaded as `solution_analyzer_tables_lookup` by `upload_to_kusto.py`.
@@ -24,7 +24,10 @@ Per-table metadata for every Log Analytics / Sentinel table referenced by at lea
 |--------|-------------|-------------|
 | `table_name` | Table name | All sources |
 | `description` | Table description | `tables_reference.csv` (Azure Monitor pages) |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) | `tables_reference.csv` |
+| `category` | Raw Azure Monitor doc category string, kept unchanged for traceability (e.g., `Audit, Azure Resources`); may be override-injected (AWS, GCP, Crowdstrike, …) | `tables_reference.csv` |
+| `category_primary` | Single normalized value from the closed reporting taxonomy: `Cloud`, `Endpoint`, `Syslog/CEF`, `3rd Party (SaaS)`, `Defender`, `ASIM`, `Internal`, `Unknown`. Resolved with deterministic combo precedence. Overridable via `Table,<pattern>,category_primary,<value>` in [`solution_analyzer_overrides.csv`](solution_analyzer_overrides.md) | Computed |
+| `category_source` | How `category_primary` was resolved. Examples: `asim_table`, `source_defender_xdr`, `category=<token>`, `collection_method=<atom>`, `resource_types`, `cl_vendor`, `cl_solution_partner`, `cl_solution_microsoft`, `cl_default`, `internal_table`, `default` | Computed |
+| `category_candidates` | Comma-separated distinct taxonomy values any signal produced (ordered by precedence), exposing combo ambiguity | Computed |
 | `support_tier` | Rolled-up support tier across solutions using this table; `Various` if mixed | Derived from `solution_support_tier` |
 | `collection_method` | Data collection method | `tables_reference.csv` + back-propagation from feeding connectors (see [resolution order](../map_solutions_connectors_tables.md#table-level-collection_method-resolution)) |
 | `collection_method_source` | How `collection_method` was resolved. One of: `asim_table`, `tables_reference`, `source_defender_xdr`, `category=Azure Resources`, `connector`, `connector_published_only`, `connector_precedence({rule trail})` | Computed |

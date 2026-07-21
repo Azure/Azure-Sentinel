@@ -2152,6 +2152,34 @@ def generate_interactive(
     content_items = load_content_items(content_items_csv)
     tables_ref = load_tables_reference(tables_csv)
 
+    # Safety net: seed any solution present in solutions.csv but absent from the
+    # mapping CSV so it is never silently dropped from the interactive index. A
+    # solution can lack mapping rows when all of its connectors had their table
+    # tokens filtered out (parser-only, validation, or reported_table_exclusions
+    # overrides). Mirrors the same seeding in generate_connector_docs.py. The
+    # placeholder carries an empty connector_id so it adds no phantom connector.
+    seeded_missing = 0
+    for sol_name, sol_info in solutions_ref.items():
+        if sol_name in by_solution:
+            continue
+        by_solution[sol_name] = [{
+            'Table': '',
+            'solution_name': sol_name,
+            'connector_id': '',
+            'connector_title': '',
+            'connector_publisher': '',
+            'is_published': sol_info.get('is_published', 'true'),
+            'solution_is_deprecated': sol_info.get('is_deprecated', 'false'),
+            'solution_logo_url': sol_info.get('solution_logo_url', ''),
+            'solution_support_tier': sol_info.get('solution_support_tier', ''),
+            'solution_categories': sol_info.get('solution_categories', ''),
+            'solution_author_name': sol_info.get('solution_author_name', ''),
+            'solution_version': sol_info.get('solution_version', ''),
+        }]
+        seeded_missing += 1
+    if seeded_missing:
+        print(f"  Seeded {seeded_missing} solution(s) present in solutions.csv but absent from the mapping CSV")
+
     # Merge tables overrides (tables.csv) into tables_ref
     load_tables_overrides(tables_overrides_csv, tables_ref)
 
