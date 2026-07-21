@@ -1,0 +1,304 @@
+{
+  "name": "CiscoMerakiConnector",
+  "apiVersion": "2023-04-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "CiscoMerakiConnector",
+      "title": "Cisco Meraki Events (using REST API) (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\nIn addition to the ASIM-normalized events, this connector also ingests Cisco Meraki Dashboard inventory and wireless security data into custom tables - Organizations, Network Clients, Organization Networks, and wireless Air Marshal (rogue access point) events.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+      "graphQueriesTableName": "CiscoMerakiOrganizations_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total Organization logs received",
+          "legend": "Cisco Meraki Organization Logs",
+          "baseQuery": "CiscoMerakiOrganizations_CL"
+        },
+        {
+          "metricName": "Total Network Client logs received",
+          "legend": "Cisco Meraki Network Client Logs",
+          "baseQuery": "CiscoMerakiNetworkClients_CL"
+        },
+        {
+          "metricName": "Total Organization Network logs received",
+          "legend": "Cisco Meraki Organization Network Logs",
+          "baseQuery": "CiscoMerakiOrganizationNetworks_CL"
+        },
+        {
+          "metricName": "Total Air Marshal Event logs received",
+          "legend": "Cisco Meraki Air Marshal Event Logs",
+          "baseQuery": "CiscoMerakiAirMarshalEvents_CL"
+        },
+        {
+          "metricName": "Total API Request events received",
+          "legend": "Cisco Meraki API Requests (ASimWebSessionLogs)",
+          "baseQuery": "ASimWebSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventOriginalType == 'API Request'"
+        },
+        {
+          "metricName": "Total Configuration Change events received",
+          "legend": "Cisco Meraki Configuration Changes (ASimAuditEventLogs)",
+          "baseQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
+        },
+        {
+          "metricName": "Total Security/IDS events received",
+          "legend": "Cisco Meraki Security Events (ASimNetworkSessionLogs)",
+          "baseQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get sample of Cisco Meraki Organization logs",
+          "query": "CiscoMerakiOrganizations_CL\n | take 10"
+        },
+        {
+          "description": "Get sample of Cisco Meraki Network Client logs",
+          "query": "CiscoMerakiNetworkClients_CL\n | take 10"
+        },
+        {
+          "description": "Get sample of Cisco Meraki Organization Network logs",
+          "query": "CiscoMerakiOrganizationNetworks_CL\n | take 10"
+        },
+        {
+          "description": "Get sample of Cisco Meraki Air Marshal Event logs",
+          "query": "CiscoMerakiAirMarshalEvents_CL\n | take 10"
+        },
+        {
+          "description": "Get organizations by cloud region",
+          "query": "CiscoMerakiOrganizations_CL\n | extend CloudInfo = parse_json(Cloud)\n | extend RegionName = tostring(CloudInfo.region.name)\n | summarize Count=count() by RegionName\n | order by Count desc"
+        },
+        {
+          "description": "Get organizations by licensing model",
+          "query": "CiscoMerakiOrganizations_CL\n | extend LicensingInfo = parse_json(Licensing)\n | extend LicensingModel = tostring(LicensingInfo.model)\n | summarize Count=count() by LicensingModel\n | order by Count desc"
+        },
+        {
+          "description": "Get online network clients from last 24 hours",
+          "query": "CiscoMerakiNetworkClients_CL\n | where TimeGenerated > ago(24h) and Status == 'Online'\n | project TimeGenerated, MacAddress, IpAddress, Description, OperatingSystem, Ssid\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get networks by product type",
+          "query": "CiscoMerakiOrganizationNetworks_CL\n | extend ProductTypesList = parse_json(ProductTypes)\n | mvexpand ProductTypesList\n | summarize Count=count() by tostring(ProductTypesList)\n | order by Count desc"
+        },
+        {
+          "description": "Get rogue access points detected in last 7 days",
+          "query": "CiscoMerakiAirMarshalEvents_CL\n | where TimeGenerated > ago(7d)\n | project TimeGenerated, Ssid, Channels, FirstSeen, LastSeen, WiredMacs\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get IDS alerts from last 24 hours",
+          "query": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco' and EventType == 'Notable'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, EventMessage, SrcIpAddr, DstIpAddr, ThreatName, EventSeverity\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get configuration changes from last 24 hours",
+          "query": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(24h)\n | project TimeGenerated, ActorUsername, Operation, Object, OldValue, NewValue, EventType\n | order by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "CiscoMerakiOrganizations_CL",
+          "lastDataReceivedQuery": "CiscoMerakiOrganizations_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "CiscoMerakiNetworkClients_CL",
+          "lastDataReceivedQuery": "CiscoMerakiNetworkClients_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "CiscoMerakiOrganizationNetworks_CL",
+          "lastDataReceivedQuery": "CiscoMerakiOrganizationNetworks_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "CiscoMerakiAirMarshalEvents_CL",
+          "lastDataReceivedQuery": "CiscoMerakiAirMarshalEvents_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "ASimWebSessionLogs",
+          "lastDataReceivedQuery": "ASimWebSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "ASimAuditEventLogs",
+          "lastDataReceivedQuery": "ASimAuditEventLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "ASimNetworkSessionLogs",
+          "lastDataReceivedQuery": "ASimNetworkSessionLogs | where EventProduct == 'Meraki' and EventVendor == 'Cisco'\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Configuration steps for the Cisco Meraki Dashboard API",
+          "description": "Follow the instructions below to obtain your Cisco Meraki API credentials.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. Sign in to Meraki Dashboard\nNavigate to [Cisco Meraki Dashboard](https://dashboard.meraki.com) and sign in with your administrator account."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. Generate API Key\n1. Navigate to **Organization > API & Webhooks** from the left navigation menu\n2. Select **API keys and access** from the top tabs\n3. Click **Generate new API key** or use an existing one\n4. Copy the API key and store it securely (it will only be shown once)"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 3. Retrieve Organization ID\n1. While logged into the Meraki Dashboard, look at the URL in your browser\n2. The Organization ID appears in the dashboard URL path as `dashboard.meraki.com/o/<organizationId>/...`\n3. Copy the Organization ID for use below"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 4. API Access Requirements\n- The API key must have **Read** access to:\n  - Organization settings\n  - Network settings\n  - Wireless settings\n- Rate limit: 10 requests per second per organization\n- Maximum lookback period: 31 days"
+              }
+            }
+          ]
+        },
+        {
+          "title": "Connect Cisco Meraki organizations to Microsoft Sentinel",
+          "description": "This connector supports multi-tenant ingestion. Add one connection per Cisco Meraki organization; each connection ingests events for that organization in parallel. Use the grid below to review existing connections or add a new one.",
+          "instructions": [
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Organization Id",
+                    "columnValue": "properties.addOnAttributes.organization"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.addOnAttributes.dataType"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Connect a Cisco Meraki organization",
+                "subtitle": "Cisco Meraki",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "API Base URL",
+                          "placeholder": "https://api.meraki.com/api/v1",
+                          "type": "text",
+                          "name": "apiBaseUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Organization ID",
+                          "placeholder": "Your Cisco Meraki Organization ID",
+                          "type": "text",
+                          "name": "organizationId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "API Key",
+                          "placeholder": "Your Cisco Meraki API Key",
+                          "type": "password",
+                          "name": "apiKey",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data Types",
+                          "name": "selectedDataTypes",
+                          "options": [
+                            {
+                              "key": "CiscoMerakiOrganizations",
+                              "text": "Organizations"
+                            },
+                            {
+                              "key": "CiscoMerakiOrganizationNetworks",
+                              "text": "Organization Networks"
+                            },
+                            {
+                              "key": "CiscoMerakiNetworkClients",
+                              "text": "Network Clients"
+                            },
+                            {
+                              "key": "CiscoMerakiAirMarshalEvents",
+                              "text": "Air Marshal Events"
+                            },
+                            {
+                              "key": "ASimWebSessionLogs",
+                              "text": "API Requests (ASIM Web Session)"
+                            },
+                            {
+                              "key": "ASimAuditEventLogs",
+                              "text": "Configuration Changes (ASIM Audit Event)"
+                            },
+                            {
+                              "key": "ASimNetworkSessionLogs",
+                              "text": "Security Events / IDS (ASIM Network Session)"
+                            }
+                          ],
+                          "placeholder": "Select data types to collect...",
+                          "isMultiSelect": true,
+                          "defaultAllSelected": true,
+                          "required": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": true
+    }
+  }
+}

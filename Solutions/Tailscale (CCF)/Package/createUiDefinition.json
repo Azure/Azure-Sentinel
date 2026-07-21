@@ -1,0 +1,854 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Tailscale.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Tailscale%20%28CCF%29/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe [Tailscale](https://tailscale.com/) solution for Microsoft Sentinel ingests Tailscale identity, device, configuration, audit and (Premium) network-flow telemetry via OAuth2-secured APIs. Built on the Codeless Connector Framework (CCF) - no Function App or container required.\n\n**Data connectors in this solution (install the one matching your Tailscale plan):**\n- **Tailscale Standard (CCF)** - Configuration audit, devices, users, keys, webhooks, DNS, settings. Use on **Personal (Free), Starter and Premium** tailnets.\n- **Tailscale Premium (CCF)** - Everything in Standard plus network flow logs and posture integrations. Use on **Premium and Enterprise** tailnets for full coverage.\n\n**Pre-requisites:**\n1. Sign in to [Tailscale OAuth settings](https://login.tailscale.com/admin/settings/oauth)\n2. Create an OAuth client with the scopes for your tier (see the README in this solution).\n3. Copy the client ID and client secret (secret shown once).\n4. Note your tailnet name (e.g. `tailb094d7.ts.net`) from the [Keys page](https://login.tailscale.com/admin/settings/keys).\n\n**Data Connectors:** 2, **Parsers:** 2, **Workbooks:** 2, **Analytic Rules:** 24, **Hunting Queries:** 22\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Solution installs the data connector for Tailscale Standard (CCF). You can get Tailscale Standard (CCF) data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link1",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          },
+          {
+            "name": "dataconnectors2-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Solution installs the data connector for Tailscale Premium (CCF). You can get Tailscale Premium (CCF) data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Operations (Standard)",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Tailscale Operations workbook for Standard tier. Nine tabs covering an at-a-glance KPI hero row, audit activity overview, an actor + device drilldown (Investigate), embedded hunting queries (first-seen actors, off-hours changes, key-expiry-disabled devices, never-expire auth keys, outdated clients, dormant devices, subnet route exposure, SSH-enabled devices), identity (user roles, status, last login recency, role escalation history, orphaned users), devices (OS / version / tag distribution, devices needing attention, full inventory, subnet routers), credentials (expiry timeline, never-expire flag, CRUD events), admin audit (action heatmap, actor x action heatmap, recent 100), network and DNS (current snapshot, tailnet policy gates, ACL change history), and pipeline health (per-table freshness, ingest rate, operational events). Driven by data polled from the Tailscale REST API."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook2",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Operations (Premium)",
+            "elements": [
+              {
+                "name": "workbook2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Tailscale Operations workbook for Premium / Enterprise tier - everything in the Standard workbook plus network flow analysis (top talkers, src-dst pairs, exit-node egress, beaconing candidates) and posture integration inventory."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: New API access token or OAuth client created",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a new API access token or OAuth client is created in the tailnet. These grant programmatic access - verify the actor and intent."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: OAuth client or API key created with write scopes",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies creation of a Tailscale OAuth client or API access key whose granted scopes include WRITE permissions (anything matching :write). Tokens with write scopes are high-value adversary targets."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Policy file (ACL) modified",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when the tailnet ACL/policy file is modified. Review the diff - incorrect ACLs can silently expand blast radius across the tailnet."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Auth key created",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a new Tailscale auth key is generated. Auth keys allow unattended device enrollment into the tailnet - confirm it was expected and revoke if not."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Exit node advertised or approved",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a device starts advertising itself as an exit node, or when an admin approves one. Validate the device and operator - rogue exit nodes can intercept tailnet egress."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Mass credential revocation in short window",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when five or more API keys, OAuth clients, or auth keys are revoked or deleted within one hour. May be routine rotation, or a typical cleanup pattern after credential compromise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Device key expiring within 7 days",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet devices whose machine key expires within the next 7 days and where key expiry is not disabled. Surface proactively so renewal can be scheduled rather than forced during an outage."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Device started advertising subnet routes",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a tailnet device begins advertising subnet routes (subnet-router capability) not present in the previous snapshot. Unexpected advertisement may indicate a compromised node expanding reachable surface area or an unsanctioned admin change."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: User role elevated to admin or owner",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a user's tailnet role changes from a lower-privilege role to admin, network-admin, or owner between consecutive snapshots. Privilege escalation is a high-value attacker objective and warrants prompt review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Split-DNS configuration modified",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when the tailnet split-DNS configuration is modified. Split-DNS overrides per-domain resolution within the tailnet - an attacker adding a new domain mapping or changing the resolver IP can hijack DNS for that domain."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: DNS nameservers modified",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when the tailnet's global DNS nameserver list is modified. Adding an attacker-controlled resolver as a tailnet-wide nameserver enables broad DNS hijacking for every device using MagicDNS resolution."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic12",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: MagicDNS disabled",
+            "elements": [
+              {
+                "name": "analytic12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when MagicDNS is turned off on the tailnet. Disabling MagicDNS changes DNS behaviour for every device and is occasionally a precursor to wider DNS hijacking - verify the change was intentional."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic13",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Tailnet lock validation failed",
+            "elements": [
+              {
+                "name": "analytic13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet devices with a non-empty TailnetLockError, indicating the device failed tailnet-lock cryptographic validation. Suspicious - likely an unsigned node attempting to join."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic14",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Device Tailscale SSH newly enabled",
+            "elements": [
+              {
+                "name": "analytic14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when Tailscale SSH is enabled on a device that previously did not have it. SSH provides authenticated shell access over the tailnet using Tailscale identity, broadening attack surface if unexpected. Verify and confirm the SSH ACL covers it."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic15",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Unauthorized device connected to control plane",
+            "elements": [
+              {
+                "name": "analytic15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies devices actively connected to the Tailscale control plane (ConnectedToControl=true) but not yet authorized by an admin (Authorized=false). Often benign onboarding but can indicate rogue joins."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic16",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: External (shared-in) device added",
+            "elements": [
+              {
+                "name": "analytic16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies new external (shared-in) devices joining the tailnet that were not present in the prior 24-hour baseline. Each shared-in device expands the trust boundary - confirm the share matches a documented agreement and ACL scope."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic17",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Unexpected exit-node egress",
+            "elements": [
+              {
+                "name": "analytic17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a node may indicate routing-policy drift, data exfiltration, or compromise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic18",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Large outbound transfer over tailnet",
+            "elements": [
+              {
+                "name": "analytic18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a single src-dst pair transfers more than 100 MB over the tailnet within a 1-hour window. Large bursts can indicate data staging, exfiltration, or a misconfigured backup. Requires Tailscale Premium or Enterprise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic19",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Network flow beaconing detected",
+            "elements": [
+              {
+                "name": "analytic19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic20",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Mass fan-out from single node",
+            "elements": [
+              {
+                "name": "analytic20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a single node initiates flows to 25 or more unique destinations within a 15-minute window. Sudden fan-out is consistent with port scanning, lateral discovery, or worm-style propagation. Requires Tailscale Premium or Enterprise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic21",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Subnet router throughput anomaly",
+            "elements": [
+              {
+                "name": "analytic21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic22",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Posture integration disabled or removed",
+            "elements": [
+              {
+                "name": "analytic22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a device-posture integration is disabled or removed from the tailnet. Posture integrations enforce device compliance - removal weakens fleet posture and is a possible defense-evasion step."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic23",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: New posture integration added",
+            "elements": [
+              {
+                "name": "analytic23-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a new device-posture integration is added to the tailnet (Jamf, Kandji, Intune, Kolide, Defender for Endpoint, CrowdStrike, SentinelOne). Verify the addition was sanctioned."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic24",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: DERP relay traffic surge",
+            "elements": [
+              {
+                "name": "analytic24-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a source node has more than 75 percent of its recent flows falling back to a DERP relay (Tailscale IsRelayed flag, traffic via 127.3.3.40). Operational signal useful for spotting policy drift."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: First-seen actor making configuration changes",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies actors making their first configuration change in the lookback window. New legitimate admins look identical to compromised credentials - review whether each surfaced actor is expected to have admin rights. This hunting query depends on TailscaleCCF data connector (Tailscale_Audit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: ACL policy churn",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies short windows where the tailnet ACL policy file was rewritten multiple times. Iterative policy edits during an incident can indicate a defender adjusting rules or an attacker probing. This hunting query depends on TailscaleCCF data connector (Tailscale_Audit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Off-hours configuration changes",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies configuration audit events that occurred outside typical business hours (Monday-Friday 08:00-18:00 UTC). Useful for spotting impromptu maintenance, account compromise, or insider activity. This hunting query depends on TailscaleCCF data connector (Tailscale_Audit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Auth key sprawl",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies actors creating multiple auth keys in a short window. A single admin creating many keys for unattended enrollment is normal during a rollout; same pattern can also indicate token-spraying. This hunting query depends on TailscaleCCF data connector (Tailscale_Audit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Devices not seen in 30+ days",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet devices that have not connected to the control plane for at least 30 days. Dormant devices accumulate risk - they may still have valid keys, advertised routes, or tags. This hunting query depends on TailscaleCCF data connector (Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Auth keys with no expiry",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet auth keys that have no expiry timestamp set. Non-expiring keys grant unattended enrollment in perpetuity and should be rotated or replaced with ephemeral, time-bounded keys. This hunting query depends on TailscaleCCF data connector (Tailscale_Keys_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Users with zero devices",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet users who have no devices currently registered. Orphaned identities are candidates for off-boarding - they retain whatever role/permissions they were granted. This hunting query depends on TailscaleCCF data connector (Tailscale_Users_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Split-DNS per-domain change history",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies the per-domain Split-DNS change history from the audit log. For each modification event, expands Old and New documents and surfaces which domains were added, removed, or changed. This hunting query depends on TailscaleCCF data connector (Tailscale_Audit_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Devices with Tailscale SSH enabled",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies devices that currently have Tailscale SSH enabled. Tailscale SSH delivers SSH access over the tailnet using Tailscale identity and is governed by the SSH ACL block in the policy file. This hunting query depends on TailscaleCCF data connector (Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: External (shared-in) device inventory",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies external (shared-in) devices currently active in the tailnet. These devices belong to another tailnet and have been admitted via a Tailscale sharing arrangement. This hunting query depends on TailscaleCCF data connector (Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery11",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Devices with outdated client version",
+            "elements": [
+              {
+                "name": "huntingquery11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet devices that report UpdateAvailable=true on the latest snapshot. Tailscale releases security updates regularly; outdated clients lack the most recent improvements. This hunting query depends on TailscaleCCF data connector (Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery12",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale: Subnet router CIDR exposure inventory",
+            "elements": [
+              {
+                "name": "huntingquery12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies every device currently advertising or enabling subnet routes (bridging non-tailnet networks into the tailnet). Excludes pure exit-node advertisements so only true subnet exposure is surfaced. This hunting query depends on TailscaleCCF data connector (Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery13",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: New src->dst node pairs (lateral movement candidates)",
+            "elements": [
+              {
+                "name": "huntingquery13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet src->dst pairs observed in the last 24h that were NOT observed in the prior 7-day baseline. Useful for spotting lateral movement to nodes that don't usually talk. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery14",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Top talkers by bytes (virtual traffic)",
+            "elements": [
+              {
+                "name": "huntingquery14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tailnet src->dst pairs ranked by total bytes transferred over the last 24h. Useful for capacity planning, identifying data-heavy flows, and spotting unexpected volume that could indicate data staging. Requires Tailscale Premium or Enterprise. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery15",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Exit-node usage patterns",
+            "elements": [
+              {
+                "name": "huntingquery15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies traffic leaving the tailnet via exit nodes. Exit-node use is typically intentional (regional egress, privacy routing) but unexpected egress from a node warrants investigation. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery16",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Beaconing candidates (regular periodic flows)",
+            "elements": [
+              {
+                "name": "huntingquery16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies flows that recur at a highly regular interval, which is the signature of C2 beaconing or scheduled exfiltration jobs. Looser threshold than the analytic rule - investigation aid. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery17",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Current posture integration inventory",
+            "elements": [
+              {
+                "name": "huntingquery17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies the current set of device-posture integrations configured on the tailnet (latest snapshot per integration). Useful for compliance attestation and detecting drift from the expected baseline. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_PostureIntegrations_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery18",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Devices with persistent DERP relay usage",
+            "elements": [
+              {
+                "name": "huntingquery18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies devices that have consistently fallen back to DERP relay (IsRelayed=true) over the past 24 hours. Sustained relay usage points to NAT/firewall misconfiguration or deliberate evasion. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery19",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Tagged services with broad inbound exposure",
+            "elements": [
+              {
+                "name": "huntingquery19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies tagged services (devices with non-empty DstTags) ranked by inbound diversity over 7 days. Surfaces services with the broadest blast-radius; ACL drift candidates. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery20",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Cross-tag flow matrix",
+            "elements": [
+              {
+                "name": "huntingquery20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies network flows pivoted by source-tag x destination-tag over 7 days. Highlights tag-to-tag traffic, useful for ACL validation. Same-tag loops can signal worm-style propagation. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery21",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Network flows outside business hours",
+            "elements": [
+              {
+                "name": "huntingquery21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies network flows occurring outside 07:00-19:00 UTC on weekdays plus all weekend, over 7 days. Filters to virtual/subnet/exit traffic. Useful for spotting unattended automation gone wrong. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery22",
+            "type": "Microsoft.Common.Section",
+            "label": "Tailscale Premium: Users generating traffic from multiple devices",
+            "elements": [
+              {
+                "name": "huntingquery22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies users (SrcUser) generating tailnet flows from more than one distinct device in the past 24 hours. Useful for spotting account compromise (sudden new device) or unauthorised device enrollment. This hunting query depends on TailscalePremiumCCF data connector (Tailscale_Network_CL Tailscale_Devices_CL Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
