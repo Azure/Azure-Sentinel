@@ -36,3 +36,6 @@
 ## 2.0.0
 - Refactored the plugin from Ruby to Java.
 - Added ManagedIdentity authentication.
+
+## 1.x.x (Ruby - deprecated)
+The 1.x.x releases are the deprecated Ruby version of this plugin. For the 1.x.x changelog and documentation, see [microsoft-sentinel-log-analytics-logstash-output-plugin](../microsoft-sentinel-log-analytics-logstash-output-plugin/CHANGELOG.md).
