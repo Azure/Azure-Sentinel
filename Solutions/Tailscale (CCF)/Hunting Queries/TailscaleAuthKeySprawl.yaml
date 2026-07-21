@@ -1,0 +1,32 @@
+id: d64e7f6f-4eab-7a5d-cf4a-3b6e8aafbcad
+name: "Tailscale: Auth key sprawl"
+description: Identifies actors creating multiple auth keys in a short window. A single admin creating many keys for unattended enrollment is normal during a rollout; same pattern can also indicate token-spraying.
+description-detailed: |
+  Identifies actors creating multiple auth keys in a short window. A single admin creating many keys for unattended enrollment is normal during a rollout; the same pattern can also indicate token-spraying for persistence. Cross-reference with the Tailscale: Auth key created alert to filter context.
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1098
+  - T1136
+query: |
+  let bucket = 1h;
+  let sprawlThreshold = 5;
+  Tailscale_Audit_CL
+  | where Action == "CREATE"
+  | where tostring(Target.type) == "AUTH_KEY"
+  | extend ActorLogin = tostring(Actor.loginName)
+  | summarize KeysCreated = count(), KeyIDs = make_set(tostring(Target.id)), Reusable = make_set(tostring(New.reusable)), Ephemeral = make_set(tostring(New.ephemeral))
+      by bin(TimeGenerated, bucket), ActorLogin
+  | where KeysCreated >= sprawlThreshold
+  | order by KeysCreated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+version: 1.0.0
