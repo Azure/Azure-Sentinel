@@ -1,0 +1,37 @@
+id: 99c9e2f5-9090-4da9-bf95-9c0d1e2f3a09
+name: "UniFi: DHCP NAK / DECLINE anomalies"
+description: |
+  Lists DHCP NAK (server denied) and DECLINE (client refused offer, usually IP conflict) bursts. Volume spikes can mean rogue DHCP, address-pool exhaustion, or a misconfigured client.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Discovery
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where TimeGenerated > ago(24h)
+  | where DeviceEventClassID in ("dhcp_NAK", "dhcp_DECLINE")
+  | summarize Events = count(),
+              Clients = make_set(SourceMACAddress, 25),
+              Hostnames = make_set(SourceHostName, 25),
+              Interfaces = make_set(DeviceInboundInterface, 5),
+              SampleHost = take_any(SourceHostName),
+              SampleIP = take_any(SourceIP)
+    by DeviceAction
+  | order by Events desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SampleIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SampleHost
+version: 1.0.0
+kind: HuntingQuery

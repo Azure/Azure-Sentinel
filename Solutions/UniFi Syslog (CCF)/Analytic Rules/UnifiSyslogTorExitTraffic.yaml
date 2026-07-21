@@ -1,0 +1,48 @@
+id: a17b3c8d-9f2e-4c7b-8e6a-13f4c8e9b2d6
+name: "UniFi: Traffic from Tor exit node"
+description: |
+  Identifies inbound traffic originating from a Tor exit node (identified at ingest time via the Tor exit-node feed). Legitimate use cases exist, but Tor is also a common cover for reconnaissance and credential stuffing.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 2h
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1090
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where IndicatorThreatType has "Anonymization"
+          or ThreatDescription has "tor_exit"
+  | summarize Hits = count(),
+              TargetPorts = make_set(DestinationPort, 25),
+              Activity = take_any(Activity),
+              DeviceAction = take_any(DeviceAction),
+              Country = take_any(MaliciousIPCountry)
+    by SourceIP
+  | order by Hits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

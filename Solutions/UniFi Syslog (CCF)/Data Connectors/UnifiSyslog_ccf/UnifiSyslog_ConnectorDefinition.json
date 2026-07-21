@@ -1,0 +1,193 @@
+{
+  "name": "UnifiSyslogCCF",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "UnifiSyslogCCF",
+      "logo": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNNDk0LjIgMGgtMzEuOHYzMS44aDMxLjh6TTM4My4xIDIyMi40di02My42aDYzLjV2NjMuNWg2My41YzEuMSA1OC45LTMuNCAxMTAuMi0zMy4zIDE2MS42LTg2LjYgMTUyLjQtMzAwLjUgMTcyLjktNDE0IDM5LjJDMzYuMyAzOTIuNCAxNy4yIDM1NSA4LjMgMzE1Yy00LjUtMjEuNy02LjUtNDkuMi02LjUtNzIuNVY0aDEyN2wuMiAyNDJjLjYgMzEuMyA2LjMgNjMuNSAyNSA4OCA1My45IDczIDE2Ny45IDY2LjMgMjEyLjEtMTMuMSAxNS45LTI2LjYgMTcuMy02OC43IDE3LTk4LjVtMTUuOC0xNzQuOGg0Ny42djQ3LjZINTEwdjYzLjVoLTYzLjVWOTUuM2gtNDcuNnoiIGZpbGw9IiMwMDVlZDkiLz48L3N2Zz4=",
+      "title": "UniFi Syslog (CCF Push) (Preview)",
+      "publisher": "Community",
+      "descriptionMarkdown": "The [UniFi Syslog](https://help.ui.com/hc/en-us/articles/33349041044119-UniFi-System-Logs-SIEM-Integration) connector for Microsoft Sentinel ingests UniFi UDM, switch and access-point syslog events using the Codeless Connector Framework (CCF) Push pattern.\n\nUniFi devices forward syslog (UDP/TCP 514) to a Logstash relay you run on your own infrastructure (UnRAID, k8s, VM). Logstash parses the dual-timestamp UniFi format, normalises CEF and synthetic-CEF events, enriches with MaxMind GeoIP/ASN and FireHOL / Spamhaus / Tor threat-intel feeds at ingest time, and POSTs to the Data Collection Endpoint provisioned by this connector.\n\nSecurity events land in **CommonSecurityLog** (CEF + synthetic CEF for sudo, dnsmasq-dhcp, AP kernel WiFi state, ubios gateway signals, switch link state, sshd, UniFi zone-based firewall). Forensic / non-CEF events land in **Unifi_Syslog_CL**.",
+      "graphQueries": [
+        {
+          "metricName": "Total CEF events",
+          "legend": "CommonSecurityLog",
+          "baseQuery": "CommonSecurityLog | where DeviceVendor =~ 'Ubiquiti'"
+        },
+        {
+          "metricName": "Total forensic events",
+          "legend": "Unifi_Syslog_CL",
+          "baseQuery": "Unifi_Syslog_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Latest 50 firewall events",
+          "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Ubiquiti'\n| where DeviceEventCategory =~ 'Firewall'\n| sort by TimeGenerated desc\n| take 50"
+        },
+        {
+          "description": "Threat-intel matches in the last 24h",
+          "query": "CommonSecurityLog\n| where isnotempty(MaliciousIP)\n| where TimeGenerated > ago(24h)\n| summarize Hits = count() by SourceIP, ThreatSeverity, IndicatorThreatType, ThreatDescription\n| order by Hits desc"
+        },
+        {
+          "description": "SSH authentication failures",
+          "query": "CommonSecurityLog\n| where DeviceEventClassID == 'sshd_auth_fail'\n| where TimeGenerated > ago(24h)\n| summarize Attempts = count() by SourceIP, SourceUserName\n| order by Attempts desc"
+        },
+        {
+          "description": "Forensic catch-all (non-CEF events)",
+          "query": "Unifi_Syslog_CL\n| where TimeGenerated > ago(1h)\n| sort by TimeGenerated desc\n| take 50"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "CommonSecurityLog (Ubiquiti)",
+          "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor =~ 'Ubiquiti'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "Unifi_Syslog_CL",
+          "lastDataReceivedQuery": "Unifi_Syslog_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "union\n  (CommonSecurityLog | where DeviceVendor =~ 'Ubiquiti'),\n  (Unifi_Syslog_CL)\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra",
+            "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to assign Monitoring Metrics Publisher role on the data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role."
+          },
+          {
+            "name": "Self-hosted Logstash",
+            "description": "A Linux host (UnRAID, Docker host, k8s, VM) reachable from your UniFi devices on UDP/TCP 514, capable of running the Logstash container shipped with this Solution."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Deploy Sentinel-side resources",
+          "description": "Click Deploy below to create the Entra application, Data Collection Rule, custom Unifi_Syslog_CL table, and role assignments in your subscription. This step does not deploy anything on your UniFi side.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated configuration\nDeploying will:\n- Create the `Unifi_Syslog_CL` custom log table.\n- Create the Data Collection Rule with two transforms - CEF events route to `CommonSecurityLog`, non-CEF events route to `Unifi_Syslog_CL`.\n- Register an Entra application with a client secret.\n- Grant the application `Monitoring Metrics Publisher` on the DCR.\n\nAt the end you'll receive the five connection values that Logstash needs."
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy UniFi Syslog Push connector resources",
+                "applicationDisplayName": "UniFi Syslog Logstash Push Connector"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Copy the five connection values",
+          "description": "These are the five values that Logstash needs in its .env file to authenticate and push events to the Data Collection Endpoint.",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [ "TenantId" ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Application ID",
+                "fillWith": [ "ApplicationId" ],
+                "placeholder": "Deploy the push connector to receive the Application ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra App Registration Client Secret",
+                "fillWith": [ "ApplicationSecret" ],
+                "placeholder": "Deploy the push connector to receive the Client Secret"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint URI",
+                "fillWith": [ "DataCollectionEndpoint" ],
+                "placeholder": "Deploy the push connector to receive the DCE URI"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Rule Immutable ID",
+                "fillWith": [ "DataCollectionRuleId" ],
+                "placeholder": "Deploy the push connector to receive the DCR Immutable ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Stream Name",
+                "value": "Custom-Unifi_CL"
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Deploy the Logstash relay",
+          "description": "On the Linux host that will receive syslog from your UniFi devices, deploy the Logstash container shipped alongside this Solution.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Container deployment\n\nThe container files ship inside this Solution at `Solutions/UniFi Syslog (CCF)/Logstash/`. From the Azure-Sentinel repo on your relay host:\n\n```bash\ngit clone https://github.com/Azure/Azure-Sentinel\ncd \"Azure-Sentinel/Solutions/UniFi Syslog (CCF)/Logstash\"\n```\n\nCopy `.env.example` to `.env` and fill in the five values from step 2 plus your MaxMind credentials:\n\n```bash\ncp .env.example .env\n# Edit .env\nSENTINEL_TENANT_ID=<Tenant ID>\nSENTINEL_CLIENT_APP_ID=<Application ID>\nSENTINEL_CLIENT_APP_SECRET=<Client Secret>\nSENTINEL_DCE_URL=<DCE URI>\nSENTINEL_DCR_IMMUTABLE_ID=<DCR Immutable ID>\nSENTINEL_DCR_STREAM_NAME=Custom-Unifi_CL\nMAXMIND_ACCOUNT_ID=<your MaxMind account ID>\nMAXMIND_LICENSE_KEY=<your MaxMind license key>\n```\n\nStart the container:\n\n```bash\ndocker compose build --no-cache\ndocker compose up -d\n```\n\nVerify the container is listening on UDP/TCP 514 and check the Logstash API on port 9600 for pipeline event counts."
+              }
+            }
+          ]
+        },
+        {
+          "title": "4. Point your UniFi devices at the Logstash host",
+          "description": "Configure UniFi to forward syslog to the Logstash relay's IP and port. UniFi exposes this in two places.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Site-wide syslog\nIn the UniFi Network application, go to **Settings -> Logging -> Remote Logging**. Enable **Remote Logging**, set **Server** to the Logstash host IP and **Port** to 514. Tick **Security Detections** to include Suricata IDS / IPS alerts.\n\n#### Console / OS\nFor UniFi OS console events (sshd, sudo, ubios-udapi-server, switch TRAPMGR), enable **System Settings -> Console Settings -> Remote Logging** with the same host and port.\n\n#### Verify\nWithin 30 seconds you should see Logstash event counts climbing in `docker logs unifi-syslog-logstash`, and rows appearing in `CommonSecurityLog | where DeviceVendor =~ 'Ubiquiti'` and `Unifi_Syslog_CL` within 1-2 minutes."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

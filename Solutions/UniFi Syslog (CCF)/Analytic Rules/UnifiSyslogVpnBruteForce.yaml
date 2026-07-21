@@ -1,0 +1,61 @@
+id: 6f4a7c89-c012-44b5-a8f4-b9e1c4f0a712
+name: "UniFi: VPN authentication failures (possible brute force)"
+description: |
+  Identifies 10+ VPN authentication failures from a single source IP within one hour. Covers both CEF events in CommonSecurityLog and plain-syslog VPN failures from openvpn, wireguard, ipsec, strongswan, charon and xl2tpd daemons in Unifi_Syslog_CL.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+      - Unifi_Syslog_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 2h
+suppressionEnabled: false
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let cef =
+      CommonSecurityLog
+      | where DeviceVendor =~ "Ubiquiti"
+      | where DeviceEventCategory has_any ("vpn", "auth")
+      | where DeviceEventClassID != "sshd_auth_fail"
+      | where DeviceAction has_any ("FAIL", "DENIED", "REJECT", "AUTH_FAIL")
+              or Message has_any ("auth fail", "authentication failed", "incorrect password")
+      | where isnotempty(SourceIP)
+      | project TimeGenerated, SourceIP;
+  let plain =
+      Unifi_Syslog_CL
+      | where DeviceEventCategory =~ "vpn"
+              or ProcessName has_any ("openvpn", "wireguard", "ipsec",
+                                      "strongswan", "charon", "xl2tpd")
+      | where DeviceAction has_any ("AUTH_FAIL", "FAIL", "DENIED")
+              or Message has_any ("auth fail", "authentication failed",
+                                  "incorrect password")
+      | where isnotempty(SourceIP)
+      | project TimeGenerated, SourceIP;
+  union cef, plain
+  | summarize Failures = count() by SourceIP, bin(TimeGenerated, 1h)
+  | where Failures >= 10
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

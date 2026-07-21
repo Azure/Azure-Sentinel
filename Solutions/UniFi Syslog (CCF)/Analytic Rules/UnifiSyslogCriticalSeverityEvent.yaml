@@ -1,0 +1,50 @@
+id: d5e8c1a9-3b76-4f2a-9d8e-7c45a1e3f0b2
+name: "UniFi: Critical-severity system event"
+description: |
+  Identifies critical-severity events emitted by UniFi devices - power loss, fan failure, hardware fault, or security crisis. Covers CEF events (LogSeverity 8+) in CommonSecurityLog and plain-syslog events with SyslogSeverity emergency/alert/critical.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+      - Unifi_Syslog_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 15m
+suppressionEnabled: false
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  let cef =
+      CommonSecurityLog
+      | where DeviceVendor =~ "Ubiquiti"
+      | where toint(LogSeverity) >= 8
+      | project TimeGenerated, Computer, Severity = tostring(LogSeverity),
+                ProcessName = DeviceProduct, Category = DeviceEventCategory,
+                Message, Detail = AdditionalExtensions;
+  let plain =
+      Unifi_Syslog_CL
+      | where SyslogSeverity in~ ("emergency", "alert", "critical", "0", "1", "2")
+              or DeviceEventCategory =~ "critical"
+      | project TimeGenerated, Computer, Severity = SyslogSeverity, ProcessName,
+                Category = DeviceEventCategory, Message, Detail = tostring(RawJson);
+  union cef, plain
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

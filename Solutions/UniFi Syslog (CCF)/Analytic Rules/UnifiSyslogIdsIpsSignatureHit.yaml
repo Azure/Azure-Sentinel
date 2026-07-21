@@ -1,0 +1,60 @@
+id: 7a2e6c91-4b32-4f8e-bf21-3d6a91e2c422
+name: "UniFi: IDS / IPS signature hit"
+description: |
+  Identifies UniFi Network IDS (Suricata + CINS / Emerging Threats rulesets) detections. UniFi marks these severity 3 natively - this rule promotes them to Medium for incident handling. Also covers Suricata events that leak via plain syslog.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+      - Unifi_Syslog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+query: |
+  let cef =
+      CommonSecurityLog
+      | where DeviceVendor =~ "Ubiquiti" and DeviceProduct =~ "UniFi Network"
+      | where DeviceEventClassID == "201"
+      | project TimeGenerated, Computer, SourceIP, SourcePort, DestinationIP, DestinationPort,
+                Protocol, Signature = Activity, Category = DeviceEventCategory,
+                Message, MaliciousIPCountry, IndicatorThreatType;
+  let suricata =
+      Unifi_Syslog_CL
+      | where ProcessName =~ "suricata" or isnotempty(RawJson.alert.signature)
+      | extend Signature = tostring(RawJson.alert.signature),
+               Category  = tostring(RawJson.alert.category)
+      | where isnotempty(Signature)
+      | project TimeGenerated, Computer, SourceIP, SourcePort, DestinationIP, DestinationPort,
+                Protocol, Signature, Category, Message,
+                MaliciousIPCountry = "", IndicatorThreatType = "";
+  union cef, suricata
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+kind: Scheduled
+version: 1.0.0

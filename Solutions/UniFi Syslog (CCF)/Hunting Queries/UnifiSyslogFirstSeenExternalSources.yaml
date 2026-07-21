@@ -1,0 +1,47 @@
+id: 44d4f7a0-4040-4e54-af40-4d5e6f7a8b04
+name: "UniFi: First-seen external source IPs"
+description: |
+  Lists external IPs observed in the last hour that have never appeared in the preceding 30 days. New-source anomalies often correlate with attack campaigns and reconnaissance waves.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - InitialAccess
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  let recent =
+      CommonSecurityLog
+      | where DeviceVendor =~ "Ubiquiti"
+      | where TimeGenerated between (ago(1h) .. now())
+      | where isnotempty(SourceIP) and not(ipv4_is_private(SourceIP))
+      | distinct SourceIP;
+  let historic =
+      CommonSecurityLog
+      | where TimeGenerated between (ago(30d) .. ago(1h))
+      | where isnotempty(SourceIP)
+      | distinct SourceIP;
+  recent
+  | where SourceIP !in (historic)
+  | join kind=leftouter (
+      CommonSecurityLog
+      | where TimeGenerated > ago(1h)
+      | summarize Activity = take_any(Activity),
+                  DeviceAction = take_any(DeviceAction),
+                  Hits = count(),
+                  Country = take_any(coalesce(MaliciousIPCountry, DeviceCustomString3)),
+                  ASN_Org = take_any(DeviceCustomString4),
+                  TIMatch = take_any(ThreatDescription)
+        by SourceIP
+    ) on SourceIP
+  | project SourceIP, Country, ASN_Org, Hits, Activity, DeviceAction, TIMatch
+  | order by Hits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: HuntingQuery

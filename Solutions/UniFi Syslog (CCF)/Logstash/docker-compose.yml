@@ -1,0 +1,72 @@
+services:
+  logstash:
+    build:
+      context: .
+      # MaxMind credentials passed as BuildKit secrets (mounted into the build,
+      # never written to image layers or build logs). Required for ingest-time
+      # geo / ASN enrichment; leave the env vars blank in .env to skip.
+      secrets:
+        - maxmind_account_id
+        - maxmind_license_key
+    image: unifi-syslog-logstash:local
+    container_name: unifi-syslog-logstash
+    restart: unless-stopped
+    # Portable default: publish 514/udp + 514/tcp from the host.
+    # Requires that the host itself is NOT already running rsyslog/systemd-journald
+    # listening on 514 (`sudo lsof -i :514`). If it IS, either free the host port
+    # or switch to the macvlan pattern (see block at the bottom of this file).
+    ports:
+      - "514:514/udp"
+      - "514:514/tcp"
+    environment:
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+      SENTINEL_TENANT_ID: "${SENTINEL_TENANT_ID}"
+      SENTINEL_CLIENT_APP_ID: "${SENTINEL_CLIENT_APP_ID}"
+      SENTINEL_CLIENT_APP_SECRET: "${SENTINEL_CLIENT_APP_SECRET}"
+      SENTINEL_DCE_URL: "${SENTINEL_DCE_URL}"
+      SENTINEL_DCR_IMMUTABLE_ID: "${SENTINEL_DCR_IMMUTABLE_ID}"
+      SENTINEL_DCR_STREAM_NAME: "${SENTINEL_DCR_STREAM_NAME}"
+      ENABLE_STDOUT_RUBYDEBUG: "${ENABLE_STDOUT_RUBYDEBUG:-false}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# BuildKit secrets sourced from the .env-loaded environment variables -
+# their values are never echoed to build logs or baked into image layers.
+secrets:
+  maxmind_account_id:
+    environment: MAXMIND_ACCOUNT_ID
+  maxmind_license_key:
+    environment: MAXMIND_LICENSE_KEY
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: macvlan network for advanced deployments
+# ---------------------------------------------------------------------------
+# Use this instead of the `ports:` block above when:
+#   - Your host is already running rsyslog/syslog-ng on 514 and you don't want
+#     to move it, OR
+#   - You want the Logstash container to be reachable as a first-class device
+#     on your LAN (dedicated IP, no NAT), which some UniFi devices prefer for
+#     syslog target discovery.
+#
+# Steps:
+#   1. Comment out the `ports:` block above.
+#   2. Create the macvlan network on the host, once:
+#        docker network create -d macvlan \
+#          --subnet=10.0.0.0/24 --gateway=10.0.0.1 \
+#          -o parent=eth0 syslog-net
+#   3. Uncomment the `networks:` block below and set an IP that's free on your
+#      LAN + inside the macvlan subnet.
+#   4. Add the top-level `networks:` declaration at the bottom.
+#
+# services:
+#   logstash:
+#     networks:
+#       syslog-net:
+#         ipv4_address: 10.0.0.21   # <-- pick a free IP on your LAN
+#
+# networks:
+#   syslog-net:
+#     external: true

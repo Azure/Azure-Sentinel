@@ -1,0 +1,31 @@
+id: aacae3f6-a0a0-4eba-afa6-ad0e1f2a3b0a
+name: "UniFi: TI feed effectiveness comparison"
+description: |
+  Lists how many hits each threat-intel feed produced over the last 7 days. Useful for deciding whether a feed is pulling its weight or needs replacing in the Logstash relay configuration.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where TimeGenerated > ago(7d)
+  | where isnotempty(MaliciousIP)
+  | mv-expand Feed = split(ThreatDescription, ", ")
+  | summarize Hits = count(),
+              UniqueSources = dcount(SourceIP),
+              TopCountries = make_set(MaliciousIPCountry, 10),
+              SampleSource = take_any(SourceIP)
+    by Feed = tostring(Feed)
+  | order by Hits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SampleSource
+version: 1.0.0
+kind: HuntingQuery

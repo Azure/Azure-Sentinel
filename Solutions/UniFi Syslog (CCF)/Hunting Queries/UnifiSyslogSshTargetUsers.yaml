@@ -1,0 +1,30 @@
+id: 77a7c0d3-7070-4b87-bf73-7a8b9c0d1e07
+name: "UniFi: SSH brute force - most-targeted accounts"
+description: |
+  Aggregates SSH authentication failures by the username being targeted. Reveals what attackers think your accounts are named - useful for tightening account lockdown and removing default usernames.
+requiredDataConnectors:
+  - connectorId: UnifiSyslogCCF
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  CommonSecurityLog
+  | where DeviceVendor =~ "Ubiquiti"
+  | where TimeGenerated > ago(24h)
+  | where DeviceEventClassID == "sshd_auth_fail"
+  | summarize Attempts = count(),
+              DistinctSources = dcount(SourceIP),
+              TopCountries = make_set(coalesce(MaliciousIPCountry, DeviceCustomString3), 10),
+              TIFlagged = countif(isnotempty(MaliciousIP))
+    by TargetUser = SourceUserName
+  | order by Attempts desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetUser
+version: 1.0.0
+kind: HuntingQuery
