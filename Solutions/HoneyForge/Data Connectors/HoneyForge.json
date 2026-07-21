@@ -1,0 +1,114 @@
+{
+  "id": "HoneyForge",
+  "title": "HoneyForge Threat Detection",
+  "publisher": "BUI",
+  "descriptionMarkdown": "The [HoneyForge](https://honeyforge.tech) connector ingests deception sensor events from the HoneyForge Threat Detection Platform into Microsoft Sentinel. HoneyForge deploys hardware honeypot sensors across your network that passively listen for connection attempts. Any interaction with a sensor is, by definition, suspicious — because legitimate systems should never communicate with a decoy device.\n\nEvents are forwarded to Sentinel in Common Event Format (CEF) via syslog. The connector provides immediate detection coverage through the bundled analytic rule, hunting queries, and operational workbook.",
+  "logo": "Logos/HoneyForgeLogo.svg",
+  "graphQueriesTableName": "CommonSecurityLog",
+  "graphQueries": [
+    {
+      "metricName": "Total events received",
+      "legend": "HoneyForge sensor events",
+      "baseQuery": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\""
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All HoneyForge events — last 24 hours",
+      "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| where TimeGenerated >= ago(24h)\n| sort by TimeGenerated desc"
+    },
+    {
+      "description": "Top source IPs interacting with sensors — last 7 days",
+      "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| where TimeGenerated >= ago(7d)\n| summarize EventCount = count() by SourceIP\n| top 20 by EventCount desc"
+    },
+    {
+      "description": "Events by sensor — last 7 days",
+      "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| where TimeGenerated >= ago(7d)\n| extend SensorName = iff(isempty(tostring(DeviceCustomString3)), tostring(Computer), tostring(DeviceCustomString3))\n| summarize EventCount = count() by SensorName\n| sort by EventCount desc"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(3d)"
+      ]
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CommonSecurityLog (HoneyForge)",
+      "lastDataReceivedQuery": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "Read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required to enable the Log Analytics agent.",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">**NOTE:** This connector uses the **Common Event Format (CEF)** to forward HoneyForge sensor events to Microsoft Sentinel via syslog. An ASIM parser (`HoneyForgeEvent`) is deployed with this solution to normalise the events to the ASIM NetworkSession schema."
+    },
+    {
+      "title": "Step 1 — Deploy the CEF syslog forwarder",
+      "description": "Deploy a Linux machine to act as the syslog forwarder between your HoneyForge deployment and Microsoft Sentinel. This machine can be on-premises, in Azure, or in another cloud. It must have network line-of-sight to receive syslog from HoneyForge and outbound HTTPS to the Log Analytics workspace.\n\n**Requirements:**\n- Python 2.7 or 3.x\n- sudo / elevated permissions\n- Outbound HTTPS (TCP 443) to `*.ods.opinsights.azure.com`\n- Inbound TCP/UDP 514 from the HoneyForge backend",
+      "innerSteps": [
+        {
+          "title": "1.1 — Install the Log Analytics agent and CEF collector",
+          "description": "Run the following command on your Linux forwarder machine. Replace `{WorkspaceId}` and `{PrimaryKey}` with your Sentinel workspace values.",
+          "instructions": [
+            {
+              "parameters": {
+                "fillWith": ["WorkspaceId", "PrimaryKey"],
+                "label": "Run on the Linux forwarder:",
+                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py && sudo python cef_installer.py {0} {1}"
+              },
+              "type": "CopyableLabel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Step 2 — Configure HoneyForge syslog forwarding",
+      "description": "Configure HoneyForge to forward CEF-formatted sensor events to the Linux forwarder.\n\n1. Log in to the HoneyForge dashboard at [platform.honeyforge.tech](https://platform.honeyforge.tech).\n2. Navigate to **Settings → SIEM / Syslog**.\n3. Enter the **IP address** of your Linux forwarder and port **514**.\n4. Select **CEF** as the format and save.\n5. Click **Send test event** to verify connectivity.\n\nFor assistance configuring syslog forwarding, contact BUI at [support@bui.co.za](mailto:support@bui.co.za)."
+    },
+    {
+      "title": "Step 3 — Validate connectivity",
+      "description": "Allow up to 20 minutes for the first events to appear in the `CommonSecurityLog` table. Validate that events are arriving with the following query:\n\n```kql\nCommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| take 10\n```\n\nIf no events appear after 20 minutes, run the connectivity troubleshooter:",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": ["WorkspaceId"],
+            "label": "Run the troubleshooter on the Linux forwarder:",
+            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py && sudo python cef_troubleshoot.py {0}"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    }
+  ]
+}
