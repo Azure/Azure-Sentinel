@@ -1,0 +1,52 @@
+id: d3c4e5f6-3456-7890-12ab-cdef12345003
+name: "Tailscale: User role elevated to admin or owner"
+description: |
+  Identifies when a user's tailnet role changes from a lower-privilege role to admin, network-admin, or owner between consecutive snapshots. Privilege escalation is a high-value attacker objective and warrants prompt review.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Users_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let elevated = dynamic(["admin", "network-admin", "owner"]);
+  let recent =
+      Tailscale_Users_CL
+      | where TimeGenerated > ago(1h)
+      | summarize arg_max(TimeGenerated, *) by UserId
+      | where Role in (elevated)
+      | project UserId, LoginName, RoleNow = Role;
+  let prior =
+      Tailscale_Users_CL
+      | where TimeGenerated between (ago(2d) .. ago(1h))
+      | summarize arg_max(TimeGenerated, *) by UserId
+      | project UserId, RolePrior = Role;
+  recent
+  | join kind=inner prior on UserId
+  | where RoleNow != RolePrior
+  | where RolePrior !in (elevated)
+  | project TimeGenerated = now(), UserId, LoginName, RolePrior, RoleNow
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: LoginName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

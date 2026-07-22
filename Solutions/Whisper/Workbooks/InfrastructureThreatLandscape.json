@@ -1,0 +1,132 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Whisper Security - Infrastructure Threat Landscape\nThis workbook provides visibility into threat intelligence data enriched by the Whisper Security knowledge graph. Use the visualizations below to monitor geographic distribution of threats, ASN reputation, threat category breakdowns, score distributions, trends over time, and top contributing threat feeds."
+      },
+      "name": "header-markdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperThreatIntel_CL\n| where isThreat == true\n| join kind=inner (WhisperInfraContext_CL | project indicator, countries) on indicator\n| extend Country = tostring(split(countries, ',')[0])\n| where isnotempty(Country)\n| summarize ThreatCount = count() by Country\n| order by ThreatCount desc",
+        "size": 0,
+        "title": "World Map of Threat-Listed IPs by Country",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "Country",
+          "sizeSettings": "ThreatCount",
+          "sizeAggregation": "Sum",
+          "legendMetric": "ThreatCount",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "ThreatCount",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "name": "threat-world-map"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperASNReputation_CL\n| where isnotempty(asnName)\n| top 10 by maxThreatScore desc\n| project asnName, reputationScore, maxThreatScore, avgThreatScore, prefixCount, hasThreateningPrefixes\n| order by maxThreatScore desc",
+        "size": 0,
+        "title": "ASN Reputation Heatmap (Top 10 by Max Threat Score)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "maxThreatScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "avgThreatScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "greenRed"
+              }
+            },
+            {
+              "columnMatch": "reputationScore",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "asn-reputation-heatmap"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperThreatIntel_CL\n| where isThreat == true\n| summarize Malware = countif(isMalware == true), C2 = countif(isC2 == true), Phishing = countif(isPhishing == true), Tor = countif(isTor == true), Spam = countif(isSpam == true), Bruteforce = countif(isBruteforce == true), Scanner = countif(isScanner == true), Anonymizer = countif(isAnonymizer == true)\n| evaluate narrow()\n| project Category = Column, Count = Value",
+        "size": 0,
+        "title": "Threat Category Distribution",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "name": "threat-category-distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperThreatIntel_CL\n| where isnotempty(threatScore)\n| extend ScoreBucket = case(\n    threatScore < 10, '0-9',\n    threatScore < 20, '10-19',\n    threatScore < 30, '20-29',\n    threatScore < 40, '30-39',\n    threatScore < 50, '40-49',\n    threatScore < 60, '50-59',\n    threatScore < 70, '60-69',\n    threatScore < 80, '70-79',\n    threatScore < 90, '80-89',\n    '90-100')\n| summarize IndicatorCount = count() by ScoreBucket\n| order by ScoreBucket asc",
+        "size": 0,
+        "title": "Threat Score Distribution Histogram",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "threat-score-histogram"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperThreatIntel_CL\n| where isThreat == true\n| where isnotempty(lastSeen)\n| summarize NewIndicators = dcount(indicator) by bin(lastSeen, 1d)\n| order by lastSeen asc",
+        "size": 0,
+        "title": "Time-Series Trend of New Threat Indicators",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "threat-trend-timeseries"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "WhisperThreatIntel_CL\n| where isThreat == true\n| where isnotempty(feedNames)\n| mv-expand FeedName = split(feedNames, ',')\n| extend FeedName = tostring(trim(' ', tostring(FeedName)))\n| where isnotempty(FeedName)\n| summarize IndicatorCount = dcount(indicator) by FeedName\n| top 15 by IndicatorCount desc",
+        "size": 0,
+        "title": "Top Threat Feed Sources by Indicator Count",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "top-feed-sources"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-InfrastructureThreatLandscapeWorkbook"
+}
