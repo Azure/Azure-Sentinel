@@ -1,0 +1,57 @@
+id: 9c275139-b554-58f1-b390-8520b10e54ad
+name: Whisper Security - SPF Record Unauthorized Include Detection
+description: |
+  Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks.
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1566
+query: |
+  // MITRE ATT&CK: T1566.001 - Phishing: Spearphishing Attachment
+  // Tactic: Initial Access
+  // Detects unauthorized SPF include directives not seen in previous scans
+  // Configure authorized_spf_includes with your organization's known SPF providers
+  let authorized_spf_includes = dynamic(["_spf.google.com", "spf.protection.outlook.com", "amazonses.com", "sendgrid.net", "mailgun.org"]);
+  let previousIncludes = WhisperInfraContext_CL
+      | where TimeGenerated between (ago(1d) .. ago(1h))
+      | where isnotempty(spfIncludes)
+      | mv-expand SpfInclude = split(spfIncludes, ",")
+      | extend SpfInclude = tostring(SpfInclude)
+      | summarize PreviousIncludes = make_set(SpfInclude) by indicator;
+  let currentIncludes = WhisperInfraContext_CL
+      | where TimeGenerated > ago(1h)
+      | where isnotempty(spfIncludes)
+      | mv-expand SpfInclude = split(spfIncludes, ",")
+      | extend SpfInclude = tostring(SpfInclude)
+      | project indicator, SpfInclude, TimeGenerated;
+  currentIncludes
+      | join kind=leftanti (previousIncludes | mv-expand PrevInclude = PreviousIncludes | extend SpfInclude = tostring(PrevInclude) | project indicator, SpfInclude) on indicator, SpfInclude
+      | where SpfInclude !in (authorized_spf_includes)
+      | project TimeGenerated, DnsDomain = indicator, UnauthorizedInclude = SpfInclude
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: DnsDomain
+customDetails:
+  Domain: DnsDomain
+  UnauthorizedInclude: UnauthorizedInclude
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

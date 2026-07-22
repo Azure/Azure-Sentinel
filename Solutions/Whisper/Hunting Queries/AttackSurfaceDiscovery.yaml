@@ -1,0 +1,46 @@
+id: 507b09cf-ef98-56d5-9d56-b23ae8e1df94
+name: Whisper - Attack Surface Discovery
+description: |
+  Enumerates all external IPs, domains, and ASNs from WhisperInfraContext_CL cross-referenced with threat scores from WhisperThreatIntel_CL, producing a prioritized risk inventory.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+  - WhisperThreatIntel_CL
+tactics:
+- Discovery
+relevantTechniques:
+- T1046
+query: |
+  // MITRE ATT&CK: T1046 - Network Service Discovery
+  // Tactic: Discovery
+  // Enumerates external attack surface by joining infrastructure context
+  // with threat intelligence scores to produce a prioritized risk inventory.
+  let lookback = 30d;
+  WhisperInfraContext_CL
+  | where TimeGenerated > ago(lookback)
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | join kind=leftouter (
+      WhisperThreatIntel_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | project indicator, threatScore, threatLevel, feedNames
+  ) on indicator
+  | project
+      indicator,
+      indicatorType,
+      asns,
+      asnNames,
+      countries,
+      cohostedCount,
+      domainAge,
+      threatScore = coalesce(threatScore, real(0)),
+      threatLevel = coalesce(threatLevel, "unknown"),
+      feedNames = coalesce(feedNames, "none")
+  | sort by threatScore desc
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: indicator
+version: 1.0.0
