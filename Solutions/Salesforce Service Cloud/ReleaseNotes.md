@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.4.1       | 22-07-2026                     | Added SecureConnectionStart column to **Salesforce event log file CCP data connector** table schema and DCR transform. |
 | 3.4.0       | 26-05-2026                     | Added new **Real time event monitoring data connector** with 19 event types |
 | 3.3.0       | 07-05-2026                     | Add new **Salesforce Audit logs CCF Data Connector** to pull **SetupAuditTrails** and **LoginHistory** logs. |
 | 3.2.0       | 01-05-2026                     | Updated **CCF Data Connector** to include new V3 table that includes additional fields and support for multiple domains. |
