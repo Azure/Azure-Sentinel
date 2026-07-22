@@ -1,0 +1,57 @@
+id: ab71059a-8f31-52a9-8f78-82bc80b857cf
+name: Whisper - Domain to ASN Migration
+description: |
+  Detects domains that changed hosting ASN over time, indicating potential threat actor infrastructure migration.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+  - WhisperThreatIntel_CL
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583.001
+query: |
+  // MITRE ATT&CK: T1583.001 - Resource Development: Acquire Infrastructure: Domains
+  // Tactic: ResourceDevelopment
+  // Detects domains that changed hosting ASN between time windows,
+  // indicating potential threat actor infrastructure migration.
+  let lookback = 30d;
+  let recentWindow = 7d;
+  let olderRecords = WhisperInfraContext_CL
+  | where TimeGenerated > ago(lookback) and TimeGenerated <= ago(recentWindow)
+  | where isnotempty(asns)
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | project indicator, oldAsns = asns, oldAsnNames = asnNames, oldTimestamp = TimeGenerated;
+  let recentRecords = WhisperInfraContext_CL
+  | where TimeGenerated > ago(recentWindow)
+  | where isnotempty(asns)
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | project indicator, newAsns = asns, newAsnNames = asnNames, newTimestamp = TimeGenerated;
+  olderRecords
+  | join kind=inner (recentRecords) on indicator
+  | where oldAsns != newAsns
+  | join kind=leftouter (
+      WhisperThreatIntel_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | project indicator, threatScore, threatLevel, isThreat
+  ) on indicator
+  | project
+      indicator,
+      oldAsns,
+      oldAsnNames,
+      oldTimestamp,
+      newAsns,
+      newAsnNames,
+      newTimestamp,
+      threatScore = coalesce(threatScore, real(0)),
+      threatLevel = coalesce(threatLevel, "unknown"),
+      isThreat = coalesce(isThreat, false)
+  | sort by threatScore desc
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: indicator
+version: 1.0.0
