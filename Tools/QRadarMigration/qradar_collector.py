@@ -4132,7 +4132,7 @@ def calc_qradar_version(row, context):
     version = context.get('qradar_version', 'UNKNOWN')
     if not version:
         return 'UNKNOWN'
-    return str(version)
+    return text_type(version)
 
 
 def calc_custom_properties(row, context):
@@ -5373,6 +5373,7 @@ class UCMCSVExtensionHandler(BaseHandler):
             logger.warning(
                 'Unknown dep_type in LST test: {0} (rule {1})'.format(
                     dep_type, rule_uuid))
+            return None
 
         logger.debug('LST test %s values=%s -> type_ids=%s',
                      dep_type, values, result)
