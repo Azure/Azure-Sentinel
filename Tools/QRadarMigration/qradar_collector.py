@@ -140,7 +140,11 @@ STREAMING_THRESHOLD_BYTES = 50 * 1024 * 1024
 # ---------------------------------------------------------------------------
 
 class CriticalPhaseError(Exception):
-    """Raised when a phase fails irrecoverably. Aborts pipeline."""
+    """Raised for a phase failure governed by handler delivery criticality.
+
+    The orchestrator aborts only when the raising handler has
+    ``delivery_critical`` set to ``True``.
+    """
 
     def __init__(self, phase, message, cause=None):
         self.phase = phase
@@ -3529,14 +3533,16 @@ class DependencyExpansionHandler(BaseHandler):
 
     def _sort_identifier_values(self, values):
         """Sort mixed numeric/string identifiers deterministically."""
-        return sorted(
-            values,
-            key=lambda value: (
-                0, int(text_type(value))
-            ) if text_type(value).isdigit() else (
-                1, text_type(value)
-            )
-        )
+        def sort_key(value):
+            value_text = text_type(value)
+            if value_text.isdigit():
+                try:
+                    return (0, int(value_text))
+                except (ValueError, TypeError, OverflowError):
+                    pass
+            return (1, value_text)
+
+        return sorted(values, key=sort_key)
 
     def _build_expanded_rule(self, rule, aggregated, chain_uuids,
                              rule_dict, lookups):
@@ -4121,7 +4127,7 @@ def calc_qradar_version(row, context):
         context: dict — enrichment context.
 
     Returns:
-        str: Version string (e.g., '7.5.0 Update Package 7') or ''.
+        str: Version string (e.g., '7.5.0 Update Package 7') or 'UNKNOWN'.
     """
     version = context.get('qradar_version', 'UNKNOWN')
     if not version:
@@ -4468,9 +4474,13 @@ class UCMCSVExtensionHandler(BaseHandler):
 
         Args:
             context: PipelineContext instance.
+            enrichment_ctx: Optional enrichment dictionary to extend. When
+                supplied, it is mutated in place. When omitted, a minimum
+                enrichment dictionary is created.
 
         Returns:
-            dict: Enrichment context with all lookup tables.
+            dict: The supplied or newly created enrichment dictionary after
+                optional lookup tables have been added.
         """
         logger = logging.getLogger(__name__)
         logger.info('Building enrichment context')
