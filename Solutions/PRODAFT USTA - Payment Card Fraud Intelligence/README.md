@@ -1,8 +1,8 @@
-# PRODAFT USTA - Payment Card Fraud Intelligence — Microsoft Sentinel Solution
+# PRODAFT USTA - Payment Card Fraud Intelligence - Microsoft Sentinel Solution
 
 Ingests **compromised payment cards** from the PRODAFT USTA Payment Card Fraud
 Intelligence API into Microsoft Sentinel via a codeless (Codeless Connector Framework)
-data connector. The full card number (PAN) is never stored — the DCR transform drops it at
+data connector. The full card number (PAN) is never stored - the DCR transform drops it at
 ingestion and retains only the BIN (first 6), the last 4 digits, the card brand, and the
 length.
 
@@ -10,12 +10,12 @@ length.
 
 | Content | Items |
 |---|---|
-| Data connector (CCF) | `Data Connectors/PRODAFTUstaPCFI_ccp/` — ConnectorDefinition, PollingConfig, DCR, Table |
-| Parser | `PRODAFTUstaCompromisedCards` — query-time dedup (one row per `TicketId`) |
+| Data connector (CCF) | `Data Connectors/PRODAFTUstaPCFI_ccp/` - ConnectorDefinition, PollingConfig, DCR, Table |
+| Parser | `PRODAFTUstaCompromisedCards` - query-time dedup (one row per `TicketId`) |
 | Analytic rules | Payment card exposed; Non-expired payment card exposed |
 | Hunting query | Payment card exposure by company |
 | Workbook | `PRODAFTUstaPCFIOverview` |
-| Playbook | `PRODAFTUstaPCFI-Backfill` — on-demand historical backfill |
+| Playbook | `PRODAFTUstaPCFI-Backfill` - on-demand historical backfill |
 
 ## Deployment
 
@@ -26,7 +26,7 @@ length.
 2. Open **Configuration → Data connectors → PRODAFT USTA - Payment Card Fraud Intelligence
    (via Codeless Connector Framework)**, enter the USTA base URL and your API key, and
    select **Connect**. The connector polls every minute going forward.
-3. To load history, deploy and run the **PRODAFTUstaPCFI-Backfill** playbook once — see
+3. To load history, deploy and run the **PRODAFTUstaPCFI-Backfill** playbook once - see
    [Playbooks/PRODAFTUstaPCFI-Backfill/readme.md](Playbooks/PRODAFTUstaPCFI-Backfill/readme.md).
 
 ### Via scripts (this repository)
@@ -38,7 +38,7 @@ length.
    PowerShell 7.1+, Node.js, and the YAML module (`pwsh -Command 'Install-Module powershell-yaml -Scope CurrentUser'`).
 
    ```bash
-   # from the repository root — pass the ABSOLUTE path to this solution's Data folder
+   # from the repository root - pass the ABSOLUTE path to this solution's Data folder
    # (the tool rejects paths that start with "Solutions/")
    pwsh Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 \
      -SolutionDataFolderPath "$(pwd)/Solutions/PRODAFT USTA - Payment Card Fraud Intelligence/Data" \
@@ -50,9 +50,9 @@ length.
    the offer up in the Content Hub catalog and, for unpublished solutions, falls back to
    3.0.0. Package versions must be **3.x**: the tool aborts on 1.x versions and 2.x
    builds only the deprecated templateSpec format, so the Content Hub packaging format
-   (`contentSchemaVersion` 3) requires 3.x — which is why the initial release is 3.0.0.
+   (`contentSchemaVersion` 3) requires 3.x - which is why the initial release is 3.0.0.
 
-2. Deploy from scratch — creates the resource group and the Log Analytics workspace,
+2. Deploy from scratch - creates the resource group and the Log Analytics workspace,
    onboards the workspace to Microsoft Sentinel, then deploys the solution package into it:
 
    ```bash
@@ -98,5 +98,5 @@ length.
   not trigger an alert storm.
 * Log Analytics is append-only; the same `TicketId` can arrive more than once (backfill
   overlapping the poller, or a ticket re-fetched after a status change). Query the
-  **`PRODAFTUstaCompromisedCards`** parser function instead of the raw `_CL` table —
+  **`PRODAFTUstaCompromisedCards`** parser function instead of the raw `_CL` table -
   it returns exactly one row per ticket (the most recently ingested copy).

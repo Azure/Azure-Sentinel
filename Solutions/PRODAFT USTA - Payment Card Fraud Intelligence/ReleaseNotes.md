@@ -1,4 +1,4 @@
-# PRODAFT USTA - Payment Card Fraud Intelligence — Release Notes
+# PRODAFT USTA - Payment Card Fraud Intelligence - Release Notes
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------|
