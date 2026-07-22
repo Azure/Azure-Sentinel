@@ -8,7 +8,7 @@ This documentation is provided as-is for the WebSocket kind connector, considere
 
 ## Request Parameters - WebSocket Specific
 
-The following parameters are specific to WebSocket not covered in the RestApiPoller Request configuration:
+The following parameters are specific to WebSocket and not covered in the RestApiPoller Request configuration:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -19,10 +19,10 @@ For all other parameters in the `Request` section, refer to the RestApiPoller Co
 
 <br>
 
-## Handler Behavior - WebSocket Specific 
+## Handler Behavior - WebSocket Specific
 
 ### Scheme Enforcement
-- Use the websocket protocol `wss://` only. This is required for the parameter `request.apiEndpoint`
+- Use the WebSocket protocol `wss://` only. This is required for the parameter `request.apiEndpoint`
 
 ### Idle Timeout
 | Timeout | Value | Behavior |
