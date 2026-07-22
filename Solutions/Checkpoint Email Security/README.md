@@ -8,12 +8,10 @@ The Check Point Email Security (Harmony Email & Collaboration) solution for Micr
 
 The connector ingests data into four custom tables in your Log Analytics workspace:
 
-| Table Name | Description |
-|------------|-------------|
-| `CheckPointEmailSecurityEvents_CL` | Security events including phishing, malware, DLP, and other threat detections with severity levels, confidence indicators, and remediation actions |
-| `CheckPointEmailSecAntiPhishingExceptions_CL` | Anti-phishing whitelist and exception rules configured in your tenant |
-| `CheckPointEmailSecuritySpamExceptions_CL` | Spam whitelist and exception rules configured in your tenant |
-| `CheckPointEmailSecurityAuditLogs_CL` | Administrative actions and system events including login/logout, configuration changes, and other audit trail data |
+- Security events including phishing, malware, DLP, and other threat detections with severity levels, confidence indicators, and remediation actions
+- Anti-phishing whitelist and exception rules configured in your tenant
+- Spam whitelist and exception rules configured in your tenant
+- Administrative actions and system events including login/logout, configuration changes, and other audit trail data
 
 ### Key Fields in Security Events
 
