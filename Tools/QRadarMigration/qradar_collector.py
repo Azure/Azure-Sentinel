@@ -4,12 +4,14 @@
 QRadar Data Collector — collects, transforms, and exports QRadar
 rule and log-source metadata for migration analysis.
 
+Version: 0.4.2
+
 Usage:
     python qradar_collector.py --help
 """
 from __future__ import absolute_import, print_function, unicode_literals, division
 
-VERSION = '0.3.2'
+VERSION = '0.4.2'
 
 import argparse
 import base64
@@ -114,6 +116,9 @@ CALCULATED_COLUMNS = [
     'QRadar Version',
     'Version',
 ]
+
+# Marker value for the summary row appended after all rule rows
+SUMMARY_ROW_MARKER = '__ALL_ACTIVE_DATA_SOURCES__'
 
 # Log sources report columns (order matters)
 LOG_SOURCE_REPORT_COLUMNS = [
@@ -1190,6 +1195,7 @@ class BaseHandler(object):
     Subclasses MUST document input/output context attributes in docstring.
     """
     __slots__ = ('name', 'phase_number')
+    delivery_critical = True
 
     def __init__(self, name, phase_number):
         self.name = name
@@ -1211,6 +1217,7 @@ class BaseHandler(object):
 class CredentialCleanupHandler(BaseHandler):
     """Clear API credentials from memory after the last API phase."""
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         context.clear_credentials()
@@ -1444,6 +1451,7 @@ class MitreMappingHandler(BaseHandler):
     Failure mode: NON-CRITICAL — creates stub on failure.
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         if context.cache_dir:
@@ -1536,9 +1544,11 @@ class ReferenceDataHandler(BaseHandler):
     Files produced:
         One JSON file per endpoint in {temp_dir}/
 
-    Failure mode: CRITICAL — aborts pipeline on any endpoint failure.
+    Failure mode: NON-CRITICAL — enrichment failures are recorded and the
+                  minimum UCM delivery continues.
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         if context.cache_dir:
@@ -1629,9 +1639,11 @@ class RuleIdHandler(BaseHandler):
     Files produced:
         {temp_dir}/rule_ids.json, {temp_dir}/building_block_ids.json
 
-    Failure mode: CRITICAL — aborts pipeline.
+    Failure mode: NON-CRITICAL — enrichment failures are recorded and the
+                  minimum UCM delivery continues.
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         if context.cache_dir:
@@ -1712,6 +1724,7 @@ class RuleExportHandler(BaseHandler):
     Failure mode: MIXED — per-batch non-critical.
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         if context.cache_dir:
@@ -1836,6 +1849,7 @@ class XmlDecodeHandler(BaseHandler):
                   NON-CRITICAL for individual skip/error (ErrorCounter).
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         context.require('temp_dir', 'export_zips')
@@ -2494,6 +2508,7 @@ class ReferenceExtractionHandler(BaseHandler):
                   NON-CRITICAL for individual rule skip/error (ErrorCounter).
     """
     __slots__ = ()
+    delivery_critical = False
     
     def execute(self, context):
         context.require('decoded_rules', 'temp_dir')
@@ -2892,6 +2907,7 @@ class DependencyExpansionHandler(BaseHandler):
                   NON-CRITICAL for missing reference data files.
     """
     __slots__ = ()
+    delivery_critical = False
 
     def execute(self, context):
         """Execute Phase 8: Dependency Expansion."""
@@ -2924,17 +2940,43 @@ class DependencyExpansionHandler(BaseHandler):
         bb_count = 0
 
         for uuid, rule in rule_dict.items():
-            # 4a. Resolve building block chain
-            chain_uuids = self._resolve_building_block_chain(uuid, rule_dict)
+            if not isinstance(rule, dict):
+                logger.warning(
+                    'Skipped malformed rule record for UUID {0}'.format(uuid)
+                )
+                if context.error_counter:
+                    context.error_counter.increment(
+                        'Dependency Expansion',
+                        'Malformed rule record: {0}'.format(uuid)
+                    )
+                continue
 
-            # 4b. Aggregate dependencies
-            aggregated = self._aggregate_dependencies(rule, chain_uuids,
-                                                      rule_dict)
+            try:
+                # 4a. Resolve building block chain
+                chain_uuids = self._resolve_building_block_chain(
+                    uuid, rule_dict
+                )
 
-            # 4c. Build expanded rule
-            expanded_rule = self._build_expanded_rule(
-                rule, aggregated, chain_uuids, rule_dict, lookups
-            )
+                # 4b. Aggregate dependencies
+                aggregated = self._aggregate_dependencies(
+                    rule, chain_uuids, rule_dict
+                )
+
+                # 4c. Build expanded rule
+                expanded_rule = self._build_expanded_rule(
+                    rule, aggregated, chain_uuids, rule_dict, lookups
+                )
+            except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                logger.warning(
+                    'Skipped malformed rule {0} during dependency '
+                    'expansion: {1}'.format(uuid, exc)
+                )
+                if context.error_counter:
+                    context.error_counter.increment(
+                        'Dependency Expansion',
+                        'Rule {0}: {1}'.format(uuid, text_type(exc))
+                    )
+                continue
 
             results[uuid] = expanded_rule
 
@@ -3025,9 +3067,27 @@ class DependencyExpansionHandler(BaseHandler):
             )
             return {}
 
+        if not isinstance(records, list):
+            logger.warning(
+                'Expected array in regex_properties.json, got {0}'.format(
+                    type(records).__name__
+                )
+            )
+            return {}
+
         lookup = {}
         for record in records:
-            name = record.get('name', '')
+            if not isinstance(record, dict):
+                logger.debug('Skipped malformed regex property record')
+                continue
+            name = record.get('name')
+            if name is None:
+                logger.debug('Skipped regex property with null name')
+                continue
+            name = text_type(name).strip()
+            if not name:
+                logger.debug('Skipped regex property with empty name')
+                continue
             key = name.lower()
             if key in lookup:
                 logger.warning(
@@ -3138,7 +3198,11 @@ class DependencyExpansionHandler(BaseHandler):
             try:
                 for item in iter_json_array(filepath):
                     try:
-                        lookup[str(item[id_field])] = item[name_field]
+                        item_id = item[id_field]
+                        item_name = item[name_field]
+                        if item_id is None or item_name is None:
+                            raise TypeError('null lookup field')
+                        lookup[str(item_id)] = text_type(item_name)
                     except (KeyError, TypeError):
                         logger.debug('Skipped malformed record in %s', filepath)
                         continue
@@ -3163,7 +3227,11 @@ class DependencyExpansionHandler(BaseHandler):
 
                 for item in data:
                     try:
-                        lookup[str(item[id_field])] = item[name_field]
+                        item_id = item[id_field]
+                        item_name = item[name_field]
+                        if item_id is None or item_name is None:
+                            raise TypeError('null lookup field')
+                        lookup[str(item_id)] = text_type(item_name)
                     except (KeyError, TypeError):
                         logger.debug('Skipped malformed record in %s', filepath)
                         continue
@@ -3209,6 +3277,9 @@ class DependencyExpansionHandler(BaseHandler):
                     cat_id = str(low_cat['id'])
                     high_id = str(low_cat.get('high_level_category_id', ''))
                     low_name = low_cat['name']
+                    if low_name is None:
+                        raise TypeError('null category name')
+                    low_name = text_type(low_name)
                 except (KeyError, TypeError):
                     logger.debug('Skipped malformed low-level category record')
                     continue
@@ -3255,9 +3326,16 @@ class DependencyExpansionHandler(BaseHandler):
 
             for source in log_sources:
                 try:
-                    device_id = str(source['id'])
-                    device_lookup[device_id] = source['name']
-                    type_lookup[device_id] = source['type_id']
+                    device_id_value = source['id']
+                    if device_id_value is None:
+                        raise TypeError('null log source ID')
+                    device_id = str(device_id_value)
+                    source_name = source.get('name')
+                    if source_name is not None:
+                        device_lookup[device_id] = text_type(source_name)
+                    type_id = source.get('type_id')
+                    if type_id is not None:
+                        type_lookup[device_id] = type_id
                 except (KeyError, TypeError):
                     logger.debug('Skipped malformed log source record')
                     continue
@@ -3289,10 +3367,26 @@ class DependencyExpansionHandler(BaseHandler):
             with io.open(rule_groups_file, 'r', encoding='utf-8') as f:
                 groups = json.load(f)
 
+            if not isinstance(groups, list):
+                logger.warning('Expected array in rule_groups.json')
+                return {}
+
             for group in groups:
                 try:
-                    group_name = group['name']
-                    for rule_id in group.get('child_items', []):
+                    if not isinstance(group, dict):
+                        raise TypeError('rule group is not an object')
+                    group_name = group.get('name')
+                    if group_name is None:
+                        raise TypeError('null rule group name')
+                    group_name = text_type(group_name).strip()
+                    if not group_name:
+                        raise TypeError('empty rule group name')
+                    child_items = group.get('child_items', [])
+                    if not isinstance(child_items, (list, tuple)):
+                        raise TypeError('child_items is not an array')
+                    for rule_id in child_items:
+                        if rule_id is None:
+                            continue
                         groups_by_rule[str(rule_id)].append(group_name)
                 except (KeyError, TypeError):
                     logger.debug('Skipped malformed rule group record')
@@ -3343,6 +3437,13 @@ class DependencyExpansionHandler(BaseHandler):
 
         visited.add(rule_uuid)
         rule = rule_dict[rule_uuid]
+        if not isinstance(rule, dict):
+            logger.debug(
+                'Malformed rule record in building block chain: {0}'.format(
+                    rule_uuid
+                )
+            )
+            return []
 
         # Exclude disabled building blocks
         if not rule.get('enabled', True):
@@ -3354,7 +3455,12 @@ class DependencyExpansionHandler(BaseHandler):
             return []
 
         chain = []
-        for ref_uuid in rule.get('rule_uuid_refs', []):
+        ref_uuids = rule.get('rule_uuid_refs', [])
+        if not isinstance(ref_uuids, (list, tuple, set)):
+            ref_uuids = []
+        for ref_uuid in ref_uuids:
+            if ref_uuid is None:
+                continue
             if ref_uuid not in visited:
                 chain.append(ref_uuid)
                 child_chain = self._resolve_building_block_chain(
@@ -3382,14 +3488,55 @@ class DependencyExpansionHandler(BaseHandler):
             if bb_uuid not in rule_dict:
                 continue
             bb = rule_dict[bb_uuid]
+            if not isinstance(bb, dict):
+                continue
             for dep_type in DEPENDENCY_TYPES:
-                aggregated[dep_type].update(bb.get(dep_type, []))
+                aggregated[dep_type].update(
+                    self._normalise_dependency_values(
+                        bb.get(dep_type, [])
+                    )
+                )
 
         # Merge rule's own dependencies
         for dep_type in DEPENDENCY_TYPES:
-            aggregated[dep_type].update(rule.get(dep_type, []))
+            aggregated[dep_type].update(
+                self._normalise_dependency_values(
+                    rule.get(dep_type, [])
+                )
+            )
 
         return aggregated
+
+    def _normalise_dependency_values(self, values):
+        """Return hashable, non-null dependency values as a list."""
+        logger = logging.getLogger(__name__)
+        if values is None:
+            return []
+        if not isinstance(values, (list, tuple, set)):
+            values = [values]
+
+        normalised = []
+        for value in values:
+            if value is None:
+                continue
+            try:
+                hash(value)
+            except TypeError:
+                logger.debug('Skipped unhashable dependency value')
+                continue
+            normalised.append(value)
+        return normalised
+
+    def _sort_identifier_values(self, values):
+        """Sort mixed numeric/string identifiers deterministically."""
+        return sorted(
+            values,
+            key=lambda value: (
+                0, int(text_type(value))
+            ) if text_type(value).isdigit() else (
+                1, text_type(value)
+            )
+        )
 
     def _build_expanded_rule(self, rule, aggregated, chain_uuids,
                              rule_dict, lookups):
@@ -3448,7 +3595,9 @@ class DependencyExpansionHandler(BaseHandler):
             aggregated['device_group_ids'], lookups['log_source_groups'],
             'log source group'
         )
-        expanded['device_group_ids'] = sorted(list(aggregated['device_group_ids']))
+        expanded['device_group_ids'] = self._sort_identifier_values(
+            aggregated['device_group_ids']
+        )
 
         # Expanded dependencies — paired arrays (sorted by numeric ID)
         qid_ids, expanded_qids = self._resolve_paired_ids_to_names(
@@ -3480,6 +3629,9 @@ class DependencyExpansionHandler(BaseHandler):
         all_props = aggregated.get('event_properties', set())
         custom_properties = []
         for prop_name in all_props:
+            if prop_name is None:
+                continue
+            prop_name = text_type(prop_name)
             if prop_name.lower() in regex_props:
                 custom_properties.append(prop_name)
         expanded['expanded_custom_properties'] = sorted(custom_properties)
@@ -3675,17 +3827,17 @@ class DependencyExpansionHandler(BaseHandler):
 # ---------------------------------------------------------------------------
 
 def format_bracket_list(items):
-    """Format a pre-sorted list as '[item1, item2, ...]' or '[]'.
+    """Format a pre-sorted list as '[item1 | item2 | ...]' or '[]'.
 
     Args:
         items: list of str or int values, pre-sorted by the caller.
 
     Returns:
-        str: Bracket-formatted string with comma-space separators.
+        str: Bracket-formatted string with pipe-space separators.
     """
     if not items:
         return '[]'
-    return '[{0}]'.format(', '.join(str(i) for i in items))
+    return '[{0}]'.format(' | '.join(str(i) for i in items))
 
 
 def format_sorted_bracket_list(items, sort_key=None):
@@ -3697,7 +3849,7 @@ def format_sorted_bracket_list(items, sort_key=None):
                   If None, uses default sorted() behaviour.
 
     Returns:
-        str: '[sorted_item1, sorted_item2]' or '[]'.
+        str: '[sorted_item1 | sorted_item2]' or '[]'.
     """
     if not items:
         return '[]'
@@ -3971,9 +4123,9 @@ def calc_qradar_version(row, context):
     Returns:
         str: Version string (e.g., '7.5.0 Update Package 7') or ''.
     """
-    version = context.get('qradar_version', '')
-    if version is None:
-        return ''
+    version = context.get('qradar_version', 'UNKNOWN')
+    if not version:
+        return 'UNKNOWN'
     return str(version)
 
 
@@ -4040,7 +4192,8 @@ COLUMN_CALCULATORS = [
     {'name': 'Extensions', 'calculator': calc_extensions, 'default': '[]'},
     {'name': 'MITRE Tactics', 'calculator': calc_mitre_tactics, 'default': '[]'},
     {'name': 'MITRE Techniques', 'calculator': calc_mitre_techniques, 'default': '[]'},
-    {'name': 'QRadar Version', 'calculator': calc_qradar_version, 'default': ''},
+    {'name': 'QRadar Version', 'calculator': calc_qradar_version,
+     'default': 'UNKNOWN'},
     {'name': 'Version', 'calculator': calc_version, 'default': ''},
 ]
 
@@ -4105,8 +4258,7 @@ class UCMCSVExtensionHandler(BaseHandler):
         start_time = time.time()
 
         # 1. Validate required context attributes
-        context.require('expanded_rules', 'ucm_csv_path',
-                        'temp_dir', 'output_dir', 'timestamp')
+        context.require('ucm_csv_path', 'temp_dir', 'output_dir', 'timestamp')
 
         # 2. Validate output directory writability
         if not os.path.isdir(context.output_dir):
@@ -4128,15 +4280,24 @@ class UCMCSVExtensionHandler(BaseHandler):
                 cause=exc
             )
 
-        # 3. Build enrichment context
-        enrichment_ctx = self._build_enrichment_context(context)
+        # 3. Build enrichment context. Any enrichment failure must preserve
+        # the minimum UCM deliverable.
+        enrichment_ctx = self._build_minimum_enrichment_context(context)
+        try:
+            self._build_enrichment_context(context, enrichment_ctx)
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Enrichment context', exc
+            )
 
         # 4. Read UCM CSV
         rows, fieldnames = self._read_ucm_csv(context.ucm_csv_path)
         logger.info('Read {0} rows from UCM CSV'.format(len(rows)))
 
         # 5. Process each row through calculators
-        extended_fieldnames = list(fieldnames) + list(CALCULATED_COLUMNS)
+        extended_fieldnames = list(fieldnames) + [
+            name for name in CALCULATED_COLUMNS if name not in fieldnames
+        ]
         processed_rows = []
         rules_with_sources = 0
 
@@ -4172,6 +4333,29 @@ class UCMCSVExtensionHandler(BaseHandler):
                 logger.info('Processed {0}/{1} rows'.format(
                     idx + 1, len(rows)))
 
+        # 5b. Build and append summary row with all active LST names
+        type_id_to_name = enrichment_ctx.get('type_id_to_name', {})
+        active_type_ids = enrichment_ctx.get('active_type_ids', set())
+        active_lst_names = [
+            text_type(type_id_to_name[str(tid)])
+            for tid in active_type_ids
+            if str(tid) in type_id_to_name
+            and type_id_to_name[str(tid)] is not None
+        ]
+        summary_row = {col: '' for col in extended_fieldnames}
+        summary_row['Rule name'] = SUMMARY_ROW_MARKER
+        summary_row['Is rule'] = 'FALSE'
+        summary_row['Rule enabled'] = 'FALSE'
+        summary_row['Rule installed'] = 'FALSE'
+        summary_row['Rule ID'] = SUMMARY_ROW_MARKER
+        summary_row['uuid'] = SUMMARY_ROW_MARKER
+        summary_row['Log Source Types'] = format_sorted_bracket_list(
+            active_lst_names)
+        summary_row['QRadar Version'] = calc_qradar_version(
+            summary_row, enrichment_ctx)
+        summary_row['Version'] = calc_version(summary_row, enrichment_ctx)
+        processed_rows.append(summary_row)
+
         # 6. Write extended CSV
         output_filename = 'qradar_rules_{0}.csv'.format(context.timestamp)
         output_path = os.path.join(context.output_dir, output_filename)
@@ -4182,10 +4366,18 @@ class UCMCSVExtensionHandler(BaseHandler):
 
         # 7. Conditionally generate log sources report
         if context.log_sources_flag:
-            ls_path = self._generate_log_sources_report(context,
-                                                         enrichment_ctx)
-            context.log_sources_csv = ls_path
-            logger.info('Log sources report written: {0}'.format(ls_path))
+            try:
+                ls_path = self._generate_log_sources_report(
+                    context, enrichment_ctx
+                )
+                context.log_sources_csv = ls_path
+                logger.info(
+                    'Log sources report written: {0}'.format(ls_path)
+                )
+            except Exception as exc:
+                self._record_enrichment_failure(
+                    context, 'Log sources report', exc
+                )
 
         # 8. Log completion summary
         elapsed = time.time() - start_time
@@ -4194,7 +4386,7 @@ class UCMCSVExtensionHandler(BaseHandler):
             len(v) for v in enrichment_ctx.get(
                 'type_id_to_instances', {}).values()
         )
-        total_rules = len(processed_rows)
+        total_rules = len(rows)  # excludes summary row
         pct = (100.0 * rules_with_sources / total_rules
                if total_rules > 0 else 0.0)
 
@@ -4207,199 +4399,324 @@ class UCMCSVExtensionHandler(BaseHandler):
         logger.info('  Elapsed time: {0:.1f}s'.format(elapsed))
         logger.info('  Output: {0}'.format(output_path))
 
-    def _build_enrichment_context(self, context):
-        """Build all lookup tables and mappings once for reuse across rows.
+    def _record_enrichment_failure(self, context, component, exc):
+        """Record an optional enrichment failure without aborting output."""
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            '{0} unavailable: {1}. Continuing with default values.'.format(
+                component, exc
+            )
+        )
+        if context.error_counter:
+            context.error_counter.increment(component, text_type(exc))
+
+    def _load_qradar_version(self, data_dir):
+        """Load the QRadar version, returning UNKNOWN when unavailable."""
+        logger = logging.getLogger(__name__)
+        version_path = os.path.join(data_dir, 'qradar_version.json')
+        if not os.path.exists(version_path):
+            logger.warning(
+                'Missing optional file: qradar_version.json; '
+                'using UNKNOWN'
+            )
+            return 'UNKNOWN'
+
+        try:
+            with io.open(version_path, 'r', encoding='utf-8') as f:
+                version_data = json.load(f)
+            if isinstance(version_data, dict):
+                version = (
+                    version_data.get('release_name')
+                    or version_data.get('external_version')
+                )
+            elif isinstance(version_data, string_types):
+                version = version_data
+            else:
+                version = None
+            return text_type(version) if version else 'UNKNOWN'
+        except (ValueError, IOError, TypeError) as exc:
+            logger.warning(
+                'Failed to read qradar_version.json: {0}; '
+                'using UNKNOWN'.format(exc)
+            )
+            return 'UNKNOWN'
+
+    def _build_minimum_enrichment_context(self, context):
+        """Build defaults required to write the minimum rules CSV."""
+        data_dir = context.cache_dir or context.temp_dir
+        return {
+            'uuid_to_expanded': {},
+            'uuid_to_log_source_types': {},
+            'uuid_to_lst_status': {},
+            'type_id_to_instances': {},
+            'type_id_to_name': {},
+            'active_type_ids': set(),
+            'uuid_to_extensions': {},
+            'uuid_to_extension_name': {},
+            'id_to_mitre': {},
+            'mitre_error': False,
+            'qradar_version': self._load_qradar_version(data_dir),
+            'extension_by_id': {},
+            'group_id_to_name': {},
+            'group_id_to_group': {},
+            'log_sources': [],
+            'high_to_low_ids': {},
+        }
+
+    def _build_enrichment_context(self, context, enrichment_ctx=None):
+        """Build optional lookup tables without risking minimum delivery.
 
         Args:
             context: PipelineContext instance.
 
         Returns:
             dict: Enrichment context with all lookup tables.
-
-        Raises:
-            CriticalPhaseError: If expanded_dependencies.json is missing
-                                or unparseable.
         """
         logger = logging.getLogger(__name__)
         logger.info('Building enrichment context')
-
-        # Load expanded dependencies (CRITICAL)
-        expanded_path = context.expanded_rules
-        if not os.path.exists(expanded_path):
-            raise CriticalPhaseError(
-                'UCM CSV Extension',
-                'Missing required file: {0}'.format(expanded_path)
-            )
-
-        try:
-            with io.open(expanded_path, 'r', encoding='utf-8') as f:
-                expanded_data = json.load(f)
-        except (ValueError, IOError) as exc:
-            raise CriticalPhaseError(
-                'UCM CSV Extension',
-                'Failed to parse expanded dependencies',
-                cause=exc
-            )
-
-        # Build uuid_to_expanded mapping
-        uuid_to_expanded = {}
-        if isinstance(expanded_data, list):
-            for item in expanded_data:
-                uuid = item.get('uuid', '')
-                if uuid:
-                    uuid_to_expanded[uuid] = item
-        elif isinstance(expanded_data, dict):
-            uuid_to_expanded = expanded_data
-
-        logger.debug('Loaded {0} expanded rules'.format(
-            len(uuid_to_expanded)))
-
-        # Load optional reference files
-        # Reference data lives in cache_dir (offline) or temp_dir (API)
         data_dir = context.cache_dir or context.temp_dir
+        if enrichment_ctx is None:
+            enrichment_ctx = self._build_minimum_enrichment_context(context)
 
-        # Log sources
+        # Expanded dependencies are optional enrichment. Preserve any valid
+        # records even when individual entries are malformed.
+        uuid_to_expanded = {}
+        expanded_path = context.expanded_rules
+        if expanded_path and os.path.exists(expanded_path):
+            try:
+                with io.open(expanded_path, 'r', encoding='utf-8') as f:
+                    expanded_data = json.load(f)
+                if isinstance(expanded_data, list):
+                    for item in expanded_data:
+                        if not isinstance(item, dict):
+                            continue
+                        uuid = item.get('uuid')
+                        if uuid:
+                            uuid_to_expanded[text_type(uuid)] = item
+                elif isinstance(expanded_data, dict):
+                    for uuid, item in expanded_data.items():
+                        if isinstance(item, dict):
+                            uuid_to_expanded[text_type(uuid)] = item
+                else:
+                    raise TypeError(
+                        'expanded dependencies must be an array or object'
+                    )
+            except (ValueError, IOError, TypeError) as exc:
+                self._record_enrichment_failure(
+                    context, 'Expanded dependencies', exc
+                )
+        else:
+            self._record_enrichment_failure(
+                context,
+                'Expanded dependencies',
+                RuntimeError('expanded_dependencies.json unavailable')
+            )
+
+        enrichment_ctx['uuid_to_expanded'] = uuid_to_expanded
+        logger.debug(
+            'Loaded {0} expanded rules'.format(len(uuid_to_expanded))
+        )
+
+        # Active data sources are the highest-priority enrichment.
         log_sources = self._load_optional_json(
-            os.path.join(data_dir, 'log_sources.json'), 'log_sources.json')
+            os.path.join(data_dir, 'log_sources.json'), 'log_sources.json'
+        )
+        if not isinstance(log_sources, list):
+            self._record_enrichment_failure(
+                context,
+                'Active data sources',
+                TypeError('log_sources.json must contain an array')
+            )
+            log_sources = []
+        enrichment_ctx['log_sources'] = log_sources
 
-        # Log source types
         log_source_types_data = self._load_optional_json(
             os.path.join(data_dir, 'log_source_types.json'),
-            'log_source_types.json')
+            'log_source_types.json'
+        )
+        if not isinstance(log_source_types_data, list):
+            self._record_enrichment_failure(
+                context,
+                'Log source type names',
+                TypeError('log_source_types.json must contain an array')
+            )
+            log_source_types_data = []
 
-        # QID records
-        qid_records_path = os.path.join(data_dir, 'qid_records.json')
-
-        # DSM event mappings
-        dsm_mappings_path = os.path.join(data_dir, 'dsm_event_mappings.json')
-
-        # Extensions
-        extensions_data = self._load_optional_json(
-            os.path.join(data_dir, 'extensions.json'), 'extensions.json')
-
-        # MITRE mappings
-        mitre_data = self._load_optional_json(
-            os.path.join(data_dir, 'mitre_mappings.json'),
-            'mitre_mappings.json')
-
-        # QRadar version
-        qradar_version = ''
-        version_path = os.path.join(data_dir, 'qradar_version.json')
-        if os.path.exists(version_path):
-            try:
-                with io.open(version_path, 'r', encoding='utf-8') as f:
-                    version_data = json.load(f)
-                if isinstance(version_data, dict):
-                    qradar_version = version_data.get('release_name', '')
-                elif isinstance(version_data, str):
-                    qradar_version = version_data
-            except (ValueError, IOError) as exc:
-                logger.warning(
-                    'Failed to read qradar_version.json: {0}'.format(exc))
-        else:
-            logger.warning('Missing optional file: qradar_version.json')
-
-        # Build active log source data
         active_days = context.active_days if context.active_days else 7
-        active_type_ids, type_id_to_instances, type_id_to_name = \
-            self._identify_active_log_sources(log_sources, active_days)
+        try:
+            active_type_ids, type_id_to_instances, type_id_to_name = \
+                self._identify_active_log_sources(log_sources, active_days)
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Active data sources', exc
+            )
+            active_type_ids = set()
+            type_id_to_instances = {}
+            type_id_to_name = {}
 
-        # Build all_type_ids from log_source_types (all defined LSTs, not just active)
         all_type_ids = set()
-        if log_source_types_data:
-            for lst_item in log_source_types_data:
+        for lst_item in log_source_types_data:
+            if not isinstance(lst_item, dict):
+                continue
+            try:
                 tid = lst_item.get('id')
                 if tid is not None:
                     all_type_ids.add(int(tid))
+                tid_str = str(tid)
+                tname = lst_item.get('name')
+                if (
+                    tid is not None
+                    and tname is not None
+                    and tid_str not in type_id_to_name
+                ):
+                    type_id_to_name[tid_str] = text_type(tname)
+            except (ValueError, TypeError):
+                continue
 
-        # Build log source type lookup from log_source_types data
-        # (for type names where we don't have active instance data)
-        if log_source_types_data:
-            for lst_item in log_source_types_data:
-                tid = str(lst_item.get('id', ''))
-                tname = lst_item.get('name', '')
-                if tid and tid not in type_id_to_name:
-                    type_id_to_name[tid] = tname
-
-        # Build QID and DSM lookups for 3-pathway matching
-        qid_lookup, category_lookup = self._build_qid_lookups(
-            qid_records_path)
-        dsm_lookup = self._build_dsm_lookup(dsm_mappings_path)
-
-        # Build high-to-low category index for category fallback
-        high_to_low_ids = self._build_high_to_low_ids(data_dir)
-
-        # Build property-to-LST mapping for Pathway 4
-        property_name_to_lst_ids = self._build_property_to_lst_mapping(
-            data_dir, category_lookup, dsm_lookup, active_type_ids)
-
-        # Load log source groups (non-critical) for Pathway 5
-        log_source_groups_data = self._load_optional_json(
-            os.path.join(data_dir, 'log_source_groups.json'),
-            'log_source_groups.json')
-
-        # Build group_id_to_name lookup
-        group_id_to_name = {}
-        if log_source_groups_data:
-            for grp in log_source_groups_data:
-                grp_id = grp.get('id')
-                grp_name = grp.get('name', '')
-                if grp_id is not None and grp_name:
-                    group_id_to_name[grp_id] = grp_name
-
-        # Build group_id_to_group lookup (full records for hierarchy traversal)
-        group_id_to_group = {}
-        if log_source_groups_data:
-            for grp in log_source_groups_data:
-                grp_id = grp.get('id')
-                if grp_id is not None:
-                    group_id_to_group[grp_id] = grp
-
-        # Build UUID to log source types mapping (5-pathway)
-        lst_status = {}
-        uuid_to_log_source_types = self._build_uuid_to_log_source_types(
-            uuid_to_expanded, qid_lookup, category_lookup,
-            dsm_lookup, active_type_ids,
-            property_name_to_lst_ids=property_name_to_lst_ids,
-            log_sources=log_sources,
-            group_map=group_id_to_group,
-            high_to_low_ids=high_to_low_ids,
-            lst_status_out=lst_status,
-            all_type_ids=all_type_ids)
-
-        # Build extension mapping
-        uuid_to_extensions, uuid_to_extension_name = \
-            self._build_uuid_to_extensions(extensions_data)
-
-        # Build MITRE lookup
-        id_to_mitre, mitre_error = self._build_mitre_lookup(mitre_data)
-
-        # Build extension_by_id for log sources report
-        extension_by_id = {}
-        if extensions_data:
-            for ext in extensions_data:
-                ext_id = ext.get('id')
-                if ext_id is not None:
-                    extension_by_id[ext_id] = ext
-
-        enrichment_ctx = {
-            'uuid_to_expanded': uuid_to_expanded,
-            'uuid_to_log_source_types': uuid_to_log_source_types,
-            'uuid_to_lst_status': lst_status,
+        enrichment_ctx.update({
+            'active_type_ids': active_type_ids,
             'type_id_to_instances': type_id_to_instances,
             'type_id_to_name': type_id_to_name,
-            'active_type_ids': active_type_ids,
-            'uuid_to_extensions': uuid_to_extensions,
-            'uuid_to_extension_name': uuid_to_extension_name,
-            'id_to_mitre': id_to_mitre,
-            'mitre_error': mitre_error,
-            'qradar_version': qradar_version,
-            'extension_by_id': extension_by_id,
-            'group_id_to_name': group_id_to_name,
-            'group_id_to_group': group_id_to_group,
-            'log_sources': log_sources,
-            'high_to_low_ids': high_to_low_ids,
-        }
+        })
+
+        # Build independent matching providers.
+        qid_lookup = {}
+        category_lookup = {}
+        try:
+            qid_lookup, category_lookup = self._build_qid_lookups(
+                os.path.join(data_dir, 'qid_records.json')
+            )
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'QID mappings', exc
+            )
+
+        dsm_lookup = {}
+        try:
+            dsm_lookup = self._build_dsm_lookup(
+                os.path.join(data_dir, 'dsm_event_mappings.json')
+            )
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'DSM mappings', exc
+            )
+
+        try:
+            high_to_low_ids = self._build_high_to_low_ids(data_dir)
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Category mappings', exc
+            )
+            high_to_low_ids = {}
+        enrichment_ctx['high_to_low_ids'] = high_to_low_ids
+
+        try:
+            property_name_to_lst_ids = \
+                self._build_property_to_lst_mapping(
+                    data_dir, category_lookup, dsm_lookup, active_type_ids
+                )
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Custom property mappings', exc
+            )
+            property_name_to_lst_ids = {}
+
+        log_source_groups_data = self._load_optional_json(
+            os.path.join(data_dir, 'log_source_groups.json'),
+            'log_source_groups.json'
+        )
+        if not isinstance(log_source_groups_data, list):
+            self._record_enrichment_failure(
+                context,
+                'Log source groups',
+                TypeError('log_source_groups.json must contain an array')
+            )
+            log_source_groups_data = []
+
+        group_id_to_name = {}
+        group_id_to_group = {}
+        for grp in log_source_groups_data:
+            if not isinstance(grp, dict):
+                continue
+            grp_id = grp.get('id')
+            if grp_id is None:
+                continue
+            try:
+                normalised_id = int(grp_id)
+            except (ValueError, TypeError):
+                normalised_id = grp_id
+            group_id_to_group[normalised_id] = grp
+            grp_name = grp.get('name')
+            if grp_name:
+                group_id_to_name[normalised_id] = text_type(grp_name)
+
+        enrichment_ctx['group_id_to_name'] = group_id_to_name
+        enrichment_ctx['group_id_to_group'] = group_id_to_group
+
+        lst_status = {}
+        try:
+            uuid_to_log_source_types = \
+                self._build_uuid_to_log_source_types(
+                    uuid_to_expanded, qid_lookup, category_lookup,
+                    dsm_lookup, active_type_ids,
+                    property_name_to_lst_ids=property_name_to_lst_ids,
+                    log_sources=log_sources,
+                    group_map=group_id_to_group,
+                    high_to_low_ids=high_to_low_ids,
+                    lst_status_out=lst_status,
+                    all_type_ids=all_type_ids
+                )
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Rule-to-data-source matching', exc
+            )
+            uuid_to_log_source_types = {}
+            lst_status = {}
+
+        enrichment_ctx['uuid_to_log_source_types'] = \
+            uuid_to_log_source_types
+        enrichment_ctx['uuid_to_lst_status'] = lst_status
+
+        extensions_data = self._load_optional_json(
+            os.path.join(data_dir, 'extensions.json'), 'extensions.json'
+        )
+        if not isinstance(extensions_data, list):
+            extensions_data = []
+        try:
+            uuid_to_extensions, uuid_to_extension_name = \
+                self._build_uuid_to_extensions(extensions_data)
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'Extension mappings', exc
+            )
+            uuid_to_extensions = {}
+            uuid_to_extension_name = {}
+        enrichment_ctx['uuid_to_extensions'] = uuid_to_extensions
+        enrichment_ctx['uuid_to_extension_name'] = uuid_to_extension_name
+
+        extension_by_id = {}
+        for ext in extensions_data:
+            if not isinstance(ext, dict):
+                continue
+            ext_id = ext.get('id')
+            if ext_id is not None:
+                extension_by_id[ext_id] = ext
+        enrichment_ctx['extension_by_id'] = extension_by_id
+
+        mitre_data = self._load_optional_json(
+            os.path.join(data_dir, 'mitre_mappings.json'),
+            'mitre_mappings.json'
+        )
+        try:
+            id_to_mitre, mitre_error = self._build_mitre_lookup(mitre_data)
+        except Exception as exc:
+            self._record_enrichment_failure(
+                context, 'MITRE mappings', exc
+            )
+            id_to_mitre = {}
+            mitre_error = True
+        enrichment_ctx['id_to_mitre'] = id_to_mitre
+        enrichment_ctx['mitre_error'] = mitre_error
 
         logger.info('Enrichment context built: {0} expanded rules, '
                      '{1} active source types, {2} active instances'.format(
@@ -4437,6 +4754,8 @@ class UCMCSVExtensionHandler(BaseHandler):
                 data = json.load(f)
             if isinstance(data, list):
                 for record in data:
+                    if not isinstance(record, dict):
+                        continue
                     high_id = record.get('high_level_category_id')
                     low_id = record.get('id')
                     if high_id is not None and low_id is not None:
@@ -4501,17 +4820,38 @@ class UCMCSVExtensionHandler(BaseHandler):
         cutoff_ms = now_ms - (active_days * 86400 * 1000)
 
         for ls in log_sources:
+            if not isinstance(ls, dict):
+                logger.warning('Skipped malformed log source record')
+                continue
+
             # Criterion 1: enabled
             if not ls.get('enabled', False):
                 continue
 
             # Criterion 2: recent events
             last_event = ls.get('last_event_time', 0)
+            try:
+                last_event = int(last_event)
+            except (ValueError, TypeError):
+                logger.warning(
+                    'Skipped log source with invalid last_event_time: {0}'.
+                    format(ls.get('id', 'UNKNOWN'))
+                )
+                continue
             if last_event < cutoff_ms:
                 continue
 
             # Active — add to results
-            type_id = ls.get('type_id', 0)
+            type_id = ls.get('type_id')
+            try:
+                type_id = int(type_id)
+            except (ValueError, TypeError):
+                logger.warning(
+                    'Skipped log source with invalid type_id: {0}'.format(
+                        ls.get('id', 'UNKNOWN')
+                    )
+                )
+                continue
             type_id_str = str(type_id)
             active_type_ids.add(type_id)
 
@@ -4520,9 +4860,9 @@ class UCMCSVExtensionHandler(BaseHandler):
             type_id_to_instances[type_id_str].append(ls)
 
             # Populate type name from type_name field if available
-            type_name = ls.get('type_name', '')
+            type_name = ls.get('type_name')
             if type_name and type_id_str not in type_id_to_name:
-                type_id_to_name[type_id_str] = type_name
+                type_id_to_name[type_id_str] = text_type(type_name)
 
         logger.debug('Active log sources: {0} instances across '
                       '{1} types (cutoff: {2} days)'.format(
@@ -4577,6 +4917,9 @@ class UCMCSVExtensionHandler(BaseHandler):
                     data = json.load(f)
                 if isinstance(data, list):
                     for record in data:
+                        if not isinstance(record, dict):
+                            logger.debug('Skipped malformed QID record')
+                            continue
                         qid_str = str(record.get('qid', ''))
                         if qid_str:
                             qid_lookup[qid_str] = record
@@ -4635,6 +4978,9 @@ class UCMCSVExtensionHandler(BaseHandler):
                     data = json.load(f)
                 if isinstance(data, list):
                     for mapping in data:
+                        if not isinstance(mapping, dict):
+                            logger.debug('Skipped malformed DSM mapping record')
+                            continue
                         rec_id = str(mapping.get('qid_record_id', ''))
                         type_id = mapping.get('log_source_type_id')
                         if rec_id and type_id is not None:
@@ -4721,11 +5067,22 @@ class UCMCSVExtensionHandler(BaseHandler):
 
         if not properties:
             return {}
+        if not isinstance(properties, list):
+            logger.warning(
+                'Expected array in regex_properties.json, got {0}'.format(
+                    type(properties).__name__
+                )
+            )
+            return {}
 
         identifier_to_name = {}
         for prop in properties:
-            identifier_to_name[prop.get('identifier', '')] = \
-                prop.get('name', '')
+            if not isinstance(prop, dict):
+                continue
+            identifier = prop.get('identifier')
+            name = prop.get('name')
+            if identifier and name:
+                identifier_to_name[identifier] = text_type(name)
 
         # 2. Load all expression files and resolve LSTs
         expression_files = [
@@ -4763,6 +5120,8 @@ class UCMCSVExtensionHandler(BaseHandler):
                 continue
 
             for record in records:
+                if not isinstance(record, dict):
+                    continue
                 prop_id = record.get('regex_property_identifier', '')
                 if prop_id not in identifier_to_name:
                     logger.debug(
@@ -4881,10 +5240,15 @@ class UCMCSVExtensionHandler(BaseHandler):
         """
         lookup = {}
         for ls in log_sources:
+            if not isinstance(ls, dict):
+                continue
             device_id = ls.get('id')
             type_id = ls.get('type_id')
             if device_id is not None and type_id is not None:
-                lookup[str(device_id)] = int(type_id)
+                try:
+                    lookup[str(device_id)] = int(type_id)
+                except (ValueError, TypeError):
+                    continue
         return lookup
 
     def _resolve_test_to_type_ids(self, test, lookup_tables, rule_uuid=''):
@@ -4907,8 +5271,17 @@ class UCMCSVExtensionHandler(BaseHandler):
                 None if the test imposes no LST constraint (universal).
         """
         logger = logging.getLogger(__name__)
-        dep_type = test['dep_type']
-        values = test['values']
+        if not isinstance(test, dict):
+            logger.warning(
+                'Malformed LST test for rule {0}'.format(rule_uuid)
+            )
+            return None
+        dep_type = test.get('dep_type')
+        values = test.get('values', [])
+        if values is None:
+            values = []
+        elif not isinstance(values, (list, tuple, set)):
+            values = [values]
         result = set()
 
         if dep_type == 'device_type_ids':
@@ -4974,7 +5347,10 @@ class UCMCSVExtensionHandler(BaseHandler):
                 for ls in group_log_sources:
                     ls_type_id = ls.get('type_id')
                     if ls_type_id is not None:
-                        result.add(int(ls_type_id))
+                        try:
+                            result.add(int(ls_type_id))
+                        except (ValueError, TypeError):
+                            continue
 
         elif dep_type == 'device_ids':
             ls_type_lookup = lookup_tables.get('log_sources_type', {})
@@ -5027,10 +5403,13 @@ class UCMCSVExtensionHandler(BaseHandler):
         constraints = []
 
         # Step 5: Resolve own tests
-        for test in rule.get('lst_tests', []):
+        lst_tests = rule.get('lst_tests', [])
+        if not isinstance(lst_tests, (list, tuple)):
+            lst_tests = []
+        for test in lst_tests:
             resolved = self._resolve_test_to_type_ids(test, lookup_tables,
                                                          rule_uuid=uuid)
-            if test.get('negate', False):
+            if isinstance(test, dict) and test.get('negate', False):
                 if resolved is None:
                     # Negate of None (no LST info) stays None.
                     # None means "no LST-constraining data" (e.g. unsupported
@@ -5051,9 +5430,19 @@ class UCMCSVExtensionHandler(BaseHandler):
             constraints.append(resolved)
 
         # Step 6: Resolve BB ref groups
-        for group in rule.get('bb_ref_groups', []):
+        bb_ref_groups = rule.get('bb_ref_groups', [])
+        if not isinstance(bb_ref_groups, (list, tuple)):
+            bb_ref_groups = []
+        for group in bb_ref_groups:
+            if not isinstance(group, dict):
+                continue
             child_results = []
-            for child_uuid in group.get('uuids', []):
+            child_uuids = group.get('uuids', [])
+            if not isinstance(child_uuids, (list, tuple)):
+                child_uuids = []
+            for child_uuid in child_uuids:
+                if child_uuid is None:
+                    continue
                 child_result = self._resolve_lst_for_rule(
                     child_uuid, uuid_to_expanded, lookup_tables, memo, visited)
                 child_results.append(child_result)
@@ -5279,6 +5668,8 @@ class UCMCSVExtensionHandler(BaseHandler):
             return uuid_to_ext, uuid_to_extension_name
 
         for ext in extensions_data:
+            if not isinstance(ext, dict):
+                continue
             ext_name = ext.get('name', '')
             ext_version = ext.get('version', '')
             ext_author = ext.get('author', '')
@@ -5356,14 +5747,17 @@ class UCMCSVExtensionHandler(BaseHandler):
                     if isinstance(mapping, dict):
                         for tactic_name, tactic_data in mapping.items():
                             if isinstance(tactic_data, dict):
-                                tactics.append(tactic_name)
+                                if tactic_name is not None:
+                                    tactics.append(text_type(tactic_name))
                                 techs = tactic_data.get('techniques', {})
                                 if isinstance(techs, dict):
                                     for _t_name, t_data in techs.items():
                                         if isinstance(t_data, dict):
                                             t_id = t_data.get('id', '')
                                             if t_id:
-                                                techniques.append(t_id)
+                                                techniques.append(
+                                                    text_type(t_id)
+                                                )
                     if tactics or techniques:
                         id_to_mitre[uuid] = {
                             'tactics': sorted(set(tactics)),
@@ -5402,19 +5796,31 @@ class UCMCSVExtensionHandler(BaseHandler):
                     if isinstance(entry, dict):
                         tactic = entry.get('tactic', '')
                         if tactic:
-                            tactics.append(tactic)
+                            tactics.append(text_type(tactic))
                         techs = entry.get('techniques', [])
                         if isinstance(techs, list):
-                            techniques.extend(techs)
+                            techniques.extend(
+                                text_type(tech)
+                                for tech in techs
+                                if tech is not None
+                            )
 
             # Handle direct tactics/techniques arrays
             direct_tactics = rule_mapping.get('tactics', [])
             if isinstance(direct_tactics, list):
-                tactics.extend(direct_tactics)
+                tactics.extend(
+                    text_type(tactic)
+                    for tactic in direct_tactics
+                    if tactic is not None
+                )
 
             direct_techniques = rule_mapping.get('techniques', [])
             if isinstance(direct_techniques, list):
-                techniques.extend(direct_techniques)
+                techniques.extend(
+                    text_type(technique)
+                    for technique in direct_techniques
+                    if technique is not None
+                )
 
             if tactics or techniques:
                 id_to_mitre[uuid] = {
@@ -5807,24 +6213,52 @@ class PipelineOrchestrator(object):
                     phases_run += 1
 
                 except CriticalPhaseError as exc:
+                    if handler.delivery_critical:
+                        self._logger.error(
+                            'CRITICAL: {0} phase failed: {1}'.format(
+                                handler.name, exc
+                            )
+                        )
+                        elapsed = time.time() - start_time
+                        self._print_summary(
+                            phases_run, elapsed, critical=True
+                        )
+                        return 1
+
                     self._logger.error(
-                        'CRITICAL: {0} phase failed: {1}'.format(
+                        'Non-critical enrichment failure in {0}: {1}. '
+                        'Minimum UCM delivery will continue.'.format(
                             handler.name, exc
                         )
                     )
-                    elapsed = time.time() - start_time
-                    self._print_summary(phases_run, elapsed, critical=True)
-                    return 1
+                    if self._context.error_counter:
+                        self._context.error_counter.increment(
+                            handler.name, text_type(exc)
+                        )
+                    phases_run += 1
 
                 except Exception as exc:
+                    if handler.delivery_critical:
+                        self._logger.error(
+                            'CRITICAL: Unexpected error in {0}: {1}'.format(
+                                handler.name, exc
+                            )
+                        )
+                        elapsed = time.time() - start_time
+                        self._print_summary(
+                            phases_run, elapsed, critical=True
+                        )
+                        return 1
+
                     self._logger.error(
                         'Non-critical error in {0}: {1}'.format(
                             handler.name, exc
                         )
                     )
-                    self._context.error_counter.increment(
-                        handler.name, text_type(exc)
-                    )
+                    if self._context.error_counter:
+                        self._context.error_counter.increment(
+                            handler.name, text_type(exc)
+                        )
                     phases_run += 1
 
         finally:
@@ -5843,7 +6277,10 @@ class PipelineOrchestrator(object):
             critical:   True if a CriticalPhaseError occurred.
         """
         self._formatter.set_phase('SUMMARY')
-        error_count = self._context.error_counter.count
+        error_count = (
+            self._context.error_counter.count
+            if self._context.error_counter else 0
+        )
 
         self._logger.info('=' * 60)
         self._logger.info('Pipeline Summary')
