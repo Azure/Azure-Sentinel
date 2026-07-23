@@ -4038,7 +4038,7 @@
           ],
           "metadata": {
             "comments": "This Azure Firewall connector uses Firewall, IP Groups and Firewall Policies APIs to perform different actions on the Firewall, IP Groups and Firewall Policies.",
-            "lastUpdateTime": "2026-07-10T17:22:35.225Z",
+            "lastUpdateTime": "2026-07-24T02:14:43.474Z",
             "releaseNotes": {
               "version": "1.0",
               "title": "[variables('blanks')]",
@@ -6541,7 +6541,7 @@
                 "description": "Identifies attack pattern when attacker tries to move, or scan, from resource to resource on the network and creates an incident when a source has more than 1 registered deny action in Azure Firewall.",
                 "displayName": "Several deny actions registered",
                 "enabled": false,
-                "query": "let threshold = 3;\nlet AzFWNetworkRuleThreshold = 5;\nunion isfuzzy=true(\nAZFWApplicationRule\n| where Action == \"Deny\"\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AZFWNetworkRule\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count(), Protocols = make_set(Protocol) by SourceIp, Fqdn, Action\n| where count_ >= AzFWNetworkRuleThreshold\n| extend Protocol = strcat_array(Protocols, \"/\")),\n(AZFWFlowTrace\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AZFWIdpsSignature\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AzureDiagnostics\n| where OperationName in (\"AzureFirewallApplicationRuleLog\",\"AzureFirewallNetworkRuleLog\")\n| extend msg_s_replaced0 = replace(@\"\\s\\s\",@\" \",msg_s)\n| extend msg_s_replaced1 = replace(@\"\\.\\s\",@\" \",msg_s_replaced0)\n| extend msg_a = split(msg_s_replaced1,\" \")\n| extend srcAddr_a = split(msg_a[3],\":\") , destAddr_a = split(msg_a[5],\":\")\n| extend Protocol = tostring(msg_a[0]), SourceIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), DestinationIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), Action = tostring(msg_a[7])\n| where Action == \"Deny\"\n| extend Fqdn = iff(DestinationIp matches regex \"\\\\d+\\\\.\\\\d+\\\\.\\\\d+\\\\.\\\\d+\",\"\",DestinationIp)\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold)\n",
+                "query": "let threshold = 2;\nunion isfuzzy=true(\nAZFWApplicationRule\n| where Action == \"Deny\"\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AZFWNetworkRule\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count_ = dcount(DestinationPort), Protocols = make_set(Protocol) by SourceIp, Fqdn, Action\n| where count_ >= threshold\n| extend Protocol = strcat_array(Protocols, \"/\")),\n(AZFWFlowTrace\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AZFWIdpsSignature\n| where Action == \"Deny\"\n| extend Fqdn = DestinationIp\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold),\n(AzureDiagnostics\n| where OperationName in (\"AzureFirewallApplicationRuleLog\",\"AzureFirewallNetworkRuleLog\")\n| extend msg_s_replaced0 = replace(@\"\\s\\s\",@\" \",msg_s)\n| extend msg_s_replaced1 = replace(@\"\\.\\s\",@\" \",msg_s_replaced0)\n| extend msg_a = split(msg_s_replaced1,\" \")\n| extend srcAddr_a = split(msg_a[3],\":\") , destAddr_a = split(msg_a[5],\":\")\n| extend Protocol = tostring(msg_a[0]), SourceIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), DestinationIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), Action = tostring(msg_a[7])\n| where Action == \"Deny\"\n| extend Fqdn = iff(DestinationIp matches regex \"\\\\d+\\\\.\\\\d+\\\\.\\\\d+\\\\.\\\\d+\",\"\",DestinationIp)\n| summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol\n| where count_ >= threshold)\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Medium",
@@ -6552,14 +6552,14 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule",
                       "AZFWFlowTrace",
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -6596,8 +6596,8 @@
                   "NetworkProtocol": "Protocol"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Source IP {{SourceIp}} has triggered multiple deny actions to destination {{Fqdn}} using protocol {{Protocol}}, which may indicate malicious activity such as lateral movement or reconnaissance.",
-                  "alertDisplayNameFormat": "Multiple Deny Actions Detected from {{SourceIp}} to {{Fqdn}}"
+                  "alertDisplayNameFormat": "Multiple Deny Actions Detected from {{SourceIp}} to {{Fqdn}}",
+                  "alertDescriptionFormat": "Source IP {{SourceIp}} has triggered multiple deny actions to destination {{Fqdn}} using protocol {{Protocol}}, which may indicate malicious activity such as lateral movement or reconnaissance."
                 }
               }
             },
@@ -6680,12 +6680,12 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -6723,8 +6723,8 @@
                   "DestinationPort": "DestinationPort"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Source IP {{SourceIp}} has scanned {{AlertTimedCountHostsInBinTime}} different hosts on port {{DestinationPort}} within a short time frame, which may indicate reconnaissance activity.",
-                  "alertDisplayNameFormat": "Port Sweep Detected from {{SourceIp}} on Port {{DestinationPort}}"
+                  "alertDisplayNameFormat": "Port Sweep Detected from {{SourceIp}} on Port {{DestinationPort}}",
+                  "alertDescriptionFormat": "Source IP {{SourceIp}} has scanned {{AlertTimedCountHostsInBinTime}} different hosts on port {{DestinationPort}} within a short time frame, which may indicate reconnaissance activity."
                 }
               }
             },
@@ -6807,12 +6807,12 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -6847,8 +6847,8 @@
                   }
                 ],
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Source IP {{SourceIp}} has scanned {{AlertTimedCountPortsInBinTime}} different ports within a short time frame, which may indicate reconnaissance activity.",
-                  "alertDisplayNameFormat": "Port Scan Detected from {{SourceIp}}"
+                  "alertDisplayNameFormat": "Port Scan Detected from {{SourceIp}}",
+                  "alertDescriptionFormat": "Source IP {{SourceIp}} has scanned {{AlertTimedCountPortsInBinTime}} different ports within a short time frame, which may indicate reconnaissance activity."
                 }
               }
             },
@@ -6931,11 +6931,11 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWThreatIntel"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7050,12 +7050,12 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7089,12 +7089,12 @@
                   }
                 ],
                 "customDetails": {
-                  "AbnormalPort": "AlertTimeDstPort",
-                  "NetworkProtocol": "AlertTimeProtocol"
+                  "NetworkProtocol": "AlertTimeProtocol",
+                  "AbnormalPort": "AlertTimeDstPort"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "Communication was observed over port {{AlertTimeDstPort}} using protocol {{AlertTimeProtocol}}, which is different from the protocol observed during the learning period. This could indicate potential malicious activity such as C2 communication or data exfiltration.",
-                  "alertDisplayNameFormat": "Abnormal Port to Protocol Communication Detected from {{SourceIp}} to {{Fqdn}}"
+                  "alertDisplayNameFormat": "Abnormal Port to Protocol Communication Detected from {{SourceIp}} to {{Fqdn}}",
+                  "alertDescriptionFormat": "Communication was observed over port {{AlertTimeDstPort}} using protocol {{AlertTimeProtocol}}, which is different from the protocol observed during the learning period. This could indicate potential malicious activity such as C2 communication or data exfiltration."
                 }
               }
             },
@@ -7177,14 +7177,14 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AzureDiagnostics",
                       "AZFWApplicationRule",
                       "AZFWNetworkRule",
                       "AZFWFlowTrace",
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7229,8 +7229,8 @@
                   "AlertCount": "AlertTimeSrcIpDenyRateCount"
                 },
                 "alertDetailsOverride": {
-                  "alertDescriptionFormat": "The source IP {{SourceIp}} has an abnormal deny rate to destination {{Fqdn}} with {{AlertTimeSrcIpDenyRateCount}} denies, which is above the calculated threshold. This could indicate potential exfiltration, initial access or C2 activities.\n",
-                  "alertDisplayNameFormat": "Abnormal Deny Rate for Source IP {{SourceIp}}"
+                  "alertDisplayNameFormat": "Abnormal Deny Rate for Source IP {{SourceIp}}",
+                  "alertDescriptionFormat": "The source IP {{SourceIp}} has an abnormal deny rate to destination {{Fqdn}} with {{AlertTimeSrcIpDenyRateCount}} denies, which is above the calculated threshold. This could indicate potential exfiltration, initial access or C2 activities.\n"
                 }
               }
             },
@@ -7313,10 +7313,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7417,10 +7417,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7523,10 +7523,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7634,10 +7634,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
@@ -7743,10 +7743,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureFirewall",
                     "dataTypes": [
                       "AZFWIdpsSignature"
-                    ]
+                    ],
+                    "connectorId": "AzureFirewall"
                   }
                 ],
                 "tactics": [
