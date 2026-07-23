@@ -1,0 +1,196 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "HoneyLabs-EnrichIncident-IP",
+        "description": "Enriches Microsoft Sentinel incidents with HoneyLabs honeypot intelligence. For every IP entity on the incident, the playbook queries the HoneyLabs lookup API and writes a comment with the verdict (exploitation, scanning, probing, or recognized research scanner), event counts, first and last seen, and a link to the full report.",
+        "prerequisites": [
+            "A HoneyLabs API key. Free keys are created at https://honeylabs.net/dashboard?src=sentinel under API keys."
+        ],
+        "postDeployment": [
+            "1. Grant the playbook's managed identity the Microsoft Sentinel Responder role on the resource group.",
+            "2. Attach the playbook to an automation rule so it runs when incidents with IP entities are created."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2026-07-16T00:00:00Z",
+        "entities": [
+            "Ip"
+        ],
+        "tags": [
+            "Enrichment",
+            "Threat Intelligence"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "HoneyLabs"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "HoneyLabs-EnrichIncident-IP",
+            "type": "string"
+        },
+        "HoneyLabsApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "HoneyLabs API key, used as a Bearer token. Free at https://honeylabs.net/dashboard?src=sentinel"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "HoneyLabs-EnrichIncident-IP",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "HoneyLabsApiKey": {
+                            "defaultValue": "",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IP": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "HTTP_HoneyLabs_lookup": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "GET",
+                                        "uri": "https://honeylabs.net/lookup/@{items('For_each_IP')?['Address']}?format=json",
+                                        "headers": {
+                                            "Authorization": "Bearer @{parameters('HoneyLabsApiKey')}",
+                                            "Accept": "application/json"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Add_comment_to_incident": {
+                                    "runAfter": {
+                                        "HTTP_HoneyLabs_lookup": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong>HoneyLabs</strong> on <strong>@{items('For_each_IP')?['Address']}</strong>: @{coalesce(body('HTTP_HoneyLabs_lookup')?['verdict']?['label'], body('HTTP_HoneyLabs_lookup')?['message'], 'no data')} (confidence: @{coalesce(body('HTTP_HoneyLabs_lookup')?['verdict']?['confidence'], 'n/a')})<br/>Events: @{coalesce(body('HTTP_HoneyLabs_lookup')?['total_events'], 0)} total, @{coalesce(body('HTTP_HoneyLabs_lookup')?['events_7d'], 0)} in the last 7 days. First seen: @{coalesce(body('HTTP_HoneyLabs_lookup')?['first_seen'], '-')}, last seen: @{coalesce(body('HTTP_HoneyLabs_lookup')?['last_seen'], '-')}.<br/>Full report: https://honeylabs.net/lookup/@{items('For_each_IP')?['Address']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "HoneyLabsApiKey": {
+                        "value": "[parameters('HoneyLabsApiKey')]"
+                    }
+                }
+            }
+        }
+    ]
+}

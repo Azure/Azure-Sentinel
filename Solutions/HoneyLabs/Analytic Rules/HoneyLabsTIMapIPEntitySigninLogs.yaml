@@ -1,0 +1,66 @@
+id: a573396f-06ed-4139-bccc-e0f88a2cf625
+name: HoneyLabs TI Map IP Entity to SigninLogs
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Identifies sign-ins (interactive and non-interactive) from IP addresses that HoneyLabs honeypot telemetry has observed running exploit or loader commands. A hit means credential access is being attempted from infrastructure with recent, evidenced malicious activity.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+  - T1078
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let aadFunc = (tableName:string){
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where SourceSystem startswith 'HoneyLabs'
+  | where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)
+  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkSourceIP)
+  | join kind=innerunique (
+      table(tableName) | where TimeGenerated >= ago(dt_lookBack)
+      | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)
+      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)
+      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
+      | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
+  )
+  on $left.TI_ipEntity == $right.IPAddress
+  | where SigninLogs_TimeGenerated < ExpirationDateTime
+  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
+  TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, Type
+  | extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress

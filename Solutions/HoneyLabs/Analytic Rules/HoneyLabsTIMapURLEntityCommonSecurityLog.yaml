@@ -1,0 +1,54 @@
+id: afe2a5ff-f4fe-4dee-8b6b-fd28d29d6738
+name: HoneyLabs TI Map URL Entity to CommonSecurityLog
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Identifies requests in CommonSecurityLog (proxy, firewall URL logging) to loader and C2 URLs that HoneyLabs extracted from payloads captured on its honeypot sensors. A match usually means a host inside your network fetched or contacted live malware infrastructure.'
+severity: High
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Execution
+relevantTechniques:
+  - T1071
+  - T1105
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where SourceSystem startswith 'HoneyLabs'
+  | where isnotempty(Url)
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(RequestURL)
+      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  )
+  on $left.Url == $right.RequestURL
+  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Url
+  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
+  Url, SourceIP, DestinationIP, DeviceName, DeviceAction, SourceUserName, RequestClientApplication
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
