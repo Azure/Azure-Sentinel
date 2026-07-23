@@ -304,6 +304,167 @@ ThreatIntelligenceIndicator
 |where Description == "Recorded Future - IP - Actively Communicating C&C Server" and AdditionalInformation contains "Cobalt Strike"
 | take 10
 ```
+## Logic App Execution Order
+
+The `RecordedFuture-ImportToSentinel` Logic App is not intended to be manually executed directly.
+
+This workflow functions as a downstream processing playbook and is automatically invoked by upstream Indicator Import and Indicator Processor playbooks during ingestion operations.
+
+The expected execution flow is:
+
+```text
+Indicator Import Playbook
+        ↓
+Indicator Processing
+        ↓
+RecordedFuture-ImportToSentinel
+        ↓
+ThreatIntelligenceIndicator Table
+```
+
+Attempting to manually execute `RecordedFuture-ImportToSentinel` directly may result in:
+
+- Empty ingestion results
+- Batch trigger errors
+- Missing payload data
+- Incomplete indicator processing
+
+For ingestion validation and troubleshooting, always execute and validate the upstream import playbooks first.
+
+
+## Batch Trigger Error in `RecordedFuture-ThreatIntelligenceImport`
+
+### Symptom
+
+The following error may appear when manually executing the Logic App:
+
+```text
+Failed to start a run of logic app
+'RecordedFuture-ThreatIntelligenceImport'.
+
+Failed to trigger workflow run with status '400'.
+
+Could not execute workflow
+'RecordedFuture-ThreatIntelligenceImport'
+trigger 'Batch_messages' of type 'Batch'.
+
+Please use an action of type 'SendToBatch'
+to send messages to triggers of type 'Batch'.
+```
+
+### Cause
+
+This typically occurs when the downstream import workflow is executed before the upstream Indicator Import playbooks have processed and submitted batched payloads.
+
+The Logic App expects batched messages from upstream ingestion workflows and is not designed for standalone execution.
+
+### Resolution
+
+Run the upstream Indicator Import playbooks first.
+
+The downstream workflow will automatically execute after indicators have been downloaded and processed.
+
+
+## Unauthorized Errors After Copying Indicator Import Playbooks
+
+### Symptom
+
+After copying or cloning Indicator Import playbooks, connector actions may fail with errors such as:
+
+```text
+Unauthorized
+
+Authentication failed
+
+API connection is invalid
+
+Connection is not authorized
+```
+
+or connector actions may fail during execution even though the original playbook was functioning correctly.
+
+### Cause
+
+When Logic Apps are copied, associated API connections and authorization contexts may not transfer correctly to the new playbook instance.
+
+This behavior depends on the organization’s Azure architecture and authentication model, including:
+
+- Managed identities
+- Subscription boundaries
+- RBAC inheritance
+- Conditional access policies
+- Connector ownership
+
+### Resolution
+
+After creating or copying a playbook:
+
+1. Open the newly created Logic App
+2. Review all API connections
+3. Reauthenticate connectors where required
+4. Validate managed identity permissions
+5. Save the Logic App
+6. Re-run the upstream import workflow
+
+### Important
+
+The Logic App run history is usually the best source for troubleshooting authorization issues.
+
+Review:
+
+- Failed actions
+- HTTP status codes
+- Connector failures
+- Authentication prompts
+- Authorization scopes
+
+Different organizations may experience different authorization behaviors depending on RBAC models and Azure governance controls.
+
+
+## Recommended Troubleshooting Flow
+
+When troubleshooting ingestion or indicator import issues:
+
+1. Validate the upstream Indicator Import playbook executed successfully
+2. Review parent Logic App run history
+3. Confirm downstream workflows executed automatically
+4. Validate API connector authorization
+5. Confirm indicators populated the `ThreatIntelligenceIndicator` table
+6. Validate workbook and analytic rule queries
+
+
+## Logic App Copies May Require Reauthorization
+
+Copied or cloned Logic Apps may lose connector authorization references after deployment.
+
+This is most commonly observed with:
+
+- Indicator Import playbooks
+- Azure Sentinel connectors
+- Recorded Future connectors
+
+If authorization-related failures occur after cloning a playbook:
+
+- Review API connections
+- Reauthenticate affected connectors
+- Validate managed identity permissions
+- Check Logic App run history for failed authorization actions
+
+
+## Manual Execution of Batch-Based Logic Apps
+
+Some Logic Apps in the solution use batch-based triggers and are not intended for direct manual execution.
+
+These playbooks are designed to be invoked downstream by upstream import and processing workflows.
+
+Direct execution may result in:
+
+- Batch trigger errors
+- Missing payload failures
+- Empty ingestion runs
+- Partial indicator processing
+
+Always execute the upstream import workflows when validating ingestion pipelines.
 
 ## "Errors" in RecordedFuture-IOC_Enrichment
 If Recorded Future is missing data for a specific entity, when viewed within the Logic App "Previous Run" section, a error might be seen.
