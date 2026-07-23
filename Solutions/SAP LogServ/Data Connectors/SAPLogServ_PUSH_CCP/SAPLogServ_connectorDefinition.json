@@ -10,19 +10,73 @@
             "title": "SAP LogServ (RISE), S/4HANA Cloud private edition",
             "publisher": "SAP SE",
             "logo": "SapLogo.svg",
-            "descriptionMarkdown": "SAP LogServ is an SAP Enterprise Cloud Services (ECS) service aimed at collection, storage, forwarding and access of logs. LogServ centralizes the logs from all systems, applications, and ECS services used by a registered customer. <br> Main Features include:<br>Near Realtime Log Collection: With ability to integrate into Microsoft Sentinel as SIEM solution.<br>LogServ complements the existing SAP application layer threat monitoring and detections in Microsoft Sentinel with the log types owned by SAP ECS as the system provider. This includes logs like: SAP Security Audit Log (AS ABAP), HANA database, AS JAVA, ICM, SAP Web Dispatcher, SAP Cloud Connector, OS, SAP Gateway, 3rd party Database, Network, DNS, Proxy, Firewall",
+            "descriptionMarkdown": "SAP LogServ is an SAP Enterprise Cloud Services (ECS) service that collects, stores, and forwards logs from all SAP systems, applications, and ECS services used by a registered customer. This connector streams those logs to Microsoft Sentinel in near real time, complementing SAP application-layer detections with infrastructure logs such as HANA database, SAP Web Dispatcher, OS, DNS, and Azure network flows.\n\nStandard log formats are automatically routed by the data collection rule to the matching Microsoft Sentinel tables — **Syslog**, **WindowsEvent** / **SecurityEvent**, and the ASIM-normalized tables **ASimDnsActivityLogs**, **ASimWebSessionLogs** and **ASimNetworkSessionLogs** — while SAP-specific logs remain in the **SAPLogServ_CL** custom table. Because these logs land in normalized, source-agnostic tables, they are already covered by the out-of-the-box analytic rules and hunting queries that Microsoft ships for the corresponding ASIM schemas and standard tables. To avoid duplicate alerts, those detections are intentionally **not** repackaged in this solution; only the HANA DB analytic rules — which require LogServ-specific parsing of the Syslog payload — are shipped here. Learn how normalized data reuses this built-in content in [Advanced Security Information Model (ASIM) normalization content](https://learn.microsoft.com/en-us/azure/sentinel/normalization-content).",
             "graphQueriesTableName": "SAPLogServ_CL",
             "graphQueries": [
                 {
-                    "metricName": "Total events received",
-                    "legend": "Tenant",
+                    "metricName": "Total SAP events received",
+                    "legend": "SAPLogServ_CL",
                     "baseQuery": "{{graphQueriesTableName}} | project TimeGenerated"
+                },
+                {
+                    "metricName": "SAP Linux syslog events",
+                    "legend": "Syslog (Linux)",
+                    "baseQuery": "Syslog | where SourceSystem == \"Linux\" and CollectorHostName == \"SAPLogServ\" | project TimeGenerated"
+                },
+                {
+                    "metricName": "SAP HANA audit events",
+                    "legend": "Syslog (HANADB)",
+                    "baseQuery": "Syslog | where SourceSystem == \"HANADB\" and CollectorHostName == \"SAPLogServ\" | project TimeGenerated"
+                },
+                {
+                    "metricName": "SAP Windows events",
+                    "legend": "WindowsEvent",
+                    "baseQuery": "WindowsEvent | where Provider startswith \"Microsoft\" and Computer has \".\" | project TimeGenerated"
+                },
+                {
+                    "metricName": "SAP DNS query events",
+                    "legend": "ASimDnsActivityLogs",
+                    "baseQuery": "ASimDnsActivityLogs | where EventProduct == \"BIND\" and EventOwner == \"SAPLogServ\" | project TimeGenerated"
+                },
+                {
+                    "metricName": "SAP Web Dispatcher access events",
+                    "legend": "ASimWebSessionLogs",
+                    "baseQuery": "ASimWebSessionLogs | where EventProduct == \"SAP Web Dispatcher\" and EventOwner == \"SAPLogServ\" | project TimeGenerated"
+                },
+                {
+                    "metricName": "Azure VNet flow log events",
+                    "legend": "ASimNetworkSessionLogs",
+                    "baseQuery": "ASimNetworkSessionLogs | where EventProduct == \"AzureVNet\" and EventOwner == \"SAPLogServ\" | project TimeGenerated"
                 }
             ],
             "sampleQueries": [
                 {
-                    "description": "Get Sample Events",
+                    "description": "Get Sample Events from custom table",
                     "query": "{{graphQueriesTableName}}\n | take 10"
+                },
+                {
+                    "description": "SAP Linux syslog events",
+                    "query": "Syslog\n | where SourceSystem == \"Linux\" and CollectorHostName == \"SAPLogServ\"\n | take 10"
+                },
+                {
+                    "description": "SAP HANA audit events",
+                    "query": "Syslog\n | where SourceSystem == \"HANADB\" and CollectorHostName == \"SAPLogServ\"\n | take 10"
+                },
+                {
+                    "description": "SAP Windows events by Provider",
+                    "query": "WindowsEvent\n | where Provider startswith \"Microsoft\"\n | summarize count() by Provider, Channel\n | sort by count_ desc"
+                },
+                {
+                    "description": "SAP DNS queries",
+                    "query": "ASimDnsActivityLogs\n | where EventProduct == \"BIND\" and EventOwner == \"SAPLogServ\"\n | summarize count() by DnsQueryTypeName, bin(TimeGenerated, 1h)"
+                },
+                {
+                    "description": "SAP Web Dispatcher access log",
+                    "query": "ASimWebSessionLogs\n | where EventProduct == \"SAP Web Dispatcher\" and EventOwner == \"SAPLogServ\"\n | summarize count() by EventResult, EventResultDetails, bin(TimeGenerated, 1h)"
+                },
+                {
+                    "description": "Azure VNet flow logs",
+                    "query": "ASimNetworkSessionLogs\n | where EventProduct == \"AzureVNet\" and EventOwner == \"SAPLogServ\"\n | summarize count() by NetworkDirection, NetworkProtocol, bin(TimeGenerated, 1h)"
                 }
             ],
             "dataTypes": [
