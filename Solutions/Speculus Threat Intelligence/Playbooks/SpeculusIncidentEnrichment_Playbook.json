@@ -1,0 +1,298 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Speculus Incident Enrichment - Playbook",
+    "description": "Runs on a Microsoft Sentinel incident, looks up every IP entity against the Speculus REST API (single-IP lookup), and posts the full Speculus enrichment (risk score, attribution, scanner/Tor/proxy classification, geo/network context) as an incident comment.",
+    "prerequisites": [
+      "Speculus API key (Bearer token, same key used for the TAXII data connector or REST API)",
+      "Microsoft Sentinel workspace with Sentinel enabled",
+      "An authorized Microsoft Sentinel API connection (created during deployment; requires one-time interactive authorization after deploy)"
+    ],
+    "postDeployment": [
+      "1. Open the deployed Logic App's API connections and authorize the 'azuresentinel' connection.",
+      "2. Enable the Logic App (deploys disabled).",
+      "3. Attach it to an automation rule (recommended: run on incident creation) or run it manually from an incident's 'Run playbook' action.",
+      "4. Confirm the Speculus API key has enough REST quota for your incident volume (this endpoint is quota-metered, unlike the TAXII data connector)."
+    ],
+    "lastUpdateTime": "2026-07-02T00:00:00.000Z",
+    "tags": [
+      "Speculus",
+      "Threat Intelligence",
+      "Enrichment",
+      "STIX",
+      "Automation"
+    ],
+    "support": {
+      "tier": "Partner"
+    },
+    "author": {
+      "name": "Speculus"
+    },
+    "entities": [
+      "ip"
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "SpeculusIncidentEnrichment_Playbook",
+        "notes": [
+          "Initial on-demand incident enrichment playbook using the Speculus REST single-IP lookup endpoint."
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "pb-speculus-incident-enrichment"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+    },
+    "Speculus_ApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Required. Your Speculus API key, sent as a Bearer token in the Authorization header."
+      }
+    },
+    "Speculus_BaseUrl": {
+      "type": "string",
+      "defaultValue": "https://feed.speculus.co",
+      "metadata": {
+        "description": "Base URL of the Speculus REST API. Change only if Speculus provides a different host."
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name (scopes the hidden-SentinelWorkspaceId tag)."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Disabled",
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          },
+          "SpeculusApiKey": {
+            "value": "[parameters('Speculus_ApiKey')]"
+          },
+          "SpeculusBaseUrl": {
+            "value": "[parameters('Speculus_BaseUrl')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "SpeculusApiKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "SpeculusBaseUrl": {
+              "type": "string",
+              "defaultValue": "https://feed.speculus.co"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_IPs": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/ip"
+              },
+              "runAfter": {}
+            },
+            "For_Each_IP_Entity": {
+              "type": "Foreach",
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              },
+              "actions": {
+                "Get_Speculus_Indicator": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{concat(parameters('SpeculusBaseUrl'), '/v1/objects/', items('For_Each_IP_Entity')?['Address'])}",
+                    "headers": {
+                      "Authorization": "@{concat('Bearer ', parameters('SpeculusApiKey'))}",
+                      "Accept": "application/vnd.oasis.stix+json;version=2.1"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs"
+                      ]
+                    }
+                  }
+                },
+                "Check_Indicator_Found": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@outputs('Get_Speculus_Indicator')['statusCode']",
+                          200
+                        ]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Get_Speculus_Indicator": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "actions": {
+                    "Parse_STIX_Bundle": {
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('Get_Speculus_Indicator')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            },
+                            "id": {
+                              "type": "string"
+                            },
+                            "objects": {
+                              "type": "array"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Filter_Indicator_Objects": {
+                      "type": "Query",
+                      "runAfter": {
+                        "Parse_STIX_Bundle": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "from": "@body('Parse_STIX_Bundle')?['objects']",
+                        "where": "@equals(item()?['type'], 'indicator')"
+                      }
+                    },
+                    "Get_Indicator_Object": {
+                      "type": "Compose",
+                      "runAfter": {
+                        "Filter_Indicator_Objects": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": "@first(body('Filter_Indicator_Objects'))"
+                    },
+                    "Add_Enrichment_Comment": {
+                      "type": "ApiConnection",
+                      "runAfter": {
+                        "Get_Indicator_Object": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "@{concat('**Speculus Threat Intelligence** — ', items('For_Each_IP_Entity')?['Address'], '\n\n', '| Field | Value |\n|---|---|\n', '| Risk score | ', string(outputs('Get_Indicator_Object')?['x_speculus_score']), ' (', outputs('Get_Indicator_Object')?['x_speculus_risk'], ') |\n', '| Activity | ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_activity'], 'n/a'), ' |\n', '| Attribution | ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_attribution'], 'n/a'), ' |\n', '| Labels | ', join(coalesce(outputs('Get_Indicator_Object')?['labels'], createArray()), ', '), ' |\n', '| Scanner | ', string(outputs('Get_Indicator_Object')?['x_speculus_is_scanner']), ' | \n', '| Tor exit node | ', string(outputs('Get_Indicator_Object')?['x_speculus_is_tor_node']), ' |\n', '| Blacklisted | ', string(outputs('Get_Indicator_Object')?['x_speculus_is_blacklisted']), ' |\n', '| ISP / ASN | ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_identity']?['isp'], 'n/a'), ' / ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_identity']?['asn'], 'n/a'), ' |\n', '| Location | ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_location']?['city'], 'n/a'), ', ', coalesce(outputs('Get_Indicator_Object')?['x_speculus_location']?['country'], 'n/a'), ' |\n', '| Verdict | ', coalesce(outputs('Get_Indicator_Object')?['description'], 'n/a'), ' |')}"
+                        },
+                        "path": "/Incidents/Comment"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "tags": {
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-SentinelTemplateName": "SpeculusIncidentEnrichment",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      }
+    }
+  ],
+  "outputs": {}
+}
