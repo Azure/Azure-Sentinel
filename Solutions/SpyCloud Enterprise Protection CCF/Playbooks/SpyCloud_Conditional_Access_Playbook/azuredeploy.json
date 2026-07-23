@@ -1,0 +1,868 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "SpyCloud Conditional Access Playbook",
+    "description": "Spycloud Conditional access playbook",
+    "prerequisites": "Create an App in App registration and provide permissions and create a client secret",
+    "lastUpdateTime": "2026-03-11T00:00:00.000Z",
+    "entities": [
+      "account"
+    ],
+    "tags": [],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "SpyCloud"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "SpyCloud_Conditional_Access_Playbook",
+      "type": "string"
+    }
+  },
+  "variables": {
+    "loginUrl": "[environment().authentication.loginEndpoint]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "Office365V1": "[concat('office365-', parameters('PlaybookName'))]",
+    "subscription": "[last(split(subscription().id, '/'))]",
+    "resourceGroupName": "[resourceGroup().name]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365V1')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('Office365V1')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Disabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "PlaybookName": {
+              "defaultValue": "[parameters('PlaybookName')]",
+              "type": "String"
+            },
+            "Notify_Users_Emails": {
+              "type": "String"
+            },
+            "Force_Password_Reset_On_Next_SignIn": {
+              "type": "Bool",
+              "defaultValue": false
+            },
+            "Disable_User": {
+              "type": "Bool",
+              "defaultValue": false
+            },
+            "Add_User_To_Azure_CA_Group": {
+              "type": "Bool",
+              "defaultValue": false
+            },
+            "Azure_CA_Group_Object_ID": {
+              "type": "String"
+            },
+            "Revoke_User_Sessions": {
+              "type": "Bool",
+              "defaultValue": false
+            },
+            "ClientID": {
+              "type": "String"
+            },
+            "TenantID": {
+              "type": "String"
+            },
+            "ClientSecret": {
+              "type": "String"
+            },
+            "DCE_Endpoint": {
+              "type": "String"
+            },
+            "DCE_Immutable_ID": {
+              "type": "String"
+            },
+            "Custom_Table_Name": {
+              "type": "String",
+              "defaultValue": "SpyCloud_ConditionalAccessLogsV2_CL"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Entities_-_Get_Accounts": {
+              "runAfter": {
+                "For_each_incident_alert": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/account"
+              }
+            },
+            "For_each": {
+              "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+              "actions": {
+                "Get_User_Details": {
+                  "runAfter": {
+                    "Set_user": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "uri": "https://graph.microsoft.com/v1.0/users/@{variables('user_email')}?$select=id,displayName,accountEnabled,lastPasswordChangeDateTime,userPrincipalName",
+                    "method": "GET",
+                    "authentication": {
+                      "type": "ActiveDirectoryOAuth",
+                      "authority": "@{variables('Authority')}",
+                      "tenant": "@{parameters('TenantID')}",
+                      "audience": "@{variables('Audience')}",
+                      "clientId": "@{parameters('ClientID')}",
+                      "secret": "@{parameters('ClientSecret')}"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "contentTransfer": {
+                      "transferMode": "Chunked"
+                    }
+                  }
+                },
+                "Set_user": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "user_email",
+                    "value": "@{concat(items('For_each')?['Name'],'@',items('for_each')?['UPNSuffix'])}"
+                  }
+                },
+                "Condition_-_Check_if_user_is_enabled": {
+                  "actions": {
+                    "Condition_Check_if_password_has_not_been_reset_since_7_days": {
+                      "actions": {
+                        "Condition_-_Check_if_user_needs_to_be_added_to_CA_group_": {
+                          "actions": {
+                            "Add_user_to_Conditional_Access_Group": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "https://graph.microsoft.com/v1.0/groups/@{parameters('Azure_CA_Group_Object_ID')}/members/$ref",
+                                "method": "POST",
+                                "body": {
+                                  "@@odata.id": "https://graph.microsoft.com/v1.0/directoryObjects/@{body('Get_User_Details')?['id']}"
+                                },
+                                "authentication": {
+                                  "type": "ActiveDirectoryOAuth",
+                                  "authority": "@{variables('Authority')}",
+                                  "tenant": "@{parameters('TenantID')}",
+                                  "audience": "@{variables('Audience')}",
+                                  "clientId": "@{parameters('ClientID')}",
+                                  "secret": "@{parameters('ClientSecret')}"
+                                }
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
+                              }
+                            },
+                            "Set_Added_To_CA_Group_Enforced": {
+                              "runAfter": {
+                                "Add_user_to_Conditional_Access_Group": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "AddedToCAGroupEnforced",
+                                "value": true
+                              }
+                            },
+                            "Set_Added_To_CA_Group_Enforced_Text": {
+                              "runAfter": {
+                                "Set_Added_To_CA_Group_Enforced": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "AddedToCAGroupText",
+                                "value": "Successfully added the user to Conditional Access Group."
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Condition_-_Check_Revoke_User_Sessions": [
+                              "Succeeded"
+                            ]
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "not": {
+                                  "equals": [
+                                    "@parameters('Add_User_To_Azure_CA_Group')",
+                                    "@true"
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Condition_-_If_User_needs_to_be_disabled": {
+                          "actions": {
+                            "HTTP_-_Disable_User": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "https://graph.microsoft.com/v1.0/users/@{variables('user_email')}",
+                                "method": "PATCH",
+                                "body": {
+                                  "accountEnabled": false
+                                },
+                                "authentication": {
+                                  "type": "ActiveDirectoryOAuth",
+                                  "authority": "@{variables('Authority')}",
+                                  "tenant": "@{parameters('TenantID')}",
+                                  "audience": "@{variables('Audience')}",
+                                  "clientId": "@{parameters('ClientID')}",
+                                  "secret": "@{parameters('ClientSecret')}"
+                                }
+                              }
+                            },
+                            "Set_Account_Disabled_": {
+                              "runAfter": {
+                                "HTTP_-_Disable_User": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "AccountDisabledEnforced",
+                                "value": true
+                              }
+                            },
+                            "Set_Account_Disabled_Text": {
+                              "runAfter": {
+                                "Set_Account_Disabled_": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "AccountDisabledText",
+                                "value": "The User has been successfully Disabled."
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Condition_-_Check_if_user_needs_to_be_added_to_CA_group_": [
+                              "Succeeded"
+                            ]
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "equals": [
+                                  "@parameters('Disable_User')",
+                                  "@true"
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Condition_-_Check_Revoke_User_Sessions": {
+                          "actions": {
+                            "HTTP_-_Revoke_User_Sessions": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "https://graph.microsoft.com/v1.0/users/@{variables('user_email')}/revokeSignInSessions",
+                                "method": "POST",
+                                "authentication": {
+                                  "type": "ActiveDirectoryOAuth",
+                                  "authority": "@{variables('Authority')}",
+                                  "tenant": "@{parameters('TenantID')}",
+                                  "audience": "@{variables('Audience')}",
+                                  "clientId": "@{parameters('ClientID')}",
+                                  "secret": "@{parameters('ClientSecret')}"
+                                }
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
+                              }
+                            },
+                            "Set_User_Session_Enforced": {
+                              "runAfter": {
+                                "HTTP_-_Revoke_User_Sessions": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "UserSessionsRevokeEnforced",
+                                "value": true
+                              }
+                            },
+                            "Set_User_Session_Revoke_Text": {
+                              "runAfter": {
+                                "Set_User_Session_Enforced": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "UserSessionRevokeText",
+                                "value": "User sessions has been scessfully revoked."
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Condition-Check_for_Password_Reset": [
+                              "Succeeded"
+                            ]
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "equals": [
+                                  "@parameters('Revoke_User_Sessions')",
+                                  "@true"
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Condition-Check_for_Password_Reset": {
+                          "actions": {
+                            "Force_Password_Reset": {
+                              "type": "Http",
+                              "inputs": {
+                                "uri": "https://graph.microsoft.com/v1.0/users/@{variables('user_email')}",
+                                "method": "PATCH",
+                                "body": {
+                                  "passwordProfile": {
+                                    "forceChangePasswordNextSignIn": true
+                                  }
+                                },
+                                "authentication": {
+                                  "type": "ActiveDirectoryOAuth",
+                                  "authority": "@{variables('Authority')}",
+                                  "tenant": "@{parameters('TenantID')}",
+                                  "audience": "@{variables('Audience')}",
+                                  "clientId": "@{parameters('ClientID')}",
+                                  "secret": "@{parameters('ClientSecret')}"
+                                }
+                              },
+                              "runtimeConfiguration": {
+                                "contentTransfer": {
+                                  "transferMode": "Chunked"
+                                }
+                              }
+                            },
+                            "Set_Passwod_Reset_Enforced": {
+                              "runAfter": {
+                                "Force_Password_Reset": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "PasswordResetEnforced",
+                                "value": true
+                              }
+                            },
+                            "Set_Password_Reset_Text": {
+                              "runAfter": {
+                                "Set_Passwod_Reset_Enforced": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "PasswordResetText",
+                                "value": "Password has been successfully reset"
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {}
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "equals": [
+                                  "@parameters('Force_Password_Reset_On_Next_SignIn')",
+                                  "@true"
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "Add_comment_to_incident": {
+                          "runAfter": {
+                            "Condition_-_If_User_needs_to_be_disabled": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<p class=\"editor-paragraph\">For User @{items('For_each')?['Name']} (UPN -@{variables('user_email')} ) the following actions were done from the Spycloud playbook. Manager () is notified.</p><p class=\"editor-paragraph\">@{variables('PasswordResetText')}</p><p class=\"editor-paragraph\">@{variables('AddedToCAGroupText')}</p><p class=\"editor-paragraph\">@{variables('UserSessionRevokeText')}</p><p class=\"editor-paragraph\">@{variables('AccountDisabledText')}</p><br>"
+                            },
+                            "path": "/Incidents/Comment"
+                          }
+                        },
+                        "Send_an_email_-_to_manager_": {
+                          "runAfter": {
+                            "Add_comment_to_incident": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['office365']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "To": "@parameters('Notify_Users_Emails')",
+                              "Subject": "@{items('For_each')?['Name']} - security risk!",
+                              "Body": "<p class=\"editor-paragraph\">Security notification! This is automated email sent by Microsoft Sentinel SpyCloud Automation!<br><br>For User @{items('For_each')?['Name']} (UPN -@{variables('user_email')} ) the following actions were done from the Spycloud playbook. <br>@{variables('PasswordResetText')}<br>@{variables('AddedToCAGroupText')}<br>@{variables('UserSessionRevokeText')}<br>@{variables('AccountDisabledText')}</p><br><br><br><p class=\"editor-paragraph\">Can you please notify the user and work with him to reach&nbsp;our support.</p><br>",
+                              "Importance": "High"
+                            },
+                            "path": "/v2/Mail"
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Add_comment_to_incident_-_Password_Latest": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "message": "<p class=\"editor-paragraph\">For User @{items('For_each')?['Name']} (UPN -@{variables('user_email')} ) no actions were done from the Spycloud playbook.</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Reason</strong></b>: Password has been reset after the breached date by the user.</p><br><br><br><br>"
+                              },
+                              "path": "/Incidents/Comment"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@parseDateTime(body('Get_User_Details')?['lastPasswordChangeDateTime'])",
+                                "@parseDateTime(variables('SpyCloudPublishDate'))"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "GetAccessToken": {
+                      "runAfter": {
+                        "Condition_Check_if_password_has_not_been_reset_since_7_days": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@concat(variables('loginUrl'), parameters('TenantID'), '/oauth2/v2.0/token')",
+                        "method": "POST",
+                        "headers": {
+                          "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        "body": "grant_type=client_credentials&client_id=@{parameters('ClientID')}&client_secret=@{parameters('ClientSecret')}&scope=https://monitor.azure.com/.default"
+                      },
+                      "runtimeConfiguration": {
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    },
+                    "Log_ingestion": {
+                      "runAfter": {
+                        "GetAccessToken": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@variables('log_ingestion_api')",
+                        "method": "POST",
+                        "headers": {
+                          "Authorization": "Bearer @{body('GetAccessToken')?['access_token']}",
+                          "Content-Type": "application/json"
+                        },
+                        "body": [
+                          {
+                            "TimeGenerated": "@{utcNow()}",
+                            "IncidentId": "@{triggerBody()?['object']?['properties']?['providerIncidentId']}",
+                            "DocumentId": "@{variables('DocumentID')}",
+                            "SpyCloudPublishDate": "@{variables('SpyCloudPublishDate')}",
+                            "InfectedTime": "@{variables('InfectedTime')}",
+                            "BreachTitle": "@{variables('BreachTitle')}",
+                            "InfectedMachineId": "@{variables('InfectedMachineId')}",
+                            "Username": "@{variables('user_email')}",
+                            "UserEmail": "@{variables('user_email')}",
+                            "ForcedPasswordResetOnNextSignIn": "@variables('PasswordResetEnforced')",
+                            "UserSessionsRevoked": "@variables('UserSessionsRevokeEnforced')",
+                            "CAgroup": "@variables('AddedToCAGroupEnforced')",
+                            "UserDisabled": "@variables('AccountDisabledEnforced')",
+                            "PlaybookName": "SpyCloud_Conditonal_Access_Automation"
+                          }
+                        ]
+                      },
+                      "runtimeConfiguration": {
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Get_User_Details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Add_comment_to_incident_-_user_disable": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                            "message": "<p class=\"editor-paragraph\">For User @{items('For_each')?['Name']} (UPN -@{variables('user_email')} ) no actions were done from the Spycloud playbook.</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Reason</strong></b>: The user is currently disabled..<br><br><br></p><br>"
+                          },
+                          "path": "/Incidents/Comment"
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Get_User_Details')?['accountEnabled']",
+                          "@true"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Entities_-_Get_Accounts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "For_each_incident_alert": {
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "actions": {
+                "Set_custom_details_object": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "incident_custom_details_object",
+                    "value": "@json(items('For_each_incident_alert')?['properties']?['additionalData']?['Custom Details'])"
+                  }
+                },
+                "Set_Spycloud_publish_date": {
+                  "runAfter": {
+                    "Set_custom_details_object": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "SpyCloudPublishDate",
+                    "value": "@first(coalesce(variables('incident_custom_details_object')?['SpyCloudPublishDate'], createArray('')))"
+                  }
+                },
+                "Set_Infected_Time": {
+                  "runAfter": {
+                    "Set_Spycloud_publish_date": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "InfectedTime",
+                    "value": "@first(coalesce(variables('incident_custom_details_object')?['InfectedTime'], createArray('')))"
+                  }
+                },
+                "Set_Breach_Title": {
+                  "runAfter": {
+                    "Set_Infected_Time": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "BreachTitle",
+                    "value": "@first(coalesce(variables('incident_custom_details_object')?['BreachTitle'], createArray('')))\n"
+                  }
+                },
+                "Set_Infected_Machine_ID": {
+                  "runAfter": {
+                    "Set_Breach_Title": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "InfectedMachineId",
+                    "value": "@first(coalesce(variables('incident_custom_details_object')?['InfectedMachineId'], createArray('')))"
+                  }
+                },
+                "Set_Document_ID": {
+                  "runAfter": {
+                    "Set_Infected_Machine_ID": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "DocumentID",
+                    "value": "@first(coalesce(variables('incident_custom_details_object')?['DocumentID'], createArray('')))"
+                  }
+                },
+                "Set_log_ingestion_api_url": {
+                  "runAfter": {
+                    "Set_Document_ID": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "log_ingestion_api",
+                    "value": "@concat(concat(concat(parameters('DCE_Endpoint'),'/dataCollectionRules/'),parameters('DCE_Immutable_ID')  ),concat('/streams/Custom-',concat(parameters('Custom_Table_Name'), '?api-version=2023-01-01')  ))"
+                  }
+                }
+              },
+              "runAfter": {
+                "variables_Section": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "variables_Section": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "incident_custom_details_object",
+                    "type": "object"
+                  },
+                  {
+                    "name": "SpyCloudPublishDate",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InfectedTime",
+                    "type": "string"
+                  },
+                  {
+                    "name": "BreachTitle",
+                    "type": "string"
+                  },
+                  {
+                    "name": "InfectedMachineId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "DocumentID",
+                    "type": "string"
+                  },
+                  {
+                    "name": "last_password_reset_date",
+                    "type": "string"
+                  },
+                  {
+                    "name": "Authority",
+                    "type": "string",
+                    "value": "[variables('loginUrl')]"
+                  },
+                  {
+                    "name": "Audience",
+                    "type": "string",
+                    "value": "https://graph.microsoft.com"
+                  },
+                  {
+                    "name": "user_email",
+                    "type": "string"
+                  },
+                  {
+                    "name": "log_ingestion_api",
+                    "type": "string"
+                  },
+                  {
+                    "name": "PasswordResetEnforced",
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "name": "AccountDisabledEnforced",
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "name": "AddedToCAGroupEnforced",
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "name": "PasswordResetText",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AccountDisabledText",
+                    "type": "string"
+                  },
+                  {
+                    "name": "AddedToCAGroupText",
+                    "type": "string"
+                  },
+                  {
+                    "name": "UserSessionsRevokeEnforced",
+                    "type": "boolean",
+                    "value": false
+                  },
+                  {
+                    "name": "UserSessionRevokeText",
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365V1'))]",
+                "connectionName": "[variables('Office365V1')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
