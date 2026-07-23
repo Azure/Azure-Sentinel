@@ -1,32 +1,32 @@
 {
   "id": "ibossAma",
-  "title": "[Recommended] iboss via AMA",
+  "title": "iboss via AMA",
   "publisher": "iboss",
   "descriptionMarkdown": "The [iboss](https://www.iboss.com) data connector enables you to seamlessly connect your Threat Console to Microsoft Sentinel and enrich your instance with iboss URL event logs. Our logs are forwarded in Common Event Format (CEF) over Syslog and the configuration required can be completed on the iboss platform without the use of a proxy. Take advantage of our connector to garner critical data points and gain insight into security threats.",
   "graphQueries": [
     {
       "metricName": "Total data received",
       "legend": "ibossUrlEvent",
-      "baseQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'iboss'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)"
+      "baseQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'iboss' and AdditionalExtensions contains 'amaExternalLogService=true'"
     }
   ],
   "sampleQueries": [
     {
       "description": "Logs Received from the past week",
-      "query": "ibossUrlEvent | where TimeGenerated > ago(7d)"
+      "query": "CommonSecurityLog\n | where DeviceVendor =~ 'iboss' and TimeGenerated > ago(7d) and AdditionalExtensions contains 'amaExternalLogService=true'"
     }
   ],
   "dataTypes": [
     {
       "name": "ibossUrlEvent",
-      "lastDataReceivedQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'iboss'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+      "lastDataReceivedQuery": "CommonSecurityLog\n | where DeviceVendor =~ 'iboss' and AdditionalExtensions contains 'amaExternalLogService=true'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
     }
   ],
   "connectivityCriterias": [
     {
       "type": "IsConnectedQuery",
       "value": [
-        "CommonSecurityLog\n |where DeviceVendor =~ 'iboss'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+        "CommonSecurityLog\n | where DeviceVendor =~ 'iboss'\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
       ]
     }
   ],
@@ -56,68 +56,39 @@
           "action": true
         }
       }
-    ],
-	"customs": [
-      {
-        "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
-      },
-      {
-        "description": "Common Event Format (CEF) via AMA and Syslog via AMA data connectors must be installed [Learn more](https://learn.microsoft.com/azure/sentinel/connect-cef-ama#open-the-connector-page-and-create-the-dcr)"
-      }	  
     ]
   },
   "instructionSteps": [
     {
-      "title": "",
-      "description": "",
-      
+      "title": "Configure AMA Data Connector",
+      "description": "Steps to configure the iboss AMA Data Connector",
          "instructions": [
 			       {
                     "parameters": {
-                        "title": "1. Kindly follow the steps to configure the data connector",
+                        "title": "Kindly follow the steps to configure the data connector",
                         "instructionSteps": [
-                            {
-                                "title": "Step A. Configure the Common Event Format (CEF) via AMA data connector",
-                                "description": "_Note:- CEF logs are collected only from Linux Agents_\n\n1. Navigate to Microsoft Sentinel workspace ---> configuration ---> Data connector blade .\n\n2. Search for 'Common Event Format (CEF) via AMA' data connector and open it.\n\n3. Check If there is no existing DCR configured to collect required facility of logs, Create a new DCR (Data Collection Rule)\n\n\t_Note:- It is recommended to install minimum 1.27 version of AMA agent [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal ) and ensure there is no duplicate DCR as it can cause log duplicacy_\n\n4. Run the command provided in the CEF via AMA data connector page to configure the CEF collector on the machine",
-                                "instructions": [
-                                ]
-                            },
-                            {
-                                "title": "Step B. Forward Common Event Format (CEF) logs",
-                                "description": "Set your Threat Console to send Syslog messages in CEF format to your Azure workspace. Make note of your Workspace ID and Primary Key within your Log Analytics Workspace (Select the workspace from the Log Analytics workspaces menu in the Azure portal. Then select Agents management in the Settings section). \n\n>1. Navigate to Reporting & Analytics inside your iboss Console\n\n>2. Select Log Forwarding -> Forward From Reporter\n\n>3. Select Actions -> Add Service\n\n>4. Toggle to Microsoft Sentinel as a Service Type and input your Workspace ID/Primary Key along with other criteria. If a dedicated proxy Linux machine has been configured, toggle to Syslog as a Service Type and configure the settings to point to your dedicated proxy Linux machine\n\n>5. Wait one to two minutes for the setup to complete\n\n>6. Select your Microsoft Sentinel Service and verify the Sentinel Setup Status is Successful. If a dedicated proxy Linux machine has been configured, you may proceed with validating your connection",
-                                "instructions": [
-                                ]
-                            },
-							{
-								"title": "Step C. Validate connection",
-								"description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\nIt may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n 1. Make sure that you have Python on your machine using the following command: python -version\n\n2. You must have elevated permissions (sudo) on your machine",
-								"instructions": [
-									{
-										"parameters": {
-										"label": "Run the following command to validate your connectivity:",
-										"value": "sudo wget -O Sentinel_AMA_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Syslog/Sentinel_AMA_troubleshoot.py&&sudo python Sentinel_AMA_troubleshoot.py --cef"
-										},
-										"type": "CopyableLabel"
-									}
-								]
-							}							
+                          {
+                            "title": "Step A. Gather Required Configuration Details in Azure Arc",
+                            "description": "1. Navigate to Azure Arc ---> Azure Arc Resources ---> Machines.\n\n2. Add a machine ---> Add a single server ---> Generate script.\n\n3. Select the resource group, this should be the same group as the Log Analytics Workspace for your Microsoft Sentinel instance you will be using\n\n4. Select a region and ensure it is in the same region as your Log Analytics Workspace\n\n5. Select Linux as Operating System\n\n6. Click Next\n\n7. Download the script and use this information for the next step when configuring your Microsoft Sentinel AMA integration iboss side.\n\n8. Navigate to the Log Analytics Workspace of your Microsoft Sentinel instance and find it's resource group, workspace name, and workspace id"
+                          },
+                          {
+                            "title": "Step B. Forward Common Event Format (CEF) logs",
+                            "description": "Set your Threat Console to send Syslog messages in CEF format to your Azure workspace. (Ensure you have the information gathered from the previous section)\n\n>1. Navigate to the Integrations Marketplace inside your iboss Console\n\n>2. Select Microsoft Sentinel AMA Log Forwarding\n\n>3. Select Add Integration\n\n4. Use the information from the script and your log analytics workspace to configure the integration.\n\n5. Add the integration\n\n>6. An email with be sent to your iboss alerts email to authenticate. Please do so within five minutes\n\n7. After authenticating, wait 15 to 20 minutes and ensure the Microsoft Sentinel Status of your integration is successful."
+                          },
+                          {
+                            "title": "Step C. Validate connection",
+                            "description": "1. Follow the instructions to validate your connectivity:\n\n2. Open Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n3. It may take about 20 minutes until the connection streams data to your workspace."
+                          }
                         ]
                     },
                     "type": "InstructionStepsGroup"
                 }
             ]    
-        
-      
-    },
-    
-    {
-      "title": "2. Secure your machine ",
-      "description": "Make sure to configure the machine's security according to your organization's security policy (Only applicable if a dedicated proxy Linux machine has been configured).\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
     }
   ],
   "metadata": {
     "id": "f8c448b1-3df4-444d-aded-63e4ad2aec08",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "kind": "dataConnector",
     "author": {
       "name": "iboss"

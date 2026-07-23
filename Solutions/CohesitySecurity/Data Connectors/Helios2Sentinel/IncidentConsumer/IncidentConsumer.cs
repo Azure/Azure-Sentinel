@@ -29,6 +29,7 @@ namespace IncidentConsumer
     public class IncidentConsumer
     {
         private static string keyVaultName = Environment.GetEnvironmentVariable("keyVaultName");
+        private static string clientId = Environment.GetEnvironmentVariable("clientId");
         string TenantId = Environment.GetEnvironmentVariable("TenantId");
         string ClientId = GetSecret("ClientId");
         string ClientKey = GetSecret("ClientKey");
@@ -37,9 +38,17 @@ namespace IncidentConsumer
         private static string GetSecret(string secretName)
         {
             var kvUri = $"https://{IncidentConsumer.keyVaultName}.vault.azure.net";
-            var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
-            var secret = secretClient.GetSecret(secretName);
-            return  secret.Value.Value;
+
+            if (clientId == null)
+            {
+                var defaultSecretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                return defaultSecretClient.GetSecret(secretName).Value.Value;
+            }
+
+            var secretClient = new SecretClient(new Uri(kvUri), new ManagedIdentityCredential(
+                clientId: clientId));
+
+            return secretClient.GetSecret(secretName).Value.Value;
         }
 
         /*

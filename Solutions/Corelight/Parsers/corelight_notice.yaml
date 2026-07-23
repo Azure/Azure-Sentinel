@@ -1,50 +1,147 @@
-id: eb6b2019-5a24-520e-aa03-1c4a0f3e0d56
+id: 9573113c-ae33-48f0-8419-0862694d3a6c
 Function:
-  Title: corelight_notice parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight Notice Events
+  Version: 1.1.0
+  LastUpdated: '2024-12-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_notice
 FunctionAlias: corelight_notice
-FunctionQuery: |+
-  let corelight_notice = view () {
-      Corelight_v2_notice_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          fuid=fuid_s,
-          file_mime_type=file_mime_type_s,
-          file_desc=file_desc_s,
-          proto=proto_s,
-          note=note_s,
-          msg=msg_s,
-          sub=sub_s,
-          src=src_s,
-          dst=dst_s,
-          p=p_d,
-          n=n_d,
-          peer_descr=peer_descr_s,
-          actions=actions_s,
-          suppress_for=suppress_for_d,
-          remote_location_country_code=remote_location_country_code_s,
-          remote_location_region=remote_location_region_s,
-          remote_location_city=remote_location_city_s,
-          remote_location_latitude=remote_location_latitude_d,
-          remote_location_longitude=remote_location_longitude_d,
-          severity_level=severity_level_d,
-          severity_name=severity_name_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="notice",
-          ts=TimeGenerated
-  };
-  corelight_notice
+FunctionQuery: |
+  let SeverityLookup = datatable(
+        severity_name: string,
+        severity_id: real,
+        severity_description: string,
+        severity_syslog_definition: string
+    )[
+        "emergencies",0,"System unstable","LOG_EMERG",
+        "alerts",1,"Immediate action needed","LOG_ALERT",
+        "critical",2,"Critical conditions","LOG_CRIT",
+        "errors",3,"Error conditions","LOG_ERR",
+        "warnings",4,"Warning conditions","LOG_WARNING",
+        "notifications",5,"Normal but significant condition","LOG_NOTICE",
+        "informational",6,"Informational messages only","LOG_INFO",
+        "debugging",7,"Debugging messages","LOG_DEBUG"
+    ];
+  let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_notice = view () {
+        union isfuzzy=true Corelight_v2_notice_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+        ( corelight_conn
+        | project uid, local_orig, local_resp
+        ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            timestamp = column_ifexists("_timestamp_t", ""),
+            _timestamp = column_ifexists("_timestamp_s", ""),
+            path = column_ifexists("_path_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            uid = column_ifexists("uid_s", ""),
+            id_orig_h = column_ifexists("id_orig_h_s", ""),
+            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h = column_ifexists("id_resp_h_s", ""),
+            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+            fuid = column_ifexists("fuid_s", ""),
+            file_mime_type = column_ifexists("file_mime_type_s", ""),
+            file_desc = column_ifexists("file_desc_s", ""),
+            proto = column_ifexists("proto_s", ""),
+            note = column_ifexists("note_s", ""),
+            msg = column_ifexists("msg_s", ""),
+            sub = column_ifexists("sub_s", ""),
+            src = column_ifexists("src_s", ""),
+            dst = column_ifexists("dst_s", ""),
+            p = column_ifexists("p_d", real(null)),
+            n = column_ifexists("n_d", real(null)),
+            peer_descr = column_ifexists("peer_descr_s", ""),
+            actions = column_ifexists("actions_s", ""),
+            version = column_ifexists("_version_s", ""),
+            suppress_for = column_ifexists("suppress_for_d", real(null)),
+            remote_location_country_code = column_ifexists("remote_location_country_code_s", ""),
+            remote_location_region = column_ifexists("remote_location_region_s", ""),
+            remote_location_city = column_ifexists("remote_location_city_s", ""),
+            remote_location_latitude = column_ifexists("remote_location_latitude_d", real(null)),
+            remote_location_longitude = column_ifexists("remote_location_longitude_d", real(null)),
+            severity_level = column_ifexists("severity_level_d", real(null)),
+            severity_name = column_ifexists("severity_name_s", "")
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "notice",
+            ts = TimeGenerated,
+            action = actions,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            body = msg,
+            signature = note,
+            severity_id = severity_level,
+            severity = severity_name,
+            sensor_name = coalesce(system_name, "unknown"),
+            timestamp = coalesce(tostring(timestamp), _timestamp)
+        | lookup kind=leftouter SeverityLookup on $left.severity_level == $right.severity_id
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | project
+            TimeGenerated,
+            path,
+            timestamp,
+            system_name,
+            write_ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            fuid,
+            file_mime_type,
+            file_desc,
+            proto,
+            note,
+            msg,
+            sub,
+            src,
+            dst,
+            p,
+            n,
+            peer_descr,
+            actions,
+            version,
+            suppress_for,
+            remote_location_country_code,
+            remote_location_region,
+            remote_location_city,
+            remote_location_latitude,
+            remote_location_longitude,
+            severity_level,
+            severity_name,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            action,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            body,
+            signature,
+            severity_id,
+            severity,
+            severity_description,
+            severity_syslog_definition,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_notice
 
-...

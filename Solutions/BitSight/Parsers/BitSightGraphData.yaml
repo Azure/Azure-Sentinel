@@ -1,29 +1,63 @@
-id: 6495f5c6-12ac-4416-8060-94e3cfad695b
+﻿id: 6495f5c6-12ac-4416-8060-94e3cfad695b
 Function:
   Title: Parser for BitSightGraphData
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2026-05-25'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightGraphData
 FunctionAlias: BitSightGraphData
 FunctionQuery: |
-    let GraphData_view  = view () {
-        BitsightGraph_data_CL
-        | extend
-                EventVendor ="BitSight",
-                EventProduct ="GraphData",
-                RatingDate = column_ifexists('Rating_Date_s', ''),
-                Rating = column_ifexists('Rating_d', ''),
-                CompanyName = column_ifexists('Company_name_s', ''),
-                RatingDifferance = column_ifexists('Rating_differance_d', '')
-        | project
-                TimeGenerated,
-                EventVendor,
-                EventProduct,
-                RatingDate,
-                Rating,
-                CompanyName,
-                RatingDifferance,
-                Type
-    };
-    GraphData_view
+    union isfuzzy=true
+        (
+            BitsightGraph_data_CL
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "GraphData",
+                    RatingDate = column_ifexists('Rating_Date', ''),
+                    Rating = column_ifexists('Rating', ''),
+                    CompanyName = column_ifexists('Company_name', ''),
+                    RatingDifferance = column_ifexists('Rating_differance', '')
+            | project
+                    TimeGenerated,
+                    EventVendor,
+                    EventProduct,
+                    RatingDate,
+                    Rating,
+                    CompanyName,
+                    RatingDifferance
+        ),
+        (
+            BitSightCompanyDetails_CL
+            | summarize arg_max(TimeGenerated, *) by Guid
+            | mv-expand RatingEntry = Ratings
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "GraphData",
+                    CompanyName = Name,
+                    RatingDate = tostring(RatingEntry["rating_date"]),
+                    Rating = toint(RatingEntry["rating"]),
+                    RatingRange = tostring(RatingEntry["range"]),
+                    RatingColor = tostring(RatingEntry["rating_color"])
+            | sort by Guid asc, RatingDate asc
+            | serialize
+            | extend
+                    PrevGuid = prev(Guid, 1),
+                    PrevRating = prev(Rating, 1)
+            | extend
+                    RatingDifference = iff(Guid == PrevGuid, Rating - PrevRating, int(null)),
+                    RatingDifferance = iff(Guid == PrevGuid, Rating - PrevRating, int(null))
+            | project-away PrevGuid, PrevRating
+            | project
+                    TimeGenerated,
+                    EventVendor,
+                    EventProduct,
+                    CompanyName,
+                    Guid,
+                    RatingDate,
+                    Rating,
+                    RatingRange,
+                    RatingColor,
+                    RatingDifference,
+                    RatingDifferance,
+                    ConnectorName
+        )

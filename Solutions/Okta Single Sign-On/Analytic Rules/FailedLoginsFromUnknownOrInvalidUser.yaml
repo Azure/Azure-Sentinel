@@ -1,7 +1,7 @@
 id: 884be6e7-e568-418e-9c12-89229865ffde
 name: Failed Logins from Unknown or Invalid User
 description: |
-  'This query searches for numerous login attempts to the management console with an unknown or invalid user name.'
+  This rule alerts when an unknown or invalid user generates more than 15 failed Okta management console login attempts from the same IP address within 5 minutes.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -18,29 +18,41 @@ triggerThreshold: 0
 tactics:
   - CredentialAccess
 relevantTechniques:
-  - T1110
+  - T1110.001
 query: |
+  // Adjust threshold for failed logins to reduce noise. This can be customized based on the organization's typical login patterns.
   let FailureThreshold = 15;
+  // Adjust list of allowed users to reduce false positives. This can include service accounts, known test accounts, or any other accounts that are expected to generate failed login attempts.
+  let AllowedUsers = dynamic([]);
   let FailedLogins = OktaSSO
   | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
+  | where isnotempty(actor_alternateId_s) and actor_alternateId_s !in (AllowedUsers)
   | summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)
   | where count_ > FailureThreshold
   | project client_ipAddress_s, actor_alternateId_s;
   OktaSSO
   | join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s
   | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
-  | summarize count() by actor_alternateId_s, ClientIP = client_ipAddress_s, City = column_ifexists('client_geographicalContext_city_s', ""), Country = column_ifexists('client_geographicalContext_country_s', ""), column_ifexists('published_t', now())
-  | sort by column_ifexists('published_t', now()) desc
-  | extend timestamp = column_ifexists('published_t', now()), IPCustomEntity = ClientIP, AccountCustomEntity = actor_alternateId_s
-
+  | summarize FailedLoginCount = count(), City = take_any(column_ifexists('client_geographicalContext_city_s', "")), Country = take_any(column_ifexists('client_geographicalContext_country_s', "")), LastSeen = max(column_ifexists('TimeGenerated', now())) by actor_alternateId_s, client_ipAddress_s
+  | sort by LastSeen desc
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.1.0
+        columnName: client_ipAddress_s
+customDetails:
+  FailedLoginCount: FailedLoginCount
+  City: City
+  Country: Country
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Failed logins from unknown or invalid user: {{actor_alternateId_s}} from IP {{client_ipAddress_s}}'
+  alertDescriptionFormat: 'Account {{actor_alternateId_s}} generated {{FailedLoginCount}} failed logins from IP {{client_ipAddress_s}} in the last 5 minutes.'
+version: 1.1.2
 kind: Scheduled

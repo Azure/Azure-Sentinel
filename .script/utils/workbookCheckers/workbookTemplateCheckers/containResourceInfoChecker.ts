@@ -1,4 +1,4 @@
-import { WorkbookTemplatesValidationError } from "../../validationError";
+import { WorkbookTemplatesValidationError } from "../../validationError.js";
 
 const guidRegex: string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
 const resourceRegex: string = `subscriptions\/${guidRegex}\/`;

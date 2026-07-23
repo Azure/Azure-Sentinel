@@ -7,7 +7,7 @@ description: |
 severity: Low
 status: Available
 requiredDataConnectors:
-  - connectorId: CloudNgfwByPAN
+  - connectorId: AzureCloudNGFWByPaloAltoNetworks
     dataTypes:
       - fluentbit_CL
 queryFrequency: 1h
@@ -21,20 +21,26 @@ relevantTechniques:
 query: |
   fluentbit_CL
   | where ident_s == "TRAFFIC"
-  | extend DestinationPort = tostring(parse_json(Message).dport)
-  | where isnotempty(DestinationPort) and parse_json(Message).action !in ("reset-both", "deny")
-  | where DestinationPort !in ("443", "53", "389", "80", "0", "880", "8888", "8080")
-  | where parse_json(Message).app == "incomplete"
-  | where toint(DestinationPort) !between (49512 .. 65535)
   | where isnotempty(FirewallName_s)
-  | where parse_json(Message).dst_ip !startswith "10."
-  | extend Reason = coalesce(column_ifexists("Reason", ""), tostring(parse_json(Message).session_end_reason), "")
+  | extend message = parse_json(Message)
+  | extend DestinationPort = tostring(message.dport)
+  | extend SourceIP = tostring(message.src_ip)
+  | extend DestinationIP = tostring(message.dst_ip)
+  | extend Application = tostring(message.app)
+  | extend Protocol = tostring(message.proto)
+  | extend Action = tostring(message.action)
+  | where isnotempty(DestinationPort) and message.action !in ("reset-both", "deny")
+  | where DestinationPort !in ("443", "53", "389", "80", "0", "880", "8888", "8080")
+  | where message.app == "incomplete"
+  | where toint(DestinationPort) !between (49512 .. 65535)
+  | where message.dst_ip !startswith "10."
+  | extend Reason = coalesce(column_ifexists("Reason", ""), tostring(message.session_end_reason), "")
   | where Reason !has "aged-out"
   | where Reason !has "tcp-fin"
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action), tostring(parse_json(Message).dst_ip),Message
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action, DestinationIP
   | where count_ >= 10
-  | summarize StartTime = min(StartTime), EndTime = max(EndTime), makeset(parse_json(Message).dst_ip), totalcount = sum(count_) by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action),Message
-  | extend IPAddress = tostring(parse_json(Message).src_ip)
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), makeset(DestinationIP), totalcount = sum(count_) by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action
+  | extend IPAddress = SourceIP
   | extend HostName = tostring(split(FirewallName_s, ".")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))
   | extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)
 entityMappings:
@@ -50,5 +56,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.4
+version: 1.0.6
 kind: Scheduled

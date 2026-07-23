@@ -1,0 +1,285 @@
+Parser:
+  Title: Dns ASIM parser for Infoblox BloxOne
+  Version: '0.1.0'
+  LastUpdated: Sep 11, 2024
+Product:
+  Name: Infoblox BloxOne
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+- Title: ASIM Dns Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Infoblox BloxOne Documentation
+  Link: https://docs.infoblox.com/space/BloxOneThreatDefense
+Description: |
+  This ASIM parser supports normalizing Dns logs from Infoblox BloxOne to the ASIM Dns normalized schema. These events are captured through the Azure Monitor Agent (AMA) which are sent by the Data Connector Service of Infoblox BloxOne.
+ParserName: vimDnsInfobloxBloxOne
+EquivalentBuiltInParser: _Im_Dns_InfobloxBloxOne
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable(LogSeverity:string, EventSeverity:string)
+    [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let DnsQueryTypeLookup = datatable(DnsQueryTypeName:string, DnsQueryType:int)
+      [
+      "A", 1,
+      "NS", 2,
+      "MD", 3,
+      "MF", 4,
+      "CNAME", 5,
+      "SOA", 6,
+      "MB", 7,
+      "MG", 8,
+      "MR", 9,
+      "NULL", 10,
+      "WKS", 11,
+      "PTR", 12,
+      "HINFO", 13,
+      "MINFO", 14,
+      "MX", 15,
+      "TXT", 16,
+      "RP", 17,
+      "AFSDB", 18,
+      "X25", 19,
+      "ISDN", 20,          
+      "RT", 21, 
+      "NSAP", 22,          
+      "NSAPPTR", 23,       
+      "SIG", 24,           
+      "KEY", 25,          
+      "PX", 26,            
+      "GPOS", 27,          
+      "AAAA", 28,          
+      "LOC", 29,           
+      "NXT", 30,           
+      "EID", 31,           
+      "NIMLOC", 32,        
+      "SRV", 33,           
+      "ATMA", 34,          
+      "NAPTR", 35,         
+      "KX", 36,            
+      "CERT", 37,          
+      "A6", 38,            
+      "DNAME", 39,         
+      "SINK", 40,          
+      "OPT", 41,           
+      "APL", 42,           
+      "DS", 43,            
+      "SSHFP", 44,         
+      "IPSECKEY", 45,      
+      "RRSIG", 46,         
+      "NSEC", 47,          
+      "DNSKEY", 48,        
+      "DHCID", 49,         
+      "NSEC3", 50,         
+      "NSEC3PARAM", 51,    
+      "TLSA", 52,          
+      "SMIMEA", 53,        
+      "HIP", 55,           
+      "NINFO", 56,         
+      "RKEY", 57,          
+      "TALINK", 58,        
+      "CDS", 59,           
+      "CDNSKEY", 60,       
+      "OPENPGPKEY", 61,    
+      "CSYNC", 62,         
+      "ZONEMD", 63,        
+      "SVCB", 64,          
+      "HTTPS", 65,         
+      "SPF", 99,           
+      "UINFO", 100,        
+      "UID", 101,          
+      "GID", 102,          
+      "UNSPEC", 103,       
+      "TKEY", 249,         
+      "TSIG", 250,         
+      "IXFR", 251,        
+      "MAILB", 253,        
+      "MAILA", 254,        
+      "ANY", 255,            
+      "URI", 256,          
+      "CAA", 257,          
+      "TA", 32768,         
+      "DLV", 32769         
+  ];
+  let DnsResponseCodeLookup = datatable(EventResultDetails:string, DnsResponseCode:int)
+      [
+      "NOERROR", 0,        
+      "FORMERR", 1,        
+      "SERVFAIL", 2,       
+      "NXDOMAIN", 3,       
+      "NOTIMPL", 4,        
+      "REFUSED", 5,        
+      "YXDOMAIN", 6,       
+      "YXRRSET", 7,        
+      "NXRRSET", 8,        
+      "NOTAUTH", 9,        
+      "NOTZONE", 10,       
+      "DSOTYPENI", 11,     
+      "RESERVED12", 12,
+      "RESERVED13", 13,
+      "RESERVED14", 14,
+      "RESERVED15", 15,
+      "BADVERS", 16,       
+      "BADKEY", 17,        
+      "BADTIME", 18,       
+      "BADMODE", 19,       
+      "BADNAME", 20,       
+      "BADALG", 21,        
+      "BADTRUNC", 22,      
+      "BADCOOKIE", 23,     
+      ];
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr: string='*', 
+      domain_has_any: dynamic=dynamic([]),
+      responsecodename: string='*',
+      response_has_ipv4: string='*',
+      response_has_any_prefix: dynamic=dynamic([]),
+      eventtype: string='Query',
+      disabled: bool=false
+      ) {
+      CommonSecurityLog
+      | where not(disabled)
+            and (eventtype == '*' or eventtype == "Query")
+            and (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and DeviceVendor == "Infoblox" 
+            and DeviceEventClassID has "DNS"
+            and (srcipaddr=="*" or has_ipv4(SourceIP, srcipaddr))
+            and response_has_ipv4 == '*'
+            and array_length(response_has_any_prefix) == 0
+      | project-rename 
+        DnsQuery = DestinationDnsDomain
+      | extend
+        DnsQuery = iff(substring(DnsQuery, strlen(DnsQuery) - 1, 1) == ".", substring(DnsQuery, 0, strlen(DnsQuery) - 1), DnsQuery)
+      | where array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any)
+      | parse-kv AdditionalExtensions as (InfobloxDNSRCode:string, InfobloxDNSQType:string, InfobloxDNSQFlags:string) with (pair_delimiter=";", kv_delimiter="=")
+      | where responsecodename == '*' or (InfobloxDNSRCode =~ responsecodename)
+      | project-rename 
+          EventResultDetails = InfobloxDNSRCode,
+          DnsQueryTypeName = InfobloxDNSQType,
+          DnsFlags = InfobloxDNSQFlags
+      | extend DnsQueryTypeName = tostring(split(DnsQueryTypeName, ' ')[0])
+      | lookup EventSeverityLookup on LogSeverity
+      | lookup DnsQueryTypeLookup on DnsQueryTypeName
+      | lookup DnsResponseCodeLookup on EventResultDetails
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | project-rename 
+          DvcIpAddr = DeviceAddress,
+          SrcIpAddr = SourceIP,
+          EventMessage = Message,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalType = DeviceEventClassID,
+          SrcUsername = SourceUserName,
+          SrcPortNumber = SourcePort,
+          EventUid = _ItemId
+      | extend
+          Dvc = coalesce(DvcHostname, DvcIpAddr),
+          EventEndTime = TimeGenerated,
+          EventResult = iff(EventResultDetails == "NOERROR", "Success", "Failure"),
+          EventStartTime = TimeGenerated,
+          Src = SrcIpAddr,
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          DnsResponseCodeName = EventResultDetails,
+          IpAddr = SrcIpAddr,
+          User = SrcUsername
+      | extend Domain = DnsQuery
+      | extend
+          EventCount = toint(1),
+          EventSchema = "Dns",
+          EventSchemaVersion = "0.1.7",
+          EventProduct = "BloxOne",
+          EventVendor = "Infoblox",
+          EventType = "Query",
+          DnsQueryClass = toint(1),
+          DnsQueryClassName = "IN"
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          EventOutcome,
+          Protocol,
+          SimplifiedDeviceAction,
+          ExternalID,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          StartTime,
+          TenantId,
+          ReportReferenceLink,
+          ReceiptTime,
+          Indicator*,
+          _ResourceId,
+          ThreatConfidence,
+          ThreatDescription,
+          ThreatSeverity,
+          Computer,
+          ApplicationProtocol,
+          ExtID,
+          Reason
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr=srcipaddr,
+      domain_has_any=domain_has_any,
+      responsecodename=responsecodename, 
+      response_has_ipv4=response_has_ipv4, 
+      response_has_any_prefix=response_has_any_prefix, 
+      eventtype=eventtype, 
+      disabled=disabled
+  )

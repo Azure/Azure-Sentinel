@@ -27,9 +27,9 @@ CrowdStrike is a SaaS solution that leverages advanced EDR applications and tech
 
 This package includes 4 playbook templates leverage Crowdstrike API's.
 You can choose to deploy the whole package (Four playbook templates) from the Deploy To Azure buttons below, or each one separately from it's specific folder.
-* [Base playbook](./Playbooks/CrowdStrike_Base) is a nested playbook that handles authentication for any of the othe playbooks. 
-* [Contain Host playbook](./Playbooks/CrowdStrike_ContainHost) will automatically contain hosts found in the incident.
-* [Enrichment playbook](./Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
+* [Base playbook](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Playbooks/CrowdStrike_Base) is a nested playbook that handles authentication for any of the othe playbooks. 
+* [Contain Host playbook](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Playbooks/CrowdStrike_ContainHost) will automatically contain hosts found in the incident.
+* [Enrichment playbook](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Playbooks/CrowdStrike_Enrichment_GetDeviceInformation) will post a comment to the incident with device information and related detections found in CrowdStrike.
 * [Response from Teams playbook](./Playbooks/CrowdStrike_ResponsefromTeams) will send the SOC Channel interactive cards with host information, allowing taking action on the host: Running a script or contain the host in CrowdStrike.
 
   ![Crowdstrike-ResponsefromTeams](./Playbooks/CrowdStrike_ResponsefromTeams/adaptivecardcrowdstrike.png)

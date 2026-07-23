@@ -1,0 +1,672 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "IP Enrichment - DomainTools Parsed Whois", 
+        "description": "This playbook uses the DomainTools Parsed Whois API. Given a ip address or set of ip addresses associated with an incident, return Whois information data for the extracted ip addresess as comments to the incident.",
+        "prerequisites": "A DomainTools API Key provisioned for Iris Investigate. Visit https://www.domaintools.com/integrations to request a trial key.",       
+        "prerequisitesDeployTemplateFile": "../DomainTools_FunctionAppConnector/azuredeploy.json",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2024-06-27T00:00:00.000Z", 
+        "entities": ["ip"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "DomainTools"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "DomainTools-IP-Address-Playbook",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "dtirisfuncapp",
+            "type": "string"
+        }
+    },
+    "variables": {
+		"functionappName": "[concat(toLower(parameters('FunctionAppName')), take(uniqueString(resourceGroup().id), 3))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Basic_compose_array": {
+                            "runAfter": {
+                                "Custom_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "basic_array",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Custom_Response": {
+                            "runAfter": {
+                                "ip_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "custom_response",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "whois_compose_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_IP": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Check_if_response_object_exists": {
+                                    "actions": {
+                                        "Add_Parsed_WhoIs_data_to_Incident_Comments": {
+                                            "runAfter": {
+                                                "Whois_Record_Table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><strong>Parsed WhoIs Response for IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('Whois_Record_Table')}</strong><strong></strong></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Add_basic_Parsed_WhoIs_data_to_Incident_Comments": {
+                                            "runAfter": {
+                                                "Basic_Compose_Tbale": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><strong>Parsed WhoIs Response for IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('Basic_Compose_Tbale')}</strong><strong></strong></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Append_to_basic_array_variable": {
+                                            "runAfter": {
+                                                "Basic_Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "basic_array",
+                                                "value": "@outputs('Basic_Compose')"
+                                            }
+                                        },
+                                        "Append_to_whois_array_variable": {
+                                            "runAfter": {
+                                                "Whois_Record_Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "whois_array",
+                                                "value": "@outputs('Whois_Record_Compose')"
+                                            }
+                                        },
+                                        "Basic_Compose": {
+                                            "runAfter": {
+                                                "set_basic_array_to_null": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "Record Source": "@body('ParsedWhois')?['record_source']",
+                                                "Registrant": "@body('ParsedWhois')?['registrant']",
+                                                "Source": "@body('ParsedWhois')?['source']"
+                                            }
+                                        },
+                                        "Basic_Compose_Tbale": {
+                                            "runAfter": {
+                                                "Append_to_basic_array_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('basic_array')"
+                                            }
+                                        },
+                                        "Check_if_Parsed_WhoIs_Contacts_records_Exits": {
+                                            "actions": {
+                                                "For_each_parsed_whois_contacts": {
+                                                    "foreach": "@body('ParsedWhois')?['parsed_whois_contacts']",
+                                                    "actions": {
+                                                        "Add_parsed_whois_contacts_to_incident_Comments": {
+                                                            "runAfter": {
+                                                                "Parsed_Whois_Contacts_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p><strong>Parsed WhoIs Contacts IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('Parsed_Whois_Contacts_table')}</strong><strong></strong></p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Parsed_Whois_Contacts_table": {
+                                                            "runAfter": {},
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "format": "HTML",
+                                                                "from": "@items('For_each_parsed_whois_contacts')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Check_if_Parsed_WhoIs_Networks_records_Exits": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('ParsedWhois')?['parsed_whois_contacts'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_Parsed_WhoIs_Networks_records_Exits": {
+                                            "actions": {
+                                                "For_each_parsed_whois_networks": {
+                                                    "foreach": "@body('ParsedWhois')?['parsed_whois_networks']",
+                                                    "actions": {
+                                                        "Add_parsed_whois_networks_to_incident_Comments": {
+                                                            "runAfter": {
+                                                                "parsed_whois_networks_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p><strong>Parsed WhoIs Networks IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('parsed_whois_networks_table')}</strong><strong></strong></p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "parsed_whois_networks_table": {
+                                                            "runAfter": {},
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "format": "HTML",
+                                                                "from": "@items('For_each_parsed_whois_networks')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Add_Parsed_WhoIs_data_to_Incident_Comments": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('ParsedWhois')?['parsed_whois_networks'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_Parsed_WhoIs_routes_records_Exits": {
+                                            "actions": {
+                                                "for_each_whois_routes": {
+                                                    "foreach": "@body('ParsedWhois')?['parsed_whois_routes']",
+                                                    "actions": {
+                                                        "Add_parsed_whois_routes_data_to_incident_comments": {
+                                                            "runAfter": {
+                                                                "Parsed_Whois_Routes_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p><strong>Parsed WhoIs Routes for IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('Parsed_Whois_Routes_table')}</strong><strong></strong></p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Parsed_Whois_Routes_table": {
+                                                            "runAfter": {},
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "format": "HTML",
+                                                                "from": "@items('for_each_whois_routes')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Check_if_Parsed_WhoIs_Contacts_records_Exits": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('ParsedWhois')?['parsed_whois_routes'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_Parsed_Whois_other_properties": {
+                                            "actions": {
+                                                "for_each_parsed_whois_other_properties": {
+                                                    "foreach": "@body('ParsedWhois')?['parsed_whois_other_properties']",
+                                                    "actions": {
+                                                        "Add_comment_to_incident_(V3)": {
+                                                            "runAfter": {
+                                                                "parsed_whois_other_properties_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p><strong>Parsed WhoIs Referral Servers for IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('parsed_whois_other_properties_table')}</strong><strong></strong></p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "parsed_whois_other_properties_table": {
+                                                            "runAfter": {},
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "format": "HTML",
+                                                                "from": "@items('for_each_parsed_whois_other_properties')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Check_if_Parsed_Whois_reffereral_servers_exists": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('ParsedWhois')?['parsed_whois_other_properties'])",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_if_Parsed_Whois_reffereral_servers_exists": {
+                                            "actions": {
+                                                "for_each_parsed_whois_referral_servers": {
+                                                    "foreach": "@body('ParsedWhois')?['parsed_whois_referral_servers']",
+                                                    "actions": {
+                                                        "Add_refferral_servers_comments_to_incident_comments": {
+                                                            "runAfter": {
+                                                                "parsed_whois_refferal_servers_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p><strong>Parsed WhoIs Referral Servers for IP Address: </strong><strong>@{variables('ip_address')}</strong><strong></strong><strong>@{body('parsed_whois_refferal_servers_table')}</strong><strong></strong></p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "parsed_whois_refferal_servers_table": {
+                                                            "runAfter": {},
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "format": "HTML",
+                                                                "from": "@items('for_each_parsed_whois_referral_servers')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Check_if_Parsed_WhoIs_routes_records_Exits": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@length(body('ParsedWhois')?['parsed_whois_referral_servers'])",
+                                                            ""
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Whois_Record_Compose": {
+                                            "runAfter": {
+                                                "Add_basic_Parsed_WhoIs_data_to_Incident_Comments": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "WhoIs Date": "@body('ParsedWhois')?['whois_date']",
+                                                "WhoIs Record": "@body('ParsedWhois')?['whois_record']"
+                                            }
+                                        },
+                                        "Whois_Record_Table": {
+                                            "runAfter": {
+                                                "Append_to_whois_array_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('whois_array')"
+                                            }
+                                        },
+                                        "set_basic_array_to_null": {
+                                            "runAfter": {
+                                                "set_whois_array_to_null": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "basic_array",
+                                                "value": "@null"
+                                            }
+                                        },
+                                        "set_whois_array_to_null": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "whois_array",
+                                                "value": "@null"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "ParsedWhois": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('ParsedWhois')",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "ParsedWhois": {
+                                    "runAfter": {
+                                        "Set_IP_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "from_playbook": "@true",
+                                            "query": "@variables('ip_address')"
+                                        },
+                                        "function": {
+                                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('Functionappname'), '/functions/ParsedWhois')]"
+                                        }
+                                    }
+                                },
+                                "Set_IP_Variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ip_address",
+                                        "value": "@items('For_each_IP')?['Address']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "ip_": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_address",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "whois_compose_array": {
+                            "runAfter": {
+                                "Basic_compose_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "whois_array",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

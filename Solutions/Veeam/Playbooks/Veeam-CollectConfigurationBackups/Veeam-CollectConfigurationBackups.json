@@ -1,0 +1,550 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-CollectConfigurationBackups",
+    "description": "A Microsoft Sentinel playbook that automatically runs configuration backup sessions on Veeam Backup & Replication servers on schedule. The playbook gets Veeam Backup & Replication settings from the watchlist, runs the configuration backup session, and collects the session result.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. VBR Settings watchlist configured in Microsoft Sentinel.",
+      "6. Hybrid Connection and Key Vault secrets configured for each VBR Server."
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "Configuration", "Backup", "Scheduled" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace.",
+      "2. Ensure the VBR Settings watchlist is properly configured with the 'Collect Configuration Backups' flag set to true on servers from which you want to collect data."
+    ],
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "8701067040678761767"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-CollectConfigurationBackups",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+    "workspaceId": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace ID (GUID) of the Log Analytics workspace that contains Microsoft Sentinel"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Subscription ID where resources are deployed"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Resource group name where Function App is deployed"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "defaultValue": "azuresentinel-connection",
+      "type": "string",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId(parameters('subscriptionId'), parameters('resourceGroupName'), 'Microsoft.Web/sites', parameters('functionAppName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-StartConfigurationBackup",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "functionAppName": {
+              "defaultValue": "[parameters('functionAppName')]",
+              "type": "String"
+            },
+            "workspaceId": {
+              "defaultValue": "[parameters('workspaceId')]",
+              "type": "String"
+            },
+            "resourceGroupName": {
+              "defaultValue": "[parameters('resourceGroupName')]",
+              "type": "String"
+            },
+            "subscriptionId": {
+              "defaultValue": "[parameters('subscriptionId')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Every_24_Hours": {
+              "type": "Recurrence",
+              "recurrence": {
+                "interval": 24,
+                "frequency": "Hour"
+              }
+            }
+          },
+          "actions": {
+            "Watchlists_-_Get_VBR_Settings": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vbr_settings')}/watchlistItems"
+              }
+            },
+            "Parse_VBR_settings": {
+              "runAfter": {
+                "Watchlists_-_Get_VBR_Settings": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Watchlists_-_Get_VBR_Settings')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "watchlistItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "properties.itemsKeyValue": {
+                                "type": "object",
+                                "properties": {
+                                  "Veeam Server Name": {
+                                    "type": "string"
+                                  },
+                                  "Base URL": {
+                                    "type": "string"
+                                  },
+                                  "Collect Configuration Backups": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Password ID": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Username ID": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "For_each_VBR_server": {
+              "foreach": "@body('Parse_VBR_settings')?['properties']?['watchlistItems']",
+              "actions": {
+                "Parse_current_VBR_server": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_VBR_server')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "properties.itemsKeyValue": {
+                          "type": "object",
+                          "properties": {
+                            "Veeam Server Name": {
+                              "type": "string"
+                            },
+                            "Base URL": {
+                              "type": "string"
+                            },
+                            "Collect Configuration Backups": {
+                              "type": "string"
+                            },
+                            "Key Vault Password ID": {
+                              "type": "string"
+                            },
+                            "Key Vault Username ID": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "If_configuration_backup_collection_is_enabled": {
+                  "actions": {
+                    "StartConfigurationBackupAsync": {
+                      "type": "Function",
+                      "inputs": {
+                        "queries": {
+                          "vbrHostName": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name']"
+                        },
+                        "function": {
+                          "id": "[concat(variables('functionAppId'), '/functions/StartConfigurationBackupAsync')]"
+                        }
+                      }
+                    },
+                    "Parse_sessionId": {
+                      "runAfter": {
+                        "StartConfigurationBackupAsync": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@outputs('StartConfigurationBackupAsync')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "statusCode": {
+                              "type": "integer"
+                            },
+                            "headers": {
+                              "type": "object",
+                              "properties": {
+                                "Date": {
+                                  "type": "string"
+                                },
+                                "Transfer-Encoding": {
+                                  "type": "string"
+                                },
+                                "Strict-Transport-Security": {
+                                  "type": "string"
+                                },
+                                "x-ms-middleware-request-id": {
+                                  "type": "string"
+                                },
+                                "Content-Type": {
+                                  "type": "string"
+                                },
+                                "Content-Length": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "body": {
+                              "type": "object",
+                              "properties": {
+                                "sessionType": {
+                                  "type": "integer"
+                                },
+                                "state": {
+                                  "type": "integer"
+                                },
+                                "platformName": {},
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "jobId": {
+                                  "type": "string"
+                                },
+                                "creationTime": {
+                                  "type": "string"
+                                },
+                                "endTime": {},
+                                "progressPercent": {
+                                  "type": "integer"
+                                },
+                                "result": {
+                                  "type": "object",
+                                  "properties": {
+                                    "result": {
+                                      "type": "integer"
+                                    },
+                                    "message": {
+                                      "type": "string"
+                                    },
+                                    "isCanceled": {
+                                      "type": "boolean"
+                                    }
+                                  }
+                                },
+                                "resourceId": {},
+                                "resourceReference": {},
+                                "parentSessionId": {},
+                                "usn": {
+                                  "type": "integer"
+                                },
+                                "platformId": {}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Until_state_is_not_stopped": {
+                      "actions": {
+                        "GetSession": {
+                          "type": "Function",
+                          "inputs": {
+                            "queries": {
+                              "vbrHostName": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name']",
+                              "sessionId": "@body('Parse_sessionId')?['body']?['id']"
+                            },
+                            "function": {
+                              "id": "[concat(variables('functionAppId'), '/functions/GetSessionAsync')]"
+                            }
+                          }
+                        },
+                        "Parse_session": {
+                          "runAfter": {
+                            "GetSession": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@outputs('GetSession')",
+                            "schema": {
+                              "type": "object",
+                              "properties": {
+                                "statusCode": {
+                                  "type": "integer"
+                                },
+                                "headers": {
+                                  "type": "object",
+                                  "properties": {
+                                    "Date": {
+                                      "type": "string"
+                                    },
+                                    "Transfer-Encoding": {
+                                      "type": "string"
+                                    },
+                                    "Request-Context": {
+                                      "type": "string"
+                                    },
+                                    "Content-Type": {
+                                      "type": "string"
+                                    },
+                                    "Content-Length": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "body": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sessionType": {
+                                      "type": "integer"
+                                    },
+                                    "state": {
+                                      "type": "integer"
+                                    },
+                                    "platformName": {},
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "jobId": {
+                                      "type": "string"
+                                    },
+                                    "creationTime": {
+                                      "type": "string"
+                                    },
+                                    "endTime": {},
+                                    "progressPercent": {
+                                      "type": "integer"
+                                    },
+                                    "result": {
+                                      "type": "object",
+                                      "properties": {
+                                        "result": {
+                                          "type": "integer"
+                                        },
+                                        "message": {
+                                          "type": "string"
+                                        },
+                                        "isCanceled": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    },
+                                    "resourceId": {},
+                                    "resourceReference": {},
+                                    "parentSessionId": {},
+                                    "usn": {
+                                      "type": "integer"
+                                    },
+                                    "platformId": {}
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Delay": {
+                          "runAfter": {
+                            "Parse_session": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Wait",
+                          "inputs": {
+                            "interval": {
+                              "count": 1,
+                              "unit": "Minute"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_sessionId": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": "@equals(body('Parse_session')?['body']?['state'],1)",
+                      "limit": {
+                        "timeout": "PT30M"
+                      },
+                      "type": "Until"
+                    },
+                    "IngestSessionDataBySessionIdAsync": {
+                      "runAfter": {
+                        "Until_state_is_not_stopped": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Function",
+                      "inputs": {
+                        "queries": {
+                          "vbrHostName": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name']",
+                          "sessionId": "@body('Parse_sessionId')?['body']?['id']"
+                        },
+                        "function": {
+                          "id": "[concat(variables('functionAppId'), '/functions/IngestSessionDataBySessionIdAsync')]"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_current_VBR_server": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Print_server_info": {
+                        "type": "Compose",
+                        "inputs": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name']"
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups']",
+                          "true"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Parse_VBR_settings": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+id: a4fddd3e-9993-4c86-b5e8-8e36d8ce1197
+Function:
+  Title: Parser for ExtraHopDetections
+  Version: '2.0.0'
+  LastUpdated: '2026-03-17'
+Category: Microsoft Sentinel Parser
+FunctionName: ExtraHopDetections
+FunctionAlias: ExtraHopDetections
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, id: real) [];
+    let ExtraHopDetections_view = view() {
+        union isfuzzy=true dummy_table,
+        ExtraHop_Detections_CL
+        | summarize arg_max(TimeGenerated, *) by id
+        | extend
+            MitreTechniques = column_ifexists('mitre_techniques', ''),
+            MitreTactics = column_ifexists('mitre_tactics_string', ''),
+            RiskScore = column_ifexists('risk_score', int(null)),
+            Time = column_ifexists('timestamp', real(null))
+        | extend ParsedMitreTechniques = todynamic(MitreTechniques)
+        | mv-apply ParsedMitreTechniques on (summarize TechniqueIds = make_list(ParsedMitreTechniques.id), TechniqueNames = make_list(ParsedMitreTechniques.name))
+        | extend ParsedMitreTactics = split(MitreTactics, ", ")
+        | mv-apply tactic = ParsedMitreTactics on
+            (summarize TacticNames = make_list(extract(@":\s*(.*)", 1, tostring(tactic))),
+            TacticIds = make_list(extract(@"^([^:]+)\s*:", 1, tostring(tactic))))
+        | extend
+            DateTime = unixtime_milliseconds_todatetime(column_ifexists('timestamp', real(null))),
+            Severity = case(RiskScore >= 1 and RiskScore <= 30, "Low",
+                            RiskScore >= 31 and RiskScore <= 79, "Medium",
+                            RiskScore >= 80 and RiskScore <= 99, "High",
+                            "Informational")
+        | extend
+            Title = column_ifexists('DetectionTitle', ''),
+            DetectionType = column_ifexists('DetectionType', ''),
+            SourceType = column_ifexists('src_type', ''),
+            SourceHostname = column_ifexists('src_hostname', ''),
+            SourceUsername = column_ifexists('src_username', ''),
+            SourceIpAddress = column_ifexists('src_ipaddr', ''),
+            SourceRole = column_ifexists('src_role', ''),
+            SourceEndpoint = column_ifexists('src_endpoint', ''),
+            IsSourceExternal = column_ifexists('src_external', ''),
+            SourceDeviceObjectId = column_ifexists('src_device_oid', real(null)),
+            SourceDeviceName = column_ifexists('src_device_name', ''),
+            SourceDeviceIpAddress = column_ifexists('src_device_ipaddrs', dynamic(null)),
+            SourceDeviceMacAddress = column_ifexists('src_device_macaddr', ''),
+            SourceDeviceRole = column_ifexists('src_device_role', ''),
+            DestinationType = column_ifexists('dst_type', ''),
+            DestinationHostname = column_ifexists('dst_hostname', ''),
+            DestinationUsername = column_ifexists('dst_username', ''),
+            DestinationIpAddress = column_ifexists('dst_ipaddr', ''),
+            DestinationRole = column_ifexists('dst_role', ''),
+            DestinationEndpoint = column_ifexists('dst_endpoint', ''),
+            IsDestinationExternal = column_ifexists('dst_external', ''),
+            DestinationDeviceObjectId = column_ifexists('dst_device_oid', real(null)),
+            DestinationDeviceName = column_ifexists('dst_device_name', ''),
+            DestinationDeviceIpAddress = column_ifexists('dst_device_ipaddrs', dynamic(null)),
+            DestinationDeviceMacAddress = column_ifexists('dst_device_macaddr', ''),
+            DestinationDeviceRole = column_ifexists('dst_device_role', ''),
+            AdditionalParticipants = column_ifexists('additional_participants', dynamic(null)),
+            PropertiesRandomness = column_ifexists('properties_randomness', int(null)),
+            PropertiesClientPort = column_ifexists('properties_client_port', real(null)),
+            PropertiesServerPort = column_ifexists('properties_server_port', real(null)),
+            PropertiesUser = column_ifexists('properties_user', ''),
+            PropertiesCommand = column_ifexists('properties_command', ''),
+            Description = column_ifexists('description', ''),
+            CategoriesIds = column_ifexists('categories_ids', dynamic(null)),
+            IsRecommended = column_ifexists('recommended', bool(null)),
+            RecommendedFactors = column_ifexists('recommended_factors', dynamic(null)),
+            Url = column_ifexists('url', ''),
+            Id = column_ifexists('id', real(null)),
+            IsUserCreated = column_ifexists('is_user_created', bool(null)),
+            ModificationTime = column_ifexists('mod_time', real(null)),
+            Status = column_ifexists('status', ''),
+            Resolution = column_ifexists('resolution', ''),
+            TicketId = column_ifexists('ticket_id', real(null)),
+            Assignee = column_ifexists('assignee', ''),
+            Categories = column_ifexists('categories_array', dynamic(null)),
+            CategoriesString = column_ifexists('categories_string', ''),
+            MitreTacticsString = column_ifexists('mitre_tactics_string', ''),
+            MitreTechniquesString = column_ifexists('mitre_techniques_string', '')
+        | extend
+            SourceHostname = coalesce(SourceHostname, SourceIpAddress, SourceDeviceName),
+            DestinationHostname = coalesce(DestinationHostname, DestinationIpAddress, DestinationDeviceName),
+            EventVendor = "ExtraHop",
+            EventModule = "extrahop-rx360-detection"
+        | project
+                TimeGenerated,
+                EventVendor,
+                EventModule,
+                Title,
+                DetectionType,
+                SourceType,
+                SourceHostname,
+                SourceUsername,
+                SourceIpAddress,
+                SourceRole,
+                SourceEndpoint,
+                IsSourceExternal,
+                SourceDeviceObjectId,
+                SourceDeviceName,
+                SourceDeviceIpAddress,
+                SourceDeviceMacAddress,
+                SourceDeviceRole,
+                DestinationType,
+                DestinationHostname,
+                DestinationUsername,
+                DestinationIpAddress,
+                DestinationRole,
+                DestinationEndpoint,
+                IsDestinationExternal,
+                DestinationDeviceObjectId,
+                DestinationDeviceName,
+                DestinationDeviceIpAddress,
+                DestinationDeviceMacAddress,
+                DestinationDeviceRole,
+                AdditionalParticipants,
+                PropertiesRandomness,
+                PropertiesClientPort,
+                PropertiesServerPort,
+                PropertiesUser,
+                PropertiesCommand,
+                Description,
+                CategoriesIds,
+                MitreTechniques,
+                IsRecommended,
+                RecommendedFactors,
+                Url,
+                RiskScore,
+                Time,
+                Id,
+                IsUserCreated,
+                ModificationTime,
+                Status,
+                Resolution,
+                TicketId,
+                Assignee,
+                Categories,
+                CategoriesString,
+                MitreTechniquesString,
+                MitreTacticsString,
+                TechniqueIds,
+                TechniqueNames,
+                DateTime,
+                Severity,
+                TacticIds,
+                TacticNames
+    };
+    ExtraHopDetections_view

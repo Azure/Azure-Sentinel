@@ -1,0 +1,531 @@
+# ingestASimSampleData.py
+#
+# This script ingests ASIM parser sample data into a Log Analytics workspace for testing.
+#
+# It expects the Azure-Sentinel repo to be checked out locally and works as follows:
+#   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
+#   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
+#   3. Loads the corresponding sample data and schema CSV files from "Sample Data/ASIM/".
+#   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
+#   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
+#
+# Usage: python ingestASimSampleData.py <pr_number>
+
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
+import requests
+import yaml
+import re
+import subprocess
+import csv
+import json
+from azure.monitor.ingestion import LogsIngestionClient
+from azure.identity import DefaultAzureCredential
+from azure.core.exceptions import HttpResponseError
+import time
+
+def get_modified_files(current_directory):
+    # Add upstream remote if not already present
+    git_remote_command = "git remote"
+    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+    if 'upstream' not in remote_result.stdout.split():
+        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    # Fetch from upstream
+    git_fetch_upstream_command = "git fetch upstream"
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    cmd = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
+    try:
+        return subprocess.check_output(cmd, shell=True).decode().split("\n")
+    except subprocess.CalledProcessError as e:
+        print(f"::error::Error occurred while executing the command: {e}")
+        return []
+
+def filter_yaml_files(modified_files):
+    # Take only the YAML files
+    return [line for line in modified_files if line.endswith('.yaml')]
+
+
+def convert_schema_csv_to_json(csv_file):
+    """Reads a schema CSV file with 'ColumnName' and 'ColumnType' headers and returns a list of
+    column definitions (name/type dicts) suitable for table creation APIs. Reserved columns are
+    excluded and 'bool' types are mapped to 'boolean'."""
+    data = []
+    try:
+        with open(csv_file, 'r',encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if 'ColumnName' not in row or 'ColumnType' not in row:
+                    raise KeyError(f"Required columns 'ColumnName' and/or 'ColumnType' not found in schema CSV '{csv_file}'. Available columns: {list(row.keys())}")
+                if row['ColumnName'] in reserved_columns:
+                    continue
+                elif row['ColumnType'] == "bool":
+                    data.append({        
+                    'name': row['ColumnName'],
+                    'type': "boolean",
+                    })
+                else:
+                    data.append({        
+                    'name': row['ColumnName'],
+                    'type': row['ColumnType'],
+                    })
+    except FileNotFoundError:
+        print(f"::error::Schema CSV file not found: {csv_file}")
+        raise
+    except KeyError:
+        raise
+    except Exception as e:
+        print(f"::error::Failed to parse schema CSV file '{csv_file}': {e}")
+        raise
+
+    if not data:
+        raise ValueError(f"No schema columns found in CSV file '{csv_file}'")
+    print(f"Schema data for {csv_file}: {data}")
+    return data
+
+def infer_schema_from_data(data_result, datetime_keys):
+    """Infers a schema (list of name/type dicts) from sample data rows when no Schema CSV exists.
+    Inspects the first data row's values to determine column types. Reserved columns are excluded."""
+    if not data_result:
+        raise ValueError("Cannot infer schema from empty data")
+    first_row = data_result[0]
+    schema = []
+    for key, value in first_row.items():
+        if key in reserved_columns:
+            continue
+        if key in datetime_keys:
+            col_type = "datetime"
+        elif isinstance(value, bool):
+            col_type = "boolean"
+        elif isinstance(value, int):
+            col_type = "int"
+        elif isinstance(value, float):
+            col_type = "real"
+        else:
+            col_type = "string"
+        schema.append({'name': key, 'type': col_type})
+    # Ensure TimeGenerated is always present in the schema
+    if not any(col['name'] == 'TimeGenerated' for col in schema):
+        schema.append({'name': 'TimeGenerated', 'type': 'datetime'})
+    return schema
+
+def convert_data_csv_to_json(csv_file):
+    """Reads a sample data CSV file and returns its rows as a list of dicts with auto-typed values,
+    the table name extracted from the 'Type' column, and a list of column names that had timestamp
+    suffixes ('[UTC]' or '[Local Time]') stripped from their keys."""
+    def convert_value(value):
+        # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
+        try:
+            # Try integer conversion
+            return int(value)
+        except ValueError:
+            try:
+                # Try float conversion
+                return float(value)
+            except ValueError:
+                # Return the value as-is (string) if it's not numeric
+                return value
+
+    data = []
+    table_name = None
+    datetime_keys = set()
+    try:
+        with open(csv_file, 'r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                if 'Type' not in row:
+                    raise KeyError(f"'Type' column not found in CSV file '{csv_file}'. Available columns: {list(row.keys())}")
+                table_name = row['Type']
+                # Convert each value in the row to its appropriate type
+                processed_row = {key: convert_value(value) for key, value in row.items()}
+                data.append(processed_row)
+            
+            for item in data:
+                for key in list(item.keys()):
+                    # If the key matches '[UTC]' or '[Local Time]', rename it
+                    if key.endswith(('[UTC]', '[Local Time]')):
+                        substring = key.split(" [")[0]
+                        item[substring] = item.pop(key)
+                        datetime_keys.add(substring)
+    except FileNotFoundError:
+        print(f"::error::Data CSV file not found: {csv_file}")
+        raise
+    except KeyError:
+        raise
+    except Exception as e:
+        print(f"::error::Failed to parse data CSV file '{csv_file}': {e}")
+        raise
+
+    if not data:
+        raise ValueError(f"No data rows found in CSV file '{csv_file}'")
+    if table_name is None:
+        raise ValueError(f"Could not determine table name from CSV file '{csv_file}'")
+
+    return data, table_name, list(datetime_keys)
+
+def check_for_custom_table(table_name):
+    if table_name in lia_supported_builtin_table:
+        log_ingestion_supported=True
+        table_type="builtin"
+    if table_name not in lia_supported_builtin_table:
+        if table_name.endswith('_CL') or table_name.endswith('_cl'):
+            log_ingestion_supported=True
+            table_type="custom_log"           
+        else:
+            log_ingestion_supported=False
+            table_type="unknown"
+    return log_ingestion_supported,table_type
+
+def create_table(schema,table):
+     request_object = {
+    "properties": {
+        "schema": {
+        "name": table,
+        "columns": json.loads(schema)
+        },
+        "retentionInDays": 30,
+        "totalRetentionInDays": 30
+    }
+    }
+     method="PUT"
+     url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table}?api-version=2022-10-01"
+     return request_object , url , method
+
+def get_table_status(table):
+    while True:
+        table_name=table
+        url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table_name}?api-version=2022-10-01"
+        method="GET"
+        time.sleep(3)
+        response = hit_api(url,"",method)
+        if response.status_code == 200:
+            print(f"Custom Table {table_name} is created successfully")
+            break
+    return response.status_code  
+
+def get_schema_for_builtin(query_table):
+    # Obtain the access token
+    credential = DefaultAzureCredential()
+    token = credential.get_token('https://api.loganalytics.io/.default').token
+    # Set the API endpoint
+    url = f'https://api.loganalytics.io/v1/workspaces/{workspace_id}/query'
+    # Create the payload
+    payload = json.dumps({
+        'query': query_table+'|getschema'
+    })
+    # Set the headers
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    # Make the request
+    query_response = requests.post(url, headers=headers, data=payload)
+    schema=[]
+    for each in json.loads(query_response.text).get('tables')[0].get('rows'):
+        if each[0] in reserved_columns:
+            continue
+        elif each[0] in guid_columns:
+            continue
+        elif each[3] == "bool":
+            schema.append({        
+            'name': each[0],
+            'type': "boolean",
+            })
+        else:
+            schema.append({        
+            'name': each[0],
+            'type': each[3],
+            })
+    return schema
+
+
+def create_dcr(schema,table,table_type):
+    #suffic_num = str(random.randint(100,999))
+    dcrname=table+"_DCR"+str(prnumber)
+    request_object={ 
+            "location": "eastus2euap", 			
+            "properties": {
+                "streamDeclarations": {
+                    "Custom-dcringest"+str(prnumber): {
+                        "columns": json.loads(schema)
+                    }
+                },				
+			"dataCollectionEndpointId": f"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Insights/dataCollectionEndpoints/{dataCollectionEndpointname}",			
+              "dataSources": {}, 
+              "destinations": { 
+                "logAnalytics": [ 
+                  { 
+                    "workspaceResourceId": f"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}",
+                    "workspaceId": workspace_id,
+                    "name": "DataCollectionEvent"+str(prnumber)
+                  } 
+                ] 
+              }, 
+              "dataFlows": [ 
+                    {
+                        "streams": [
+                            "Custom-dcringest"+str(prnumber)
+                        ],
+                        "destinations": [
+                            "DataCollectionEvent"+str(prnumber)
+                        ],
+                        "transformKql": "source",
+                        "outputStream": f"{table_type}-{table}"
+                    } 
+                        ] 
+                }
+        }
+    method="PUT"
+    url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Insights/dataCollectionRules/{dcrname}?api-version=2022-06-01"
+    return request_object , url , method ,"Custom-dcringest"+str(prnumber)
+
+def get_access_token():
+    credential = DefaultAzureCredential()
+    token = credential.get_token('https://management.azure.com/')
+    return token.token
+
+def hit_api(url,request,method):
+    access_token = get_access_token()
+    headers = {
+    "Authorization": f"Bearer {access_token}",
+    "Content-Type": "application/json"
+    }
+    try:
+        if method == "GET":
+            response = requests.request(method, url, headers=headers)
+        else:
+            response = requests.request(method, url, headers=headers, json=request)
+    except Exception as e:
+        print(f"Upload failed: {e}")       
+    return response
+
+def senddtosentinel(immutable_id,data_result,stream_name,flag_status):
+    if flag_status == 0:
+        print("::error::DCR is not created for the table. Please create DCR first")
+        return False
+    print("Waiting for data to be sent to sentinel (This will take atleast 20 seconds)")
+    time.sleep(20)
+    credential = DefaultAzureCredential()
+    client = LogsIngestionClient(endpoint=endpoint_uri, credential=credential, logging_enable=True)
+    try:
+        client.upload(rule_id=immutable_id, stream_name=stream_name, logs=data_result)
+        print(f"Data uploaded successfully to stream '{stream_name}' via DCR '{immutable_id}'")
+        return True
+    except HttpResponseError as e:
+        print(f"::error::Upload failed: {e}")
+        return False
+
+
+def extract_event_vendor_product(parser_query,parser_file):
+    match = re.search(r'(ASim\w+)/', parser_file)
+    if match:
+        schema_name = match.group(1)
+    else:
+        print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
+
+    match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
+    if match:
+        event_vendor = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
+    else:
+        print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
+
+    match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
+    if match:
+        event_product = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
+    else:
+        print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
+    return event_vendor, event_product ,schema_name   
+
+def convert_data_type(schema_result, data_result):
+    for data in data_result:
+        for schema in schema_result:
+            field_name = schema["name"]
+            field_type = schema["type"]
+            
+            if field_name in data:
+                value = data[field_name]
+                
+                # Handle conversion based on schema type
+                
+                if field_type == "string":
+                    # Convert to string
+                    data[field_name] = str(value)
+                elif field_type == "boolean":
+                    # Convert to boolean
+                    if isinstance(value, str) and value.lower() in ["true", "false"]:
+                        data[field_name] = value.lower() == "true"
+
+    return data_result
+
+
+#main starting point of script
+
+workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
+resourceGroupName = "asim-schemadatatester-githubshared-canary"
+subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
+dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
+endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
+dcr_directory=[]
+
+lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdspSignature', 'AZFWThreatIntel']
+reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
+
+SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
+current_directory = os.path.dirname(os.path.abspath(__file__))
+modified_files = get_modified_files(current_directory)
+
+parser_yaml_files = filter_yaml_files(modified_files)
+
+prnumber = sys.argv[1]
+
+for file in parser_yaml_files:
+    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
+    if SchemaNameMatch:
+        SchemaName = SchemaNameMatch.group(1)
+    else:
+        SchemaName = None
+    # Check if changed file is a union or empty parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        print(f"Ignoring this {file} because it is a union or empty parser file")
+        continue        
+    print(f"Starting ingestion for sample data present in {file}")
+    repo_root = os.path.abspath(os.path.join(current_directory, '..', '..', '..'))
+    asim_parser_path = os.path.join(repo_root, file)
+    print(f"Reading Asim Parser file from local path: {asim_parser_path}")
+    try:
+        with open(asim_parser_path, 'r', encoding='utf-8') as f:
+            asim_parser = yaml.safe_load(f.read())
+    except Exception as e:
+        print(f"::error::An error occurred while trying to read YAML file at {asim_parser_path}: {e}")
+        continue
+    parser_query = asim_parser.get('ParserQuery', '')
+    normalization = asim_parser.get('Normalization', {})
+    schema = normalization.get('Schema')
+    equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
+    event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
+
+    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
+    sample_data_dir = os.path.join(repo_root, 'Sample Data', 'ASIM')
+    sample_data_path = os.path.join(sample_data_dir, SampleDataFile)
+    print(f"Sample data log file reading from local path: {sample_data_path}")
+    try:
+        with open(sample_data_path, 'rb') as f:
+            with open('tempfile.csv', 'wb') as file:
+                file.write(f.read())
+    except Exception as e:
+        print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
+    data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
+    print(f"Table Name : {table_name}")
+    log_ingestion_supported,table_type=check_for_custom_table(table_name)
+    print(f"Log ingestion supported: {log_ingestion_supported}\n Table type: {table_type}")
+    if log_ingestion_supported == True and table_type =="custom_log":
+        flag=0 #flag value is used to check if DCR is created for the table or not
+        schema_file_name = f"{table_name}_Schema.csv"
+        schema_path = os.path.join(sample_data_dir, schema_file_name)
+        if os.path.exists(schema_path):
+            try:
+                with open(schema_path, 'rb') as f:
+                    with open('tempfile.csv', 'wb') as file:
+                        file.write(f.read())
+            except Exception as e:
+                print(f"::error::An error occurred while trying to read Schema file at {schema_path}: {e}")
+                continue
+            schema_result = convert_schema_csv_to_json('tempfile.csv')
+        else:
+            print(f"Schema CSV not found at {schema_path}, inferring schema from sample data")
+            schema_result = infer_schema_from_data(data_result, datetime_keys)
+        data_result = convert_data_type(schema_result, data_result)
+        # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
+        # boolean values are consider as string and numerical value of type string are consider 
+        # as integer which leds to non ingestion of those value in sentinel    
+        # create table 
+        request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
+        response_body=hit_api(url_to_call,request_body,method_to_use)
+        print(f"Response of table creation: {response_body.text} {response_body.status_code}")
+        if response_body.status_code != 202 and response_body.status_code != 200:
+            print(f"Table creation failed for {table_name}")
+            continue
+        else:
+            get_table_status(table_name)
+        #Once table is created now creating DCR
+        request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")  
+        response_body=hit_api(url_to_call,request_body,method_to_use)
+        print(f"Response of DCR creation: {response_body.text}")
+        dcr_directory.append({
+        'DCRname':table_name+'_DCR'+str(prnumber),
+        'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
+        'stream_name':stream_name
+        })
+        print(dcr_directory)
+        #ingestion start for sending data via DCR
+        for dcr in dcr_directory:
+            if table_name in dcr['DCRname'] and str(prnumber) in dcr['DCRname'] :
+                immutable_id = dcr['imutableid']
+                stream_name = dcr['stream_name']
+                flag=1
+                break 
+        print(f"Ingestion started for {table_name}") 
+        print(f"{immutable_id},{stream_name},{table_name}")      
+        senddtosentinel(immutable_id,data_result,stream_name,flag)
+    elif log_ingestion_supported == True and table_type == "builtin":
+        flag=0 #flag value is used to check if DCR is created for the table or not
+        #create dcr for ingestion
+        guid_columns = []
+        schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
+        request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+        response_body=hit_api(url_to_call,request_body,method_to_use)
+        print(f"Response of DCR creation: {response_body.text}")
+        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
+            guid_flag=0
+            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
+            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+            print(f"Mismatched Column and there types : {match}")
+            for item in match:
+                if "Guid" not in item:
+                    guid_flag=1
+                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+            if guid_flag == 1:
+                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                exit(1)
+            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+            guid_columns = cleaned_guid_columns
+            print("Re trying DCR creation after removing GUID columns")
+            schema = get_schema_for_builtin(table_name)
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            print(f"Response of DCR creation: {response_body.text}")       
+        dcr_directory.append({
+        'DCRname':table_name+'_DCR'+str(prnumber),
+        'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
+        'stream_name':stream_name
+        })
+        print(dcr_directory)
+        for dcr in dcr_directory:
+            if table_name in dcr['DCRname'] and str(prnumber) in dcr['DCRname'] :
+                immutable_id = dcr['imutableid']
+                stream_name = dcr['stream_name']
+                flag=1
+                break
+        print(dcr_directory)    
+        print(f"Ingestion started for {table_name}")       
+        senddtosentinel(immutable_id,data_result,stream_name,flag)
+    else:
+        print(f"Table {table_name} is not supported for log ingestion")
+        continue

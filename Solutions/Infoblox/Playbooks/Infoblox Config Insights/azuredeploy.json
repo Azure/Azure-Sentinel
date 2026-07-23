@@ -1,0 +1,390 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Infoblox-Config-Insights",
+    "description": "The playbook retrieves Config Insight Data and ingests it into a custom table within the Log Analytics Workspace on a scheduled basis.",
+    "prerequisites": "User must provide valid Infoblox API Key.",
+    "postDeployment": [
+      "**a. Authorize azuremonitorlogs connections**",
+      "Once deployment is complete, authorize each connection.",
+      "1. Go to your logic app -> API connections -> Select azuremonitorlogs connection resource",
+      "2. Go to General -> edit API connection",
+      "3. Click Authorize",
+      "4. Sign in",
+      "5. Click Save",
+      "6. Repeat steps for other connections",
+      "**b. Authorize azureloganalyticsdatacollector connections**",
+      "Once deployment is complete, authorize connection.",
+      "1. Go to your logic app -> API connections -> Select connection resource",
+      "2. Go to General -> edit API connection",
+      "3. Provide Workspace Id and Workspace Key of Log Analytics Workspace where Table will be created",
+      "4. Click Save"
+    ],
+    "entities": [],
+    "tags": ["Infoblox", "Insights"],
+    "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+    "support": {
+      "tier": "Community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "Infoblox"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Infoblox-Config-Insights",
+      "type": "string"
+    },
+    "Infoblox API Key": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Enter Infoblox API Key"
+      }
+    },
+    "Infoblox Base Url": {
+      "type": "string",
+      "defaultValue": "https://csp.infoblox.com",
+      "metadata": {
+        "description": "Enter Base Url for your Infoblox instance. (e.g. https://csp.infoblox.com)"
+      }
+    },
+    "Workspace Name": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter name of Log Analytics Workspace where Infoblox Workbook is available"
+      }
+    }
+  },
+  "variables": {
+    "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+    "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "InfobloxAPIKey": {
+              "defaultValue": "[trim(parameters('Infoblox API Key'))]",
+              "type": "String"
+            },
+            "InfobloxBaseUrl": {
+              "defaultValue": "[trim(parameters('Infoblox Base Url'))]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1
+              },
+              "evaluatedRecurrence": {
+                "frequency": "Day",
+                "interval": 1
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "Check_if_Status_code_200_or_not": {
+              "actions": {
+                "Fetch_Existing_Data": {
+                  "runAfter": {
+                    "Parse_Config_Insight_List_ID": ["Succeeded"]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "body": "let dummyschema = datatable(TimeGenerated:datetime, policyAnalyticsId_g:string, insightType_s:string, type_s:string)[];\nunion isfuzzy=true dummyschema,\n@{variables('config_insights_table_name')}\n| where TimeGenerated>ago(365d)\n| project policyAnalyticsId_g",
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/queryData",
+                    "queries": {
+                      "resourcegroups": "[resourceGroup().name]",
+                      "resourcename": "[trim(parameters('Workspace Name'))]",
+                      "resourcetype": "Log Analytics Workspace",
+                      "subscriptions": "[subscription().subscriptionId]",
+                      "timerange": "Last 24 hours"
+                    }
+                  }
+                },
+                "For_Each_to_Append_Existing_Ids": {
+                  "foreach": "@body('Fetch_Existing_Data')?['value']",
+                  "actions": {
+                    "Append_to_Existing_Ids": {
+                      "runAfter": {},
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "existing_ids",
+                        "value": "@items('For_Each_to_Append_Existing_Ids')?['policyAnalyticsId_g']"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Fetch_Existing_Data": ["Succeeded"]
+                  },
+                  "type": "Foreach"
+                },
+                "For_Each_to_ingest_data_to_Sentinel": {
+                  "foreach": "@body('Parse_Config_Insight_List_ID')?['policyAnalyticsList']",
+                  "actions": {
+                    "Check_whether_Config_Insight_ID_already_in_Sentinel": {
+                      "actions": {},
+                      "runAfter": {},
+                      "else": {
+                        "actions": {
+                          "Send_Data": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "body": "@{items('For_Each_to_ingest_data_to_Sentinel')}",
+                              "headers": {
+                                "Log-Type": "@variables('config_insights_table_name')"
+                              },
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "/api/logs"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@contains(variables('existing_ids'), items('For_each_to_ingest_data_to_Sentinel')['policyAnalyticsId'])",
+                              true
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    }
+                  },
+                  "runAfter": {
+                    "For_Each_to_Append_Existing_Ids": ["Succeeded"]
+                  },
+                  "type": "Foreach"
+                },
+                "Parse_Config_Insight_List_ID": {
+                  "runAfter": {},
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('HTTP')",
+                    "schema": {
+                      "properties": {
+                        "policyAnalyticsList": {
+                          "items": {
+                            "properties": {
+                              "insightType": {
+                                "type": "string"
+                              },
+                              "policyAnalyticsId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["policyAnalyticsId", "insightType"],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "HTTP": ["Succeeded"]
+              },
+              "else": {
+                "actions": {
+                  "Terminate": {
+                    "runAfter": {},
+                    "type": "Terminate",
+                    "inputs": {
+                      "runError": {
+                        "code": "@{outputs('HTTP')['statusCode']}",
+                        "message": "API request call failed. Kindly Run again after checking credentials. Error: @{body('HTTP')}"
+                      },
+                      "runStatus": "Failed"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": ["@outputs('HTTP')['statusCode']", 200]
+                  }
+                ]
+              },
+              "type": "If"
+            },
+            "HTTP": {
+              "runAfter": {
+                "Initialize_Config_Insights_Table_Name": ["Succeeded"]
+              },
+              "type": "Http",
+              "inputs": {
+                "headers": {
+                  "Authorization": "Token @{parameters('InfobloxAPIKey')}"
+                },
+                "method": "GET",
+                "uri": "@variables('config_insight_list_url')"
+              }
+            },
+            "Initialize_Config_Ids": {
+              "runAfter": {
+                "Initialize_Config_Insights_List_URL": ["Succeeded"]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "config_ids",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Initialize_Config_Insights_List_URL": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "config_insight_list_url",
+                    "type": "string",
+                    "value": "@{parameters('InfobloxBaseUrl')}/api/v1/config-insights/analytics"
+                  }
+                ]
+              }
+            },
+            "Initialize_Config_Insights_Table_Name": {
+              "runAfter": {
+                "Initialize_Data_To_Send": ["Succeeded"]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "config_insights_table_name",
+                    "type": "string",
+                    "value": "Infoblox_Config_Insights_CL"
+                  }
+                ]
+              }
+            },
+            "Initialize_Data_To_Send": {
+              "runAfter": {
+                "Initialize_Existing_Ids": ["Succeeded"]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "data_to_send",
+                    "type": "array"
+                  }
+                ]
+              }
+            },
+            "Initialize_Existing_Ids": {
+              "runAfter": {
+                "Initialize_Config_Ids": ["Succeeded"]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "existing_ids",
+                    "type": "array"
+                  }
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azureloganalyticsdatacollector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+              },
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "Infoblox-Config-Insights",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2017-07-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzuremonitorlogsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+        }
+      }
+    }
+  ]
+}

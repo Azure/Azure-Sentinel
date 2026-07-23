@@ -15,22 +15,41 @@
       "type": "String"
     },
     "PersonalAccessToken": {
-      "defaultValue": "Enter the personal access token",
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Enter the GitHub personal access token."
+      }
     },
     "UserName": {
-      "defaultValue": "<username>@<domain>",
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Enter the username of the person who will own the Key Vault access policy."
+      }
     },
     "principalId": {
-      "defaultValue": "Enter the object ID of the user entered above",
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Enter the object ID of the user entered above"
+      }
     },
     "workspaceId": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Enter the Log Analytics workspace ID."
+      }
     },
     "workSpaceKey": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Enter the Log Analytics workspace key."
+      }
+    },
+    "GitHubAPIEndPoint": {
+      "defaultValue": "api.github.com",
+      "type": "string",
+      "metadata": {
+        "description": "Enter the GitHub API endpoint. For GitHub Enterprise Cloud, use api.github.com. For GitHub Enterprise Cloud with data residency, use your custom domain eg api.octocorp.ghe.com."
+      }
     }
   },
   "variables": {
@@ -40,13 +59,13 @@
     "StorageContainerName": "githublogicapp",
     "AzureBlobConnectionName": "azureblob-GitHubPlaybooks",
     "AzureLogAnalyticsDataCollectorConnectionName": "azureloganalyticsdatacollector-GitHubPlaybooks",
-    "KeyVaultConnectionName": "keyvault-GitHubPlaybooks"
-
+    "KeyVaultConnectionName": "keyvault-GitHubPlaybooks",
+    "GitHubAPIUrl": "[concat('https://', parameters('GitHubAPIEndPoint'))]"
   },
   "resources": [
     {
       "type": "Microsoft.KeyVault/vaults",
-      "apiVersion": "2016-10-01",
+      "apiVersion": "2022-07-01",
       "name": "[variables('KeyVaultName')]",
       "location": "[resourceGroup().location]",
       "properties": {
@@ -60,21 +79,18 @@
             "tenantId": "[subscription().tenantId]",
             "objectId": "[parameters('principalId')]",
             "permissions": {
-              "keys": [
-              ],
+              "keys": [],
               "secrets": [
                 "Get",
                 "List"
               ],
-              "certificates": [
-              ]
+              "certificates": []
             }
           }
         ],
         "enabledForDeployment": false,
         "enabledForDiskEncryption": false,
-        "enabledForTemplateDeployment": true,
-        "enableSoftDelete": true
+        "enabledForTemplateDeployment": true
       }
     },
     {
@@ -94,7 +110,7 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2019-06-01",
+      "apiVersion": "2023-01-01",
       "name": "[variables('StorageAccountName')]",
       "location": "[resourceGroup().location]",
       "sku": {
@@ -106,10 +122,8 @@
         "largeFileSharesState": "Disabled",
         "networkAcls": {
           "bypass": "AzureServices",
-          "virtualNetworkRules": [
-          ],
-          "ipRules": [
-          ],
+          "virtualNetworkRules": [],
+          "ipRules": [],
           "defaultAction": "Allow"
         },
         "supportsHttpsTrafficOnly": true,
@@ -142,8 +156,7 @@
       },
       "properties": {
         "cors": {
-          "corsRules": [
-          ]
+          "corsRules": []
         },
         "deleteRetentionPolicy": {
           "enabled": false
@@ -172,13 +185,12 @@
       ],
       "properties": {
         "displayName": "github",
-        "customParameterValues": {
-        },
+        "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureblob')]"
         },
         "parameterValues": {
-          "accountname": "[variables('AzureBlobConnectionName')]",
+          "accountname": "[variables('StorageAccountName')]",
           "accesskey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value]"
         }
       }
@@ -190,8 +202,7 @@
       "location": "[resourceGroup().location]",
       "properties": {
         "displayName": "github",
-        "customParameterValues": {
-        },
+        "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
         },
@@ -208,8 +219,7 @@
       "location": "[resourceGroup().location]",
       "properties": {
         "displayName": "[parameters('UserName')]",
-        "customParameterValues": {
-        },
+        "customParameterValues": {},
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
         },
@@ -239,9 +249,11 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "$connections": {
-              "defaultValue": {
-              },
+              "defaultValue": {},
               "type": "Object"
+            },
+            "GitHubAPIUrl": {
+              "type": "string"
             }
           },
           "triggers": {
@@ -363,8 +375,7 @@
                     "Condition_2": {
                       "actions": {
                         "Update_blob": {
-                          "runAfter": {
-                          },
+                          "runAfter": {},
                           "type": "ApiConnection",
                           "inputs": {
                             "body": "{\n  \"lastRun\": \"@{utcNow()}\",\n  \"lastContext\": \"@{variables('lastContext')}\"\n}",
@@ -454,7 +465,7 @@
                           "Content-Type": "application/json"
                         },
                         "method": "POST",
-                        "uri": "https://api.github.com/graphql"
+                        "uri": "@{parameters('GitHubAPIUrl')}/graphql"
                       },
                       "runAfter": {},
                       "type": "Http"
@@ -706,10 +717,8 @@
               },
               "type": "ParseJson"
             }
-
           },
-          "outputs": {
-          }
+          "outputs": {}
         },
         "parameters": {
           "$connections": {
@@ -730,6 +739,9 @@
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
               }
             }
+          },
+          "GitHubAPIUrl": {
+            "value": "[variables('GitHubAPIUrl')]"
           }
         }
       }
@@ -753,9 +765,11 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "$connections": {
-              "defaultValue": {
-              },
+              "defaultValue": {},
               "type": "Object"
+            },
+            "GitHubAPIUrl": {
+              "type": "string"
             }
           },
           "triggers": {
@@ -779,7 +793,7 @@
                           "Content-Type": "application/json"
                         },
                         "method": "GET",
-                        "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/contributors"
+                        "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/contributors"
                       },
                       "runAfter": {},
                       "type": "Http"
@@ -926,7 +940,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/popular/referrers"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/popular/referrers"
                           },
                           "runAfter": {},
                           "type": "Http"
@@ -938,7 +952,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/popular/paths"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/popular/paths"
                           },
                           "runAfter": {
                             "Send_Data": [
@@ -954,7 +968,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/views"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/views"
                           },
                           "runAfter": {
                             "Send_Data_2": [
@@ -970,7 +984,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/clones"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/traffic/clones"
                           },
                           "runAfter": {
                             "Send_Data_3": [
@@ -986,7 +1000,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/commits"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/commits"
                           },
                           "runAfter": {
                             "Send_Data_4": [
@@ -1002,7 +1016,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/collaborators"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/collaborators"
                           },
                           "runAfter": {
                             "Send_Data_5": [
@@ -1018,7 +1032,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "GET",
-                            "uri": "https://api.github.com/repos/@{variables('OrgName')}/@{items('For_each')['name']}/forks"
+                            "uri": "@{parameters('GitHubAPIUrl')}/repos/@{variables('OrgName')}/@{items('For_each')['name']}/forks"
                           },
                           "runAfter": {
                             "Send_Data_6": [
@@ -1499,7 +1513,7 @@
                         "queries": {
                           "page": "@{variables('pageNumber')}"
                         },
-                        "uri": "https://api.github.com/orgs/@{variables('OrgName')}/repos"
+                        "uri": "@{parameters('GitHubAPIUrl')}/orgs/@{variables('OrgName')}/repos"
                       },
                       "runAfter": {},
                       "type": "Http"
@@ -1821,8 +1835,7 @@
               "type": "ParseJson"
             }
           },
-          "outputs": {
-          }
+          "outputs": {}
         },
         "parameters": {
           "$connections": {
@@ -1843,6 +1856,9 @@
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
               }
             }
+          },
+          "GitHubAPIUrl": {
+            "value": "[variables('GitHubAPIUrl')]"
           }
         }
       }
@@ -1866,9 +1882,11 @@
           "contentVersion": "1.0.0.0",
           "parameters": {
             "$connections": {
-              "defaultValue": {
-              },
+              "defaultValue": {},
               "type": "Object"
+            },
+            "GitHubAPIUrl": {
+              "type": "string"
             }
           },
           "triggers": {
@@ -2217,7 +2235,7 @@
                               "Content-Type": "application/json"
                             },
                             "method": "POST",
-                            "uri": "https://api.github.com/graphql"
+                            "uri": "@{parameters('GitHubAPIUrl')}/graphql"
                           },
                           "runAfter": {},
                           "type": "Http"
@@ -2264,7 +2282,10 @@
                                                             "type": "string"
                                                           },
                                                           "permalink": {
-                                                            "type": ["string", "null"]
+                                                            "type": [
+                                                              "string",
+                                                              "null"
+                                                            ]
                                                           },
                                                           "publishedAt": {
                                                             "type": "string"
@@ -2458,7 +2479,7 @@
                         "queries": {
                           "page": "@{variables('pageNumber')}"
                         },
-                        "uri": "https://api.github.com/orgs/@{variables('OrgName')}/repos"
+                        "uri": "@{parameters('GitHubAPIUrl')}/orgs/@{variables('OrgName')}/repos"
                       },
                       "runAfter": {},
                       "type": "Http"
@@ -2774,8 +2795,7 @@
               "type": "ParseJson"
             }
           },
-          "outputs": {
-          }
+          "outputs": {}
         },
         "parameters": {
           "$connections": {
@@ -2796,6 +2816,9 @@
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
               }
             }
+          },
+          "GitHubAPIUrl": {
+            "value": "[variables('GitHubAPIUrl')]"
           }
         }
       }

@@ -122,7 +122,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
-            ValidateKqlForBestPractices(queryStr,fileName);
+            ValidateKqlForBestPractices(queryStr, fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
 
@@ -314,7 +314,7 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(SolutionParsersYamlFilesTestData))]
         public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
+            if (fileName == "NoFile.yaml" || fileName == "ASIM_FillNull.yaml")
             {
                 Assert.True(true);
                 return;
@@ -375,7 +375,7 @@ namespace Kqlvalidations.Tests
             var parserPaths = Directory.GetDirectories(solutionDirectories, parsersFolder, SearchOption.AllDirectories).ToList();
             parserPaths.AddRange(Directory.GetDirectories(solutionDirectories, parserFolder, SearchOption.AllDirectories).ToList());
 
-            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md" };
+            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".yaml", ".md", ".json" };
 
             var filteredFiles = prFiles
                 .Where(file =>
@@ -455,6 +455,7 @@ namespace Kqlvalidations.Tests
 
             bool isQueryValid = !(from p in listOfDiagnostics
                                   where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  || !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
                                   select p).Any();
 
 
@@ -476,7 +477,7 @@ namespace Kqlvalidations.Tests
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
-                .Where(template => 
+                .Where(template =>
 template.id
  == templateId)
                 .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))

@@ -1,0 +1,301 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Vaikora for O365 - Quarantine Incident Responder",
+    "description": "This playbook responds to Microsoft Sentinel incidents raised from the VaikoraO365_Quarantine_CL custom Log Analytics table. It enriches the incident with classification reasoning, posts a notification to a SOC Teams channel via webhook, and adds a comment to the incident. Designed to pair with the Vaikora for O365 black-box Azure VM that classifies M365 mailbox content and writes quarantine events.",
+    "mainSteps": [
+      "1. Triggers when a Microsoft Sentinel incident is created from a Vaikora-O365 analytic rule.",
+      "2. Extracts the originating quarantine row from the incident's custom details.",
+      "3. Posts a structured notification to the configured Microsoft Teams webhook with sender, subject, recipient, action_id, confidence, and reasoning.",
+      "4. Adds a comment to the Sentinel incident summarizing the classification.",
+      "5. Tags the incident with the Vaikora-O365 action category."
+    ],
+    "prerequisites": [
+      "1. Microsoft Sentinel enabled on the target workspace.",
+      "2. Vaikora for O365 black-box Azure VM deployed in the customer tenant, writing to VaikoraO365_Quarantine_CL.",
+      "3. A Microsoft Teams Incoming Webhook URL for the SOC notification channel.",
+      "4. A user account or system-assigned managed identity with Microsoft Sentinel Responder role on the workspace."
+    ],
+    "postDeployment": [
+      "1. Open the Logic App in the Azure portal.",
+      "2. Authorize the azuresentinel API connection (Sentinel Responder role required).",
+      "3. Authorize the teams API connection or update the Teams webhook URL parameter.",
+      "4. Enable the analytic rules deployed with this solution.",
+      "5. Wire the analytic rule actions to invoke this playbook when an incident fires."
+    ],
+    "lastUpdateTime": "2026-05-13T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Vaikora",
+      "O365",
+      "Email",
+      "Quarantine",
+      "Microsoft Sentinel"
+    ],
+    "support": {
+      "tier": "Partner",
+      "link": "https://www.data443.com"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Vaikora for O365 - Quarantine Incident Responder",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "VaikoraO365ToQuarantine",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Logic App playbook"
+      }
+    },
+    "TeamsWebhookUrl": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Microsoft Teams Incoming Webhook URL for SOC notifications"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is set up"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]",
+      "metadata": {
+        "description": "Region for the deployed Logic App and managed connections. Defaults to the resource group location."
+      }
+    }
+  },
+  "variables": {
+    "logicAppName": "[parameters('PlaybookName')]",
+    "azureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('azureSentinelConnectionName')]",
+      "location": "[parameters('location')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "Vaikora-O365 Azure Sentinel",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "VaikoraO365ToQuarantine",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('azureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "TeamsWebhookUrl": {
+              "type": "securestring"
+            },
+            "$connections": {
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_QuarantineRow": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "QuarantineRow",
+                    "type": "object",
+                    "value": "@coalesce(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames']?[0], json('{}'))"
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Extract_Incident_Fields": {
+              "type": "Compose",
+              "inputs": {
+                "incidentNumber": "@triggerBody()?['object']?['properties']?['incidentNumber']",
+                "incidentTitle": "@triggerBody()?['object']?['properties']?['title']",
+                "incidentUrl": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                "status": "@triggerBody()?['object']?['properties']?['status']",
+                "alertCount": "@length(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['alertsCount'], 0))"
+              },
+              "runAfter": {
+                "Initialize_QuarantineRow": ["Succeeded"]
+              }
+            },
+            "Post_Teams_Notification": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@parameters('TeamsWebhookUrl')",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "@@type": "MessageCard",
+                  "@@context": "https://schema.org/extensions",
+                  "themeColor": "7C3AED",
+                  "summary": "@{concat('Vaikora-O365 incident #', outputs('Extract_Incident_Fields')?['incidentNumber'])}",
+                  "title": "@{concat('Vaikora-O365 quarantine incident: ', outputs('Extract_Incident_Fields')?['incidentTitle'])}",
+                  "sections": [
+                    {
+                      "facts": [
+                        {
+                          "name": "Incident",
+                          "value": "@{outputs('Extract_Incident_Fields')?['incidentNumber']}"
+                        },
+                        {
+                          "name": "Severity",
+                          "value": "@{outputs('Extract_Incident_Fields')?['severity']}"
+                        },
+                        {
+                          "name": "Status",
+                          "value": "@{outputs('Extract_Incident_Fields')?['status']}"
+                        },
+                        {
+                          "name": "Alerts",
+                          "value": "@{outputs('Extract_Incident_Fields')?['alertCount']}"
+                        }
+                      ],
+                      "markdown": true
+                    }
+                  ],
+                  "potentialAction": [
+                    {
+                      "@@type": "OpenUri",
+                      "name": "View incident in Microsoft Sentinel",
+                      "targets": [
+                        {
+                          "os": "default",
+                          "uri": "@{outputs('Extract_Incident_Fields')?['incidentUrl']}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "runAfter": {
+                "Extract_Incident_Fields": ["Succeeded"]
+              }
+            },
+            "Add_Comment_To_Incident": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p><strong>Vaikora for O365</strong> classified this message as high-risk and quarantined it automatically. SOC notification dispatched to Teams.</p>"
+                },
+                "path": "/Incidents/Comment"
+              },
+              "runAfter": {
+                "Post_Teams_Notification": ["Succeeded"]
+              }
+            },
+            "Tag_Incident_Vaikora_O365": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "tagsToAdd": {
+                    "TagsToAdd": [
+                      {
+                        "Tag": "Vaikora-O365"
+                      },
+                      {
+                        "Tag": "EmailQuarantine"
+                      }
+                    ]
+                  }
+                },
+                "path": "/Incidents/Tags"
+              },
+              "runAfter": {
+                "Add_Comment_To_Incident": ["Succeeded"]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "TeamsWebhookUrl": {
+            "value": "[parameters('TeamsWebhookUrl')]"
+          },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureSentinelConnectionName'))]",
+                "connectionName": "[variables('azureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+    }
+  }
+}

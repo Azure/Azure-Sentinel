@@ -1,0 +1,46 @@
+id: 428c3d41-e441-4244-994e-b059d6316bc4
+name: Dataverse - Activity after Microsoft Entra alerts
+description: This hunting query looks for users conducting Dataverse/Dynamics 365
+  activity shortly after a Microsoft Entra Identity Protection alert for that user.
+  The query only looks for users not seen before or conducting Dynamics activity not
+  previously seen.
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let match_window = 1h;
+  let analysis_window = 1d;
+  let lookback_window = 7d;
+  SecurityAlert
+  | where TimeGenerated > ago(analysis_window)
+  | where ProviderName == 'IPC'
+  | extend UserName = tostring(parse_json(ExtendedProperties).["User Account"])
+  | extend UserName = tolower(UserName)
+  | extend TimeKey = bin(TimeGenerated, match_window)
+  | join kind=inner(DataverseActivity
+      | where TimeGenerated > ago(analysis_window)
+      | extend UserName = tolower(UserId)
+      | extend TimeKey = bin(TimeGenerated, match_window))
+      on UserName, TimeKey
+  | join kind=leftanti(DataverseActivity
+      | where TimeGenerated between(ago(lookback_window) .. ago(analysis_window))
+      | extend UserName = tolower(UserId))
+      on UserName, OriginalObjectId
+  | summarize
+      Actions = make_set(OriginalObjectId),
+      MostRecentAction = max(TimeGenerated1),
+      IPs = make_set(split(tostring(ClientIp), ':')[0]),
+      AADAlerts=make_set(Description),
+      MostRecentAlert = max(TimeGenerated)
+      by UserName
+  | extend timestamp = MostRecentAction, AccountCustomEntity = UserName
+entityMappings: []
+version: 3.2.0

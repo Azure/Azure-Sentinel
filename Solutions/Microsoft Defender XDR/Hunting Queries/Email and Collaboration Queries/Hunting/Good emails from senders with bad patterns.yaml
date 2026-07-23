@@ -1,0 +1,30 @@
+id: e6259b03-622e-4e11-9c54-94987dad7c14
+name: Good emails from senders with bad patterns
+description: |
+  This query helps hunting for good emails from senders with bad patterns
+description-detailed: |
+  This query helps hunting for good emails from senders with bad patterns using Defender for Office 365 data.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+    //Good emails from senders with bad patterns
+    let PctPhishThreshold = 50;
+    let LookbackWindow = 1d;
+     EmailEvents
+    | where Timestamp > ago (LookbackWindow) and EmailDirection == "Inbound"
+    | extend PhishMethods=tostring(parse_json(DetectionMethods).Phish)
+    | where PhishMethods contains ("File") or PhishMethods contains ("URL") or PhishMethods contains ("Filter")
+    | summarize PhishCount=count() by SenderMailFromAddress,AuthenticationDetails,PhishMethods
+    | join kind=inner (EmailEvents | where Timestamp > ago (LookbackWindow) and EmailDirection == "Inbound"
+    | summarize TotalCount=count() by SenderMailFromAddress,AuthenticationDetails) on SenderMailFromAddress,AuthenticationDetails
+    | project-away SenderMailFromAddress1,AuthenticationDetails1
+    | extend PctPhish = (PhishCount*100 / TotalCount)
+    | where PctPhish < 100 and PctPhish>= PctPhishThreshold
+    | join kind=inner (EmailEvents | where Timestamp > ago (LookbackWindow) and EmailDirection == "Inbound" and DeliveryLocation<> "Quarantine") on SenderMailFromAddress,AuthenticationDetails
+version: 1.0.0

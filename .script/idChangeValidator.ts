@@ -1,8 +1,8 @@
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { GetPRDetails } from "./utils/gitWrapper";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
-import gitP, { SimpleGit } from 'simple-git/promise';
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { GetPRDetails } from "./utils/gitHubWrapper.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
+import gitP, { SimpleGit } from 'simple-git';
 import { readFileSync } from 'fs';
 
 const workingDir: string = process.cwd();
@@ -12,9 +12,9 @@ const git: SimpleGit = gitP(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
-    var skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
+    const skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
     console.log("skipValidationCheckFilePath: " + skipValidationCheckFilePath);
-    var skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath, 'utf8'));
+    const skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath, 'utf8'));
     console.log(skipIdsFile + " " + typeof (skipIdsFile));
 
     if (filePath.includes("Detections") || filePath.includes("Analytic Rules")) {
@@ -23,14 +23,33 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
         console.log(filePath);
 
         if (typeof pr === "undefined") {
-            console.log("Azure DevOps CI for a Pull Request wasn't found. If issue persists - please open an issue");
+            console.log("Pull Request couldn't be fetched. If issue persists - please open an issue");
             return ExitCode.ERROR;
         }
 
-        let options = [pr.targetBranch, pr.sourceBranch, filePath];
-        let diffSummary = await git.diff(options);
-        let idPosition = diffSummary.search(templateIdRegex);
-        let idHasChanged = idPosition > 0;
+        // Fetch the base and head branches before running the diff
+        const branches = await git.branch();
+        if (!branches.all.includes(pr.base.ref)) {
+            try {
+                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.base.repo.clone_url, pr.base.ref + ':' + pr.base.ref]);
+            } catch (e) {
+                console.error(`Error fetching branch ${pr.base.ref} from git:`, e);
+                return ExitCode.ERROR;
+            }
+        }
+        if (!branches.all.includes(pr.head.ref)) {
+            try {
+                    await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.head.repo.clone_url , pr.head.ref + ':' + pr.head.ref]);
+            } catch (e) {
+                console.error(`Error fetching branch ${pr.head.ref} from git:`, e);
+                return ExitCode.ERROR;
+            }
+        }
+
+        const options = [pr.base.ref, pr.head.ref, filePath];
+        const diffSummary = await git.diff(options);
+        const idPosition = diffSummary.search(templateIdRegex);
+        const idHasChanged = idPosition > 0;
 
         if (idHasChanged) {
 
@@ -39,8 +58,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
             const regex = RegExp('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}', 'g');
             let array1;
-            var oldId: string = "";
-            var newId: string = "";
+            let oldId: string = "";
+            let newId: string = "";
 
             while ((array1 = regex.exec(diffSummary)) !== null) {
                 if (oldId == "") {
@@ -55,7 +74,9 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
                 console.log(filePath + " is skipped from this validation.");
                 return ExitCode.SUCCESS;
             } else {
-                throw new Error();
+                if (oldId !== newId) {
+                    throw new Error();
+                }
             }
         }
     }

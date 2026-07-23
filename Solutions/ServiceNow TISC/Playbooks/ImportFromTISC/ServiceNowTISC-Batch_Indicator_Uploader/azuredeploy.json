@@ -1,0 +1,170 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "ServiceNow TISC Batch Indicator Uploader",
+        "description":  "This playbook will write indicators in batch to ThreatIntelligenceIndicator log analytics table. This playbook referenced by **ServiceNowTISC-Import_Observables_Batch** playbook -- which calls the ServiceNow TISC API to get observables and then calls this playbook to write them to ThreatIntelligenceIndicator table.",
+        "prerequisites":  [
+            "Microsoft Sentinel Threat Intelligence is active"
+        ],
+        "postDeployment":  [
+            "1. Once deployment is complete, you will need to configure/authorize each connection.",
+            "2. Install the dependant playbook **ServiceNowTISC-Import_Observables_Batch** to start importing observables from ServiceNow TISC."
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Connectors/ServiceNowTISCCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2025-01-10T00:00:00.000Z",
+        "entities":  ["ip","filehash","url","dns"],
+        "tags": ["Threat Intelligence", "ServiceNow TISC"],
+        "support":  {
+            "tier":  "partner",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "ServiceNow"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "ServiceNowTISC-Batch_Indicator_Uploader",
+            "type":  "string"
+        },
+        "WorkspaceID": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Microsoft Sentinel WorkspaceID, guid format (example:85a5bccc-7a5c-4e3f-ad57-36be224c4d2e). WorkspaceID can be found under Log Analytics Workspaces blade. "
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "ServiceNowTISC-MicrosoftSentinelConnection"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "WorkspaceId":  {
+                            "defaultValue":  "[parameters('WorkspaceId')]",
+                            "type":  "String"
+                        }
+                    },
+                    "triggers":  {
+                        "Batch_Trigger":  {
+                            "type":  "Batch",
+                            "inputs":  {
+                                "mode":  "Inline",
+                                "configurations":  {
+                                    "ServiceNowImportTISC":  {
+                                        "releaseCriteria":  {
+                                            "messageCount":  100,
+                                            "recurrence":  {
+                                                "frequency":  "Minute",
+                                                "interval":  1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Select":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Select",
+                            "inputs":  {
+                                "from":  "@triggerBody()['items']",
+                                "select":  "@item()['content']"
+                            }
+                        },
+                        "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)":  {
+                            "runAfter":  {
+                                "Select":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "body":  {
+                                    "indicators":  "@body('Select')",
+                                    "sourcesystem":  "ServiceNow TISC"
+                                },
+                                "path": "[concat( '/V2/ThreatIntelligence/',parameters('WorkspaceID'),'/UploadIndicators/')]",
+                                "retryPolicy": {
+                                    "count": 10,
+                                    "interval": "PT20S",
+                                    "maximumInterval": "PT1H",
+                                    "minimumInterval": "PT10S",
+                                    "type": "exponential"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "ServiceNowTISC-Batch_Indicator_Uploader",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

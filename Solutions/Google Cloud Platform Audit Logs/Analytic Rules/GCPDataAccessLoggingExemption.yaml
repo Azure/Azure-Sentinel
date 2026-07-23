@@ -1,0 +1,112 @@
+id: b7da45ce-fcc8-43c7-a37c-c08454579d26
+name: GCP Audit Logs - Data Access Logging Exemption Added for Principal
+description: |
+  'Detects when a principal (user or service account) is exempted from GCP data access audit logging.
+  This is a critical security event as it reduces visibility into privileged operations and may indicate an attempt to hide malicious activity.
+  Adversaries may exempt their accounts from audit logging to evade detection while performing reconnaissance, privilege escalation, or data exfiltration.
+  This rule monitors SetIamPolicy operations that add audit log exemptions for ADMIN_READ, DATA_READ, or DATA_WRITE log types.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1562.008
+  - T1078.004
+tags:
+  - Cloud Security
+  - Audit Logging
+  - Defense Evasion
+query: |
+ GCPAuditLogs
+  | where ServiceName == "cloudresourcemanager.googleapis.com"
+  | where MethodName == "SetIamPolicy"
+  | where GCPResourceType == "project" and Severity == "NOTICE"
+  | where isnotempty(ServiceData)
+  | extend ServiceDataJson = parse_json(ServiceData)
+  | extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas
+  | where isnotempty(PolicyDelta)
+  | mv-expand ConfigDelta = PolicyDelta
+  | where ConfigDelta.action == "ADD"
+  | extend LogType = tostring(ConfigDelta.logType)
+  | where LogType in ("ADMIN_READ", "DATA_READ", "DATA_WRITE")
+  | extend 
+      ExemptedMember = tostring(ConfigDelta.exemptedMember),
+      ServiceAffected = tostring(ConfigDelta.service),
+      RequestMetadataJson = parse_json(RequestMetadata),
+      AuthInfoJson = parse_json(AuthenticationInfo)
+  | where isnotempty(ExemptedMember)
+  | extend 
+      CallerIpAddress = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      AuthEmail = tostring(AuthInfoJson.principalEmail),
+      ExemptedAccountName = tostring(split(ExemptedMember, ":")[1])
+  | summarize 
+      ExemptedLogTypes = make_set(LogType, 10),
+      ExemptedServices = make_set(ServiceAffected, 50),
+      FirstExemption = min(TimeGenerated),
+      LastExemption = max(TimeGenerated)
+      by PrincipalEmail, ProjectId, GCPResourceName, ExemptedMember, 
+         CallerIpAddress, UserAgent, LogName, ExemptedAccountName, MethodName, ServiceName, AuthEmail
+  | extend
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project TimeGenerated = LastExemption,
+      PrincipalEmail,
+      ProjectId,
+      ResourceName = GCPResourceName,
+      ExemptedMember,
+      ExemptedAccountName,
+      ExemptedLogTypes,
+      ExemptedServices,
+      FirstExemption,
+      LastExemption,
+      CallerIpAddress,
+      UserAgent,
+      AuthEmail,
+      MethodName,
+      ServiceName,
+      LogName,
+      AccountName,
+      AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+      - identifier: InstanceName
+        columnName: ResourceName
+customDetails:
+  ProjectId: ProjectId
+  ExemptedMember: ExemptedMember
+  ExemptedAccountName: ExemptedAccountName
+  ExemptedLogTypes: ExemptedLogTypes
+  ExemptedServices: ExemptedServices
+  UserAgent: UserAgent
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP Data Access Logging Exemption Added for {{ExemptedAccountName}} by {{PrincipalEmail}} in Service {{ExemptedServices}}"
+  alertDescriptionFormat: |-
+    Principal {{ExemptedAccountName}} added as exception from Data Access logging in project {{ProjectId}} for Service {{ExemptedServices}}.
+    This action reduces audit visibility and may indicate an attempt to evade detection. Verify this change was authorized and investigate any suspicious activity performed by the exempted principal.
+version: 1.0.0
+kind: Scheduled

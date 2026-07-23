@@ -1,0 +1,85 @@
+id: df577f0f-1d8a-4420-9057-a07f0edb15c8
+kind: Scheduled
+name: Dataverse - Mass record updates
+description: This query detects mass record update changes in Dataverse and Dynamics
+  365, exceeding a pre-defined threshold.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1641
+  - T1485
+  - T1565
+query: |
+  // Set threshold for number of updated records
+  let detection_threshold = 10000;
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message == "Update"
+  | summarize EventCount = count() by InstanceUrl, UserId, ClientIp, Message
+  | where EventCount > detection_threshold
+  | join kind=inner(
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency))
+      on InstanceUrl, UserId, ClientIp, Message
+  | mv-expand Fields
+  | summarize
+      UpdatedFields = make_set(Fields.Name, 100),
+      FirstEvent = min(TimeGenerated)
+      by UserId, ClientIp, InstanceUrl, EventCount, EntityName
+  | extend Details = bag_pack("Entity", EntityName, "Count", EventCount, "FieldsUpdated", UpdatedFields)
+  | summarize
+      TotalEvents = sum(EventCount),
+      FirstEvent = min(FirstEvent),
+      Details = make_list(Details, 100)
+      by UserId, ClientIp, InstanceUrl
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      UserId,
+      ClientIp,
+      TotalEvents,
+      Details,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Mass record changes detected in {{{InstanceUrl}} '
+  alertDescriptionFormat: A total of {{TotalEvents}} records were updated by {{UserId}}
+    , breaching the mass update threshold in {{InstanceUrl}} .
+customDetails:
+  Details: Details
+version: 3.2.0

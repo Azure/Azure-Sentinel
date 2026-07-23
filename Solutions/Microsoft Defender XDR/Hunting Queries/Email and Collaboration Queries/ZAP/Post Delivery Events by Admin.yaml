@@ -1,0 +1,45 @@
+id: 21bafecb-ae8f-4667-b7d6-144e047cb602
+name: Post Delivery Events by Admin
+description: |
+  This query visualises the daily amount of emails that had an admin post delivery action, summarizing the data by action type
+description-detailed: |
+  This query visualises the daily amount of emails that had an admin post delivery action, summarizing the data by action type
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailPostDeliveryEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = EmailPostDeliveryEvents
+  | where TimeGenerated >= TimeStart
+  | where ActionTrigger has "AdminAction";
+  let sdelete=baseQuery
+  | where Action has 'Soft Delete'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Soft Delete";
+  let hdelete=baseQuery
+  | where Action has 'Hard Delete'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Hard Delete";
+  let mtojunk=baseQuery
+  | where Action has 'Moved to junk folder'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Moved to junk folder";
+  let mtoinbox=baseQuery
+  | where Action has 'Moved to inbox'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Moved to inbox";
+  let qrel=baseQuery
+  | where Action has 'Quarantine release'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d
+  | extend Details = "Quarantine release";
+  union sdelete,hdelete,mtojunk,mtoinbox,qrel
+  | project Count, Details, Timestamp
+  | render timechart
+version: 1.0.0

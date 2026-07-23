@@ -1,0 +1,64 @@
+id: b1c791bf-5f0b-4bfd-81b6-238e446abce3
+Function:
+  Title: Corelight Suri Aggregation Events
+  Version: 1.1.0
+  LastUpdated: '2025-01-28'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_suri_aggregations
+FunctionAlias: corelight_suri_aggregations
+FunctionQuery: |
+  let list_of_uid = ( 
+        corelight_suricata_corelight
+        | where isnotempty(suri_id) and isnotempty(signature_id) and isnotempty(uid)
+        | extend sid = tostring(toint(signature_id))
+        | lookup (union _GetWatchlist('CorelightAggregationsEnrichment1'),
+                        _GetWatchlist('CorelightAggregationsEnrichment2') | extend sid = column_ifexists("sid", "")) on sid 
+        | where toint(impact_score) > 3
+        | summarize make_list(uid)
+        );
+        let corelight_suri_aggregations = view () {
+        union isfuzzy=true corelight_conn, corelight_files, corelight_http, corelight_ssl, corelight_dns, corelight_suricata_corelight, corelight_smb_files, corelight_smb_mapping
+        | where uid in (list_of_uid)
+        | summarize TimeGenerated = max(TimeGenerated),
+                signature_ids = make_set_if(toint(signature_id), isnotempty(signature_id)),
+                paths = make_set_if(EventType, isnotempty(EventType)),
+                signatures = make_set_if(signature, isnotempty(signature)),
+                orig_h = make_set_if(src_ip, isnotempty(src_ip)),
+                resp_h = make_set_if(dest_ip, isnotempty(dest_ip)),
+                ts = make_set_if(ts, isnotempty(ts)),
+                local_resp = make_set_if(local_resp, isnotempty(local_resp)),
+                sensor_name = make_set_if(sensor_name, isnotempty(sensor_name)) by uid
+        | extend sids_sorted = strcat_array(array_sort_asc(signature_ids), ","), local_resp = strcat_array(array_sort_asc(local_resp), ",")
+        | extend did = substring(hash_sha1(sids_sorted), 1, 8),
+                dethash = hash_sha1(strcat(sids_sorted, ",", uid, ",", strcat_array(ts, ","), ","))
+        | extend EventVendor = "Corelight",
+                EventProduct = "CorelightSensor",
+                EventType = "suri_aggregations",
+                dest = resp_h,
+                dest_ip = resp_h,
+                src = orig_h,
+                src_ip = orig_h,
+                sid = signature_ids
+        | project   TimeGenerated,
+                dethash,
+                did,
+                paths,
+                sensor_name,
+                signature_ids,
+                sids_sorted,
+                signatures,
+                uid,
+                EventVendor,
+                EventProduct,
+                EventType,
+                ts,
+                orig_h,
+                resp_h,
+                dest,
+                dest_ip,
+                src,
+                src_ip,
+                sid,
+                local_resp
+        };
+        corelight_suri_aggregations

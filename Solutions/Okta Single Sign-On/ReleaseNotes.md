@@ -1,5 +1,17 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.8       | 10-07-2026                     | Update **Analytic rule** and **Hunting Queries** for Okta SSO.|
+| 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |
+| 3.1.6       | 14-04-2026                     | Deprecate Okta Single Sign-On (using Azure Function) |
+| 3.1.5       | 02-04-2026                     | Rename CCF solution to Okta Single Sign-On (via Codeless Connector Framework).<br> Add SessionId variable and reference in template. |
+| 3.1.4       | 13-01-2026                     | Updated non-functional link from MFA Fatigue (OKTA) **Analytic rule** |
+| 3.1.3       | 05-02-2025                     | Version Update |
+| 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
+| 3.1.1       | 08-11-2024                     | Fixed CCP **Data Connector** connection bug                          |
+| 3.1.0       | 27-11-2024                     | Fixed Solution version in Maintemplate and resolved ARM template error                           |
+| 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
+| 3.0.9       | 17-10-2024                     | Updated package to fix connectivity of CCP connector |
+| 3.0.8       | 14-08-2024                     | Data Connector Globally Available         |
 | 3.0.7       | 25-04-2024                     | Repackaged for parser issue with old names       |
 | 3.0.6       | 17-04-2024                     | Repackaged solution for parser fix   |
 | 3.0.5       | 08-04-2024                     | Added Azure Deploy button for government portal deployments   |

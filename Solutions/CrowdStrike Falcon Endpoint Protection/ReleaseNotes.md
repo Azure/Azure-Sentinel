@@ -1,7 +1,32 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
-| 3.0.4       | 03-05-2024                     | Fixed **Parser** issue for Parser name and ParentID mismatch                   |
-| 3.0.3       | 10-04-2024                     | Added Azure Deploy button for government portal deployments                    |
-| 3.0.2       | 14-02-2024                     | Addition of new CrowdStrike Falcon Endpoint Protection AMA **Data Connector**  |
-| 3.0.1       | 31-01-2024                     | **Data Connector**[Crowdstrike Falcon Data Replicator V2] globally available   |
-| 3.0.0       | 28-07-2023                     | New **Data Connector** added                                                   |
+| 3.3.6       | 28-05-2026                     | Added support of multiple domains to **Crowdstrike API Data Connector** |
+| 3.3.5       | 20-05-2026                     | Updated **Analytic Rules** (v1.0.5): improved descriptions, added MITRE ATT&CK tactics, and optimized KQL queries. Updated **Workbook** to remove hardcoded resource IDs. Added non-analytics tier queries to *CrowdStrike Falcon Data Replicator (AWS S3)* **Data Connector** to support Basic/Auxiliary plan tables (Usage-based fallback, 14h window). |
+| 3.3.4       | 30-04-2026                     | remove deprecated tag. CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) is not deprecated |
+| 3.3.3       | 13-04-2026                     | Deprecate CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3) (using Azure Function) |
+| 3.3.2       | 16-03-2026                     | Update *CrowdStrike API Data Connector* to GA with adding rate limits to inner steps for Alerts and Detections data types |
+| 3.3.1       | 05-03-2026                     | Update *CrowdStrike API Data Connector* to fix Alerts and Detections data types |
+| 3.3.0       | 26-01-2026                     | Refresh *CrowdStrike API Data Connector* with Cases data type and multiple improvements |
+| 3.2.0       | 07-01-2026                     | Updated *CrowdStrike Falcon Adversary Data Connector* Change table name to be "ThreatIntelIndicators" instead of "ThreatIntelligenceIndicator" |
+| 3.1.9       | 17-12-2025                     | Updated *CrowdStrike API Data Connector* Enhance API configuration instructions with link |
+| 3.1.8       | 08-12-2025                     | Updated *CrowdStrike API Data Connector* to fix rate limit exceptions by introducing retry logic. |
+| 3.1.7       | 12-11-2025                     | Updated *CrowdStrike API Data Connector* to fix rate limit exceptions |
+| 3.1.6       | 23-10-2025                     | Updated *CrowdStrike API Data Connector* to fix deprecated detections API issues |
+| 3.1.5       | 22-08-2025                     | Updated *CrowdStrike API Data Connector* to fix duplicate logs issues |
+| 3.1.4       | 04-07-2025                     | Added new **CCF Connector** to the Solution *CrowdStrike API Data Connector*.<br/>Removed *Crowdstrike Falcon Data Replicator* - Function App **Data Connector**.<br/>Updated Connectors description. |
+| 3.1.3       | 24-06-2025                     | Removed "DEPRECATED" label from the *Crowdstrike Falcon Data Replicator V2* - **Data connector**. <br/> Updated Solution description.                                      |
+| 3.1.2       | 03-06-2025                     | Crowdstrike Falcon S3 **CCF connector** moving to GA.                                    |
+| 3.1.1       | 08-05-2025                     | Added preview tag to **CCP Connector**.                                    |
+| 3.1.0       | 11-03-2025                     | Added new CCP **Data Connector** to the Solution.                                    |
+| 3.0.10      | 15-01-2025                     | Resolve **Workbook** data type dependency issue.                                    |
+| 3.0.9       | 12-11-2024                     | Removed deprecated **Data Connectors**.                                             |
+|             |                                | Updated the python runtime version to 3.11 in **Data Connector** Function App.                                                                               |
+| 3.0.8 	  | 10-07-2024 					   | Deprecated **Data Connector**. 										            |
+| 3.0.7       | 20-06-2024                     | Shortlinks updated for **Data Connector** CrowdStrike Falcon Indicators of Compromise.                   |
+| 3.0.6       | 06-06-2024                     | Renamed **Data Connector** *CrowdStrike Falcon Indicators of Compromise* to *CrowdStrike Falcon Adversary Intelligence*. |
+| 3.0.5       | 30-05-2024                     | Added new Function App **Data Connector** CrowdStrike Falcon Indicators of Compromise.                   |
+| 3.0.4       | 03-05-2024                     | Fixed **Parser** issue for Parser name and ParentID mismatch.                   |
+| 3.0.3       | 10-04-2024                     | Added Azure Deploy button for government portal deployments.                    |
+| 3.0.2       | 14-02-2024                     | Addition of new CrowdStrike Falcon Endpoint Protection AMA **Data Connector**.  |
+| 3.0.1       | 31-01-2024                     | **Data Connector**[Crowdstrike Falcon Data Replicator V2] globally available.   |
+| 3.0.0       | 28-07-2023                     | New **Data Connector** added.                                                   |  

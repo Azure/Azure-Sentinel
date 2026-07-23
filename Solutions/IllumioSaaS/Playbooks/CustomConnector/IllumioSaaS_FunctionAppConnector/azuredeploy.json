@@ -1,0 +1,186 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionAppName": {
+            "defaultValue": "illumiopbfuncapp",
+            "type": "String",
+            "metadata": {
+                "description": "Function app Name"
+            }
+        },
+        "StorageAccountName": {
+            "type": "String",
+            "metadata": {
+                "description": "Storage name should be globally unique name"
+            }
+        },
+        "PCE_FQDN": {
+            "type": "String",
+            "metadata": {
+                "description": "FQDN of PCE"
+            }
+        },
+        "PORT": {
+            "type": "String",
+            "metadata": {
+                "description": "Port that PCE connects to, like 443"
+            }
+        },
+        "ORG_ID": {
+            "type": "String",
+            "metadata": {
+                "description": "Customer's org id"
+            }
+        },
+        "API_KEY": {
+            "type": "String",
+            "metadata": {
+                "description": "API key"
+            }
+        },
+        "API_SECRET": {
+            "type": "String",
+            "metadata": {
+                "description": "API secret"
+            }
+        }
+    },
+    "variables": {
+        "hostingPlanName": "[parameters('FunctionAppName')]",
+        "storageAccountName": "[parameters('StorageAccountName')]",
+        "functionAppName": "[parameters('FunctionAppName')]",
+        "applicationInsightsName": "[parameters('FunctionAppName')]",
+        "pceFQDN": "[parameters('PCE_FQDN')]",
+        "port": "[parameters('PORT')]",
+        "orgId": "[parameters('ORG_ID')]",
+        "apiKey": "[parameters('API_KEY')]",
+        "apiSecret": "[parameters('API_SECRET')]"        
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-04-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot",
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": "true",
+                "allowBlobPublicAccess": "false",
+                "allowSharedKeyAccess": "true",
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "defaultAction": "Allow",
+                    "ipRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationInsightsName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+            },
+            "properties": {
+                "Application_Type": "web"
+            },
+            "kind": "web"
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-06-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-04-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "~20"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://raw.githubusercontent.com/illumio-shield/Azure-Sentinel/illumio-sentinel-playbook-v2/Solutions/IllumioSaaS/Playbooks/CustomConnector/IllumioSaaS_FunctionAppConnector/IllumioSaaS_FunctionAppForPlaybooks.zip"
+                        },
+                        {
+                            "name": "PCE_FQDN",
+                            "value": "[variables('pceFQDN')]"
+                        },
+                        {
+                            "name": "PORT",
+                            "value": "[variables('port')]"
+                        },
+                        {
+                            "name": "ORG_ID",
+                            "value": "[variables('orgId')]"
+                        },
+                        {
+                            "name": "API_KEY",
+                            "value": "[variables('apiKey')]"
+                        },
+                        {
+                            "name": "API_SECRET",
+                            "value": "[variables('apiSecret')]"
+                        }
+                    ]
+                },
+                "cors": {
+                    "allowedOrigins": [
+                        "https://functions.azure.com",
+                        "https://functions-staging.azure.com",
+                        "https://functions-next.azure.com"
+                    ],
+                    "supportCredentials": false
+                }
+            }
+        }
+    ]
+}

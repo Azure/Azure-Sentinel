@@ -24,7 +24,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         health_obj = HealthCollector(
-            applogger,
+            start_time,
             consts.HEALTH_NAME,
             consts.HEALTH_CLIENT_ID,
             consts.HEALTH_CLIENT_SECRET,

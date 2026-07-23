@@ -1,0 +1,626 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Microsoft Sentinel: Dynamics 365 Finance and Operations Data Connector",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Basics",
+					"elements": [
+						{
+							"name": "resourceScope",
+							"type": "Microsoft.Common.ResourceScope"
+						},
+						{
+							"name": "getLAWorkspace",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "[concat('resources | where type =~ \"microsoft.operationalinsights/workspaces\" and subscriptionId == \"', steps('basics').resourceScope.subscription.subscriptionId, '\" | project label = name, description = location, value = pack(\"name\", name, \"location\", location, \"resourceGroup\", resourceGroup, \"id\", id) | order by label asc')]"
+								}
+							}
+						},
+						{
+							"name": "getKeyVaults",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "[concat('resources | where type =~ \"microsoft.keyvault/vaults\" and subscriptionId == \"', steps('basics').resourceScope.subscription.subscriptionId, '\" | project label = name, description = resourceGroup, value = name | order by label asc')]"
+								}
+							}
+						},
+						{
+							"name": "sentinelWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Sentinel workspace",
+							"defaultValue": "[parse('[]')]",
+							"toolTip": "",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "function",
+					"label": "Function App",
+					"elements": [
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "Configure the Function App used to collect Dynamics 365 Finance and Operations data. As part of the deploymnet, the Function App and Storage Account resources will be created in the target resource group. Function App health logs and metrics will be sent to selected App Insights workspace."
+							}
+						},
+						{
+							"name": "appServiceNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Web/checknameavailability?api-version=2022-03-01')]",
+								"body": {
+									"name": "[steps('function').newFunctionAppName]",
+									"type": "Microsoft.Web/sites"
+								}
+							}
+						},
+						{
+							"name": "storageNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-01-01')]",
+								"body": {
+									"name": "[steps('function').newStorageAccountName]",
+									"type": "Microsoft.Storage/storageAccounts"
+								}
+							}
+						},
+						{
+							"name": "newFunctionAppName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Function App name",
+							"defaultValue": "[toLower(concat('D365FinOps', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-'))))]",
+							"toolTip": "Name of the Function App",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').appServiceNameApi.nameAvailable]",
+										"message": "[steps('function').appServiceNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "newStorageAccountName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Storage account name",
+							"visible": true,
+							"defaultValue": "[toLower(concat('D365FinOps', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-')), 'sa'))]",
+							"toolTip": "Name of the Storage account",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').storageNameApi.nameAvailable]",
+										"message": "[steps('function').storageNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "appInsightsWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "App Insights workspace",
+							"defaultValue": "[steps('basics').sentinelWorkspace.name]",
+							"toolTip": "Select the workspace used to send Function App health logs and metrics",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "identity",
+					"label": "Identity",
+					"elements": [
+						{
+							"name": "getServicePrincipal",
+							"type": "Microsoft.Solutions.GraphApiControl",
+							"request": {
+								"method": "GET",
+								"path": "[concat('/v1.0/serviceprincipals?$filter=appid eq ', '\\'', steps('identity').spn.clientId,  '\\'')]"
+							}
+						},
+						{
+							"name": "keyVaultNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+								"body": {
+									"name": "[steps('identity').keyvault.newKeyVaultName]",
+									"type": "Microsoft.KeyVault/vaults"
+								}
+							}
+						},
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "The Dynamics 365 Finance and Operations connector collects data using a System Assigned Managed Identity (MSI) or Client ID and Client Secret (Service Principal). The MSI option is recommended for most deployments. Service Principal option is recommended for deployments used with the codeless connector (CCP) verion.",
+								"link": {
+									"label": "Learn more",
+									"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution"
+								}
+							}
+						},
+						{
+							"name": "useManagedIdentity",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "Managed Identity",
+							"defaultValue": "Managed Identity",
+							"toolTip": "",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "Managed Identity",
+										"value": true
+									},
+									{
+										"label": "Service Principal",
+										"value": false
+									}
+								],
+								"required": true
+							},
+							"visible": true
+						},
+						{
+							"name": "spn",
+							"type": "Microsoft.Common.Section",
+							"label": "Service Principal",
+							"elements": [
+								{
+									"name": "tenantId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Microsoft Entra Tenant ID",
+									"placeholder": "example: 21bbac8f-2227-4d79-9a91-558327b49f15",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "clientId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Client (App) ID",
+									"placeholder": "example: b22dcaaa-0838-46ac-8a09-2a9c04e31a8c",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "objectId",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Confirm Service Principal",
+									"placeholder": "Service Principal",
+									"toolTip": "This dropdown will be populated when a valid Client (App) ID is provided above",
+									"constraints": {
+										"allowedValues": "[map(steps('identity').getServicePrincipal.value, (item) => parse(concat('{\"label\":\"', item.displayName, '\",\"value\":\"', item.id, '\"}')))]",
+										"required": true
+									}
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						},
+						{
+							"name": "keyvault",
+							"type": "Microsoft.Common.Section",
+							"label": "Key Vault",
+							"elements": [
+								{
+									"name": "useExistingKeyVault",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Create new, or existing Key Vault",
+									"defaultValue": "New",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "New",
+												"value": false
+											},
+											{
+												"label": "Existing",
+												"value": true
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "newKeyVaultName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Key Vault name",
+									"defaultValue": "[toLower(concat('D365FinOpsKv', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-'))))]",
+									"toolTip": "Name of the Key Vault",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"isValid": "[steps('identity').keyVaultNameApi.nameAvailable]",
+												"message": "[steps('identity').keyVaultNameApi.message]"
+											}
+										]
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								},
+								{
+									"name": "existingKeyVaultName",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Azure Key Vault",
+									"defaultValue": "[parse('[]')]",
+									"toolTip": "",
+									"multiselect": false,
+									"selectAll": true,
+									"filter": true,
+									"filterPlaceholder": "Filter items ...",
+									"multiLine": true,
+									"constraints": {
+										"allowedValues": "[steps('basics').getKeyVaults.data]",
+										"required": true
+									},
+									"visible": "[steps('identity').keyvault.useExistingKeyVault]"
+								},
+								{
+									"name": "secretName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Secret name",
+									"placeholder": "example: secret1",
+									"toolTip": "Name of the secret in Key Vault (not the actual client secret)",
+									"constraints": {
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "secretValue",
+									"type": "Microsoft.Common.PasswordBox",
+									"label": {
+										"password": "Client Secret",
+										"confirmPassword": "Confirm secret"
+									},
+									"toolTip": "The client secret value from Microsoft Entra",
+									"constraints": {
+										"required": true
+									},
+									"options": {
+										"hideConfirmation": true
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						}
+					]
+				},
+				{
+					"name": "dynamics365",
+					"label": "Dynamics 365",
+					"elements": [
+						{
+							"name": "instanceApiHost",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Organization URL",
+							"placeholder": "example: https://contoso.dynamics.com",
+							"toolTip": "LCS organization URL",
+							"constraints": {
+								"required": true,
+								"regex": "^https:\/\/[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+								"validationMessage": "Please enter a valid URL starting with 'https://' and no trailing '/'."
+							},
+							"visible": true
+						},
+						{
+							"name": "instanceApiName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Instance Name",
+							"placeholder": "example: Contoso Prod",
+							"toolTip": "Unique identifier for the F&O instance",
+							"constraints": {
+								"required": true
+							},
+							"visible": true
+						},
+						{
+							"name": "dataCollection",
+							"type": "Microsoft.Common.Section",
+							"label": "Data Collection",
+							"elements": [
+								{
+									"name": "dcrOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "Select which data to collect. If you are using the Codeless Connector (CCP) version, you may wish to select only Users, Roles and Role associations.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"
+										}
+									}
+								},
+								{
+									"name": "selection",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Select data to collect",
+									"placeholder": "",
+									"defaultValue": [
+										"Database Logs",
+										"Users, Roles and Role Associations"
+									],
+									"toolTip": "",
+									"multiselect": true,
+									"selectAll": true,
+									"filter": true,
+									"filterPlaceholder": "Filter items ...",
+									"multiLine": true,
+									"defaultDescription": "A value for selection",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Database Logs",
+												"description": "Audit logs from Finance and Operations",
+												"value": "logs"
+											},
+											{
+												"label": "Users, Roles and Role Associations",
+												"description": "System users, roles and role to user mappings.",
+												"value": "data"
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								}
+							],
+							"visible": true
+						}
+					]
+				},
+				{
+					"name": "roles",
+					"label": "Role Assignments",
+					"elements": [
+						{
+							"name": "dcrRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "DCR Role Assignment",
+							"elements": [
+								{
+									"name": "dcrOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, Data Collection Rule (DCR) and Data Collection Endpoint (DCE) resources will be created. To ingest data, the Function App managed identity must be assigned the Monitoring Metrics Publisher role on the DCR.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"
+										}
+									}
+								},
+								{
+									"name": "dcrInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "Role assignment to the DCR typically requires Owner or User Access Administrator privileges on the target resource.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Role assignment",
+									"defaultValue": "none",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "noDcrPermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('roles').dcrRoleAssignment.hasPermissions, false)]",
+									"options": {
+										"text": "To complete the deployment, you will need to assign the Monitoring Metrics Publisher role to the Function App managed identity on the Microsoft-Sentinel-FinanceOperations-DCR resource created during deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution",
+										"style": "Warning"
+									}
+								}
+							],
+							"visible": true
+						},
+						{
+							"name": "ketVaultRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Key Vault Role Assignment",
+							"elements": [
+								{
+									"name": "kvOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]",
+									"options": {
+										"text": "As part of the deployment, a Key Vault resource will be created to store the client secret of the Microsoft Entra Service Principal. To ingest data, the Function App managed identity must be assigned the Key Vault Secrets User role on the Key Vault.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide"
+										}
+									}
+								},
+								{
+									"name": "kvInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]",
+									"options": {
+										"text": "Role assignment to the Key Vault typically requires Owner or User Access Administrator privileges on the target resource.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Role assignment",
+									"defaultValue": "none",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								},
+								{
+									"name": "noKvPermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "To complete the deployment, you will need to assign the Key Vault Secrets User role to the Function App managed identity on the Key Vault resource created during deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution",
+										"style": "Warning"
+									},
+									"visible": "[or(steps('identity').keyvault.useExistingKeyVault, equals(steps('roles').ketVaultRoleAssignment.hasPermissions, false))]"
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						},
+						{
+							"name": "d365RoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Dynamics 365 Role Assignment",
+							"elements": [
+								{
+									"name": "d365Overview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, you will need to grant the Funtion App access to read from the DatabaseLogs, SystemUsers, SystemRoles, and SystemUserRoles data entities. Click here for further information.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"
+										}
+									}
+								},
+								{
+									"name": "noD365Permissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "To complete the deployment, you will need to assign permission in Dynamics 365 Finance & Operations administration page.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution",
+										"style": "Warning"
+									}
+								}
+							],
+							"visible": true
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "tagsByResource",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Resources/deployments",
+								"Microsoft.Insights/components",
+								"Microsoft.Web/serverfarms",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.Web/sites",
+								"Microsoft.Insights/dataCollectionRules",
+								"Microsoft.Insights/dataCollectionEndpoints",
+								"Microsoft.Authorization/roleAssignments",
+								"Microsoft.OperationalInsights/workspaces/tables"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').resourceScope.location.name]",
+			"resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]",
+			"parameters": {
+				"functionAppName": "[steps('function').newFunctionAppName]",
+				"storageAccountName": "[steps('function').newStorageAccountName]",
+				"appInsightsWorkspaceResourceId": "[steps('function').appInsightsWorkspace.id]",
+				"roleAssignmentDcr": "[steps('roles').dcrRoleAssignment.hasPermissions]",
+				"roleAssignmentKv": "[steps('roles').ketVaultRoleAssignment.hasPermissions]",
+				"sentinelWorkspace": "[steps('basics').sentinelWorkspace]",
+				"financeOperationsApiHost": "[steps('dynamics365').instanceApiHost]",
+				"instanceName": "[steps('dynamics365').instanceApiName]",
+				"tagsByResource": "[steps('tags').tagsByResource]",
+				"logsDisabled": "[not(contains(steps('dynamics365').dataCollection.selection, 'logs'))]",
+				"dataDisabled": "[not(contains(steps('dynamics365').dataCollection.selection, 'data'))]",
+				"keyVault": {
+					"useExistingKeyVault": "[steps('identity').keyvault.useExistingKeyVault]",
+					"keyVaultName": "[coalesce(steps('identity').keyvault.existingKeyVaultName, steps('identity').keyvault.newKeyVaultName, 'empty')]",
+					"secretName": "[coalesce(steps('identity').keyvault.secretName, 'empty')]"
+				},
+				"secretValue": "[coalesce(steps('identity').keyvault.secretValue, 'empty')]",
+				"identity": {
+					"useManagedIdentity": "[steps('identity').useManagedIdentity]",
+					"clientId": "[coalesce(steps('identity').spn.clientId, 'empty')]",
+					"tenantId": "[coalesce(steps('identity').spn.tenantId, 'empty')]",
+					"objectId": "[coalesce(steps('identity').spn.objectId, 'empty')]"
+				}
+			}
+		}
+	}
+}

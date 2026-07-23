@@ -1,4 +1,15 @@
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
-|-------------|--------------------------------|--------------------------------------------------------|
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
+|-------------|--------------------------------|-------------------------------------------------------------|
+| 3.2.0       | 01-07-2026                     | Updated Cisco Umbrella CCF data connector as generally available (isPreview false). |
+| 3.1.0       | 22-05-2026                     | Added new CCF (Codeless Connector) for Cisco Umbrella with 10 new tables (DNS, WebTraffic, CloudFirewall, AdminAudit, DLP, FileEvent, IPS, RemoteAccessVPN, ZeroTrustAccess, ZeroTrustAccessFlow) and updated parser to union new tables. (Public Preview) |
+| 3.0.10      | 23-03-2026                     | Added null-byte sanitization for corrupted state manager timestamps in Data Connector to prevent crashes on corrupted Azure File Share markers. Added null-byte stripping in date formatting to handle corrupted date fields from csv file. |
+| 3.0.9       | 13-03-2026                     | Moved csv.field_size_limit to module level so all 12 CSV parsers are covered. Added csv.Error guardrail to prevent a single oversized row from stalling ingestion. Consolidated null-byte stripping into unpack_file() to prevent _csv.Error on embedded NUL characters across all parsers. |
+| 3.0.8       | 29-01-2026                     | The Data connector has been updated to support large fields. |
+| 3.0.7       | 28-11-2025                     | The Data connector has been updated to support up to version 14 log versioning for the Cisco log format, and the parser to include all tables. |
+| 3.0.6       | 01-09-2025                     | Added a new data connector, 'CiscoUmbrella_API_FunctionApp_elasticpremium.json'    |
+| 3.0.5       | 21-06-2025                     | To expand support for Cisco Umbrella data in KQL validation tests and to standardize the naming of analytic rules    |
+| 3.0.4       | 15-05-2025                     | Updating documentation to reflect support for Cisco Umbrella log schema version 11    |
+| 3.0.3       | 30-12-2024                     | Update Playbooks **AddIpToDestination**, **AssignPolicyToIdentity**, **GetDomainInfo** as v1 version of CiscoUmbrella APIs are deprecated and Urls are also changed for this. **Cisco Umbrella Enforcement API has not been deprecated**. Repackage of solution.    |
+| 3.0.2       | 20-09-2024                     | Update **Analytic rules** for Entity mapping and missing TTP and Updated the python runtime version to 3.11    |
 | 3.0.1       | 03-05-2024                     | Added Deploy to Azure Government button in **Data connector** <br/> Fixed **Parser** issue for Parser name and ParentID mismatch|
 | 3.0.0       | 28-09-2023                     | Updated **Data Connector** with step by step guidelines |

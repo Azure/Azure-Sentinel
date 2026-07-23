@@ -1,0 +1,424 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Rubrik Update Anomaly Status",
+        "description":  "This playbook will resolve or report false positive to unresolved anomaly and update status as resolved.",
+        "prerequisites":  [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Obtain Teams GroupId and ChannelId",
+            "a. Create a Team with public channel.",
+            "b. Click on three dots (...) present on right side of the your newly created teams channel and Get link to the channel.",
+            "c. copy the text from the link between /channel and /, decode it using online url decoder and copy it to use as channelId.",
+            "d. copy the text of groupId parameter from link to use as groupId. "
+        ],
+        "postDeployment":  [
+            "**a. Authorize connection**",
+            "Once deployment is complete, authorize connection.",
+            "1. Go to your logic app -> API connections -> Select teams connection resource",
+            "2. Go to General -> edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save"
+        ],
+        "lastUpdateTime":  "2025-03-07T00:00:00.000Z",
+        "entities":  [ "account", "url" ],
+        "tags":  [ "Anomaly", "Resolve", "FalsePositive", "Rubrik" ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Rubrik"
+        }
+    },
+    "parameters":  {
+        "PlaybookName": {
+            "defaultValue": "RubrikUpdateAnomalyStatus",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "TeamsGroupId": {
+            "defaultValue": "TeamsGroupId",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Group where the adaptive card will be posted"
+            }
+        },
+        "TeamsChannelId": {
+            "defaultValue": "TeamsChannelId",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Channel where the adaptive card will be posted"
+            }
+        }
+    },
+    "variables": {
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "manual":  {
+                            "type":  "Request",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "schema":  {
+                                    "properties":  {
+                                        "AccessToken":  {
+                                            "type":  "string"
+                                        },
+                                        "BaseUrl":  {
+                                            "type":  "string"
+                                        },
+                                        "UserAgent":  {
+                                            "type":  "string"
+                                        },
+                                        "ObjectName":  {
+                                            "type":  "string"
+                                        },
+                                        "anomalyId":  {
+                                            "type":  "string"
+                                        },
+                                        "anomalyType":  {
+                                            "type":  "string"
+                                        },
+                                        "workloadId":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+            "Does_Resolve_Anomaly_Status_Code_Equal_To_200_And_Response_Not_Contain_Errors": {
+                "actions": {
+                    "Success_Response": {
+                        "type": "Response",
+                        "kind": "Http",
+                        "inputs": {
+                            "statusCode": 200,
+                            "body": "@variables('Response_Message')"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Resolve_Anomaly": [
+                        "Succeeded",
+                        "Failed",
+                        "TimedOut",
+                        "Skipped"
+                    ]
+                },
+                "else":  {
+                    "actions":  {
+                        "Failure_Response":  {
+                            "runAfter":  {
+                                "Set_Error_In_Response_Message":  [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "Response",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "statusCode": 400,
+                                "body": "@variables('Response_Message')"
+                            }
+                        },
+                        "Set_Error_In_Response_Message":  {
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "Response_Message",
+                                "value":  "@if(contains(body('Resolve_Anomaly'), 'errors'), body('Resolve_Anomaly')?['errors'][0]?['message'], body('Resolve_Anomaly')?['message'])"
+                            }
+                        },
+                        "Terminate_Due_To_Failure":  {
+                            "runAfter":  {
+                                "Failure_Response":  [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "Terminate",
+                            "inputs":  {
+                                "runStatus":  "Failed",
+                                "runError":  {
+                                    "code":  "400",
+                                    "message":  "@variables('Response_Message')"
+                                }
+                            }
+                        }
+                    }
+                },
+                "expression":  {
+                    "and":  [
+                        {
+                            "equals":  [
+                                "@outputs('Resolve_Anomaly')['statusCode']",
+                                200
+                            ]
+                        },
+                        {
+                            "not":  {
+                                "contains":  [
+                                    "@body('Resolve_Anomaly')",
+                                    "errors"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "type":  "If"
+            },
+            "Get_Anomaly_Resolution":  {
+                "runAfter":  {
+                    "Initialize_Response_Message":  [
+                        "Succeeded"
+                    ]
+                },
+                "type":  "ApiConnectionWebhook",
+                "inputs":  {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['teams']['connectionId']"
+                        }
+                    },
+                    "body": {
+                        "notificationUrl": "@{listCallbackUrl()}",
+                        "body": {
+                            "messageBody":  "{\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.3\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Anomaly Resolution\",\n      \"horizontalAlignment\": \"Center\",\n      \"style\": \"heading\",\n      \"color\": \"Accent\",\n      \"wrap\": true\n    },\n    {\n            \"type\": \"TextBlock\",\n            \"text\": \"Object Name =  @{triggerBody()?['ObjectName']}\\n\\nObject ID = @{triggerBody()?['workloadId']}\\n\\nAnomaly ID =  @{triggerBody()?['anomalyId']}\\n\\nAnomaly Type = @{triggerBody()?['anomalyType']}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n    {\n            \"type\": \"TextBlock\",\n            \"text\": \"Select resolution type for above anomaly.\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"style\": \"default\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n    {\n      \"type\": \"Input.ChoiceSet\",\n      \"id\": \"resolutionChoice\",\n      \"style\": \"expanded\",\n      \"isRequired\": true,\n      \"choices\": [\n        {\n          \"title\": \"Resolve\",\n          \"value\": \"resolve\"\n        },\n        {\n          \"title\": \"Resolve & Report False Positive\",\n          \"value\": \"resolveandreport\"\n        },\n       {\n          \"title\": \"No Action\",\n          \"value\": \"noaction\"\n        }\n      ]\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"Action.Submit\",\n      \"title\": \"Submit\",\n      \"style\": \"positive\"\n    }\n  ]\n}",
+                            "updateMessage": "Thanks for your response!",
+                            "recipient":  {
+                                    "groupId": "[parameters('TeamsGroupId')]",
+                                    "channelId": "[parameters('TeamsChannelId')]"
+                            }
+                        }
+                    },
+                    "path":  "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                }
+            },
+            "Initialize_False_Positive_Report":  {
+                "runAfter":  {
+                },
+                "type":  "InitializeVariable",
+                "inputs":  {
+                    "variables":  [
+                        {
+                            "name":  "False_Positive_Report",
+                            "type":  "object"
+                        }
+                    ]
+                }
+            },
+            "Initialize_Response_Message":  {
+                "runAfter":  {
+                    "Initialize_False_Positive_Report":  [
+                        "Succeeded"
+                    ]
+                },
+                "type":  "InitializeVariable",
+                "inputs":  {
+                    "variables":  [
+                        {
+                            "name":  "Response_Message",
+                            "type":  "string",
+                            "value":  "Resolved anomaly successfully"
+                        }
+                    ]
+                }
+            },
+            "Resolve_Anomaly":  {
+                "runAfter":  {
+                    "Check_Resolution_Choice": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "uri": "@{triggerBody()?['BaseUrl']}/api/graphql",
+                    "method": "POST",
+                    "headers": {
+                        "Authorization": "Bearer @{triggerBody()?['AccessToken']}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "@triggerBody()?['UserAgent']"
+                    },
+                    "body": {
+                        "query": "mutation resolveAnomaly($input:ResolveAnomalyInput!)\r\n{\r\n  resolveAnomaly(input:$input)\r\n}",
+                        "variables": {
+                            "input": {
+                                "anomalyId": "@triggerBody()?['anomalyId']",
+                                "anomalyType": "@triggerBody()?['anomalyType']",
+                                "falsePositiveReport": "@variables('False_Positive_Report')",
+                                "workloadId": "@triggerBody()?['workloadId']"
+                            }
+                        }
+                    }
+                }
+            },
+            "Check_Resolution_Choice": {
+                "runAfter": {
+                    "Get_Anomaly_Resolution": [
+                        "Succeeded"
+                    ]
+                },
+                "cases": {
+                    "Does_Resolution_Choice_Equals_To_No_Action": {
+                        "case": "noaction",
+                        "actions": {
+                            "Terminate_As_No_Action_Selected": {
+                                "runAfter": {
+                                    "Response_As_No_Action_Selected": [
+                                        "Succeeded",
+                                        "TimedOut",
+                                        "Skipped",
+                                        "Failed"
+                                    ]
+                                },
+                                "type": "Terminate",
+                                "inputs": {
+                                    "runStatus": "Succeeded"
+                                }
+                            },
+                            "Response_As_No_Action_Selected": {
+                                "type": "Response",
+                                "kind": "Http",
+                                "inputs": {
+                                    "statusCode": 200,
+                                    "body": "No action selected for anomaly resolution"
+                                }
+                            }
+                        }
+                    },
+                    "Does_Resolution_Choice_Equals_To_Report_False_Positive": {
+                        "case": "resolveandreport",
+                        "actions": {
+                            "Get_Reason_For_False_Positive": {
+                                "type": "ApiConnectionWebhook",
+                                "inputs": {
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                        }
+                                    },
+                                    "body": {
+                                        "notificationUrl": "@{listCallbackUrl()}",
+                                        "body": {
+                                            "messageBody": "{\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.0\",\n  \"body\": [\n     {\n      \"type\": \"TextBlock\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Report False Positive\",\n      \"horizontalAlignment\": \"Center\",\n      \"style\": \"heading\",\n      \"color\": \"Accent\",\n      \"wrap\": true\n    },\n    {\n            \"type\": \"TextBlock\",\n            \"text\": \"Object Name =  @{triggerBody()?['ObjectName']}\\n\\nObject ID = @{triggerBody()?['workloadId']}\\n\\nAnomaly ID =  @{triggerBody()?['anomalyId']}\\n\\nAnomaly Type = @{triggerBody()?['anomalyType']}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n{\n            \"type\": \"TextBlock\",\n            \"text\": \"Select reason for reporting false positive.\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"style\": \"default\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n    {\n      \"type\": \"Input.ChoiceSet\",\n      \"id\": \"falsePositiveReason\",\n      \"style\": \"expanded\",\n      \"isRequired\": true,\n      \"choices\": [\n        {\n          \"title\": \"It's an app update\",\n          \"value\": \"APPLICATION_UPDATE\"\n        },\n        {\n          \"title\": \"It's a log rotation\",\n          \"value\": \"LOG_ROTATION\"\n        },\n        {\n          \"title\": \"It's an OS update\",\n          \"value\": \"OS_UPDATE\"\n        },\n        {\n          \"title\": \"VMs are offline for scheduled maintenance\",\n          \"value\": \"NFA_SCHEDULED_MAINTENANCE\"\n        },\n        {\n          \"title\": \"VMs are offline for unscheduled maintenance\",\n          \"value\": \"NFA_UNSCHEDULED_MAINTENANCE\"\n        },\n        {\n          \"title\": \"Unspecified false positive type\",\n          \"value\": \"FP_TYPE_UNSPECIFIED\"\n        },\n        {\n          \"title\": \"Other\",\n          \"value\": \"OTHER\"\n        }\n      ]\n    },\n     {\n      \"type\": \"TextBlock\",\n      \"weight\": \"Bolder\",\n      \"text\": \"Specify Reason (required if Other selected)\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"Input.Text\",\n      \"id\": \"otherReason\",\n      \"isMultiline\": true,\n      \"isRequired\": true,\n      \"value\": \"Enter another reason\",\n      \"isVisible\": true,\n      \"maxLength\": 250\n    }\n  ],\n \"actions\": [\n\t  {\n\t\t\"type\": \"Action.Submit\",\n\t\t\"title\": \"Submit\"\n\t  }\n\t]\n}",
+                                            "updateMessage": "Thanks for your response!",
+                                            "recipient":  {
+                                                "groupId": "[parameters('TeamsGroupId')]",
+                                                "channelId": "[parameters('TeamsChannelId')]"
+                                            }
+                                        }
+                                    },
+                                    "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                }
+                            },
+                            "Set_False_Positive_Report": {
+                                "runAfter": {
+                                    "Get_Reason_For_False_Positive": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "SetVariable",
+                                "inputs": {
+                                    "name": "False_Positive_Report",
+                                    "value": {
+                                        "falsePositiveType": "@body('Get_Reason_For_False_Positive')?['data']?['falsePositiveReason']",
+                                        "otherReason": "@if(equals(body('Get_Reason_For_False_Positive')?['data']?['otherReason'], 'Enter another reason'), '', body('Get_Reason_For_False_Positive')?['data']?['otherReason'])"
+                                    }
+                                }
+                            },
+                            "Set_Response_Message_For_Reporting_False_Positive": {
+                                "runAfter": {
+                                    "Set_False_Positive_Report": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "SetVariable",
+                                "inputs": {
+                                    "name": "Response_Message",
+                                    "value": "Resolve anomnaly & report false positive with reason:  @{if(equals(body('Get_Reason_For_False_Positive')?['data']?['falsePositiveReason'], 'OTHER'), body('Get_Reason_For_False_Positive')?['data']?['otherReason'], body('Get_Reason_For_False_Positive')?['data']?['falsePositiveReason'])}"
+                                }
+                            }
+                        }
+                    }
+                },
+                "default": {
+                    "actions": {}
+                },
+                "expression": "@body('Get_Anomaly_Resolution')?['data']?['resolutionChoice']",
+                "type": "Switch"
+            }
+        },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value": {
+                        "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "RubrikUpdateAnomalyStatus",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('TeamsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('TeamsConnectionName')]",   
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

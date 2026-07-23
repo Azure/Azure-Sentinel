@@ -1,0 +1,1000 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "DomainTools DNSDB Co-Located IP Addresses", 
+        "description": "This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Microsoft Sentinel incidents. This lookup will identify all the IPs that are co-located (based on Domain) based on the Offense Source value. This would be set of IPs that also shared the same Domain as the originating IP address.",
+        "prerequisites": "A DomainTools API Key provisioned for Iris Investigate. Visit https://www.domaintools.com/integrations to request a trial key.",       
+        "prerequisitesDeployTemplateFile": "",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2024-06-27T00:00:00.000Z", 
+        "entities": ["ip"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "DomainTools"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "DomainTools-DNSDB-Co-Located-IP-Addresses",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        }
+    },
+    "variables": {
+		"DomainToolsDNSDBConnectionName": "[concat('domaintoolsdnsdb-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('DomainToolsDNSDBConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('DomainToolsDNSDBConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/farsightdnsdb')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name":	 "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('DomainToolsDNSDBConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Co_Located_IPs": {
+                            "runAfter": {
+                                "RDATA_Unique_hosts_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "co_located_ips",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "End_Date_epoch": {
+                            "runAfter": {
+                                "Get1970TimestampInTicks": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "end_date_epoch",
+                                        "type": "integer",
+                                        "value": "@div(sub(variables('end_date_ticks_time'),variables('ticks_1970_time')),10000000)"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "co_located_ip_address_output": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Filter_results_for_time_seen_after_relative_to_incident_date": {
+                            "runAfter": {
+                                "Incident_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "time_fencing_seen_after",
+                                        "type": "string",
+                                        "value": "90d"
+                                    }
+                                ]
+                            },
+                            "description": "Possible Values: 1h,6h,12h,24h, 30d, 60d,90d,365d"
+                        },
+                        "Filter_results_for_time_seen_before_relative_to_incident_date": {
+                            "runAfter": {
+                                "Filter_results_for_time_seen_after_relative_to_incident_date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "time_fencing_seen_before",
+                                        "type": "string",
+                                        "value": "1h"
+                                    }
+                                ]
+                            },
+                            "description": " Possible Values: 1h,6h,12h,24h, 30d, 60d,90d,365d"
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Check_if_co_located_ip_address_exists": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Co_located_Ip_Address_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><span style=\"font-size: 12px\">DNSDB Co-Located IP Addresses for IP: </span><span style=\"font-size: 12px\">@{items('For_each')?['Address']}</span><span style=\"font-size: 12px\"> (From Date: </span><span style=\"font-size: 12px\">@{variables('start_date')}</span><span style=\"font-size: 12px\">, To Date: </span><span style=\"font-size: 12px\">@{variables('end_date')}</span><span style=\"font-size: 12px\">)</span><span style=\"font-size: 12px\"><strong>@{body('Co_located_Ip_Address_table')}</strong></span><span style=\"font-size: 12px\"><strong></strong></span><br>\n</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Co_located_Ip_Address_table": {
+                                            "runAfter": {},
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('co_located_ip_address_output')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_unique_co_located_ip_address": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>DNSDB Co-Located IP Addresses for IP: @{items('For_each')?['Address']} (From Date: @{variables('start_date')}, To Date: @{variables('end_date')})<br>\nNo Records Found</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(variables('co_located_ip_address_output'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_RDATA_": {
+                                    "foreach": "@body('RData_Lookup_with_RRType')",
+                                    "actions": {
+                                        "Append_to_Rdata_Hosts_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "rdata_hosts",
+                                                "value": "@items('For_each_RDATA_')?['rrname']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_RData_Hosts_to_Empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "For_each_RRName_": {
+                                    "foreach": "@variables('rdata_hosts_unique')",
+                                    "actions": {
+                                        "For_each_RRSet_AAAA": {
+                                            "foreach": "@body('RRSet_Lookup_with_RRType_AAAA')",
+                                            "actions": {
+                                                "For_each_RRSet_AAAA_RData": {
+                                                    "foreach": "@items('For_each_RRSet_AAAA')?['rdata']",
+                                                    "actions": {
+                                                        "Set_Co-located_IPS_2": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "co_located_ips",
+                                                                "value": "@items('For_each_RRSet_AAAA_RData')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "RRSet_Lookup_with_RRType_AAAA": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_RRSet_With_A": {
+                                            "foreach": "@body('RRSet_Lookup_with_RRType_A')",
+                                            "actions": {
+                                                "For_each_RRSet_A_RData": {
+                                                    "foreach": "@items('For_each_RRSet_With_A')?['rdata']",
+                                                    "actions": {
+                                                        "Set_Co-located_IPS": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "co_located_ips",
+                                                                "value": "@items('For_each_RRSet_A_RData')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "RRSet_Lookup_with_RRType_A": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "RRSet_Lookup_with_RRType_A": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['farsightdnsdb']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/lookup/rrset/name/@{encodeURIComponent(items('For_each_RRName_'))}/@{encodeURIComponent('A')}",
+                                                "queries": {
+                                                    "limit": 10,
+                                                    "time_first_before": "@variables('end_date_epoch')",
+                                                    "time_last_after": "@variables('start_date_epoch')"
+                                                }
+                                            }
+                                        },
+                                        "RRSet_Lookup_with_RRType_AAAA": {
+                                            "runAfter": {
+                                                "For_each_RRSet_With_A": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['farsightdnsdb']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/lookup/rrset/name/@{encodeURIComponent(items('For_each_RRName_'))}/@{encodeURIComponent('AAAA')}",
+                                                "queries": {
+                                                    "limit": 10,
+                                                    "time_first_before": "@variables('end_date_epoch')",
+                                                    "time_last_after": "@variables('start_date_epoch')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Co_Located_IPS_to_Empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "For_each_unique_co_located_ip_address": {
+                                    "foreach": "@variables('co_located_ips_unique')",
+                                    "actions": {
+                                        "co_located_ip_address_compose": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "IP Address": "@items('For_each_unique_co_located_ip_address')"
+                                            }
+                                        },
+                                        "co_located_ip_address_output_array": {
+                                            "runAfter": {
+                                                "co_located_ip_address_compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "co_located_ip_address_output",
+                                                "value": "@outputs('co_located_ip_address_compose')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_Uniquie_Hosts": {
+                                    "runAfter": {
+                                        "Set_Unique_Hosts_to_Empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "rdata_hosts_unique",
+                                        "value": "@union(variables('rdata_hosts'),variables('rdata_hosts'))"
+                                    }
+                                },
+                                "Join": {
+                                    "runAfter": {
+                                        "Unique_co_located_IP_Addresses": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Join",
+                                    "inputs": {
+                                        "from": "@variables('co_located_ips_unique')",
+                                        "joinWith": ",\n"
+                                    }
+                                },
+                                "RData_Lookup_with_RRType": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['farsightdnsdb']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/lookup/rdata/@{encodeURIComponent('ip')}/@{encodeURIComponent(items('For_each')?['Address'])}/ANY",
+                                        "queries": {
+                                            "limit": 10,
+                                            "time_first_before": "@variables('end_date_epoch')",
+                                            "time_last_after": "@variables('start_date_epoch')"
+                                        }
+                                    }
+                                },
+                                "Set_Co_Located_IPS_to_Empty": {
+                                    "runAfter": {
+                                        "Get_Uniquie_Hosts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "co_located_ips",
+                                        "value": []
+                                    }
+                                },
+                                "Set_RData_Hosts_to_Empty": {
+                                    "runAfter": {
+                                        "RData_Lookup_with_RRType": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "rdata_hosts",
+                                        "value": []
+                                    }
+                                },
+                                "Set_Unique_Hosts_to_Empty": {
+                                    "runAfter": {
+                                        "For_each_RDATA_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "rdata_hosts_unique",
+                                        "value": []
+                                    }
+                                },
+                                "Set_Unique_IP_Address_to_Empty": {
+                                    "runAfter": {
+                                        "For_each_RRName_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "co_located_ips_unique",
+                                        "value": []
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Join": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "co_located_ip_address_output",
+                                        "value": "@null"
+                                    }
+                                },
+                                "Unique_co_located_IP_Addresses": {
+                                    "runAfter": {
+                                        "Set_Unique_IP_Address_to_Empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "co_located_ips_unique",
+                                        "value": "@union(variables('co_located_ips'),variables('co_located_ips'))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Get1970TimestampInTicks": {
+                            "runAfter": {
+                                "Lookup_Start_Date_Ticks_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ticks_1970_time",
+                                        "type": "integer",
+                                        "value": "@ticks('1970-01-01T00:00:00Z')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Incident_Date": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "incident_created_date",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['object']?['properties']?['createdTimeUtc']"
+                                    }
+                                ]
+                            }
+                        },
+                        "LookUp_End_Date": {
+                            "runAfter": {
+                                "LookUp_Start_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "end_date",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "LookUp_Start_Date": {
+                            "runAfter": {
+                                "Filter_results_for_time_seen_before_relative_to_incident_date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "start_date",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Lookup_End_Date_Ticks_Time": {
+                            "runAfter": {
+                                "Lookup_date_based_on_Timefencing_Seen_After": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "end_date_ticks_time",
+                                        "type": "integer",
+                                        "value": "@ticks(variables('end_date'))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Lookup_Start_Date_Ticks_Time": {
+                            "runAfter": {
+                                "Lookup_End_Date_Ticks_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "start_date__ticks_time",
+                                        "type": "integer",
+                                        "value": "@ticks(variables('start_date'))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Lookup_date_based_on_Timefencing_Seen_After": {
+                            "runAfter": {
+                                "Lookup_date_based_on_Timefencing_Seen_Before": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Case_12_Hours": {
+                                    "case": "12h",
+                                    "actions": {
+                                        "Set_end_date_12_hours_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-12)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_1_Hours": {
+                                    "case": "1h",
+                                    "actions": {
+                                        "Set_end_date_an_hour_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-1)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_24_Hours": {
+                                    "case": "24h",
+                                    "actions": {
+                                        "set_end_date_1_day_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-1)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_30_Days": {
+                                    "case": "30d",
+                                    "actions": {
+                                        "set_end_date_30_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-30)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_365_Days": {
+                                    "case": "365d",
+                                    "actions": {
+                                        "set_end_date_365_days_back": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-365)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_60_Days": {
+                                    "case": "60d",
+                                    "actions": {
+                                        "set_end_date_60_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-60)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_6_Hours": {
+                                    "case": "6h",
+                                    "actions": {
+                                        "Set_end_date_6_hours_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-6)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_90_Days": {
+                                    "case": "90d",
+                                    "actions": {
+                                        "set_end_date_90_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "start_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-90)}"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "set_default_end_date_to_1_hour_before": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "start_date",
+                                            "value": "@{addHours(variables('incident_created_date'),-1)}"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": "@variables('time_fencing_seen_after')",
+                            "type": "Switch"
+                        },
+                        "Lookup_date_based_on_Timefencing_Seen_Before": {
+                            "runAfter": {
+                                "LookUp_End_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Case_12_Hours": {
+                                    "case": "12h",
+                                    "actions": {
+                                        "Set_start_date_12_hours_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-12)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_1_Hours": {
+                                    "case": "1h",
+                                    "actions": {
+                                        "Set_start_date_an_hour_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-1)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_24_Hours": {
+                                    "case": "24h",
+                                    "actions": {
+                                        "set_start_date_1_day_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-1)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_30_Days": {
+                                    "case": "30d",
+                                    "actions": {
+                                        "set_start_date_30_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-30)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_365_Days": {
+                                    "case": "365d",
+                                    "actions": {
+                                        "set_start_date_365_days_back": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-365)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_60_Days": {
+                                    "case": "60d",
+                                    "actions": {
+                                        "set_start_date_60_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-60)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_6_Hours": {
+                                    "case": "6h",
+                                    "actions": {
+                                        "Set_start_date_6_hours_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addHours(variables('incident_created_date'),-6)}"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_90_Days": {
+                                    "case": "90d",
+                                    "actions": {
+                                        "set_start_date_90_days_before": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "end_date",
+                                                "value": "@{addDays(variables('incident_created_date'),-90)}"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "set_default_start_date_to_1_day_before": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "end_date",
+                                            "value": "@{addDays(variables('incident_created_date'),-1)}"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": "@variables('time_fencing_seen_before')",
+                            "type": "Switch"
+                        },
+                        "RDATA_Unique_hosts_Array": {
+                            "runAfter": {
+                                "RDATA_hosts_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "rdata_hosts_unique",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "RDATA_hosts_Array": {
+                            "runAfter": {
+                                "Start_Date_epoch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "rdata_hosts",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Start_Date_epoch": {
+                            "runAfter": {
+                                "End_Date_epoch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "start_date_epoch",
+                                        "type": "integer",
+                                        "value": "@div(sub(variables('start_date__ticks_time'),variables('ticks_1970_time')),10000000)"
+                                    }
+                                ]
+                            }
+                        },
+                        "Unique_Co_Located_IPs": {
+                            "runAfter": {
+                                "Co_Located_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "co_located_ips_unique",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "co_located_ip_address_output": {
+                            "runAfter": {
+                                "Unique_Co_Located_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "co_located_ip_address_output",
+                                        "type": "array",
+                                        "value": "@null"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            },
+                            "farsightdnsdb": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('DomainToolsDNSDBConnectionName'))]",
+                                "connectionName": "[variables('DomainToolsDNSDBConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/farsightdnsdb')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

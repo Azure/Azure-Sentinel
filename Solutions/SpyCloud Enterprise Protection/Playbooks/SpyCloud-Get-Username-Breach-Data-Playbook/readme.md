@@ -13,7 +13,7 @@
 <a name="overview">
 
 ## Overview
-The SpyCloud Enterprise API is able to provide breach data for a username or set of usernames associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
+The SpyCloud Enterprise API is able to provide breach data for a username or set of usernames associated with an incident. When a new Microsoft Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the account entities in the incident.
 - Iterates through the account objects and fetches the breach data from SpyCloud Enterprise for each account username.
@@ -51,5 +51,5 @@ Once deployment is complete, you will need to authorize each connection:
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 
 ### Configurations in Sentinel:
-- In Azure Sentinel, analytical rules should be configured to trigger an incident with the Account entity.
+- In Microsoft Sentinel, analytical rules should be configured to trigger an incident with the Account entity.
 - Configure the automation rules to trigger this playbook.

@@ -1,7 +1,7 @@
 
+import gzip
 import boto3
 import json
-import csv
 import time
 import pandas as pd
 from datetime import datetime
@@ -99,12 +99,14 @@ def lambda_handler(event, context):
                                 # If the column exists, drop it
                                 df.drop(columns=["ingestionTime"], inplace=True)
                                 fileToS3 = df
-                                try:                
-                                    # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-                                    fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+                                try:     
+                                    file_path = f'/tmp/{output_File_Name}.gz'           
+                                    text_content = '\n'.join(fileToS3['message'].astype(str).values)
+                                    with gzip.open(file_path, 'wt', encoding='utf-8') as f:
+                                        f.write(text_content)
                                 
                                     # Upload data to desired folder in bucket
-                                    s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
+                                    s3.Bucket(BUCKET_NAME).upload_file(file_path, f'{BUCKET_PREFIX}{output_File_Name}.gz')
                                 except Exception as e:                
                                     print("Error exporting to S3 %s %s: %s" % (key["logGroupName"], key["logStreamName"], getattr(e, 'message', repr(e))))
                             else:

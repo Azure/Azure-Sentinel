@@ -1,0 +1,75 @@
+id: 5b7cc7f9-fe54-4138-9fb0-d650807345d3
+kind: Scheduled
+name: F&O - Non-interactive account mapped to self or sensitive privileged user
+description: Identifies changes to Microsoft Entra client apps registered for Finance
+  & Operations, specifically when a new client is mapped to a predefined list of sensitive
+  privileged user accounts, or when a user associates a client app with their own
+  account.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+      - FinanceOperationsActivity_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1556
+  - T1098
+  - T1136
+  - T1078
+  - T0859
+query: |
+  // Add sensitive privilege accounts to the privileged_user_accounts variable.
+  // Example: let privileged_user_accounts = dynamic(["Admin1", "Admin"]);
+  let privileged_user_accounts = dynamic([]);
+  FinanceOperationsActivity_CL
+  | where TableName == "SysAADClientTable" and LogType in ("Insert", "Update")
+  | extend ClientId = tostring(parse_json(tostring(FormattedData.["03::AADClientId"])).NewData)
+  | extend User = parse_json(tostring(FormattedData.UserId))
+  | extend
+      MappedUser = tostring(User.NewData),
+      PreviousUserId = tostring(User.OldData),
+      TargetAppName = tostring(parse_json(tostring(FormattedData.Name)).NewData),
+      FinOpsAppId = 32780
+  | where MappedUser in (privileged_user_accounts) or LogCreatedBy == MappedUser
+  | project
+      LogCreatedDateTime,
+      LogCreatedBy,
+      LogType,
+      TargetAppName,
+      MappedUser,
+      PreviousUserId,
+      ClientId,
+      FinOpsAppId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: LogCreatedBy
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: ClientId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: FinOpsAppId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: MappedUser
+alertDetailsOverride:
+  alertDisplayNameFormat: F&O - Sensitive non-interactive user mapping detected
+  alertDescriptionFormat: User account {{LogCreatedBy}} mapped an Azure AD App to
+    senstitive privileged user account {{MappedUser}}. The associated Azure AD client
+    ID is {{ClientId}}
+version: 3.2.0

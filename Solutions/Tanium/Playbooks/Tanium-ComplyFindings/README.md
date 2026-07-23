@@ -2,7 +2,7 @@
 
 ## Overview
 
-This playbook will use Tanium to retrieve Tanium Comply Findings from hosts associated with a Microsoft Sentinel incident.
+This playbook will use the Tanium API to retrieve Tanium Comply Findings from hosts associated with a Microsoft Sentinel incident.
 
 The results of the playbook will be added as a comment to the incident.
 
@@ -10,17 +10,31 @@ The results of the playbook will be added as a comment to the incident.
 
 ## Prerequisites
 
-Sentinel incidents with associated hosts.
+- Sentinel incidents with associated hosts running the Tanium client  
+If this playbook is run against an incident with 1 or more hosts that are not running the Tanium client, then Tanium will not be able to provide information for those host(s). If the incident only contains hosts that are not running the Tanium client then a comment will be placed on the incident indicating that and the playbook will exit early.
 
-The "Tanium Threat Response Alerts" analytic rule will generate incidents from Tanium Threat Response Alerts with associated hosts from Tanium Threat Response alerts.
+> [!TIP]
+> Leverage the "Tanium Threat Response Alerts" analytics rule to generate Sentinel incidents for an Threat Response Alert from Tanium.
 
-## Post-Deployment Instructions
+- A [Tanium API Token](https://help.tanium.com/bundle/ug_console_cloud/page/platform_user/console_api_tokens.html)   
+A Tanium API token, granting access to your Tanium environment is required to make the necessary queries against the Tanium API.
 
-You must authorize the API Connections used by this playbook after deployment.
+- An Azure Integration Account  
+Required to execute javascript needed to prepare query filters for Tanium API Gateway HTTP requests.
 
-1. Visit the playbook resource.
-2. Under "Development Tools" (located on the sidebar), click "API Connections".
-3. Ensure each connection has been authorized.
+- Tanium Comply Module
+Tanium Comply must be installed and operational in your Tanium environment. See [Tanium Playbooks](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Get_to_know_our_Content.htm#_Tanium_Playbooks) for more information on creating a token and RBAC permissions guidance.
+
+
+- Permission to Assign Roles to the Resource Group   
+For this playbook to successfully run it must have the Microsoft Sentinel Contributor role at the Resource Group scope. This is added as part of this ARM template, and therefore requires the user who is creating the playbook to have `Microsoft.Authorization/roleAssignments/write` on the resource group. Some examples of roles that meet this criteria for the user include:
+  - Owner
+  - User Access Administrator
+  - Role Based Access Control Administrator
+  - Global Administrator 
+
+## Get the Template
+Use the links below to create the playbook from our template.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-ComplyFindings%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTanium%2FPlaybooks%2FTanium-ComplyFindings%2Fazuredeploy.json)
 

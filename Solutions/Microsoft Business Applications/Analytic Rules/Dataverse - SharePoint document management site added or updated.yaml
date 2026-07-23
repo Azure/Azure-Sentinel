@@ -1,0 +1,79 @@
+id: c4c3510a-0ee0-4561-9835-47882ffa7f46
+kind: Scheduled
+name: Dataverse - SharePoint document management site added or updated
+description: Identifies modifications of SharePoint document management integration.
+  Document management allows storage of data located externally to Dataverse. Combine
+  this analytics rule with the MSBizApps-Add-SharePointSite-To-Watchlist Playbook
+  to automatically update the Dataverse-SharePointSites watchlist. This watchlist
+  can be used to correlate events between Dataverse and SharePoint when using the
+  Office 365 data connector.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+  - T1537
+query: |
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message in ("Create", "Update") and EntityName == "sharepointsite"
+  | mv-expand Fields
+  | where Fields.Name == "absoluteurl"
+  | extend
+      SharePointAppId = int(20892),
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1]),
+      SharePointUrl = tostring(Fields.Value)
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      Message,
+      SharePointUrl,
+      InstanceUrl,
+      CloudAppId,
+      SharePointAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: SharePointAppId
+      - identifier: InstanceName
+        columnName: SharePointUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Document management enabled or modified in
+    {{{InstanceUrl}} '
+  alertDescriptionFormat: '{{UserId}} made changes to document management in {{{InstanceUrl}}.
+    Sharepoint site {{{SharePointUrl}} was added.'
+version: 3.2.0

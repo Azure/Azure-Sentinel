@@ -1,8 +1,8 @@
-# SonicWall Firewall ASIM WebSession Normalization Parser
+# SonicWall ASIM WebSession Normalization Parser
 
-ARM template for ASIM WebSession schema parser for SonicWall firewalls.
+ARM template for ASIM WebSession schema parser for SonicWall.
 
-This ASIM parser supports filtering and normalizing SonicWall SonicOS syslog data (ArcSight format) ingested by Microsoft Sentinel to the ASIM Web Session normalized schema.
+This ASIM parser supports normalizing SonicWall SonicOS ArcSight-formatted syslog received via the SonicWall Firewall/Common Event Format data connectors and ingested to the CommonSecurityLog table by Microsoft Sentinel to the ASIM WebSession normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM WebSession normalization schema reference](https://aka.ms/ASimWebSessionDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimWebSession/CHANGELOG/vimWebSessionSonicWallFirewall.md)
 
 <br>
 

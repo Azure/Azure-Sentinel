@@ -1,0 +1,45 @@
+id: 5acbe4cb-a379-4acc-9ad3-28dc48ad33d3
+kind: Scheduled
+name: BTP - User added to sensitive privileged role collection
+description: Identifies identity management actions whereby a user is added to a set
+  of monitored privileged role collections.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+  - PrivilegeEscalation
+relevantTechniques:
+  - T0859
+  - T1078
+query: |
+  let monitored_rolecollections = dynamic(["Subaccount Service Administrator", "Subaccount Administrator", "Connectivity and Destination Administrator", "Destination Administrator", "Cloud Connector Administrator"]);
+  SAPBTPAuditLog_CL
+  | where Message.object has "xs_rolecollection2user"
+  | extend ObjectId = parse_json((Message.object).id)
+  | where ObjectId.crudType == "CREATE"
+  | extend RoleCollection = ObjectId.rolecollection_name, TargetUserId = ObjectId.user_id
+  | where RoleCollection in (monitored_rolecollections)
+  | project UpdatedOn, UserName, RoleCollection, TargetUserId, Tenant, SpaceId, CloudApp = "SAP BTP"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+version: 3.0.5

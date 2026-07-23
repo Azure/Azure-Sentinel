@@ -1,0 +1,241 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Function App (must be globally unique)"
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "storageAccountName": "[concat('vm', uniqueString(resourceGroup().id))]",
+        "hostingPlanName": "[concat(parameters('functionAppName'), '-plan')]",
+        "functionPackageUrl": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VirtualMetric DataStream/Data Connectors/VirtualMetric-DirectorProxy/DirectorProxyFunction.zip",
+        "contentShare": "[concat(toLower(parameters('functionAppName')), '-content')]",
+        "functionToken": "[base64(concat(uniqueString(resourceGroup().id, parameters('functionAppName'), deployment().name), '-', guid(resourceGroup().id, parameters('functionAppName'), 'token')))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2023-05-01",
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "location": "[variables('location')]",
+            "tags": {
+                "DisplayName": "Function App Storage"
+            },
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "defaultToOAuthAuthentication": true,
+                "allowBlobPublicAccess": false,
+                "publicNetworkAccess": "Enabled",
+                "encryption": {
+                    "services": {
+                        "blob": {
+                            "enabled": true
+                        },
+                        "file": {
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "apiVersion": "2022-03-01",
+            "name": "[variables('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[variables('location')]",
+            "kind": "elastic",
+            "tags": {
+                "DisplayName": "VirtualMetric Proxy Function App"
+            },
+            "properties": {
+                "maximumElasticWorkerCount": 20,
+                "reserved": true,
+                "zoneRedundant": false
+            },
+            "sku": {
+                "name": "EP1",
+                "tier": "ElasticPremium",
+                "size": "EP1",
+                "family": "EP",
+                "capacity": 1
+            }
+        },
+        {
+            "apiVersion": "2022-09-01",
+            "name": "[parameters('functionAppName')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "functionapp,linux",
+            "location": "[variables('location')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "DisplayName": "VirtualMetric Proxy Function App"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "X_VMETRIC_TOKEN",
+                            "value": "[variables('functionToken')]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "custom"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-05-01').keys[0].value,';EndpointSuffix=core.windows.net')]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "[variables('functionPackageUrl')]"
+                        },
+                        {
+                            "name": "GOMAXPROCS",
+                            "value": "2"
+                        },
+                        {
+                            "name": "GOGC",
+                            "value": "100"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__logging__logLevel__default",
+                            "value": "Information"
+                        },
+                        {
+                            "name": "WEBSITE_ENABLE_SYNC_UPDATE_SITE",
+                            "value": "true"
+                        },
+                        {
+                            "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                            "value": "false"
+                        },
+                        {
+                            "name": "ENABLE_ORYX_BUILD",
+                            "value": "false"
+                        }
+                    ],
+                    "cors": {
+                        "allowedOrigins": [
+                            "https://portal.azure.com"
+                        ]
+                    },
+                    "use32BitWorkerProcess": false,
+                    "ftpsState": "FtpsOnly",
+                    "linuxFxVersion": "custom|",
+                    "alwaysOn": true,
+                    "http20Enabled": true,
+                    "minTlsVersion": "1.2",
+                    "scmMinTlsVersion": "1.2",
+                    "httpLoggingEnabled": true,
+                    "detailedErrorLoggingEnabled": true,
+                    "requestTracingEnabled": true
+                },
+                "clientAffinityEnabled": false,
+                "httpsOnly": true,
+                "publicNetworkAccess": "Enabled",
+                "virtualNetworkSubnetId": null,
+                "functionsRuntimeAdminIsolationEnabled": false
+            },
+            "resources": [
+                {
+                    "type": "basicPublishingCredentialsPolicies",
+                    "apiVersion": "2022-09-01",
+                    "name": "scm",
+                    "properties": {
+                        "allow": true
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                    ]
+                },
+                {
+                    "type": "basicPublishingCredentialsPolicies",
+                    "apiVersion": "2022-09-01",
+                    "name": "ftp",
+                    "properties": {
+                        "allow": false
+                    },
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                    ]
+                },
+                {
+                    "type": "config",
+                    "apiVersion": "2022-09-01",
+                    "name": "logs",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                    ],
+                    "properties": {
+                        "applicationLogs": {
+                            "fileSystem": {
+                                "level": "Information"
+                            }
+                        },
+                        "httpLogs": {
+                            "fileSystem": {
+                                "enabled": true,
+                                "retentionInDays": 7,
+                                "retentionInMb": 35
+                            }
+                        },
+                        "failedRequestsTracing": {
+                            "enabled": true
+                        },
+                        "detailedErrorMessages": {
+                            "enabled": true
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "functionAppName": {
+            "type": "string",
+            "value": "[parameters('functionAppName')]"
+        },
+        "functionAppUrl": {
+            "type": "string",
+            "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', parameters('functionAppName'))).defaultHostName)]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "value": "[variables('storageAccountName')]"
+        },
+        "scmUrl": {
+            "type": "string",
+            "value": "[concat('https://', parameters('functionAppName'), '.scm.azurewebsites.net/')]"
+        },
+        "managedIdentityPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-09-01', 'full').identity.principalId]"
+        },
+        "functionToken": {
+            "type": "string",
+            "value": "[variables('functionToken')]"
+        }
+    }
+}

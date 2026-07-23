@@ -9,9 +9,9 @@ from .consts import (
     AZURE_CLIENT_ID,
     AZURE_CLIENT_SECRET,
     AZURE_TENANT_ID,
-    COMPANIES_TABLE_NAME,
     LOGS_STARTS_WITH,
     WORKSPACE_ID,
+    PORTFOLIO_COMPANY_QUERY
 )
 from .logger import applogger
 
@@ -25,11 +25,11 @@ def parse_table_data(rows):
     return data_to_return
 
 
-def get_logs_data():
+def get_logs_data(query=PORTFOLIO_COMPANY_QUERY):
     """Get data from log analytics workspace.
 
     Args:
-        time_generated (string): Time generated data
+        query (str): query to be executed.
 
     Returns:
         list: List containing the table data.
@@ -41,11 +41,6 @@ def get_logs_data():
         tenant_id=AZURE_TENANT_ID,
     )
     client = LogsQueryClient(credential)
-    query = """{}_CL
-    | sort by name_s asc
-    | project name_s, guid_g""".format(
-        COMPANIES_TABLE_NAME
-    )
     try:
         response = client.query_workspace(
             workspace_id=WORKSPACE_ID, query=query, timespan=None
@@ -62,7 +57,9 @@ def get_logs_data():
         applogger.debug("BitSight: get_logs_data: Data count: {}".format(len(data_to_send)))
         return data_to_send, True
     except Exception as error:
-        if "Failed to resolve table or column expression" in str(error):
+        table_not_exist = "Failed to resolve table expression"
+        column_not_exist = "Failed to resolve scalar expression"
+        if table_not_exist or column_not_exist in str(error):
             applogger.error(
                 "{}(method={}) : TableName provided is not Created or Data is not Ingested.".format(
                     LOGS_STARTS_WITH,

@@ -1,7 +1,7 @@
 # encoding: utf-8
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogstashLoganalyticsOutputConfiguration
-    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger, managed_identity)
+    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger, managed_identity, managed_identity_object_id)
 		@client_app_Id = client_app_Id
         @client_app_secret = client_app_secret
         @tenant_id = tenant_id
@@ -13,9 +13,8 @@ class LogstashLoganalyticsOutputConfiguration
         @create_sample_file = create_sample_file
         @sample_file_path = sample_file_path
         @managed_identity = managed_identity
+        @managed_identity_object_id = managed_identity_object_id
 
-	# Delay between each resending of a message
-        @RETRANSMISSION_DELAY = 2
         @MIN_MESSAGE_AMOUNT = 100
         # Maximum of 1 MB per post to Log Analytics Data Collector API V2.
         # This is a size limit for a single post.
@@ -75,6 +74,9 @@ class LogstashLoganalyticsOutputConfiguration
         if @retransmission_time < 0
             raise ArgumentError, "retransmission_time must be a positive integer."
         end
+        if @RETRANSMISSION_DELAY < 0
+            raise ArgumentError, "retransmission_delay must be a positive integer."
+        end
         if @max_items < @MIN_MESSAGE_AMOUNT
             raise ArgumentError, "Setting max_items to value must be greater then #{@MIN_MESSAGE_AMOUNT}."
         end
@@ -92,9 +94,9 @@ class LogstashLoganalyticsOutputConfiguration
 
 
     def print_missing_parameter_message_and_raise(param_name)
-        @logger.error("Missing a required setting for the microsoft-sentinel-log-analytics-logstash-output-plugin output plugin:
+        @logger.error("Missing a required setting for the microsoft-sentinel-logstash-output output plugin:
     output {
-        microsoft-sentinel-log-analytics-logstash-output-plugin {
+        microsoft-sentinel-logstash-output {
             #{param_name} => # SETTING MISSING
             ...
         }
@@ -137,6 +139,10 @@ class LogstashLoganalyticsOutputConfiguration
 
     def managed_identity
         @managed_identity
+    end
+
+    def managed_identity_object_id
+        @managed_identity_object_id
     end
 
     def client_app_Id
@@ -209,6 +215,10 @@ class LogstashLoganalyticsOutputConfiguration
 
     def retransmission_time=(new_retransmission_time)
         @retransmission_time = new_retransmission_time
+    end
+
+    def retransmission_delay=(new_retransmission_delay)
+        @RETRANSMISSION_DELAY = new_retransmission_delay
     end
 
     def compress_data

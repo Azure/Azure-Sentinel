@@ -1,0 +1,1253 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Oracle Cloud Infrastructure"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Oracle Cloud Infrastructure",
+    "_solutionVersion": "3.0.2",
+    "solutionId": "azuresentinel.azure-sentinel-solution-ocilogs",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "OCI-Connector-CCP-Definition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "OCI-Connector-CCP-DefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "OCI-Connector-CCP-Definition",
+                  "title": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).",
+                  "graphQueriesTableName": "OCI_LogsV2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "OCI Events",
+                      "legend": "OCI Data Connector Event Logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All OCI Events",
+                      "query": "{{graphQueriesTableName}} \n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get Sample of OCI Events",
+                      "query": "{{graphQueriesTableName}} \n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "OCI Streaming API access",
+                        "description": "Access to the OCI Streaming API through a API Signing Keys is required."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel",
+                      "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" \u2192 \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" \u2192 \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Stream OCID",
+                            "required": true,
+                            "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
+                            "type": "text",
+                            "name": "streamId"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Service Endpoint Base URL",
+                            "required": true,
+                            "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
+                            "type": "text",
+                            "name": "serviceEndpointBaseUrl"
+                          }
+                        },
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Cursor Type",
+                            "name": "cursorType",
+                            "required": true,
+                            "type": "text",
+                            "placeholder": "Select Cursor Type",
+                            "options": [
+                              {
+                                "key": "IndividualCursor",
+                                "text": "Individual Cursor"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Partition Id",
+                            "required": true,
+                            "placeholder": "Provide the Partition Id. (E.g. 0 or 1 or 2)",
+                            "type": "text",
+                            "name": "partitions",
+                            "description": "The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2."
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Tenant ID",
+                            "required": true,
+                            "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
+                            "type": "text",
+                            "name": "tenantId"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "User ID",
+                            "required": true,
+                            "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
+                            "type": "text",
+                            "name": "userId"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Pem File Content",
+                            "required": true,
+                            "placeholder": "Provide the Pem File content.",
+                            "type": "password",
+                            "name": "pemFile"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Pass Phrase",
+                            "required": false,
+                            "placeholder": "Provide the pass phrase for the Pem File Content. (Optional)",
+                            "type": "password",
+                            "name": "passPhrase"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Fingerprint",
+                            "required": true,
+                            "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
+                            "type": "password",
+                            "name": "publicFingerprint"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "Connect"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "OCI_DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-OCI_LogsV2_CL": {
+                    "columns": [
+                      {
+                        "name": "data",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "dataschema",
+                        "type": "string"
+                      },
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "oracle",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "specversion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "time",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-OCI_LogsV2_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend d=data,o=oracle,dq=data.request,dqp=data.request.parameters,dqh=data.request.headers,ds=data.response | project TimeGenerated=['time'],id=tostring(id),EventType=tostring(type),source_s=tostring(source),EventVendor=tostring(EventVendor),EventProduct=tostring(EventProduct),StreamName=tostring(stream),oracle_compartmentid_s=tostring(o.compartmentid),oracle_tenantid_s=tostring(o.tenantid),oracle_loggroupid_s=tostring(o.loggroupid),oracle_logid_s=tostring(o.logid),oracle_vniccompartmentocid_s=tostring(o.vniccompartmentocid),oracle_vnicocid_s=tostring(o.vnicocid),oracle_vnicsubnetocid_s=tostring(o.vnicsubnetocid),data_eventName_s=tostring(d.eventName),data_eventGroupingId_s=tostring(d.eventGroupingId),data_compartmentId_s=tostring(d.compartmentId),data_compartmentName_s=tostring(d.compartmentName),data_availabilityDomain_s=tostring(d.availabilityDomain),data_resourceId_s=tostring(d.resourceId),data_request_id_s=tostring(dq.id),data_request_path_s=tostring(dq.path),EventMessage=tostring(d.message),HttpRequestMethod=tostring(dq.action),HttpStatusCode=tostring(ds.status),data_response_payload_id_s=tostring(ds.payload.id),data_response_payload_resourceName_s=tostring(ds.payload.resourceName),data_identity_principalId_s=tostring(d.identity.principalId),data_identity_principalName_s=tostring(d.identity.principalName),data_identity_callerId_s=tostring(d.identity.callerId),data_identity_callerName_s=tostring(d.identity.callerName),data_identity_tenantId_s=tostring(d.identity.tenantId),data_identity_authType_s=tostring(d.identity.authType),data_identity_consoleSessionId_s=tostring(d.identity.consoleSessionId),data_identity_credentials_s=tostring(d.identity.credentials),HttpUserAgentOriginal=tostring(d.identity.userAgent),data_request_parameters_compartmentId_s=tostring(dqp.compartmentId),data_request_parameters_userId_s=tostring(dqp.userId),data_request_parameters_instanceId_s=tostring(dqp.instanceId),data_request_parameters_vcnId_s=tostring(dqp.vcnId),data_request_parameters_subnetId_s=tostring(dqp.subnetId),data_request_parameters_imageId_s=tostring(dqp.imageId),data_request_parameters_serviceName_s=tostring(dqp.serviceName),data_request_parameters_id_s=tostring(dqp.id),data_request_parameters_name_s=tostring(dqp.name),data_request_parameters_lifecycleState_s=tostring(dqp.lifecycleState),data_request_headers_X_Forwarded_For_s=tostring(dqh['X-Forwarded-For']),data_request_headers_X_Real_IP_s=tostring(dqh['X-Real-IP']),data_request_headers_oci_original_url_s=tostring(dqh['oci-original-url']),data_additionalDetails_imageId_s=tostring(d.additionalDetails.imageId),data_additionalDetails_shape_s=tostring(d.additionalDetails.shape),data_additionalDetails_volumeId_s=tostring(d.additionalDetails.volumeId),data_additionalDetails_userId_s=tostring(d.additionalDetails.userId),data_stateChange_current_id_s=tostring(d.stateChange.current.id),data_stateChange_current_displayName_s=tostring(d.stateChange.current.displayName),data_stateChange_current_compartmentId_s=tostring(d.stateChange.current.compartmentId),data_stateChange_current_instanceId_s=tostring(d.stateChange.current.instanceId),data_stateChange_current_lifecycleState_s=tostring(d.stateChange.current.lifecycleState),data_stateChange_current_userId_s=tostring(d.stateChange.current.userId),data_stateChange_current_userName_s=tostring(d.stateChange.current.userName),data_stateChange_current_userDisplayName_s=tostring(d.stateChange.current.userDisplayName),data_stateChange_current_timeCreated_t=todatetime(d.stateChange.current.timeCreated),data_stateChange_current_timeUpdated_t=todatetime(d.stateChange.current.timeUpdated),data_stateChange_current_Instance_displayName_s=tostring(d.stateChange.current.Instance.displayName),data_stateChange_current_Instance_compartmentId_s=tostring(d.stateChange.current.Instance.compartmentId),data_stateChange_current_Instance_availabilityDomain_s=tostring(d.stateChange.current.Instance.availabilityDomain),data_stateChange_current_isEnabled_b=tobool(d.stateChange.current.isEnabled),data_stateChange_current_logGroupId_s=tostring(d.stateChange.current.logGroupId),data_stateChange_current_logType_s=tostring(d.stateChange.current.logType),data_stateChange_current_retentionDuration_d=todouble(d.stateChange.current.retentionDuration),data_stateChange_current_fingerprint_s=tostring(d.stateChange.current.fingerprint),data_stateChange_current_keyId_s=tostring(d.stateChange.current.keyId),data_definedTags_Oracle_Tags_CreatedBy_s=tostring(d.definedTags['Oracle-Tags'].CreatedBy),data_definedTags_Oracle_Tags_CreatedOn_t=todatetime(d.definedTags['Oracle-Tags'].CreatedOn),SrcIpAddr=tostring(iff(isnull(d.sourceAddress), d.identity.ipAddress, d.sourceAddress)),SrcPortNumber=toint(d.sourcePort),DstIpAddr=tostring(d.destinationAddress),DstPortNumber=toint(d.destinationPort),DstBytes=toint(d.bytesOut),NetworkProtocol=tostring(d.protocolName),data_startTime_d=toint(d.startTime),data_endTime_d=toint(d.endTime),data_action_s=tostring(d.action),data_status_s=tostring(d.status),data_packets_d=toint(d.packets),data_flowid_s=tostring(d.flowid)",
+                    "outputStream": "Custom-OCI_LogsV2_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]"
+              }
+            },
+            {
+              "name": "OCI_LogsV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "OCI_LogsV2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The time when the log entry was generated",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "id",
+                      "type": "string",
+                      "description": "Id"
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Eventtype"
+                    },
+                    {
+                      "name": "source_s",
+                      "type": "string",
+                      "description": "Source s"
+                    },
+                    {
+                      "name": "EventVendor",
+                      "type": "string",
+                      "description": "Eventvendor"
+                    },
+                    {
+                      "name": "EventProduct",
+                      "type": "string",
+                      "description": "Eventproduct"
+                    },
+                    {
+                      "name": "StreamName",
+                      "type": "string",
+                      "description": "Streamname"
+                    },
+                    {
+                      "name": "oracle_compartmentid_s",
+                      "type": "string",
+                      "description": "Oracle compartmentid s"
+                    },
+                    {
+                      "name": "oracle_tenantid_s",
+                      "type": "string",
+                      "description": "Oracle tenantid s"
+                    },
+                    {
+                      "name": "oracle_loggroupid_s",
+                      "type": "string",
+                      "description": "Oracle loggroupid s"
+                    },
+                    {
+                      "name": "oracle_logid_s",
+                      "type": "string",
+                      "description": "Oracle logid s"
+                    },
+                    {
+                      "name": "oracle_vniccompartmentocid_s",
+                      "type": "string",
+                      "description": "Oracle vniccompartmentocid s"
+                    },
+                    {
+                      "name": "oracle_vnicocid_s",
+                      "type": "string",
+                      "description": "Oracle vnicocid s"
+                    },
+                    {
+                      "name": "oracle_vnicsubnetocid_s",
+                      "type": "string",
+                      "description": "Oracle vnicsubnetocid s"
+                    },
+                    {
+                      "name": "data_eventName_s",
+                      "type": "string",
+                      "description": "Data eventname s"
+                    },
+                    {
+                      "name": "data_eventGroupingId_s",
+                      "type": "string",
+                      "description": "Data eventgroupingid s"
+                    },
+                    {
+                      "name": "data_compartmentId_s",
+                      "type": "string",
+                      "description": "Data compartmentid s"
+                    },
+                    {
+                      "name": "data_compartmentName_s",
+                      "type": "string",
+                      "description": "Data compartmentname s"
+                    },
+                    {
+                      "name": "data_availabilityDomain_s",
+                      "type": "string",
+                      "description": "Data availabilitydomain s"
+                    },
+                    {
+                      "name": "data_resourceId_s",
+                      "type": "string",
+                      "description": "Data resourceid s"
+                    },
+                    {
+                      "name": "data_request_id_s",
+                      "type": "string",
+                      "description": "Data request id s"
+                    },
+                    {
+                      "name": "data_request_path_s",
+                      "type": "string",
+                      "description": "Data request path s"
+                    },
+                    {
+                      "name": "EventMessage",
+                      "type": "string",
+                      "description": "Eventmessage"
+                    },
+                    {
+                      "name": "HttpRequestMethod",
+                      "type": "string",
+                      "description": "Httprequestmethod"
+                    },
+                    {
+                      "name": "HttpStatusCode",
+                      "type": "string",
+                      "description": "Httpstatuscode"
+                    },
+                    {
+                      "name": "data_response_payload_id_s",
+                      "type": "string",
+                      "description": "Data response payload id s"
+                    },
+                    {
+                      "name": "data_response_payload_resourceName_s",
+                      "type": "string",
+                      "description": "Data response payload resourcename s"
+                    },
+                    {
+                      "name": "data_identity_principalId_s",
+                      "type": "string",
+                      "description": "Data identity principalid s"
+                    },
+                    {
+                      "name": "data_identity_principalName_s",
+                      "type": "string",
+                      "description": "Data identity principalname s"
+                    },
+                    {
+                      "name": "data_identity_callerId_s",
+                      "type": "string",
+                      "description": "Data identity callerid s"
+                    },
+                    {
+                      "name": "data_identity_callerName_s",
+                      "type": "string",
+                      "description": "Data identity callername s"
+                    },
+                    {
+                      "name": "data_identity_tenantId_s",
+                      "type": "string",
+                      "description": "Data identity tenantid s"
+                    },
+                    {
+                      "name": "data_identity_authType_s",
+                      "type": "string",
+                      "description": "Data identity authtype s"
+                    },
+                    {
+                      "name": "data_identity_consoleSessionId_s",
+                      "type": "string",
+                      "description": "Data identity consolesessionid s"
+                    },
+                    {
+                      "name": "data_identity_credentials_s",
+                      "type": "string",
+                      "description": "Data identity credentials s"
+                    },
+                    {
+                      "name": "HttpUserAgentOriginal",
+                      "type": "string",
+                      "description": "Httpuseragentoriginal"
+                    },
+                    {
+                      "name": "data_request_parameters_compartmentId_s",
+                      "type": "string",
+                      "description": "Data request parameters compartmentid s"
+                    },
+                    {
+                      "name": "data_request_parameters_userId_s",
+                      "type": "string",
+                      "description": "Data request parameters userid s"
+                    },
+                    {
+                      "name": "data_request_parameters_instanceId_s",
+                      "type": "string",
+                      "description": "Data request parameters instanceid s"
+                    },
+                    {
+                      "name": "data_request_parameters_vcnId_s",
+                      "type": "string",
+                      "description": "Data request parameters vcnid s"
+                    },
+                    {
+                      "name": "data_request_parameters_subnetId_s",
+                      "type": "string",
+                      "description": "Data request parameters subnetid s"
+                    },
+                    {
+                      "name": "data_request_parameters_imageId_s",
+                      "type": "string",
+                      "description": "Data request parameters imageid s"
+                    },
+                    {
+                      "name": "data_request_parameters_serviceName_s",
+                      "type": "string",
+                      "description": "Data request parameters servicename s"
+                    },
+                    {
+                      "name": "data_request_parameters_id_s",
+                      "type": "string",
+                      "description": "Data request parameters id s"
+                    },
+                    {
+                      "name": "data_request_parameters_name_s",
+                      "type": "string",
+                      "description": "Data request parameters name s"
+                    },
+                    {
+                      "name": "data_request_parameters_lifecycleState_s",
+                      "type": "string",
+                      "description": "Data request parameters lifecyclestate s"
+                    },
+                    {
+                      "name": "data_request_headers_X_Forwarded_For_s",
+                      "type": "string",
+                      "description": "Data request headers x forwarded for s"
+                    },
+                    {
+                      "name": "data_request_headers_X_Real_IP_s",
+                      "type": "string",
+                      "description": "Data request headers x real ip s"
+                    },
+                    {
+                      "name": "data_request_headers_oci_original_url_s",
+                      "type": "string",
+                      "description": "Data request headers oci original url s"
+                    },
+                    {
+                      "name": "data_additionalDetails_imageId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails imageid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_shape_s",
+                      "type": "string",
+                      "description": "Data additionaldetails shape s"
+                    },
+                    {
+                      "name": "data_additionalDetails_volumeId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails volumeid s"
+                    },
+                    {
+                      "name": "data_additionalDetails_userId_s",
+                      "type": "string",
+                      "description": "Data additionaldetails userid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_id_s",
+                      "type": "string",
+                      "description": "Data statechange current id s"
+                    },
+                    {
+                      "name": "data_stateChange_current_displayName_s",
+                      "type": "string",
+                      "description": "Data statechange current displayname s"
+                    },
+                    {
+                      "name": "data_stateChange_current_compartmentId_s",
+                      "type": "string",
+                      "description": "Data statechange current compartmentid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_instanceId_s",
+                      "type": "string",
+                      "description": "Data statechange current instanceid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_lifecycleState_s",
+                      "type": "string",
+                      "description": "Data statechange current lifecyclestate s"
+                    },
+                    {
+                      "name": "data_stateChange_current_userId_s",
+                      "type": "string",
+                      "description": "Data statechange current userid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_userName_s",
+                      "type": "string",
+                      "description": "Data statechange current username s"
+                    },
+                    {
+                      "name": "data_stateChange_current_userDisplayName_s",
+                      "type": "string",
+                      "description": "Data statechange current userdisplayname s"
+                    },
+                    {
+                      "name": "data_stateChange_current_timeCreated_t",
+                      "type": "datetime",
+                      "description": "Data statechange current timecreated t"
+                    },
+                    {
+                      "name": "data_stateChange_current_timeUpdated_t",
+                      "type": "datetime",
+                      "description": "Data statechange current timeupdated t"
+                    },
+                    {
+                      "name": "data_stateChange_current_Instance_displayName_s",
+                      "type": "string",
+                      "description": "Data statechange current instance displayname s"
+                    },
+                    {
+                      "name": "data_stateChange_current_Instance_compartmentId_s",
+                      "type": "string",
+                      "description": "Data statechange current instance compartmentid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_Instance_availabilityDomain_s",
+                      "type": "string",
+                      "description": "Data statechange current instance availabilitydomain s"
+                    },
+                    {
+                      "name": "data_stateChange_current_isEnabled_b",
+                      "type": "boolean",
+                      "description": "Data statechange current isenabled b"
+                    },
+                    {
+                      "name": "data_stateChange_current_logGroupId_s",
+                      "type": "string",
+                      "description": "Data statechange current loggroupid s"
+                    },
+                    {
+                      "name": "data_stateChange_current_logType_s",
+                      "type": "string",
+                      "description": "Data statechange current logtype s"
+                    },
+                    {
+                      "name": "data_stateChange_current_retentionDuration_d",
+                      "type": "real",
+                      "description": "Data statechange current retentionduration d"
+                    },
+                    {
+                      "name": "data_stateChange_current_fingerprint_s",
+                      "type": "string",
+                      "description": "Data statechange current fingerprint s"
+                    },
+                    {
+                      "name": "data_stateChange_current_keyId_s",
+                      "type": "string",
+                      "description": "Data statechange current keyid s"
+                    },
+                    {
+                      "name": "data_definedTags_Oracle_Tags_CreatedBy_s",
+                      "type": "string",
+                      "description": "Data definedtags oracle tags createdby s"
+                    },
+                    {
+                      "name": "data_definedTags_Oracle_Tags_CreatedOn_t",
+                      "type": "datetime",
+                      "description": "Data definedtags oracle tags createdon t"
+                    },
+                    {
+                      "name": "SrcIpAddr",
+                      "type": "string",
+                      "description": "Srcipaddr"
+                    },
+                    {
+                      "name": "SrcPortNumber",
+                      "type": "int",
+                      "description": "Srcportnumber"
+                    },
+                    {
+                      "name": "DstIpAddr",
+                      "type": "string",
+                      "description": "Dstipaddr"
+                    },
+                    {
+                      "name": "DstPortNumber",
+                      "type": "int",
+                      "description": "Dstportnumber"
+                    },
+                    {
+                      "name": "DstBytes",
+                      "type": "int",
+                      "description": "Dstbytes"
+                    },
+                    {
+                      "name": "NetworkProtocol",
+                      "type": "string",
+                      "description": "Networkprotocol"
+                    },
+                    {
+                      "name": "data_startTime_d",
+                      "type": "int",
+                      "description": "Data starttime d"
+                    },
+                    {
+                      "name": "data_endTime_d",
+                      "type": "int",
+                      "description": "Data endtime d"
+                    },
+                    {
+                      "name": "data_action_s",
+                      "type": "string",
+                      "description": "Data action s"
+                    },
+                    {
+                      "name": "data_status_s",
+                      "type": "string",
+                      "description": "Data status s"
+                    },
+                    {
+                      "name": "data_packets_d",
+                      "type": "int",
+                      "description": "Data packets d"
+                    },
+                    {
+                      "name": "data_flowid_s",
+                      "type": "string",
+                      "description": "Data flowid s"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "OCI-Connector-CCP-Definition",
+          "title": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).",
+          "graphQueriesTableName": "OCI_LogsV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "OCI Events",
+              "legend": "OCI Data Connector Event Logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All OCI Events",
+              "query": "{{graphQueriesTableName}} \n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get Sample of OCI Events",
+              "query": "{{graphQueriesTableName}} \n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "OCI Streaming API access",
+                "description": "Access to the OCI Streaming API through a API Signing Keys is required."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel",
+              "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" \u2192 \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" \u2192 \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Stream OCID",
+                    "required": true,
+                    "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
+                    "type": "text",
+                    "name": "streamId"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Service Endpoint Base URL",
+                    "required": true,
+                    "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
+                    "type": "text",
+                    "name": "serviceEndpointBaseUrl"
+                  }
+                },
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Cursor Type",
+                    "name": "cursorType",
+                    "required": true,
+                    "type": "text",
+                    "placeholder": "Select Cursor Type",
+                    "options": [
+                      {
+                        "key": "IndividualCursor",
+                        "text": "Individual Cursor"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Partition Id",
+                    "required": true,
+                    "placeholder": "Provide the Partition Id.",
+                    "type": "text",
+                    "name": "partitions"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Tenant ID",
+                    "required": true,
+                    "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
+                    "type": "text",
+                    "name": "tenantId"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "User ID",
+                    "required": true,
+                    "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
+                    "type": "text",
+                    "name": "userId"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Pem File Content",
+                    "required": true,
+                    "placeholder": "Provide the Pem File content.",
+                    "type": "password",
+                    "name": "pemFile"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Pass Phrase",
+                    "required": false,
+                    "placeholder": "Provide the pass phrase for the Pem File Content. (Optional)",
+                    "type": "password",
+                    "name": "passPhrase"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Fingerprint",
+                    "required": true,
+                    "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
+                    "type": "password",
+                    "name": "publicFingerprint"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "Connect"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Oracle Cloud Infrastructure (via CCP) \u2013 Preview",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "streamId": {
+              "defaultValue": "streamId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "serviceEndpointBaseUrl": {
+              "defaultValue": "serviceEndpointBaseUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "cursorType": {
+              "defaultValue": "cursorType",
+              "type": "array"
+            },
+            "partitions": {
+              "defaultValue": "partitions",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "tenantId": {
+              "defaultValue": "tenantId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "userId": {
+              "defaultValue": "userId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "pemFile": {
+              "defaultValue": "pemFile",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "passPhrase": {
+              "defaultValue": "passPhrase",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "publicFingerprint": {
+              "defaultValue": "publicFingerprint",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'oracle-cloud-infra-connector', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "OCI",
+              "properties": {
+                "connectorDefinitionName": "OCI-Connector-CCP-Definition",
+                "dataType": "OCI_LogsV2_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-OCI_LogsV2_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "Oracle",
+                  "pemFile": "[[parameters('pemFile')]",
+                  "publicFingerprint": "[[parameters('publicFingerprint')]",
+                  "tenantId": "[[parameters('tenantId')]",
+                  "userId": "[[parameters('userId')]",
+                  "passPhrase": "[[parameters('passPhrase')]"
+                },
+                "request": {
+                  "streamId": "[[parameters('streamId')]",
+                  "rateLimitQPS": 1,
+                  "partitions": "[[parameters('partitions')]",
+                  "serviceEndpointBaseUrl": "[[parameters('serviceEndpointBaseUrl')]",
+                  "queryWindowInMin": 5,
+                  "cursorType": "[[parameters('cursorType')[0]]",
+                  "type": "OCI"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json"
+                },
+                "Paging": {
+                  "pageSize": 100
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Oracle Cloud Infrastructure",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>\u2022 Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Oracle%20Cloud%20Infrastructure/ReleaseNotes.md\">Release Notes</a></p>\n<p>\u2022 There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Oracle Cloud Infrastructure (OCI) solution provides the capability to ingest OCI Logs from <a href=\"https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm\">OCI Stream</a> into Microsoft Sentinel using the <a href=\"https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418\">OCI Streaming REST API</a>.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p></li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API (Data Collection Rules)</a></p></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Oracle Cloud Infrastructure",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-01",
+        "providers": [
+          "Oracle"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Insider Threat"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

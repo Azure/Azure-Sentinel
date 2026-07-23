@@ -1,0 +1,47 @@
+id: 74b243a6-3046-48aa-8b03-e43b3c529cc1
+kind: Scheduled
+name: BTP - Failed access attempts across multiple BAS subaccounts
+description: Identifies failed Business Application Studio access attempts over a
+  predefined number of subaccounts.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+  - Discovery
+relevantTechniques:
+  - T1595
+  - T1526
+query: |
+  let subaccount_detection_threshold = 3;
+  SAPBTPAuditLog_CL
+  | where Category == "audit.security-events" and Message has "Unauthorized access attempt"
+  | summarize Start=min(UpdatedOn), End=max(UpdatedOn), Tenants = make_set(Tenant, 100) by UserName
+  | where array_length(Tenants) > subaccount_detection_threshold
+  | project Start, End, UserName, Tenants, CloudApp = "SAP BTP"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: BTP - Unauthorized access attempt to multiple tenants
+  alertDescriptionFormat: '{{UserName}} attempted, and failed, to log into multiple
+    Business Application Studio dev spaces. Tenants accessed: {{Tenants}}'
+version: 3.0.5

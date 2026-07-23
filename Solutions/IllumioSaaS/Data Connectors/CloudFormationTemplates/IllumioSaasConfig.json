@@ -1,0 +1,309 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This stack integrates Microsoft Sentinel by creating an IAM role with minimal permissions. This role allows Microsoft Sentinel to access your Imperva logs stored in an S3 bucket and SQS queue. The stack also creates an S3 bucket, an SQS Queue, and sets up S3 notifications. Additionally, it includes necessary IAM policies.",
+    "Parameters": {
+        "AwsRoleName": {
+            "Type": "String",
+            "Description": "Enter the ARN name for the role. The name must start with 'OIDC_', otherwise the connector will not function properly.",
+            "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+            "Default": "OIDC_IllumioLogsSentinelRole"
+        },
+        "BucketName": {
+            "Type": "String",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
+            "Description": "Enter the name of the S3 bucket. Bucket name must be unique within the global namespace and follow the bucket naming rules.",
+            "Default": "sentinel-illumio-logs-bucket"
+        },
+        "ExternalId": {
+            "Type": "String",
+            "Default": "528298"
+        },
+        "SentinelWorkspaceId": {
+            "Type": "String",
+            "Description": "Enter the Microsoft Sentinel Workspace ID"
+        }
+    },
+    "Resources": {
+        "SentinelWebIdentityBasedRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "AwsRoleName"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Fn::Sub": "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"},\"Action\": \"sts:AssumeRoleWithWebIdentity\",\"Condition\": {\"StringEquals\": {\"sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud\": \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\",\"sts:RoleSessionName\": \"MicrosoftSentinel_${SentinelWorkspaceId}\"}}}]}"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "IllumioLoggingPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "WebACLLoggingS3",
+                                    "Action": [
+                                        "s3:GetBucketPolicy"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "IllumioLogsAwsIamRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "illumio-logs-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "857003445768"
+                        },
+                        "Action": [
+                            "sts:AssumeRole"
+                        ],
+                        "Condition": {
+                            "StringEquals": {
+                                "Sts:ExternalId": {
+                                    "Ref": "ExternalId"
+                                }
+                            }
+                        }
+                    }
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "can-see-bucket",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": {
+                                "Effect": "Allow",
+                                "Sid": "illumioCanSeeBucket",
+                                "Action": [
+                                    "s3:ListBucket",
+                                    "s3:ListBucketVersions"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "PolicyName": "can-use-bucket",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": {
+                                "Effect": "Allow",
+                                "Sid": "illumioCanPutAndGet",
+                                "Action": [
+                                    "s3:PutObject",
+                                    "s3:GetObject"
+                                ],
+                                "Resource": {
+                                    "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${BucketName}"
+                },
+                "NotificationConfiguration": {
+                    "QueueConfigurations": [
+                        {
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "IllumioFlowSQSQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": "IllumioFlowLogs/"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SampleBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Fn::Sub": "${BucketName}"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Allow Arn read access S3 bucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AwsRoleName}"
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${BucketName}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "IllumioFlowSQSQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "IllumioFlowSQSQueue-${BucketName}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Bucket",
+                        "Value": {
+                            "Fn::Sub": "${BucketName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "SentinelFlowSQSQueuePolicyForS3": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "allow s3 to send notification messages to SQS queue",
+                            "Action": [
+                                "SQS:SendMessage"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "IllumioFlowSQSQueue",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:*:*:${BucketName}"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "allow specific role to read/delete/change visibility of SQS messages and get queue url",
+                            "Action": [
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:DeleteMessage",
+                                "SQS:ReceiveMessage",
+                                "SQS:GetQueueUrl"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "IllumioFlowSQSQueue",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Principal": {
+                                "AWS": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "SentinelWebIdentityBasedRole",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Queues": [
+                    {
+                        "Ref": "IllumioFlowSQSQueue"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "SentinelRoleArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelWebIdentityBasedRole",
+                    "Arn"
+                ]
+            },
+            "Description": "Role ARN for Sentinel Role that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal."
+        },
+        "IllumioRoleArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "IllumioLogsAwsIamRole",
+                    "Arn"
+                ]
+            },
+            "Description": "Role ARN for Illumio Role that is inserted into Amazon Web Service S3 Connector in the Illumio Connectors portal."
+        },
+        "IllumioFlowSQSQueueURL": {
+            "Description": "AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Ref": "IllumioFlowSQSQueue"
+            }
+        },
+        "IllumioFlowSQSQueueArn": {
+            "Description": "Log destination ARN to be used when setting up other accounts to exports logs",
+            "Value": {
+                "Fn::GetAtt": [
+                    "IllumioFlowSQSQueue",
+                    "Arn"
+                ]
+            }
+        },
+        "IllumioFlowSQSQueueName": {
+            "Description": "SQS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "IllumioFlowSQSQueue",
+                    "QueueName"
+                ]
+            }
+        }
+    }
+}

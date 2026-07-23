@@ -1,7 +1,7 @@
 Parser:
   Title: File event ASIM parser for Windows Sysmon
-  Version: '0.4.1'
-  LastUpdated: Nov 14 2023
+  Version: '0.5.1'
+  LastUpdated: Jul 19, 2024
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -12,7 +12,8 @@ References:
   Link: https://aka.ms/ASimFileEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
-Description: This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, to the ASIM file event schema.
+Description: 
+  This ASIM parser supports normalizing Sysmon logs ingested in 'Event' table to the ASIM file event schema.
 ParserName: ASimFileEventMicrosoftSysmon
 EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftSysmon
 ParserParams:
@@ -25,7 +26,7 @@ ParserQuery: |
       let EventParser = () {
           Event
           | where not(disabled)
-          | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+          | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type , _ItemId 
           | where Source == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
           | project-away Source
           | parse-kv EventData as (
@@ -50,33 +51,9 @@ ParserQuery: |
                 EventStartTime=UtcTime
           | project-away EventData
        };
-       //
-       // -- WindowsEvent parser
-       let WindowsEventParser=(){
-         WindowsEvent 
-         | where not(disabled)
-         | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type // , _ItemId 
-         | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
-         | project-away Provider
-         | extend 
-             TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
-             TargetFilePath=tostring(EventData.TargetFilename),
-             ActingProcessName = tostring(EventData.Image),
-             ActingProcessId = tostring(EventData.ProcessId),
-             ActingProcessGuid = tostring(EventData.ProcessGuid),
-             ActorUsername = tostring(EventData.User),
-             EventStartTime = todatetime(EventData.UtcTime),
-             RuleName = tostring(EventData.RuleName),
-             Hashes = tostring(EventData.Hashes)
-          | parse ActingProcessGuid with "{" ActingProcessGuid "}"
-          | project-away EventData
-       };
-       union isfuzzy=true 
-           WindowsEventParser,
-           EventParser 
+       EventParser 
        | project-rename
            DvcHostname = Computer,
-           //EventUid = _ItemId,
            DvcScopeId = _SubscriptionId,
            DvcId = _ResourceId
        | extend
@@ -95,7 +72,8 @@ ParserQuery: |
            EventOriginalType = tostring(EventID),
            TargetFileName = tostring(split(TargetFilePath,'\\')[-1]),
            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
-           RuleName = iff (RuleName == "-", "", RuleName)
+           RuleName = iff (RuleName == "-", "", RuleName),
+           EventUid = _ItemId
         | parse-kv Hashes as (
             MD5:string,
             SHA1:string,
@@ -121,6 +99,6 @@ ParserQuery: |
            FilePath = TargetFilePath,
            FileName = TargetFileName,
            User = ActorUsername
-        | project-away EventID, Hashes
+        | project-away EventID, Hashes,ActorWindowsUsername,TargetFileIMPHASH
     };
     parser(disabled=disabled) 

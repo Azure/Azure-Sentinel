@@ -1,0 +1,53 @@
+id: c2b3d4e5-2345-6789-01ab-cdef12345002
+name: "Tailscale: Device started advertising subnet routes"
+description: |
+  Identifies when a tailnet device begins advertising subnet routes (subnet-router capability) not present in the previous snapshot. Unexpected advertisement may indicate a compromised node expanding reachable surface area or an unsanctioned admin change.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Devices_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+  - Persistence
+relevantTechniques:
+  - T1021
+  - T1556
+query: |
+  let recent =
+      Tailscale_Devices_CL
+      | where TimeGenerated > ago(1h)
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where array_length(AdvertisedRoutes) > 0;
+  let baseline =
+      Tailscale_Devices_CL
+      | where TimeGenerated between (ago(1d + 1h) .. ago(1h))
+      | summarize arg_max(TimeGenerated, *) by DeviceId
+      | where array_length(AdvertisedRoutes) > 0
+      | distinct DeviceId;
+  recent
+  | join kind=leftanti baseline on DeviceId
+  | project TimeGenerated, DeviceId, DeviceName, Hostname, User, AdvertisedRoutes, EnabledRoutes, LastSeen
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

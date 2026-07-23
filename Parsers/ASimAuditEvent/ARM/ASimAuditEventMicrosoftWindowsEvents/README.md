@@ -2,7 +2,7 @@
 
 ARM template for ASIM AuditEvent schema parser for Microsoft Windows.
 
-This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
+This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'WindowsEvent' table to the ASIM Audit Event schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM AuditEvent normalization schema reference](https://aka.ms/ASimAuditEventDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuditEvent/CHANGELOG/ASimAuditEventMicrosoftWindowsEvents.md)
 
 <br>
 

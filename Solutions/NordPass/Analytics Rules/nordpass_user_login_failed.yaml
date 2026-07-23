@@ -1,0 +1,47 @@
+id: 27b261dc-68f3-489a-944f-bc252e0c1960
+name: NordPass - User fails authentication
+kind: Scheduled
+version: 1.0.0
+displayName: User fails authentication
+description: |
+  This will alert you if a user fails to log in to their NordPass account or SSO authentication three or more times in the last 24 hours.
+severity: High
+query: |
+  let threshold = 2;
+  let filteredData = materialize(
+      NordPassEventLogs_CL
+      | where event_type == "login" and action == "user_login_failed"
+  );
+  let users = filteredData
+      | summarize Count = count() by user_email
+      | where Count > threshold
+      | project user_email;
+  filteredData  
+  | where user_email in (users)
+  | extend TargetEmail = user_email, IPAddress = metadata.ip_address, Provider = metadata.provider
+requiredDataConnectors:
+  - connectorId: NordPass
+    dataTypes:
+      - NordPassEventLogs_CL
+queryFrequency: 5m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 2
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+  - T1556.003
+customDetails:
+  Provider: Provider
+incidentConfiguration:
+  createIncident: false
+entityMappings:
+  - entityType: Mailbox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: TargetEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress

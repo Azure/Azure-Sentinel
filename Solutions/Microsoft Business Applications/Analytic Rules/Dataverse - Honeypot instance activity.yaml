@@ -1,0 +1,84 @@
+id: 11650b85-d8cc-49c4-8c04-a8a739635983
+kind: Scheduled
+name: Dataverse - Honeypot instance activity
+description: |
+  Identifies activities in a predefined Honeypot Dataverse instance. Alerts when either sign-in to the Honeypot is detected or when monitored Dataverse tables in the Honeypot are accessed.
+
+  Note: Requires a dedicated Honeypot Dataverse instance in Power Platform with auditing enabled.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Exfiltration
+relevantTechniques:
+  - T1538
+  - T1526
+  - T1567
+query: |
+  let honeypot_dataverse_instances = dynamic(["https://myinstance.crm.dynamics.com/"]);
+  let honeypot_authorized_users = dynamic(["scanner@mydomain.com"]);
+  let monitored_dataverse_entities = dynamic(["contact", "account", "opportunity", "lead", "competitor"]);
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where InstanceUrl in (honeypot_dataverse_instances)
+  | where UserId !in (honeypot_authorized_users)
+  | where UserId !endswith "@onmicrosoft.com"
+      and UserId != "Unknown"
+      and isnotempty(ClientIp)
+  | where Message in ("UserSignIn") or EntityName in (monitored_dataverse_entities)
+  | summarize
+      TimeStart = min(TimeGenerated),
+      TimeEnd = max(TimeGenerated),
+      Entities = make_set(EntityName, 10),
+      Messages = make_set(Message, 10)
+      by UserId, ClientIp, InstanceUrl
+  | extend Severity = iif(array_length(set_difference(Messages, dynamic(["UserSignIn"]))) > 0, "Medium", "Low")
+  | extend CloudAppId = int(32780)
+  | extend AccountName = tostring(split(UserId, '@')[0])
+  | extend UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeStart,
+      TimeEnd,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      Messages,
+      Entities,
+      Severity,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Honeytoken activity detected in {{InstanceUrl}} '
+  alertDescriptionFormat: '{{UserId}} from {{ClientIp}} was detected in the Dataverse
+    honeypot instance: {{InstanceUrl}}'
+  alertSeverityColumnName: Severity
+version: 3.2.0

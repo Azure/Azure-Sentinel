@@ -1,0 +1,71 @@
+id: 886a5655-3d12-42f1-8927-4095789c575e
+kind: Scheduled
+name: Power Platform - Connector added to a sensitive environment
+description: Identifies occurrences of new API connector creations within Power Platform,
+  specifically targeting a predefined list of sensitive environments.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+      - PowerPlatformAdminActivity
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Exfiltration
+relevantTechniques:
+  - T0871
+  - T1567
+  - T1537
+query: |
+  let sensitive_environment_id = dynamic([
+      // Specify the list of sensitive power platform environment ID's to monitor here.
+      // Example: "10e72012-8886-41ec-b973-250286419b38", "183c7056-7ed0-426f-8ae6-69819cf72259"
+      ]);
+  let query_frequency = 11h;
+  PowerPlatformAdminActivity
+  | where TimeGenerated >= ago (query_frequency)
+  | where EventOriginalType == "PutConnection"
+  | extend Properties = tostring(PropertyCollection)
+  | extend SrcIpAddr = extract(@'"enduser.ip_address","Value":"([^"]+)"', 1, Properties)
+  | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string('::ffff:', '', SrcIpAddr), SrcIpAddr)
+  | extend
+      EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties),
+      ConnectionId = extract(@'"powerplatform.analytics.resource.connection.id","Value":"([^"]+)"', 1, Properties)
+  | where EnvironmentId in~ (sensitive_environment_id)
+  | extend
+      AccountName = tostring(split(ActorName, "@")[0]),
+      UPNSuffix = tostring(split(ActorName, "@")[1])
+  | project
+      TimeGenerated,
+      EventOriginalType,
+      ActorName,
+      SrcIpAddr,
+      ConnectionId,
+      EnvironmentId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+alertDetailsOverride:
+  alertDisplayNameFormat: New Power Platform connector added in a sensitive environment
+  alertDescriptionFormat: '{{ActorName}} added a new API connector in environment
+    id {{EnvironmentId}}. This environment has been listed as sensitive.'
+customDetails:
+  Environment: EnvironmentId
+  Connection: ConnectionId
+version: 3.2.0

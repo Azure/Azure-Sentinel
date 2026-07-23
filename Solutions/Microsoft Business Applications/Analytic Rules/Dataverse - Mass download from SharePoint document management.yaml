@@ -1,0 +1,79 @@
+id: 95e02f1b-5886-4043-8f0e-a42e6e23330f
+kind: Scheduled
+name: Dataverse - Mass download from SharePoint document management
+description: Identifies mass download (in the last hour) of files from SharePoint
+  sites configured for document management in Dynamics 365. This analytics rule utilizes
+  the MSBizApps-Configuration watchlist to identify SharePoint sites used for Document
+  Management.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+query: |
+  // Set threshold for number of downloaded files
+  let detection_threshold = 10000;
+  let query_frequency = 1h;
+  DataverseSharePointSites
+  | join kind=inner (
+      OfficeActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where OfficeWorkload == "SharePoint" and Operation == "FileDownloaded")
+      on $left.SharePointUrl == $right.Site_Url
+  | summarize FileDownloadCount = count() by UserId, SharePointUrl, InstanceUrl, ClientIP
+  | where FileDownloadCount > detection_threshold
+  | extend
+      CloudAppId = int(32780),
+      SharePointId = int(20892),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      UserId,
+      ClientIP,
+      FileDownloadCount,
+      SharePointUrl,
+      InstanceUrl,
+      CloudAppId,
+      SharePointId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: SharePointId
+      - identifier: InstanceName
+        columnName: SharePointUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Mass download detected from document management
+    in {{{InstanceUrl}} '
+  alertDescriptionFormat: '{{{FileDownloadCount}} files were downloaded from {{SharePointUrl}}  by
+    {{{UserId}}.'
+version: 3.2.0

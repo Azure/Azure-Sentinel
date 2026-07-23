@@ -22,15 +22,17 @@ relevantTechniques:
 query: |
   // Adjust this figure to adjust how sensitive this detection is
   let sensitivity = 2.5;
+  // Adjust this figure to set the value that defines the requested estimation accuracy. The default value is 1. Possible values are 0, 1, 2, 3, 4.
+  let dcountAccuracy = 1;
   let AuthEvents = materialize(
   union isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs
-  | where TimeGenerated > ago(7d)
+  | where TimeGenerated between (ago(7d) .. now())
   | where ResultType == 0
   | extend LocationDetails = LocationDetails_dynamic
   | extend Location = strcat(LocationDetails.countryOrRegion, "-", LocationDetails.state,"-", LocationDetails.city)
   | where Location != "--");
   AuthEvents
-  | summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)
+  | summarize dcount(Location, dcountAccuracy) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)
   | where dcount_Location > 2
   | make-series CountOfLocations = sum(dcount_Location) on TimeGenerated  step 1d by AppId, UserId
   | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')
@@ -63,5 +65,5 @@ alertDetailsOverride:
     This query over Microsoft Entra ID sign-in considers all user sign-ins for each Microsoft Entra ID application and picks out the most anomalous change in location profile for a user within an
     individual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} 
     different locations.
-version: 2.0.4
+version: 2.0.5
 kind: Scheduled

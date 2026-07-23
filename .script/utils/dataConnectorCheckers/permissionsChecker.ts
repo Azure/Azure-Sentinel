@@ -1,6 +1,6 @@
 import _ from "lodash";
-import { RequiredConnectorPermissions, ConnectorCategory } from "../dataConnector";
-import { DataConnectorValidationError } from "../validationError";
+import { RequiredConnectorPermissions, ConnectorCategory } from "../dataConnector.js";
+import { DataConnectorValidationError } from "../validationError.js";
 
 const CEFRestAPIPermissions = {
     "resourceProvider": [

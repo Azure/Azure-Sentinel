@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM parser for Fortinet FortiGate
-  Version: '0.1.0'
-  LastUpdated: Dec 24th, 2023
+  Version: '0.1.2'
+  LastUpdated: Dec 8, 2025
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -155,27 +155,91 @@ ParserQuery: |
       ];
       CommonSecurityLog
       | where not(disabled)
-      | where DeviceVendor    == "Fortinet" and 
-          DeviceProduct       == "Fortigate"
-      | where DeviceEventClassID in(54000,54200,54400,54401,54600,54601,54800,54801,54802,54803,54804,54805)
-      | project TimeGenerated, EventOriginalSubType = DeviceEventClassID, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol, DvcId = DeviceExternalID, DnsSessionId = ExtID
+      | where DeviceVendor == "Fortinet" and DeviceProduct startswith "Fortigate"
+      | where DeviceEventClassID endswith "54000" or 
+              DeviceEventClassID endswith "54200" or 
+              DeviceEventClassID endswith "54400" or 
+              DeviceEventClassID endswith "54401" or 
+              DeviceEventClassID endswith "54600" or 
+              DeviceEventClassID endswith "54601" or 
+              DeviceEventClassID endswith "54800" or 
+              DeviceEventClassID endswith "54801" or 
+              DeviceEventClassID endswith "54802" or 
+              DeviceEventClassID endswith "54803" or 
+              DeviceEventClassID endswith "54804" or 
+              DeviceEventClassID endswith "54805"
+      | extend EventOriginalSubType = case(
+          DeviceEventClassID endswith "54000", "54000",
+          DeviceEventClassID endswith "54200", "54200",
+          DeviceEventClassID endswith "54400", "54400",
+          DeviceEventClassID endswith "54401", "54401",
+          DeviceEventClassID endswith "54600", "54600",
+          DeviceEventClassID endswith "54601", "54601",
+          DeviceEventClassID endswith "54800", "54800",
+          DeviceEventClassID endswith "54801", "54801",
+          DeviceEventClassID endswith "54802", "54802",
+          DeviceEventClassID endswith "54803", "54803",
+          DeviceEventClassID endswith "54804", "54804",
+          DeviceEventClassID endswith "54805", "54805",
+          DeviceEventClassID
+      )
+      | project TimeGenerated, EventOriginalSubType, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol, DvcId = DeviceExternalID, DnsSessionId = ExtID
       | lookup DeviceEventClassIDLookup on EventOriginalSubType
-      | parse-kv  AdditionalExtensions as (FTNTFGTlogid:string, FTNTFGTsubtype:string, FTNTFGTsrccountry:string, FTNTFGTdstcountry:string,FTNTFGTsrcintfrole:string, FTNTFGTrcode:string, FTNTFGTqname:string, FTNTFGTqtype:string, FTNTFGTxid:string, FTNTFGTqtypeval:int, FTNTFGTqclass:string, FTNTFGTcatdesc:string, FTNTFGTipaddr:string, FTNTFGTunauthuser:string, FTNTFGTuser:string, FTNTFGTbotnetip:string, sessionid:int) with (pair_delimiter=";", kv_delimiter="=")
-      | project-rename 
-          EventOriginalResultDetails  = FTNTFGTrcode,
-          EventOriginalUid            = FTNTFGTlogid,
-          DvcZone                     = FTNTFGTsrcintfrole,
-          EventOriginalType           = FTNTFGTsubtype,
-          SrcGeoCountry               = FTNTFGTsrccountry,
-          DstGeoCountry               = FTNTFGTdstcountry,
-          DnsQuery                    = FTNTFGTqname,
-          DnsQueryTypeName            = FTNTFGTqtype,
-          TransactionIdHex            = FTNTFGTxid,
-          DnsQueryClass               = FTNTFGTqtypeval,
-          DnsQueryClassName           = FTNTFGTqclass,
-          UrlCategory                 = FTNTFGTcatdesc,
-          DnsResponseName             = FTNTFGTipaddr,
-          ThreatIpAddr                = FTNTFGTbotnetip
+      | parse-kv  AdditionalExtensions as (
+            // FTNTFGT format for FortiGate
+            FTNTFGTlogid:string, 
+            FTNTFGTsubtype:string, 
+            FTNTFGTsrccountry:string, 
+            FTNTFGTdstcountry:string,
+            FTNTFGTsrcintfrole:string, 
+            FTNTFGTrcode:string, 
+            FTNTFGTqname:string, 
+            FTNTFGTqtype:string, 
+            FTNTFGTxid:string, 
+            FTNTFGTqtypeval:int, 
+            FTNTFGTqclass:string, 
+            FTNTFGTcatdesc:string, 
+            FTNTFGTipaddr:string, 
+            FTNTFGTunauthuser:string, 
+            FTNTFGTuser:string, 
+            FTNTFGTbotnetip:string,
+            // Simple format for FortiAnalyzer
+            logid:string, 
+            subtype:string, 
+            srccountry:string, 
+            dstcountry:string,
+            srcintfrole:string, 
+            rcode:string, 
+            qname:string, 
+            qtype:string, 
+            xid:string, 
+            qtypeval:int, 
+            qclass:string, 
+            catdesc:string, 
+            ipaddr:string, 
+            unauthuser:string, 
+            user:string, 
+            botnetip:string,
+            // Additional fields
+            sessionid:int
+        ) with (pair_delimiter=";", kv_delimiter="=")
+      | extend 
+          EventOriginalResultDetails  = coalesce(FTNTFGTrcode, rcode),
+          EventOriginalUid            = coalesce(FTNTFGTlogid, logid),
+          DvcZone                     = coalesce(FTNTFGTsrcintfrole, srcintfrole),
+          EventOriginalType           = coalesce(FTNTFGTsubtype, subtype),
+          SrcGeoCountry               = coalesce(FTNTFGTsrccountry, srccountry),
+          DstGeoCountry               = coalesce(FTNTFGTdstcountry, dstcountry),
+          DnsQuery                    = coalesce(FTNTFGTqname, qname),
+          DnsQueryTypeName            = coalesce(FTNTFGTqtype, qtype),
+          TransactionIdHex            = coalesce(FTNTFGTxid, xid),
+          DnsQueryClass               = coalesce(FTNTFGTqtypeval, qtypeval),
+          DnsQueryClassName           = coalesce(FTNTFGTqclass, qclass),
+          UrlCategory                 = coalesce(FTNTFGTcatdesc, catdesc),
+          DnsResponseName             = coalesce(FTNTFGTipaddr, ipaddr),
+          ThreatIpAddr                = coalesce(FTNTFGTbotnetip, botnetip),
+          User1                      = coalesce(FTNTFGTuser, user),
+          UnauthUser1                 = coalesce(FTNTFGTunauthuser, unauthuser)
       | extend 
           DnsQueryTypeName = case(
               DnsQueryTypeName == "Unknown","",
@@ -186,7 +250,7 @@ ParserQuery: |
       | invoke _ASIM_ResolveDvcFQDN ("Computer")
       | invoke _ASIM_ResolveNetworkProtocol("NetworkProtocolNumber")
       | extend 
-          SrcUsername         = coalesce(FTNTFGTuser, FTNTFGTunauthuser),
+          SrcUsername         = coalesce(User1, UnauthUser1),
           IpAddr              = SrcIpAddr,
           Src                 = SrcIpAddr,
           Dst                 = DstIpAddr,
@@ -202,13 +266,17 @@ ParserQuery: |
           EventProduct        = "FortiGate",
           Domain              = DnsQuery,
           DomainCategory      = UrlCategory,
-          SessionId           = DnsSessionId
+          SessionId           = DnsSessionId,
+          DvcIdType           = "Other"
       | extend 
           User            = SrcUsername,
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
           SrcUserType     = _ASIM_GetUserType(SrcUsername, "")
-      | project-away FTNTFGTuser, FTNTFGTunauthuser, AdditionalExtensions, Computer, NetworkProtocolNumber
+      | project-away FTNTFGT*, logid, subtype, srccountry, dstcountry, srcintfrole, rcode,
+        qname, qtype, xid, qtypeval, qclass, catdesc, ipaddr, unauthuser, user, botnetip, sessionid,
+        User1, UnauthUser1, AdditionalExtensions, Computer, NetworkProtocolNumber
   };
   Parser(
     disabled = disabled
   )
+  

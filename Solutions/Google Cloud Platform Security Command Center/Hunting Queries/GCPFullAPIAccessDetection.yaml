@@ -1,0 +1,49 @@
+id: 0cbdd537-b31b-41b7-a3f2-8a421ea89a43
+name: Identify GCP Instances with Full API Access
+description: |
+  Identifies Google Cloud Platform Compute Engine instances that are configured with the "Allow full access to all Cloud APIs" scope using Security Command Center FULL_API_ACCESS findings.
+description-detailed: |
+  This query surfaces Compute Engine instances which allow full API access via their service account access scopes. Instances with this configuration can use the attached service account to call any Google Cloud API, potentially enabling privilege escalation. Use this hunting query to find such instances and investigate service account usage and assigned IAM roles.
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1068
+  - T1098
+tags:
+  - CIS GCP Foundations Benchmark v3.0 4.2
+  - NIST 800-53 R5 AC-6
+  - NIST 800-53 R5 IA-5
+  - PCI-DSS v4.0 2.2.2, 2.3.1
+  - ISO-27001 v2022 A.8.2, A.8.9
+  - NIST Cybersecurity Framework 1.0 PR-AC-1
+  - SOC2 v2017 CC6.3.1, CC6.3.2, CC6.3.3
+  - CIS Controls 8.0 4.7
+query: |
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "FULL_API_ACCESS"
+  // parse resource name to extract project and instance
+  | extend ResourceName = tostring(Findings.resourceName)
+  | extend Project = extract(@"projects/([^/]+)", 1, ResourceName),
+           Instance = extract(@"instances/([^/]+)$", 1, ResourceName)
+  | extend SourcePropertiesJson = todynamic(Findings.sourceProperties)
+  | extend ResourceDisplayName = tostring(FindingsResource.displayName)
+  | extend Severity = tostring(Findings.severity),
+           ResourceType = tostring(FindingsResource.type),
+           CloudResource = coalesce(tostring(FindingsResource.name), ResourceDisplayName)
+  | summarize TimeGenerated = max(TimeGenerated) by Project, Instance, Severity, ResourceType, ResourceDisplayName, CloudResource
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Instance
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudResource
+version: 1.0.0

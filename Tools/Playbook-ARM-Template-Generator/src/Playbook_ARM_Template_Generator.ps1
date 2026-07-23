@@ -259,20 +259,32 @@ Function BuildPlaybookArmId() {
 }
 
 Function SendArmGetCall($relativeUrl) {
-    $authHeader = @{
-        'Authorization'='Bearer ' + $tokenToUse
+    if ($tokenToUse -is [System.Security.SecureString]) {
+        $ssPtr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($tokenToUse)
+        try {
+            $AccessToken = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ssPtr)
+            $authHeader = @{
+                'Authorization' = 'Bearer ' + $AccessToken
+            }
+        } finally {
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ssPtr) | Out-Null
+        }
+    } else {
+        $authHeader = @{
+            'Authorization' = 'Bearer ' + $tokenToUse
+        }
     }
 
-    $absoluteUrl = $armHostUrl+$relativeUrl
-    Try {
+    $absoluteUrl = $armHostUrl + $relativeUrl
+    try {
         $result = Invoke-RestMethod -Uri $absoluteUrl -Method Get -Headers $authHeader
         Write-Log -Message $result -LogFileName $LogFileName -Severity Information
         return $result
     }
-    catch {                    
-        Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error                 
-        Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error                
-    } 
+    catch {
+        Write-Log -Message $($_.Exception.Response.StatusCode.value__) -LogFileName $LogFileName -Severity Error
+        Write-Log -Message $($_.Exception.Response.StatusDescription) -LogFileName $LogFileName -Severity Error
+    }
 }
 
 Function GetPlaybookResource() {

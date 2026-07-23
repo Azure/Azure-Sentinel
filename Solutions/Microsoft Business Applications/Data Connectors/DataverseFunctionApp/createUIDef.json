@@ -1,0 +1,582 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Microsoft Sentinel: Dataverse Security Data Connector",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Basics",
+					"elements": [
+						{
+							"name": "resourceScope",
+							"type": "Microsoft.Common.ResourceScope"
+						},
+						{
+							"name": "getLAWorkspace",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "[concat('resources | where type =~ \"microsoft.operationalinsights/workspaces\" and subscriptionId == \"', steps('basics').resourceScope.subscription.subscriptionId, '\" | project label = name, description = location, value = pack(\"name\", name, \"location\", location, \"resourceGroup\", resourceGroup, \"id\", id) | order by label asc')]"
+								}
+							}
+						},
+						{
+							"name": "getKeyVaults",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "[concat('resources | where type =~ \"microsoft.keyvault/vaults\" and subscriptionId == \"', steps('basics').resourceScope.subscription.subscriptionId, '\" | project label = name, description = resourceGroup, value = name | order by label asc')]"
+								}
+							}
+						},
+						{
+							"name": "sentinelWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Sentinel workspace",
+							"defaultValue": "[parse('[]')]",
+							"toolTip": "",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "function",
+					"label": "Function App",
+					"elements": [
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "Configure the Function App used to collect Dataverse security model data. As part of the deploymnet, the Function App and Storage Account resources will be created in the target resource group. Function App health logs and metrics will be sent to selected App Insights workspace."
+							}
+						},
+						{
+							"name": "appServiceNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Web/checknameavailability?api-version=2022-03-01')]",
+								"body": {
+									"name": "[steps('function').newFunctionAppName]",
+									"type": "Microsoft.Web/sites"
+								}
+							}
+						},
+						{
+							"name": "storageNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-01-01')]",
+								"body": {
+									"name": "[steps('function').newStorageAccountName]",
+									"type": "Microsoft.Storage/storageAccounts"
+								}
+							}
+						},
+						{
+							"name": "newFunctionAppName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Function App name",
+							"defaultValue": "[toLower(concat('Dataverse', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-'))))]",
+							"toolTip": "Name of the Function App",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').appServiceNameApi.nameAvailable]",
+										"message": "[steps('function').appServiceNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "newStorageAccountName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Storage account name",
+							"visible": true,
+							"defaultValue": "[toLower(concat('Dataverse', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-')), 'sa'))]",
+							"toolTip": "Name of the Storage account",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').storageNameApi.nameAvailable]",
+										"message": "[steps('function').storageNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "appInsightsWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "App Insights workspace",
+							"defaultValue": "[steps('basics').sentinelWorkspace.name]",
+							"toolTip": "Select the workspace used to send Function App health logs and metrics",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "identity",
+					"label": "Identity",
+					"elements": [
+						{
+							"name": "getServicePrincipal",
+							"type": "Microsoft.Solutions.GraphApiControl",
+							"request": {
+								"method": "GET",
+								"path": "[concat('/v1.0/serviceprincipals?$filter=appid eq ', '\\'', steps('identity').spn.clientId,  '\\'')]"
+							}
+						},
+						{
+							"name": "keyVaultNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.KeyVault/checknameavailability?api-version=2022-07-01')]",
+								"body": {
+									"name": "[steps('identity').keyvault.newKeyVaultName]",
+									"type": "Microsoft.KeyVault/vaults"
+								}
+							}
+						},
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "The Dataverse Security data connector collects data using a System Assigned Managed Identity (MSI) or Client ID and Client Secret (Service Principal). The MSI option is recommended for most deployments.",
+								"link": {
+									"label": "Learn more",
+									"uri": "https://learn.microsoft.com/azure/sentinel/business-applications"
+								}
+							}
+						},
+						{
+							"name": "useManagedIdentity",
+							"type": "Microsoft.Common.OptionsGroup",
+							"label": "Managed Identity",
+							"defaultValue": "Managed Identity",
+							"toolTip": "",
+							"constraints": {
+								"allowedValues": [
+									{
+										"label": "Managed Identity",
+										"value": true
+									},
+									{
+										"label": "Service Principal",
+										"value": false
+									}
+								],
+								"required": true
+							},
+							"visible": true
+						},
+						{
+							"name": "spn",
+							"type": "Microsoft.Common.Section",
+							"label": "Service Principal",
+							"elements": [
+								{
+									"name": "tenantId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Microsoft Entra Tenant ID",
+									"placeholder": "example: 21bbac8f-2227-4d79-9a91-558327b49f15",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "clientId",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Client (App) ID",
+									"placeholder": "example: b22dcaaa-0838-46ac-8a09-2a9c04e31a8c",
+									"constraints": {
+										"required": true
+									}
+								},
+								{
+									"name": "objectId",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Confirm Service Principal",
+									"placeholder": "Service Principal",
+									"toolTip": "This dropdown will be populated when a valid Client (App) ID is provided above",
+									"constraints": {
+										"allowedValues": "[map(steps('identity').getServicePrincipal.value, (item) => parse(concat('{\"label\":\"', item.displayName, '\",\"value\":\"', item.id, '\"}')))]",
+										"required": true
+									}
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						},
+						{
+							"name": "keyvault",
+							"type": "Microsoft.Common.Section",
+							"label": "Key Vault",
+							"elements": [
+								{
+									"name": "useExistingKeyVault",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Create new, or existing Key Vault",
+									"defaultValue": "New",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "New",
+												"value": false
+											},
+											{
+												"label": "Existing",
+												"value": true
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "newKeyVaultName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Key Vault name",
+									"defaultValue": "[toLower(concat('DataverseKv', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-'))))]",
+									"toolTip": "Name of the Key Vault",
+									"constraints": {
+										"required": true,
+										"validations": [
+											{
+												"isValid": "[steps('identity').keyVaultNameApi.nameAvailable]",
+												"message": "[steps('identity').keyVaultNameApi.message]"
+											}
+										]
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								},
+								{
+									"name": "existingKeyVaultName",
+									"type": "Microsoft.Common.DropDown",
+									"label": "Azure Key Vault",
+									"defaultValue": "[parse('[]')]",
+									"toolTip": "",
+									"multiselect": false,
+									"selectAll": true,
+									"filter": true,
+									"filterPlaceholder": "Filter items ...",
+									"multiLine": true,
+									"constraints": {
+										"allowedValues": "[steps('basics').getKeyVaults.data]",
+										"required": true
+									},
+									"visible": "[steps('identity').keyvault.useExistingKeyVault]"
+								},
+								{
+									"name": "secretName",
+									"type": "Microsoft.Common.TextBox",
+									"label": "Secret name",
+									"placeholder": "example: secret1",
+									"toolTip": "Name of the secret in Key Vault (not the actual client secret)",
+									"constraints": {
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "secretValue",
+									"type": "Microsoft.Common.PasswordBox",
+									"label": {
+										"password": "Client Secret",
+										"confirmPassword": "Confirm secret"
+									},
+									"toolTip": "The client secret value from Microsoft Entra",
+									"constraints": {
+										"required": true
+									},
+									"options": {
+										"hideConfirmation": true
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						}
+					]
+				},
+				{
+					"name": "dataverse",
+					"label": "Dataverse",
+					"elements": [
+						{
+							"name": "instanceApiHost",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Dataverse Instance URL",
+							"placeholder": "example: https://contoso.crm.dynamics.com/",
+							"toolTip": "Dataverse Instance URL",
+							"constraints": {
+								"required": true,
+								"regex": "^https:\/\/[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+								"validationMessage": "Please enter a valid URL starting with https:// and without a trailing \"/\"."
+							},
+							"visible": true
+						}
+					]
+				},
+				{
+					"name": "roles",
+					"label": "Role Assignments",
+					"elements": [
+						{
+							"name": "roleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Storage and DCR Role Assignment",
+							"elements": [
+								{
+									"name": "storageOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, the Funcion App uses identity based connection to host storage. The Function App managed identity must be assigned the Storage Blob Data Owner role on the Storage Account.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-functions/functions-reference?tabs=azurewebjobsstorage&pivots=programming-language-csharp#grant-permission-to-the-identity"
+										}
+									}
+								},
+								{
+									"name": "dcrOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, Data Collection Rule (DCR) and Data Collection Endpoint (DCE) resources will be created. To ingest data, the Function App managed identity must be assigned the Monitoring Metrics Publisher role on the DCR.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"
+										}
+									}
+								},
+								{
+									"name": "dcrInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "Role assignment typically requires Owner or User Access Administrator privileges on the target resource.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Role assignment",
+									"defaultValue": "none",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "noStoragePermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('roles').roleAssignment.hasPermissions, false)]",
+									"options": {
+										"text": "Assign the <b>Storage Blob Data Owner</b> role to the Function App managed identity on the function app storage account to complete deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications",
+										"style": "Warning"
+									}
+								},
+								{
+									"name": "noDcrPermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('roles').roleAssignment.hasPermissions, false)]",
+									"options": {
+										"text": "Assign the <b>Monitoring Metrics Publisher</b> role to the Function App managed identity on the Microsoft-Sentinel-Dataverse-DCR resource to complete deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications",
+										"style": "Warning"
+									}
+								}								
+							],
+							"visible": true
+						},
+						{
+							"name": "ketVaultRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Key Vault Role Assignment",
+							"elements": [
+								{
+									"name": "kvOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]",
+									"options": {
+										"text": "As part of the deployment, a Key Vault resource will be created to store the client secret of the Microsoft Entra Service Principal. To ingest data, the Function App managed identity must be assigned the Key Vault Secrets User role on the Key Vault.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide"
+										}
+									}
+								},
+								{
+									"name": "kvInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]",
+									"options": {
+										"text": "Role assignment to the Key Vault typically requires Owner or User Access Administrator privileges on the target resource.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Role assignment",
+									"defaultValue": "none",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": "[equals(steps('identity').keyvault.useExistingKeyVault, false)]"
+								},
+								{
+									"name": "noKvPermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"options": {
+										"text": "To complete the deployment, you will need to assign the Key Vault Secrets User role to the Function App managed identity on the Key Vault resource created during deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications",
+										"style": "Warning"
+									},
+									"visible": "[or(steps('identity').keyvault.useExistingKeyVault, equals(steps('roles').ketVaultRoleAssignment.hasPermissions, false))]"
+								}
+							],
+							"visible": "[equals(steps('identity').useManagedIdentity, false)]"
+						},
+						{
+							"name": "dataverseRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Dataverse Role Assignment",
+							"elements": [
+								{
+									"name": "dataverseOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, you will need to grant the Funtion App access to read from the Dataverse Web API. Click here for further information.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/power-apps/developer/data-platform/webapi/overview"
+										}
+									}
+								},
+								{
+									"name": "noDataversePermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "To complete the deployment, you will need to assign permission in Dataverse.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications",
+										"style": "Warning"
+									}
+								}
+							],
+							"visible": true
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "tagsByResource",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Resources/deployments",
+								"Microsoft.Insights/components",
+								"Microsoft.Web/serverfarms",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.Web/sites",
+								"Microsoft.Insights/dataCollectionRules",
+								"Microsoft.Insights/dataCollectionEndpoints",
+								"Microsoft.Authorization/roleAssignments",
+								"Microsoft.OperationalInsights/workspaces/tables"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').resourceScope.location.name]",
+			"resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]",
+			"parameters": {
+				"functionAppName": "[steps('function').newFunctionAppName]",
+				"storageAccountName": "[steps('function').newStorageAccountName]",
+				"appInsightsWorkspaceResourceId": "[steps('function').appInsightsWorkspace.id]",
+				"roleAssignmentDcr": "[steps('roles').roleAssignment.hasPermissions]",
+				"roleAssignmentStorage": "[steps('roles').roleAssignment.hasPermissions]",
+				"roleAssignmentKv": "[steps('roles').ketVaultRoleAssignment.hasPermissions]",
+				"sentinelWorkspace": "[steps('basics').sentinelWorkspace]",
+				"dataverseApiHost": "[steps('dataverse').instanceApiHost]",
+				"tagsByResource": "[steps('tags').tagsByResource]",
+				"keyVault": {
+					"useExistingKeyVault": "[steps('identity').keyvault.useExistingKeyVault]",
+					"keyVaultName": "[coalesce(steps('identity').keyvault.existingKeyVaultName, steps('identity').keyvault.newKeyVaultName, 'empty')]",
+					"secretName": "[coalesce(steps('identity').keyvault.secretName, 'empty')]"
+				},
+				"secretValue": "[coalesce(steps('identity').keyvault.secretValue, 'empty')]",
+				"identity": {
+					"useManagedIdentity": "[steps('identity').useManagedIdentity]",
+					"clientId": "[coalesce(steps('identity').spn.clientId, 'empty')]",
+					"tenantId": "[coalesce(steps('identity').spn.tenantId, 'empty')]",
+					"objectId": "[coalesce(steps('identity').spn.objectId, 'empty')]"
+				}
+			}
+		}
+	}
+}

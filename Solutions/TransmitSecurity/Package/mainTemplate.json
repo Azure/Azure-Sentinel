@@ -1,0 +1,922 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Transmit Security",
+    "comments": "Solution template for TransmitSecurity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "TransmitSecurity",
+    "_solutionVersion": "3.0.2",
+    "solutionId": "transmitsecurity.microsoft-sentinel-solution-transmitsecurity",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.0.2",
+    "_dataConnectorContentIdConnectorDefinition1": "TransmitSecurityConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "TransmitSecurityConnectorDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpoint1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Transmit Security Data Connector (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "TransmitSecurityConnectorDefinition",
+                  "title": "Transmit Security Data Connector (via Codeless Connector Framework)",
+                  "publisher": "Transmit Security",
+                  "descriptionMarkdown": "The [Transmit Security](https://transmitsecurity.com/) data connector provides the capability to ingest Transmit Security activity events into Microsoft Sentinel through the REST API. Refer to API documentation for more information. The connector provides the ability to get events from Transmit Security platform.",
+                  "graphQueriesTableName": "TransmitSecurityActivity_V2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Transmit Security Activity Data",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Transmit Security Activity Events",
+                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get sample of Transmit Security Activity Events",
+                      "query": "{{graphQueriesTableName}}\n| take 10"
+                    },
+                    {
+                      "description": "Summary by event type",
+                      "query": "{{graphQueriesTableName}}\n| summarize count() by Activity"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "TransmitSecurityActivity_V2_CL",
+                      "lastDataReceivedQuery": "TransmitSecurityActivity_V2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Transmit Security API access",
+                        "description": "**Transmit Security API** credentials are required: Client ID, Client Secret, Token Endpoint, and Pull Endpoint."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Configure Transmit Security API access",
+                      "description": "Before using the API, you need to obtain your API credentials from the Transmit Security platform.\n1. Log in to your Transmit Security admin console.\n2. Navigate to API credentials section.\n3. Create a new API client or use existing credentials.\n4. Note down the following:\n   - Client ID\n   - Client Secret\n   - Token Endpoint URL\n   - Pull Endpoint URL (events API endpoint)\n\nThese credentials will be required in the next step.",
+                      "instructions": [
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Endpoint",
+                                "columnValue": "properties.request.apiEndpoint"
+                              },
+                              {
+                                "columnName": "Stream",
+                                "columnValue": "properties.dataType"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "label": "Connect",
+                            "title": "Connect to Transmit Security",
+                            "subtitle": "Connect to Transmit Security API",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client ID",
+                                      "placeholder": "Transmit Security Client ID",
+                                      "type": "text",
+                                      "name": "clientId",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Client Secret",
+                                      "placeholder": "Transmit Security Client Secret",
+                                      "type": "password",
+                                      "name": "clientSecret",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Token Endpoint",
+                                      "placeholder": "Enter the OAuth2 token endpoint URL",
+                                      "type": "text",
+                                      "name": "transmitSecurityTokenEndpoint",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Pull Endpoint",
+                                      "placeholder": "Enter the events pull endpoint URL",
+                                      "type": "text",
+                                      "name": "transmitSecurityPullEndpoint",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Transmit Security"
+                },
+                "support": {
+                  "name": "Transmit Security",
+                  "tier": "Partner",
+                  "link": "https://transmitsecurity.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "TransmitSecurityDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpoint1')]",
+                "streamDeclarations": {
+                  "Custom-TransmitSecurityActivity_V2_CL": {
+                    "columns": [
+                      {
+                        "name": "activity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "app_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ip",
+                        "type": "string"
+                      },
+                      {
+                        "name": "user_agent",
+                        "type": "string"
+                      },
+                      {
+                        "name": "timestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "invocation_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "original_app_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "original_user_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "target_resource_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "target_resource_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "actor_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "actor_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "original_actor_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "flow_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "correlation_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "additional_params",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "tenant_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "client_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "device_id",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-TransmitSecurityActivity_V2_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-TransmitSecurityActivity_V2_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnull(timestamp), now(), todatetime(tostring(timestamp))) , Activity = ['activity'] , AppId = ['app_id'] , DeviceId = ['device_id'] , UserId = ['user_id'] , Ip = ['ip'] , UserAgent = ['user_agent'] , ClientId = ['client_id'] , Timestamp = ['timestamp'] , InvocationId = ['invocation_id'] , OriginalAppId = ['original_app_id'] , OriginalUserId = ['original_user_id'] , TargetResourceId = ['target_resource_id'] , TargetResourceType = ['target_resource_type'] , ActorId = ['actor_id'] , ActorType = ['actor_type'] , OriginalActorId = ['original_actor_id'] , FlowId = ['flow_id'] , SourceTenantId = ['tenant_id'] , CorrelationId = ['correlation_id'] , AdditionalParams = ['additional_params'] | project TimeGenerated , Activity , AppId , ClientId , SourceTenantId , DeviceId , UserId , Ip , UserAgent , Timestamp , InvocationId , OriginalAppId , OriginalUserId , TargetResourceId , TargetResourceType , ActorId , ActorType , OriginalActorId , FlowId , CorrelationId , AdditionalParams"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "TransmitSecurityActivity_V2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "TransmitSecurityActivity_V2_CL",
+                  "description": "Transmit Security activity events data",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "The time when the log entry was generated",
+                      "isDefaultDisplay": true
+                    },
+                    {
+                      "name": "Activity",
+                      "type": "string",
+                      "description": "Activity name"
+                    },
+                    {
+                      "name": "AppId",
+                      "type": "string",
+                      "description": "Application identifier"
+                    },
+                    {
+                      "name": "ClientId",
+                      "type": "string",
+                      "description": "Client identifier"
+                    },
+                    {
+                      "name": "SourceTenantId",
+                      "type": "string",
+                      "description": "Tenant identifier"
+                    },
+                    {
+                      "name": "DeviceId",
+                      "type": "string",
+                      "description": "Device identifier"
+                    },
+                    {
+                      "name": "UserId",
+                      "type": "string",
+                      "description": "User identifier"
+                    },
+                    {
+                      "name": "Ip",
+                      "type": "string",
+                      "description": "IP address from which the event originated"
+                    },
+                    {
+                      "name": "UserAgent",
+                      "type": "string",
+                      "description": "User agent string from the client"
+                    },
+                    {
+                      "name": "Timestamp",
+                      "type": "datetime",
+                      "description": "When the event occurred"
+                    },
+                    {
+                      "name": "InvocationId",
+                      "type": "string",
+                      "description": "Unique invocation identifier"
+                    },
+                    {
+                      "name": "OriginalAppId",
+                      "type": "string",
+                      "description": "Hashed app ID before enrichment"
+                    },
+                    {
+                      "name": "OriginalUserId",
+                      "type": "string",
+                      "description": "Hashed user ID before enrichment"
+                    },
+                    {
+                      "name": "TargetResourceId",
+                      "type": "string",
+                      "description": "Target resource identifier"
+                    },
+                    {
+                      "name": "TargetResourceType",
+                      "type": "string",
+                      "description": "Target resource type"
+                    },
+                    {
+                      "name": "ActorId",
+                      "type": "string",
+                      "description": "Actor identifier (e.g. admin user for admin activities)"
+                    },
+                    {
+                      "name": "ActorType",
+                      "type": "string",
+                      "description": "Actor type"
+                    },
+                    {
+                      "name": "OriginalActorId",
+                      "type": "string",
+                      "description": "Hashed actor ID before enrichment"
+                    },
+                    {
+                      "name": "FlowId",
+                      "type": "string",
+                      "description": "Flow identifier"
+                    },
+                    {
+                      "name": "CorrelationId",
+                      "type": "string",
+                      "description": "Correlation identifier for tracking related events"
+                    },
+                    {
+                      "name": "AdditionalParams",
+                      "type": "dynamic",
+                      "description": "Additional parameters as free-form JSON"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "TransmitSecurityConnectorDefinition",
+          "title": "Transmit Security Data Connector (via Codeless Connector Framework)",
+          "publisher": "Transmit Security",
+          "descriptionMarkdown": "The [Transmit Security](https://transmitsecurity.com/) data connector provides the capability to ingest Transmit Security activity events into Microsoft Sentinel through the REST API. Refer to API documentation for more information. The connector provides the ability to get events from Transmit Security platform.",
+          "graphQueriesTableName": "TransmitSecurityActivity_V2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Transmit Security Activity Data",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Transmit Security Activity Events",
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get sample of Transmit Security Activity Events",
+              "query": "{{graphQueriesTableName}}\n| take 10"
+            },
+            {
+              "description": "Summary by event type",
+              "query": "{{graphQueriesTableName}}\n| summarize count() by Activity"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "TransmitSecurityActivity_V2_CL",
+              "lastDataReceivedQuery": "TransmitSecurityActivity_V2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Transmit Security API access",
+                "description": "**Transmit Security API** credentials are required: Client ID, Client Secret, Token Endpoint, and Pull Endpoint."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Configure Transmit Security API access",
+              "description": "Before using the API, you need to obtain your API credentials from the Transmit Security platform.\n1. Log in to your Transmit Security admin console.\n2. Navigate to API credentials section.\n3. Create a new API client or use existing credentials.\n4. Note down the following:\n   - Client ID\n   - Client Secret\n   - Token Endpoint URL\n   - Pull Endpoint URL (events API endpoint)\n\nThese credentials will be required in the next step.",
+              "instructions": [
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Endpoint",
+                        "columnValue": "properties.request.apiEndpoint"
+                      },
+                      {
+                        "columnName": "Stream",
+                        "columnValue": "properties.dataType"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "label": "Connect",
+                    "title": "Connect to Transmit Security",
+                    "subtitle": "Connect to Transmit Security API",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client ID",
+                              "placeholder": "Transmit Security Client ID",
+                              "type": "text",
+                              "name": "clientId",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Client Secret",
+                              "placeholder": "Transmit Security Client Secret",
+                              "type": "password",
+                              "name": "clientSecret",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Token Endpoint",
+                              "placeholder": "Enter the OAuth2 token endpoint URL",
+                              "type": "text",
+                              "name": "transmitSecurityTokenEndpoint",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Pull Endpoint",
+                              "placeholder": "Enter the events pull endpoint URL",
+                              "type": "text",
+                              "name": "transmitSecurityPullEndpoint",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Transmit Security"
+        },
+        "support": {
+          "name": "Transmit Security",
+          "tier": "Partner",
+          "link": "https://transmitsecurity.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Transmit Security Data Connector (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Transmit Security Data Connector (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "transmitSecurityTokenEndpoint": {
+              "defaultValue": "transmitSecurityTokenEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "transmitSecurityPullEndpoint": {
+              "defaultValue": "transmitSecurityPullEndpoint",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Transmit Security"
+                },
+                "support": {
+                  "name": "Transmit Security",
+                  "tier": "Partner",
+                  "link": "https://transmitsecurity.com/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'TransmitSecurityPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "TransmitSecurityConnectorDefinition",
+                "dataType": "TransmitSecurityActivity_V2_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-TransmitSecurityActivity_V2_CL"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[parameters('transmitSecurityTokenEndpoint')]",
+                  "TokenEndpointHeaders": {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[parameters('transmitSecurityPullEndpoint')]",
+                  "httpMethod": "POST",
+                  "rateLimitQPS": 1,
+                  "queryWindowInMin": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "isPostPayloadJson": true,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                  },
+                  "queryParametersTemplate": "{}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$[*]"
+                  ],
+                  "format": "json"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "TransmitSecurity",
+        "publisherDisplayName": "Transmit Security",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TransmitSecurity/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. <a href=\"https://developer.transmitsecurity.com/\">Refer to API documentation for more information</a>. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://github.com/Azure/Azure-Sentinel/raw/refs/heads/master/Logos/Transmit_Security_Logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TransmitSecurity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Transmit Security"
+        },
+        "support": {
+          "name": "Transmit Security",
+          "tier": "Partner",
+          "link": "https://transmitsecurity.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-06-10",
+        "lastPublishDate": "2024-11-20",
+        "providers": [
+          "TransmitSecurity"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

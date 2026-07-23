@@ -15,6 +15,7 @@ ACCOUNT_CODE = os.environ.get("FncAccountCode")
 API_TOKEN = os.environ.get("ApiToken")
 BUCKET_NAME = os.environ.get("FncBucketName") or DEFAULT_BUCKET_NAME
 LOGGER_LEVEL = os.environ.get("LogLevel") or "INFO"
+POSTING_LIMIT = int(os.environ.get("PostingLimit", "3000"))
 
 
 def main(args: dict) -> str:
@@ -74,7 +75,7 @@ def validate_args(args: dict):
 
 
 def post_events_inc(events, event_type):
-    limit = 5000
+    limit = POSTING_LIMIT
     count = len(events)
     start = 0
     while start < count:

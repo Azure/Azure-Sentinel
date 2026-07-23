@@ -1,5 +1,5 @@
-import { WorkbookTemplatesValidationError } from "../../validationError";
-import { WorkbookTemplate } from "../../workbookTemplate";
+import { WorkbookTemplatesValidationError } from "../../validationError.js";
+import { WorkbookTemplate } from "../../workbookTemplate.js";
 
 // This function checks if the value of the "fromTemplateId" key is not "sentinel-UserWorkbook" (which is the default given value).
 export function isFromTemplateIdNotSentinelUserWorkbook(workbookTemplate: WorkbookTemplate) {

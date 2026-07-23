@@ -20,7 +20,7 @@ This playbook is utilizing new update trigger to notify person/group on Microsof
 - Trigger = When incident is updated;  
 - Condition = Staus > Changed To > Closed;.<br>
 **Automation rule example**<br>
-![Automation Rule Example](./images/AutomationRuleExample.jpg)
+![Automation Rule Example](./images/AutomationRuleExampleLight.jpg)
 4. If you want to receive notifications only on Microsoft Teams or only on Microsoft Office 365 Outlook, please remove unneeded connection. To remove, click on 3 dots on top right side of connector, and choose "Delete".<br><br>
 **Delete connection example**<br>
 ![Delete Connection Example](./images/DeleteConnectionExample.jpg)
@@ -32,7 +32,7 @@ This playbook is utilizing new update trigger to notify person/group on Microsof
 ![playbook screenshot](./images/playbookLight.png)<br><br>
 
 **Teams** <br>
-![teams notification](./images/TeamsNotification.jpg)<br><br>
+![teams notification](./images/TeamsNotificationDark.jpg)<br><br>
 
 **Outlook** <br>
-![outlook notification](./images/OutlookNotification.jpg)<br><br>
+![outlook notification](./images/OutlookNotificationDark.png)<br><br>

@@ -1,4 +1,14 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.1       | 03-05-2024                     | Repackaged for parser issue fix   |
-| 3.0.0       | 28-07-2023                     | Bug fixes in API version.                                  | 
+| 3.1.0       | 01-07-2026                     | Added new **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** (ingests alerts via the GraphQL API) |
+| 3.0.10      | 03-06-2026                     | Updated CCP **Data Connector** to support multiple instances (multi-connection) for MSSP scenarios |
+| 3.0.9       | 14-04-2026                     | Deprecate SentinelOne (using Azure Function) |
+| 3.0.8       | 24-03-2026                     | Rename CCF solution to SentinelOne (via Codeless Connector Framework) |
+| 3.0.7       | 09-01-2026                     | Updated broken URL and bumped the SentinelOne solution version |
+| 3.0.6       | 10-02-2025                     | Advancing CCP **Data Connector** from Public preview to Global Availability.|
+| 3.0.5       | 20-01-2025                     | Updated "Sentinel One - Agent uninstalled from multiple hosts" **Analytic Rule** with  ActivityType  |
+| 3.0.4       | 15-01-2025                     | Added older Function app **Data Connector** again to SOlution until final deprecation of Function app happens  |
+| 3.0.3       | 12-12-2024                     | Added new CCP **Data Connector** and Updated **Parser**  |
+| 3.0.2       | 11-09-2024                     | Updated the python runtime version to 3.11 in **Data Connector** Function App  |
+| 3.0.1       | 03-05-2024                     | Repackaged for **Parser** issue fix             |
+| 3.0.0       | 28-07-2023                     | Bug fixes in API version.                   | 

@@ -1,29 +1,30 @@
-id: 1280e2d5-9d9a-4455-8aec-3e340a3ffeb2
+﻿id: 1280e2d5-9d9a-4455-8aec-3e340a3ffeb2
 Function:
   Title: Parser for BitSightCompanyRatings
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2026-05-25'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightCompanyRatings
 FunctionAlias: BitSightCompanyRatings
 FunctionQuery: |
-    let CompanyRatings_view  = view () {
-        BitsightCompany_rating_details_CL
-        | extend
-                    EventVendor ="BitSight",
-                    EventProduct ="CompanyRating",
-                    CompanyName = column_ifexists('Company_name_s', ''),
-                    Beta = column_ifexists('beta_b', ''),
-                    Category = column_ifexists('Category', ''),
-                    CategoryOrder = column_ifexists('category_order_d', ''),
-                    DisplayURL = column_ifexists('display_url_s', ''),
-                    Grade = column_ifexists('grade_s', ''),
-                    GradeColor = column_ifexists('grade_color_s', ''),
-                    Name = column_ifexists('name_s', ''),
-                    Order = column_ifexists('order_d', ''),
-                    Percentile = column_ifexists('percentile_d', ''),
-                    Rating = column_ifexists('rating_d', '')
-        | project
+    union isfuzzy=true
+        (
+            BitsightCompany_rating_details_CL
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "CompanyRating",
+                    CompanyName = column_ifexists('Company_name', ''),
+                    Beta = column_ifexists('beta', ''),
+                    Category = column_ifexists('category', ''),
+                    CategoryOrder = column_ifexists('category_order', ''),
+                    DisplayURL = column_ifexists('display_url', ''),
+                    Grade = column_ifexists('grade', ''),
+                    GradeColor = column_ifexists('grade_color', ''),
+                    Name = column_ifexists('name', ''),
+                    Order = column_ifexists('order', ''),
+                    Percentile = column_ifexists('percentile', ''),
+                    Rating = column_ifexists('rating', '')
+            | project
                     TimeGenerated,
                     EventVendor,
                     EventProduct,
@@ -37,7 +38,30 @@ FunctionQuery: |
                     Name,
                     Order,
                     Percentile,
+                    Rating
+        ),
+        (
+            BitSightCompanyRatingDetails_CL
+            | summarize arg_max(TimeGenerated, *) by CompanyGuid, RiskVectorLabel
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "CompanyRating"
+            | project
+                    TimeGenerated,
+                    EventVendor,
+                    EventProduct,
+                    CompanyName,
+                    CompanyGuid,
+                    RiskVectorSlug,
+                    RiskVectorLabel,
+                    RiskCategory,
+                    CategoryOrder,
                     Rating,
-                    Type
-    };
-    CompanyRatings_view
+                    Grade,
+                    Percentile,
+                    GradeColor,
+                    RiskVectorOrder,
+                    DisplayUrl,
+                    Beta,
+                    ConnectorName
+        )

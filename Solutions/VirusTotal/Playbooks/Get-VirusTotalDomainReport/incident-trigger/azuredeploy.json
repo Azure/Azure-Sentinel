@@ -2,11 +2,16 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "URL Enrichment - Virus Total domain report  - Incident Triggered",
+        "title": "URL Enrichment - Virus Total Domain Report - Incident Triggered",
         "description": "This playbook will take each URL entity and query VirusTotal for Domain Report (https://developers.virustotal.com/v3.0/reference#domain-info). It will write the results to Log Analytics and add a comment to the incident.",
-        "prerequisites": [ "Register to Virus Total community for an API key." ],
-        "postDeployment": [ "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created." ],
-        "lastUpdateTime": "2022-07-20T00:00:00.000Z",
+        "prerequisites": [ "VirusTotal API key, Register to VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)" ],
+        "postDeployment": [
+            "1. Authorize/Configure all the connections.",
+            "2. Assign Microsoft Sentinel Responder Role to playbook.",
+            "3. After deployment, attach this playbook to an **automation rule** and map URL entity so it runs when the incident is created.",
+            "[click here for detail instructions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirusTotal/Playbooks/Get-VirusTotalDomainReport/readme.md)"
+        ],
+        "lastUpdateTime": "2025-05-28T00:00:00.000Z",
         "entities": [ "URL" ],
         "tags": [ "Enrichment" ],
         "support": {
@@ -14,16 +19,7 @@
         },
         "author": {
             "name": "Nicholas DiCola"
-        },
-        "releaseNotes": [
-            {
-                "version": "1.0.0",
-                "title": "URL Enrichment - Virus Total domain report",
-                "notes": [
-                    "Initial version"
-                ]
-            }
-        ]
+        }
     },
     "parameters": {
         "PlaybookName": {
@@ -32,9 +28,9 @@
         }
     },
     "variables": {
-        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "VirusTotalConnectionName": "[concat('virustotal-',parameters('PlaybookName'))]"
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('AzureLogAnalyticsDataCollector-', parameters('PlaybookName'))]",
+        "AzureSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "VirusTotalConnectionName": "[concat('VirusTotal-',parameters('PlaybookName'))]"
     },
     "resources": [
         {
@@ -44,7 +40,6 @@
             "location": "[resourceGroup().location]",
             "properties": {
                 "displayName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
-                "customParameterValues": {},
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                 }
@@ -69,7 +64,6 @@
             "kind": "V1",
             "properties": {
                 "displayName": "[parameters('PlaybookName')]",
-                "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
@@ -121,7 +115,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely harmless<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                                    "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely harmless domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                 },
                                                 "host": {
                                                     "connection": {
@@ -163,7 +157,7 @@
                                                 "inputs": {
                                                     "body": {
                                                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']}which indicates likely malicous<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
+                                                        "message": "<p>Virus Total File Report found for @{items('For_each')?['Url']}<br>\nReputation is: @{body('Get_Domain_report')?['data']?['attributes']?['reputation']} which indicates likely malicious domain.<br>\nQuery: VTURLReport_CL | where id_s == \"@{items('For_each')?['Url']}\"</p>"
                                                     },
                                                     "host": {
                                                         "connection": {
@@ -225,7 +219,7 @@
                                             }
                                         },
                                         "method": "get",
-                                        "path": "/api/v3/domains/@{encodeURIComponent(split(items('For_each')?['Url'], '/')[2])}"
+                                        "path": "/api/v3/domains/@{encodeURIComponent(if(greater(length(split(items('For_each')?['Url'], '/')), 2), split(items('For_each')?['Url'], '/')[2], items('For_each')?['Url']))}"
                                     },
                                     "runAfter": {},
                                     "type": "ApiConnection"
@@ -270,7 +264,7 @@
                         "value": {
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
                             },
                             "azuresentinel": {

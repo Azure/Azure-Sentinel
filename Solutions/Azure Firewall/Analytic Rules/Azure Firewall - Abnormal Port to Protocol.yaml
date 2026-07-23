@@ -17,20 +17,23 @@ requiredDataConnectors:
 queryFrequency: 1h
 queryPeriod: 8d
 triggerOperator: gt
-triggerThreshold: 1
+triggerThreshold: 0
 tactics:
-  - DefenseEvasion
   - Exfiltration
   - CommandAndControl
-relevantTechniques: []
+  - DefenseEvasion
+relevantTechniques:
+  - T1041
+  - T1571
+  - T1572
 query: |
   let LearningPeriod = 7d;
-  let RunTime = 1d;
+  let RunTime = 1h;
   let StartLearningPeriod = LearningPeriod + RunTime;
-  let EndRunTime = RunTime - 1d;
+  let DetectionWindowStart = ago(RunTime);
   let LearningPortToProtocol1 =  (AzureDiagnostics
-  | where OperationName == "AzureFirewallApplicationRuleLog"
   | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | where OperationName == "AzureFirewallApplicationRuleLog"
   | extend msg_s= column_ifexists('msg_s',Message)
   | parse msg_s with Protocol " request from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int "." *
   | where isnotempty(DestinationPort)
@@ -45,19 +48,19 @@ query: |
   | where isnotempty(DestinationPort)
   | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
   let AlertTimePortToProtocol1 = (AzureDiagnostics
-  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where OperationName == "AzureFirewallApplicationRuleLog"
   | extend msg_s= column_ifexists('msg_s',Message)
   | parse msg_s with Protocol " request from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int "." *
   | where isnotempty(DestinationPort)
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   let AlertTimePortToProtocol2 = (AZFWNetworkRule
-  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where isnotempty(DestinationPort)
   | extend Fqdn = DestinationIp
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   let AlertTimePortToProtocol3 = (AZFWApplicationRule
-  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where TimeGenerated between (DetectionWindowStart .. now())
   | where isnotempty(DestinationPort)
   | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
   (union isfuzzy=true 
@@ -79,5 +82,11 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Fqdn
-version: 1.1.1
+customDetails:
+  AbnormalPort: AlertTimeDstPort
+  NetworkProtocol: AlertTimeProtocol
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Abnormal Port to Protocol Communication Detected from {{SourceIp}} to {{Fqdn}}'
+  alertDescriptionFormat: 'Communication was observed over port {{AlertTimeDstPort}} using protocol {{AlertTimeProtocol}}, which is different from the protocol observed during the learning period. This could indicate potential malicious activity such as C2 communication or data exfiltration.'
+version: 1.1.4
 kind: Scheduled

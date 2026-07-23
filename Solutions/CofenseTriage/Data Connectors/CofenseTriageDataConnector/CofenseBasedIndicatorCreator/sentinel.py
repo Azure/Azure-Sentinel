@@ -1,4 +1,5 @@
 """This file contains methods for creating microsoft indicator and custom log table."""
+
 import base64
 import time
 import requests
@@ -33,7 +34,7 @@ class MicrosoftSentinel:
         """Initialize instance variable for class."""
         self.bearer_token = auth_sentinel(COFENSE_TO_SENTINEL)
 
-    def create_indicator(self, indicator_data):
+    def create_indicator(self, indicator_data, indicator_id):
         """To create indicator into Microsoft Sentinel."""
         __method_name = inspect.currentframe().f_code.co_name
         try:
@@ -69,6 +70,17 @@ class MicrosoftSentinel:
                         )
                     )
                     return response_json
+                elif response.status_code == 400:
+                    applogger.warning(
+                        "{}(method={}) : {} :  error 400 for indicatorId : {}.".format(
+                            LOGS_STARTS_WITH,
+                            __method_name,
+                            COFENSE_TO_SENTINEL,
+                            indicator_id,
+                        )
+                    )
+                    return None
+
                 elif response.status_code == 429:
                     applogger.error(
                         "{}(method={}) : {} : trying again error 429.".format(
@@ -88,8 +100,8 @@ class MicrosoftSentinel:
                     retry_count_401 += 1
                 else:
                     applogger.error(
-                        "{}(method={}) : {} : url: {}, Status Code : {}: Error while creating microsoft"
-                        " sentinel access_token. Error Reason: {}".format(
+                        "{}(method={}) : {} : url: {}, Status Code : {}: Error while creating indicator, "
+                        "Error Reason: {}".format(
                             LOGS_STARTS_WITH,
                             __method_name,
                             COFENSE_TO_SENTINEL,
@@ -105,9 +117,11 @@ class MicrosoftSentinel:
                 )
             )
             raise CofenseException()
-        except CofenseException as error:
+        except CofenseException:
+            raise CofenseException()
+        except Exception as error:
             applogger.error(
-                "{}(method={}) : {} : Error generated while getting sentinel access token :{}".format(
+                "{}(method={}) : {} : Error generated while creating indicator : {}".format(
                     LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, error
                 )
             )
@@ -123,17 +137,7 @@ class MicrosoftSentinel:
     ):
         """To build signature which is required in header."""
         x_headers = "x-ms-date:" + date
-        string_to_hash = (
-            method
-            + "\n"
-            + str(content_length)
-            + "\n"
-            + content_type
-            + "\n"
-            + x_headers
-            + "\n"
-            + resource
-        )
+        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(WORKSPACE_KEY)
         encoded_hash = base64.b64encode(
@@ -173,16 +177,8 @@ class MicrosoftSentinel:
                     LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, err
                 )
             )
-            raise CofenseException(
-                "Error while generating signature for posting data into log analytics."
-            )
-        uri = (
-            "https://"
-            + WORKSPACE_ID
-            + ".ods.opinsights.azure.com"
-            + resource
-            + "?api-version=2016-04-01"
-        )
+            raise CofenseException("Error while generating signature for posting data into log analytics.")
+        uri = "https://" + WORKSPACE_ID + ".ods.opinsights.azure.com" + resource + "?api-version=2016-04-01"
 
         headers = {
             "content-type": content_type,
@@ -194,7 +190,8 @@ class MicrosoftSentinel:
             response = requests.post(uri, data=body, headers=headers)
             if response.status_code >= 200 and response.status_code <= 299:
                 applogger.debug(
-                    "{}(method={}) : {} : Status_code: {} Accepted: Data Posted Successfully to microsoft sentinel.".format(
+                    "{}(method={}) : {} : Status_code: {} Accepted: Data Posted\
+                          Successfully to microsoft sentinel.".format(
                         LOGS_STARTS_WITH,
                         __method_name,
                         COFENSE_TO_SENTINEL,
@@ -210,17 +207,11 @@ class MicrosoftSentinel:
                 )
         except CofenseException as error:
             applogger.error(
-                "{}(method={}) : {} : Error:{}".format(
-                    LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, error
-                )
+                "{}(method={}) : {} : Error:{}".format(LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, error)
             )
-            raise CofenseException(
-                "CofenseException: Error while posting data to sentinel."
-            )
+            raise CofenseException("CofenseException: Error while posting data to sentinel.")
         except Exception as error:
             applogger.error(
-                "{}(method={}) : {} : Error:{}".format(
-                    LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, error
-                )
+                "{}(method={}) : {} : Error:{}".format(LOGS_STARTS_WITH, __method_name, COFENSE_TO_SENTINEL, error)
             )
             raise CofenseException("Exception: Error while posting data to sentinel.")

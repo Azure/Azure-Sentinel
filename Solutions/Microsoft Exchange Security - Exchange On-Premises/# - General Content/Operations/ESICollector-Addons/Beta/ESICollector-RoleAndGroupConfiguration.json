@@ -1,0 +1,122 @@
+{
+    "SolutionMetadata":
+	{
+		"JSonVersion":"1.2",
+		"JsonUpdateDate":"27/02/2023",
+		"Description":"All Audit Functions around Role and Groups content and configuration",
+		"VersionInformation":{
+			"1.2":{
+				"Tracking":["Adding Exchange Enterprise Servers and Exchange Services on ADGroup"],
+				"MigrationMessageFromLastVersion":"Change list of groups that ADGroup retrieve"
+			},
+			"1.1":{
+				"Tracking":["We remove Role information in RoleGroup section to optimize data payload. We add a new section RoleGroupMember"],
+				"MigrationMessageFromLastVersion":"Change 'RoleGroup' section with new version. Add 'RoleGroupMember' section"
+			},
+			"1.0":{
+				"Tracking":["First version of the file"],
+				"MigrationMessageFromLastVersion":"N/A"
+			}
+		}
+	},
+	"AuditFunctionProtectedArea":
+	{
+		"ContentCheckSum":"1E5B0829DB06EC79E49127FA0FA7E42725FE2504F42D0A14620F9B3555E7F179"
+	},
+    "AuditFunctions":[
+        {
+			"Section":"RoleGroup",
+			"Cmdlet":"Get-RoleGroup",
+			"PropertySelection":["Name","LinkedGroup","RoleGroupType","SamAccountName","Members","ManagedBy","WhenCreated","WhenChanged"],
+			"ProcessPerServer":"false",
+			"ProcessingCategory":"All"
+		},
+		{
+			"Section":"RoleGroupMember",
+			"Cmdlet":"$RGMembers = @();$AllRG=Get-RoleGroup; foreach ($RG in $AllRG) {$RGMembers+=Get-RoleGroupMember $RG.identity| select @{Name=\"RoleGroup\";Expression={\"$RG\"}},Identity,DisplayName,RecipientType,WhenCreated,WhenChanged}; $RGMembers",
+			"PropertySelection":["RoleGroup","Identity","DisplayName","RecipientType","WhenCreated","WhenChanged"],
+			"ProcessPerServer":"false",
+			"ProcessingCategory":"All"
+		},
+		{
+			"Section":"ETS",
+			"Cmdlet":"Get-ESIADGroupMember -Identity \"Exchange Trusted Subsystem\" -Server #ForestName#",
+			"PropertySelection":["Name","objectClass","SamAccountName","distinguishedName"],
+			"ProcessPerServer":"false",
+			"ProcessingCategory":"On-Premises",
+			"NoRunspace":"true"
+		},
+		{
+			"Section":"EWP",
+			"Cmdlet":"Get-ESIADGroupMember -Identity \"Exchange Windows Permissions\" -Server #ForestName#",
+			"PropertySelection":["Name","objectClass","SamAccountName","distinguishedName"],
+			"ProcessPerServer":"false",
+			"ProcessingCategory":"On-Premises",
+			"NoRunspace":"true"
+		},
+		{
+			"Section":"ExGroup",
+			"Cmdlet":"get-adgroup  -filter * -searchbase \"ou=Microsoft Exchange Security Groups,#ForestDN#\" -server #ForestName#",
+			"PropertySelection":["*"],
+			"CustomExpressionForSelection":[
+				{"Name":"LastLogonString","Expression":"$_.LastLogon.ToString()"},
+				{"Name":"LastPwdSetString","Expression":"$_.LastPwdSet.ToString()"}
+			],
+			"ProcessPerServer":"false",
+			"TransformationFunction":"GetInfo",
+			"TransformationForeach":"True",
+			"ProcessingCategory":"On-Premises"
+		},
+		{
+			"Section":"ADGroup",
+			"Cmdlet":"@( \"S-1-5-32-544\", \"S-1-5-32-548\",\"#SIDRoot#-512\",\"#SIDRoot#-518\",\"#SIDRoot#-519\", \"Exchange Enterprise Servers\",\"Exchange Services\") | %{ Get-ADgroup -identity $_ -server #GCServer# }",
+			"PropertySelection":["*"],
+			"CustomExpressionForSelection":[
+				{"Name":"LastLogonString","Expression":"$_.LastLogon.ToString()"},
+				{"Name":"LastPwdSetString","Expression":"$_.LastPwdSet.ToString()"}
+			],
+			"ProcessPerServer":"false",
+			"TransformationFunction":"GetInfo",
+			"TransformationForeach":"True",
+			"ProcessingCategory":"On-Premises"
+		},
+		{
+			"Section":"DirectRoleAssignments",
+			"Cmdlet":"Get-ManagementRoleAssignment | where {$_.RoleAssigneeType -in (\"SecurityGroup\",\"User\")} | select *, @{Name=\"ObjectClass\";Expression={\"ManagementRoleAssignment\"}} -ExcludeProperty ObjectClass",
+			"PropertySelection":["*"],
+			"CustomExpressionForSelection":[
+				{"Name":"LastLogonString","Expression":"$_.LastLogon.ToString()"},
+				{"Name":"LastPwdSetString","Expression":"$_.LastPwdSet.ToString()"}
+			],
+			"ProcessPerServer":"false",
+			"TransformationFunction":"GetInfo",
+			"TransformationForeach":"True",
+			"ProcessingCategory":"On-Premises"
+		},
+		{
+			"Section":"DirectRoleAssignments",
+			"Cmdlet":"Get-ManagementRoleAssignment | where {$_.RoleAssigneeType -in (\"SecurityGroup\",\"User\")} | select *, @{Name=\"ObjectClass\";Expression={\"ManagementRoleAssignment\"}} -ExcludeProperty ObjectClass",
+			"PropertySelection":["*"],
+			"CustomExpressionForSelection":[
+				{"Name":"LastLogonString","Expression":"$_.LastLogon.ToString()"},
+				{"Name":"LastPwdSetString","Expression":"$_.LastPwdSet.ToString()"}
+			],
+			"ProcessPerServer":"false",
+			"TransformationFunction":"GetO365Info",
+			"TransformationForeach":"True",
+			"ProcessingCategory":"Online"
+		},
+		{
+			"Section":"LocalAminGroup",
+			"Cmdlet":"$res = Get-WmiObject -Class Win32_GroupUser -Filter \"GroupComponent=\"\"Win32_Group.Domain='#TargetServer#',Name='Administrators'\"\"\" -ComputerName #TargetServer# |% {if ($_.PartComponent -match 'cimv2:(.+).Domain=\"(.+)\",Name=\"(.+)\"'){$members=@();$members+=$Matches[1]+\";\"+$Matches[2]+\"\\\"+$Matches[3];$members}};@{\"List\"=$res;\"srv\"=\"#TargetServer#\"}",
+			"PropertySelection":["*"],
+			"CustomExpressionForSelection":[
+				{"Name":"LastLogonString","Expression":"$_.LastLogon.ToString()"},
+				{"Name":"LastPwdSetString","Expression":"$_.LastPwdSet.ToString()"}
+			],
+			"ProcessPerServer":"True",
+			"TransformationFunction":"GetWMILocalAdmins",
+			"ProcessingCategory":"On-Premises"
+		}
+    ]
+}

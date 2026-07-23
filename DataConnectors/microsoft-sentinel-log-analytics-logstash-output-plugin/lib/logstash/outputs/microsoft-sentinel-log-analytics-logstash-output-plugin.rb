@@ -16,6 +16,9 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # If managed Identity is used, the plugin will use the managed identity to authenticate with Microsoft Entra ID
   config :managed_identity, :validate => :boolean, :default => false
 
+  # Object ID of the user-assigned managed identity (optional, used when multiple user-assigned identities are present)
+  config :managed_identity_object_id, :validate => :string
+
   # Your registered app ID
   config :client_app_Id, :validate => :string
 
@@ -62,6 +65,9 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # This will set the amount of time given for retransmitting messages once sending is failed
   config :retransmission_time, :validate => :number, :default => 10
 
+  # Delay in seconds between each retry attempt when sending fails
+  config :retransmission_delay, :validate => :number, :default => 2
+
   # Compress the message body before sending to LA
   config :compress_data, :validate => :boolean, :default => false
 
@@ -102,7 +108,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Building the logstash object configuration from the output configuration provided by the user
   # Return LogstashLoganalyticsOutputConfiguration populated with the configuration values
   def build_logstash_configuration()
-    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger, @managed_identity)
+    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger, @managed_identity, @managed_identity_object_id)
     logstash_configuration.key_names = @key_names
     logstash_configuration.plugin_flush_interval = @plugin_flush_interval
     logstash_configuration.decrease_factor = @decrease_factor
@@ -111,6 +117,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     logstash_configuration.proxy_aad = @proxy_aad || @proxy || ENV['http_proxy']
     logstash_configuration.proxy_endpoint = @proxy_endpoint || @proxy || ENV['http_proxy']
     logstash_configuration.retransmission_time = @retransmission_time
+    logstash_configuration.retransmission_delay = @retransmission_delay
     logstash_configuration.azure_cloud = @azure_cloud || "AzureCloud"
 
     return logstash_configuration

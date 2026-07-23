@@ -1,0 +1,59 @@
+id: c7e6e48a-0514-4989-bc90-4a3c9207ede1
+name: Dataverse - Identity management activity outside of privileged directory role
+  membership
+description: This query detects identity administration events in Dataverse/Dynamics
+  365 made by accounts which are not members of privileged directory roles 'Dynamics
+  365 Admins', 'Power Platform Admins' or 'Global Admins
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: IdentityInfo
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+  - T1078.004
+query: |
+  let admin_role_names = dynamic(['Dynamics 365 Administrator', 'Power Platform Administrator', 'Global Administrator']);
+  let event_types = dynamic(['Associate', 'Disassociate', 'Create', 'Delete', 'Upsert', 'Update']);
+  let excluded_accounts = dynamic(['cdsusermanagement@onmicrosoft.com', 'unknown', 'powervirtualagentsprod@onmicrosoft.com']);
+  IdentityInfo
+  | where TimeGenerated > ago(14d)
+  | where array_length(AssignedRoles) > 0
+  | mv-expand AssignedRoles
+  | where AssignedRoles in (admin_role_names)
+  | summarize by UserId = tolower(AccountUPN)
+  | join kind=rightanti (DataverseActivity
+      | where EntityName =~ 'systemuser' and Message in (event_types)
+      | project TimeGenerated, UserId = tolower(UserId), ClientIp, InstanceUrl, OriginalObjectId
+      | where UserId !in (excluded_accounts))
+      on UserId
+  | extend CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      OriginalObjectId,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - columnName: InstanceUrl
+        identifier: InstanceName
+      - columnName: CloudAppId
+        identifier: AppId
+  - entityType: Account
+    fieldMappings:
+      - columnName: UPNSuffix
+        identifier: UPNSuffix
+      - columnName: AccountName
+        identifier: Name
+version: 3.2.0

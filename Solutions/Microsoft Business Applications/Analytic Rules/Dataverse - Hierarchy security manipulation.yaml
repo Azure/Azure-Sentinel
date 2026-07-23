@@ -1,0 +1,99 @@
+id: 2df0adf5-92a8-4ee0-a123-3eb5be1eed02
+kind: Scheduled
+name: Dataverse - Hierarchy security manipulation
+description: |
+  Identifies suspicious behaviors in hierarchy security including:
+  - Hierarchy security disabled.
+  - User assigns themselves as a manager.
+  - User assigns themselves to a monitored position.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548
+  - T1078
+query: |
+  let monitored_position_ids = dynamic([
+      // Enter a list of monitored position ID (guids)
+      //"79380ac5-da2a-ed11-9db1-000d3a58d546"
+      ]);
+  let query_frequency = 1h;
+  let security_disabled_events = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Update" and EntityName == "organization"
+      | mv-expand Fields
+      | where Fields.Name == "ishierarchicalsecuritymodelenabled"
+      | where Fields.Value == "False"
+      | extend Message = "Hierarchy security has been disabled"
+      | project TimeGenerated, UserId, ClientIp, InstanceUrl, Message;
+  let assign_self_as_manager_events = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Update" and EntityName == "systemuser"
+      | mv-expand Fields
+      | where Fields.Name == "parentsystemuserid"
+      | extend ModifiedManager = tostring(Fields.Value)
+      | where SystemUserId == ModifiedManager
+      | extend Message = "User added self as manager of another user";
+  let assign_self_to_position_events = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Update" and EntityName == "systemuser"
+      | mv-expand Position = Fields
+      | where Position.Name == "positionid" and tostring(Position.Value) in (monitored_position_ids)
+      | mv-expand Target = Fields
+      | where Target.Name == "systemuserid"
+      | extend UserAssigned = tostring(Target.Value)
+      | where SystemUserId == UserAssigned
+      | extend
+          Message = "User assigned self to a monitored position",
+          PositionId = tostring(Position.Value);
+  union
+      security_disabled_events,
+      assign_self_as_manager_events,
+      assign_self_to_position_events
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      Message,
+      PositionId,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Suspicious hierarchy security modifications
+    in {{InstanceUrl}} '
+  alertDescriptionFormat: '{{Message}}. Events detected for user {{UserId}}.'
+version: 3.2.0

@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import os
 import sys
@@ -9,7 +8,7 @@ from collections import namedtuple
 import azure.functions as func
 import msal
 import requests
-from greynoise import GreyNoise
+from greynoise.api import APIConfig, GreyNoise
 from requests.adapters import HTTPAdapter
 from requests_ratelimiter import LimiterSession
 from urllib3.util import Retry
@@ -27,12 +26,12 @@ REQUIRED_ENVIRONMENT_VARIABLES = [
 
 GreyNoiseSetup = namedtuple("GreyNoiseSetup", ["api_key", "query", "tries", "size"])
 MSALSetup = namedtuple("MSALSetup", ["tenant_id", "client_id", "client_secret", "workspace_id"])
-class GreuNoiseSentinelUpdater(object):
+class GreyNoiseSentinelUpdater(object):
     """Simple wrapper class to handle consuming IPs"""
 
     def __init__(self, greynoise_setup: GreyNoiseSetup,
                  msal_setup: MSALSetup):
-        super(GreuNoiseSentinelUpdater, self).__init__()
+        super(GreyNoiseSentinelUpdater, self).__init__()
 
         self.greynoise_query = greynoise_setup.query
         self.greynoise_size = greynoise_setup.size
@@ -57,8 +56,10 @@ class GreuNoiseSentinelUpdater(object):
 
         # Setup GreyNoise Session
         self.session = GreyNoise(
-            api_key=greynoise_setup.api_key,
-            integration_name="azuresentinel-consumer-v1.0",
+            APIConfig(
+                api_key=greynoise_setup.api_key,
+                integration_name="azuresentinel-consumer-v1.0",
+            )
         )
         self.gn_stix_generator = GreyNoiseStixGenerator()
 
@@ -73,6 +74,8 @@ class GreuNoiseSentinelUpdater(object):
             A token access key.
         """
         logging.info("Getting token for tenant: {0}".format(self.msal_tenant_id))
+        logging.info("Using client_id: {0}".format(self.msal_client_id))
+        logging.info("Using workspace_id: {0}".format(self.msal_workspace_id))
         try:
             context = msal.ConfidentialClientApplication(self.msal_client_id,
                                                         authority='https://login.microsofto'
@@ -129,17 +132,17 @@ class GreuNoiseSentinelUpdater(object):
             Returns:
                 A response object."""
         status_retry = 0
-        url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
+        url = "https://api.ti.sentinel.azure.com/workspaces/{0}/threat-intelligence-stix-objects:upload".format(self.msal_workspace_id)
         headers = {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer {0}'.format(token)
         }
         params = {
-            'api-version': '2022-07-01'
+            'api-version': '2024-02-01-preview'
         }
         payload = {
-            'SourceSystem': 'GreyNoise',
-            'Value': indicators
+            'sourcesystem': 'GreyNoise',
+            'stixobjects': indicators
         }
 
         try:
@@ -152,34 +155,38 @@ class GreuNoiseSentinelUpdater(object):
             response.raise_for_status()
         except requests.HTTPError as e:
             status_retry += 1
-            if e.response.status_code == (429 or 503):
-                logging.error("HTTP: " + int(e.response.status_code))
+            if e.response.status_code in (429, 503):
+                logging.error("HTTP: " + str(e.response.status_code))
                 if status_retry > 3:
                     logging.error("Too many upload indicators API retries, exiting.")
                     sys.exit(1)
-                sleep_for = int(e.response.message.split()[7]) + 5 if e.response.message else 60
+                retry_after = e.response.headers.get('Retry-After')
+                sleep_for = int(retry_after) + 5 if retry_after else 60
                 logging.info("API Rate limit exceeded (HTTP 429) or Server Error (HTTP 503), waiting {0} seconds...".format(sleep_for))
                 time.sleep(sleep_for)
                 logging.info("Retrying upload...")
                 self.upload_indicators_to_sentinel(token, indicators)
             elif e.response.status_code == 401:
-                logging.error("HTTP: " + int(e.response.status_code))
+                logging.error("HTTP: " + str(e.response.status_code))
                 logging.error('Did you add the Azure Sentinel Contributor role to your service principal?')
                 logging.error('More info here: https://learn.microsoft.com/en-us/azure/sentinel/upload-indicators-api#acquire-an-access-token')
                 logging.error(e.response.text)
             elif e.response.status_code:
-                logging.error("HTTP: " + int(e.response.status_code))
+                logging.error("HTTP: " + str(e.response.status_code))
                 logging.error(e.response.text)
             logging.error('Cannot upload indicators to Azure Sentinel, exiting.')
             sys.exit(1)
         
-        # Check for submission errors
-        if response.json().get('errors') != []:
-                logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
-                                'the rest of the indicator failed and we can continue.')
-                logging.warning('Error: ' + json.loads(response.json()).get('error'))
- 
-        return response.json()
+        try:
+            # Check for submission errors
+            if response.json().get('errors') != []:
+                    logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
+                                    'the rest of the indicator succeeded and we can continue.')
+                    logging.warning('Error: ' + str(response.json().get('errors')))
+    
+            return response.json()
+        except requests.exceptions.JSONDecodeError:
+            return []
     
     def chunks(self, l: list, chunk_size: int):
         """Yield successive n-sized chunks from list."""
@@ -228,13 +235,13 @@ class GreuNoiseSentinelUpdater(object):
 
                 # this protects from bad / invalid queries
                 # and exits out before proceeding
-                if payload["count"] == 0:
+                if payload["request_metadata"]["count"] == 0:
                     logging.info("GreyNoise Query return no results, exiting")
                     sys.exit(1)
 
                 # Capture the total number of indicators available
-                elif payload["count"] and payload_size is None:
-                    payload_size = int(payload["count"])
+                elif payload["request_metadata"]["count"] and payload_size is None:
+                    payload_size = int(payload["request_metadata"]["count"])
                     logging.info("Total Indicators found: %s results" % payload_size)
 
                 # Loop to generate STIX objects and upload to Sentinel
@@ -257,8 +264,8 @@ class GreuNoiseSentinelUpdater(object):
 
                 # the scroll is for pagination but does not always exist because
                 # we have consumed all the IPs
-                scroll = payload.get("scroll")
-                complete = payload["complete"]
+                scroll = payload["request_metadata"].get("scroll")
+                complete = payload["request_metadata"]["complete"]
 
                 addresses = len(payload["data"])
                 total_addresses += addresses
@@ -279,7 +286,7 @@ class GreuNoiseSentinelUpdater(object):
                     break
                 elif (
                     self.greynoise_size != 0
-                    and self.greynoise_size < int(payload["count"])  # noqa: W503
+                    and self.greynoise_size < int(payload["request_metadata"]["count"])  # noqa: W503
                     and self.greynoise_size <= total_addresses # noqa: W503
                 ):
                     break
@@ -403,7 +410,8 @@ def main(mytimer: func.TimerRequest) -> None:
         env.get("TENANT_ID"), env.get("CLIENT_ID"), env.get("CLIENT_SECRET"), env.get("WORKSPACE_ID")
     )
 
-    g = GreuNoiseSentinelUpdater(greynoise_setup, msal_setup)
+    g = GreyNoiseSentinelUpdater(greynoise_setup, msal_setup)
     g.consume_ips()
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    

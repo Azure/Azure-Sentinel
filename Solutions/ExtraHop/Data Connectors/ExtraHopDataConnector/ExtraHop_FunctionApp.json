@@ -1,0 +1,128 @@
+{
+    "id": "ExtraHop",
+    "title": "ExtraHop Detections Data Connector",
+    "publisher": "ExtraHop",
+    "descriptionMarkdown": "The [ExtraHop](https://extrahop.com/) Detections Data Connector enables you to import detection data from ExtraHop RevealX to Microsoft Sentinel through webhook payloads. Data is ingested using the Azure Monitor Log Ingestion API via a Data Collection Rule (DCR).",
+    "graphQueries": [
+        {
+            "metricName": "Total detections data received",
+            "legend": "ExtraHop_Detections_CL",
+            "baseQuery": "ExtraHop_Detections_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "ExtraHop detections data for all detection types",
+            "query": "ExtraHop_Detections_CL\n | sort by TimeGenerated desc"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "ExtraHop_Detections_CL",
+            "lastDataReceivedQuery": "ExtraHop_Detections_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "ExtraHop_Detections_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": true
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Azure Subscription",
+                "description": "Azure Subscription with owner role is required to register an application in Microsoft Entra ID, create a Data Collection Endpoint, Data Collection Rule, and assign the required roles."
+            },
+            {
+                "name": "Microsoft Entra App Registration",
+                "description": "A Microsoft Entra ID App Registration (Service Principal) with a Client Secret is required. The app's Object ID must be provided so the deployment can assign it the necessary role to publish logs via the Log Ingestion API."
+            },
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "ExtraHop RevealX permissions",
+                "description": "The following is required on your ExtraHop RevealX system:\n 1. Your RevealX system must be running firmware version 9.9.2 or later.\n 2. Your RevealX system must be connected to ExtraHop Cloud Services.\n 3. Your user account must have System Administration privileges on RevealX 360 or Full Write privileges on RevealX Enterprise."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions to receive ExtraHop webhook payloads and ingest them into Microsoft Sentinel using the **Azure Monitor Log Ingestion API** (DCR-based ingestion). This replaces the legacy Log Analytics HTTP Data Collector API. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+        },
+        {
+            "title": "",
+            "description": ">**(Optional Step)** Securely store API credentials in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+        },
+        {
+            "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias **ExtraHopDetections** and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop/Parsers/ExtraHopDetections.yaml). The function usually takes 10-15 minutes to activate after solution installation/update."
+        },
+        {
+            "title": "Configuration:",
+            "description": "**STEP 1 - App Registration steps for the Application in Microsoft Entra ID**\n\n This integration requires an App registration in the Azure portal. Follow the steps in this section to create a new application in Microsoft Entra ID:\n 1. Sign in to the [Azure portal](https://portal.azure.com/).\n 2. Search for and select **Microsoft Entra ID**.\n 3. Under **Manage**, select **App registrations > New registration**.\n 4. Enter a display **Name** for your application (e.g., `ExtraHopSentinelConnector`).\n 5. Select **Register** to complete the initial app registration.\n 6. When registration finishes, the Azure portal displays the app registration's Overview pane. You see the **Application (client) ID** and **Tenant ID**. The client ID and Tenant ID is required as configuration parameters for the execution of ExtraHop Data Connector. \n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - Add a client secret for application in Microsoft Entra ID**\n\n Sometimes called an application password, a client secret is a string value required for the execution of ExtraHop Data Connector. Follow the steps in this section to create a new Client Secret:\n 1. In the Azure portal, in **App registrations**, select your application.\n 2. Select **Certificates & secrets > Client secrets > New client secret**.\n 3. Add a description for your client secret.\n 4. Select an expiration for the secret or specify a custom lifetime. Limit is 24 months.\n 5. Select **Add**. \n 6. *Record the secret's value for use in your client application code. This secret value is never displayed again after you leave this page.* The secret value is required as configuration parameter for the execution of ExtraHop Data Connector. \n\n> **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)"
+        },
+        {
+            "title": "",
+            "description": "**STEP 3 - Get Object ID of your application in Microsoft Entra ID**\n\n After creating your app registration, follow the steps in this section to get Object ID:\n 1. Go to **Microsoft Entra ID**.\n 2. Select **Enterprise applications** from the left menu.\n 3. Find your newly created application in the list (you can search by the name you provided).\n 4. Click on the application.\n 5. On the overview page, copy the **Object ID**. This is the **AzureEntraObjectID** needed for your ARM template role assignment.\n"
+        },
+        {
+            "title": "",
+            "description": "**STEP 4 - Deploy ExtraHop Data Connector**\n\n>**IMPORTANT:** Before deploying the ExtraHop Data connector, have the Microsoft Entra ID App Registration details (Client ID, Client Secret, Tenant ID, and Object ID) readily available."
+        },
+        {
+            "title": "Deploy the ExtraHop Detections Data Connector:",
+            "description": "Use this method for automated deployment of the ExtraHop Detections Data connector.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ExtraHop-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group** and **Region**. \n3. Enter the below information : \n\n\t a. **FunctionName** - Enter the Function App name (used to name all related resources). Must be 1-11 characters. Default: `ExtraHop`\n\n\t b. **Location** - The location in which the data collection rules and data collection endpoints should be deployed\n\n\t c. **WorkspaceName** - Enter Microsoft Sentinel Workspace Name of Log Analytics workspace\n\n\t d. **AzureClientId** - Enter Azure Client ID that you have created during app registration\n\n\t e. **AzureClientSecret** - Enter Azure Client Secret that you have created during creating the client secret\n\n\t f. **AzureEntraObjectID** - Enter Object id of your Microsoft Entra App\n\n\t g. **TenantId** - Enter Tenant ID of your Microsoft Entra ID\n\n\t h. **DetectionsTableName** - Enter name of the table used to store ExtraHop Detections logs. Default is 'ExtraHop_Detections'\n\n\t i. **LogLevel** - Select log level or log severity value from Debug, Info, Error, Warning. By default it is set to Info\n\n\t j. **AppInsightsWorkspaceResourceID** - Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'\n\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. \n5. Click **Purchase** to deploy."
+        },
+        {
+            "title": "",
+            "description": "**STEP 5 - Post Deployment**\n\nAfter successful deployment, configure the webhook connection from ExtraHop RevealX to Microsoft Sentinel."
+        },
+        {
+            "title": "1) Get the Function App endpoint",
+            "description": "1. Go to the Azure function overview page and click the **Functions** tab.\n2. Click on the function called **ExtraHopHttpStarter**.\n3. Go to **Get Function URL** and copy the function URL available under **default (Function key)**.\n4. Replace **{functionname}** with **ExtraHopDetectionsOrchestrator** in the copied function URL."
+        },
+        {
+            "title": "2) Configure a connection to Microsoft Sentinel and specify webhook payload criteria from RevealX",
+            "description": "From your ExtraHop system, configure the Microsoft Sentinel integration to establish a connection between Microsoft Sentinel and ExtraHop RevealX and to create detection notification rules that will send webhook data to Microsoft Sentinel. For detailed instructions, refer to [Integrate ExtraHop RevealX with Microsoft Sentinel SIEM](https://docs.extrahop.com/current/rx-enterprise-integrations-microsoft-sentinel-siem/)."
+        },
+        {
+            "title": "",
+            "description": "*After notification rules have been configured and Microsoft Sentinel is receiving webhook data, the Function App is triggered and you can view ExtraHop detections from the Log Analytics workspace custom table. Use the **ExtraHopDetections** parser function for a normalized view of the data.*\n\n"
+        }
+    ]
+}

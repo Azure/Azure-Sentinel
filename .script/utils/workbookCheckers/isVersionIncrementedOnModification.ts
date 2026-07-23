@@ -1,7 +1,8 @@
-import { GetDiffFiles, GetPRDetails } from "../gitWrapper";
-import { WorkbookMetadata } from "../workbookMetadata";
-import gitP, { SimpleGit } from 'simple-git/promise';
-import { WorkbookValidationError } from "../validationError";
+import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper.js";
+import { WorkbookMetadata } from "../workbookMetadata.js";
+import gitP, { SimpleGit } from 'simple-git';
+import { WorkbookValidationError } from "../validationError.js";
+import { ExitCode } from "../exitCode.js";
 
 const workingDir:string = process.cwd();
 const git: SimpleGit = gitP(workingDir);
@@ -20,10 +21,30 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
   if(pr){ // pr may return undefined
       const changedFiles = await GetDiffFiles(fileKinds, fileTypeSuffixes, filePathFolderPrefixes);
     if(changedFiles && changedFiles.length > 0){
-      const options = [pr.targetBranch, pr.sourceBranch, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
-        const diffSummary = await git.diff(options);
-        const diffLinesArray = diffSummary.split('\n').map(l => l.trim());
-        const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
+
+      // Fetch the base and head branches before running the diff
+      const branches = await git.branch();
+      if (!branches.all.includes(pr.base.ref)) {
+          try {
+              await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.base.repo.clone_url, pr.base.ref + ':' + pr.base.ref]);
+          } catch (e) {
+              console.error(`Error fetching branch ${pr.base.ref} from git:`, e);
+              return ExitCode.ERROR;
+          }
+      }
+      if (!branches.all.includes(pr.head.ref)) {
+          try {
+                  await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.head.repo.clone_url , pr.head.ref + ':' + pr.head.ref]);
+          } catch (e) {
+              console.error(`Error fetching branch ${pr.head.ref} from git:`, e);
+              return ExitCode.ERROR;
+          }
+      }
+
+      const options = [pr.base.ref, pr.head.ref, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
+      const diffSummary = await git.diff(options);
+      const diffLinesArray: string[] = diffSummary.split('\n').map((l: string) => l.trim());
+      const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
 
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`${workbooksDirectoryPath}/${workbookMetadata.templateRelativePath}`))
@@ -43,6 +64,7 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
       });
     }
   }
+  return ExitCode.SUCCESS;
 }
 
 

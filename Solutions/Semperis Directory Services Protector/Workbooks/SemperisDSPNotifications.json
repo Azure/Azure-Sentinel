@@ -82,7 +82,6 @@
             "name": "Severity",
             "type": 2,
             "typeSettings": {
-              "additionalResourceOptions": [],
               "showDefault": false
             },
             "jsonData": "[\r\n    { \"value\":\"Critical\", \"label\":\"Critical\" },\r\n    { \"value\":\"Warning\" , \"label\":\"Warning\" },\r\n    { \"value\":\"Informational\" , \"label\":\"Informational\" }\r\n]",
@@ -102,7 +101,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\r\n| where Source == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Key1=tostring(['@Name']), Value=['#text']\r\n| evaluate pivot(Key1, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\r\n| where (isempty('{Time}') or (todatetime(timeCreated) >= todatetime('{Time:startISO}') and todatetime(timeCreated) <= todatetime('{Time:endISO}'))) and ((isempty('{RuleName}') or indexof(ruleName,'{RuleName}') > -1)) and ((isempty('{Severity}') or severity == '{Severity}'))\r\n| order by TimeGenerated desc\r\n| project ruleName, fullOperation\r\n",
+        "query": "(SecurityEvent\r\n| where EventSourceName == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Name=column_ifexists(tostring('@Name'), ''), columnValue=column_ifexists('#text', '')\r\n| evaluate pivot(Name, any(columnValue), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\r\n| extend RuleName=tostring(column_ifexists('ruleName', '')), Severity=tostring(column_ifexists('severity', '')), DataSource=tostring(column_ifexists('dataSource', '')), ObjectDN=tostring(column_ifexists('objectDN', '')), TimeCreated=tostring(column_ifexists('timeCreated', '')), Operation=tostring(column_ifexists('fullOperation', '')), Attribute=tostring(column_ifexists('attributeName', '')), Value=tostring(column_ifexists('attributeValue', '')), ChangedBy=tostring(column_ifexists('changedBy', '')), Source=tostring(column_ifexists('Computer', '')))\r\n| union\r\n(CommonSecurityLog\r\n| extend Activity=column_ifexists('Activity', ''), DeviceProduct=column_ifexists('DeviceProduct', '')\r\n| where Activity == 'rule-alert'\r\n| where DeviceProduct == 'Core Directory'\r\n| extend p1Array = split(AdditionalExtensions,\"|\")\r\n| mv-expand bagexpansion=array p1Array\r\n| evaluate bag_unpack(p1Array)\r\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\r\n| extend Value=replace_string(Value, \";\", \" \")\r\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\r\n| extend RuleName=column_ifexists('ruleName', ''), Severity=column_ifexists('severity', ''), DataSource=column_ifexists('dataSources', ''), ObjectDN=column_ifexists('subjectId', ''), TimeCreated=column_ifexists('alertCreated', ''), Operation=column_ifexists('operation', ''), Attribute=column_ifexists('attribute', ''), Value=column_ifexists('value', ''), ChangedBy=column_ifexists('changedBy', ''), Source=column_ifexists('alertSource', '')\r\n| extend Severity = case(toint(Severity) == 1 or toint(Severity) == 2, \"Informational\", toint(Severity)==3 or toint(Severity)==4, \"Low\", toint(Severity)==5 or toint(Severity)==6, \"Medium\", toint(Severity)==7 or toint(Severity)==8, \"High\", toint(Severity)==9 or toint(Severity)==10, \"Critical\", \"\"))\r\n| where (isempty('{Time}') or (todatetime(TimeCreated) >= todatetime('{Time:startISO}') and todatetime(TimeCreated) <= todatetime('{Time:endISO}'))) and ((isempty('{RuleName}') or indexof(RuleName,'{RuleName}') > -1)) and ((isempty('{Severity}') or Severity == '{Severity}'))\r\n| order by TimeGenerated desc\r\n| project RuleName, Severity, DataSource, ObjectDN, TimeCreated, Operation, Attribute, Value, ChangedBy, Source",
         "size": 0,
         "title": "Notifications",
         "queryType": 0,
@@ -111,12 +110,24 @@
         "gridSettings": {
           "labelSettings": [
             {
-              "columnId": "ruleName",
+              "columnId": "RuleName",
               "label": "Rule Name"
             },
             {
-              "columnId": "fullOperation",
-              "label": "Operation"
+              "columnId": "DataSource",
+              "label": "Data Source"
+            },
+            {
+              "columnId": "ObjectDN",
+              "label": "Object DN"
+            },
+            {
+              "columnId": "TimeCreated",
+              "label": "Time Created"
+            },
+            {
+              "columnId": "ChangedBy",
+              "label": "Changed By"
             }
           ]
         }
