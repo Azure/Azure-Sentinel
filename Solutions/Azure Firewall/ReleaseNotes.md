@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                       |
 |-------------|--------------------------------|------------------------------------------------------------------------------------------|
-| 3.0.6       | 07-10-2026                     | Fixed false positives in Abnormal Port to Protocol and SeveralDenyActionsRegistered rules when using AZFWNetworkRule table             |
+| 3.0.7       | 07-10-2026                     | Fixed false positives in Abnormal Port to Protocol and SeveralDenyActionsRegistered rules when using AZFWNetworkRule table             |
 | 3.0.6       | 06-05-2026                     | Updated **Analytical Rules** and **Hunting Queries** to Quality improvements.            |
 | 3.0.5       | 13-02-2026                     | Updated **Analytic Rule** to cover missing TTPs. Extended detection for FQDN and Destination IP across multiple sources and added new **Analytic Rule** for improved TI destination coverage.                                           |
 | 3.0.4       | 12-02-2024                     | Updated **Analytical Rule**	                                          |
