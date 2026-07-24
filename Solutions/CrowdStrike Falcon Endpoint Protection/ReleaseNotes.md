@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.9       | 24-07-2026                     | Updated titles for both **CrowdStrike Falcon Data Replicator** connectors |
 | 3.3.8       | 24-07-2026                     | Updated **CrowdStrike API Data Connector** polling to use updated time instead of created time |
 | 3.3.7       | 13-07-2026                     | Updated **CrowdStrike API Data Connector** UI labels |
 | 3.3.6       | 28-05-2026                     | Added support of multiple domains to **Crowdstrike API Data Connector** |
