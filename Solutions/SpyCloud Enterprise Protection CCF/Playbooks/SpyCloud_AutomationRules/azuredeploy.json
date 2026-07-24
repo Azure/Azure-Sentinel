@@ -1,0 +1,179 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SpyCloud Enterprise Protection - Automation Rules",
+        "description": "Deploys automation rules that trigger the SpyCloud MDE Automation and SpyCloud Conditional Access playbooks when a matching SpyCloud analytic rule creates an incident.",
+        "prerequisites": [
+            "1. The SpyCloud_MDE_Automation and SpyCloud_Conditional_Access_Playbook playbooks must be deployed in the same resource group.",
+            "2. The SpyCloud analytic rules (AR_malware_25, AR_Breached_Users_20) must be deployed to the same Microsoft Sentinel workspace.",
+            "3. Microsoft Sentinel must be enabled on the target Log Analytics workspace."
+        ],
+        "postDeployment": [
+            "1. Verify the automation rules are visible in Microsoft Sentinel > Automation.",
+            "2. Grant each playbook's Managed Identity the Microsoft Sentinel Responder role if not already done."
+        ],
+        "lastUpdateTime": "2026-07-15T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Automation" ],
+        "support": {
+            "tier": "Partner",
+            "name": "SpyCloud",
+            "link": "https://support.spycloud.com"
+        },
+        "source": {
+            "type": "solution",
+            "name": "SpyCloud Enterprise Protection"
+        },
+        "author": {
+            "name": "SpyCloud"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "SpyCloud Enterprise Protection - Automation Rules",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "Sentinel_Workspace_Resource_Id": {
+            "type": "string",
+            "metadata": {
+                "description": "Full resource ID of the Log Analytics workspace with Microsoft Sentinel enabled (e.g., /subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...)"
+            }
+        },
+        "MDE_PlaybookName": {
+            "type": "string",
+            "defaultValue": "SpyCloud_MDE_Automation",
+            "metadata": {
+                "description": "Name of the SpyCloud_MDE_Automation Logic App"
+            }
+        },
+        "ConditionalAccess_PlaybookName": {
+            "type": "string",
+            "defaultValue": "SpyCloud_Conditional_Access_Playbook",
+            "metadata": {
+                "description": "Name of the SpyCloud_Conditional_Access_Playbook Logic App"
+            }
+        },
+        "MalwareAnalyticRuleId": {
+            "type": "string",
+            "defaultValue": "ead4deed-9d48-4646-aee0-6b46c2dd1ae6",
+            "metadata": {
+                "description": "GUID of the SpyCloud infostealer malware credential exposure analytic rule (AR_malware_25) that triggers the MDE automation rule"
+            }
+        },
+        "BreachedUsersAnalyticRuleId": {
+            "type": "string",
+            "defaultValue": "a25eba0e-ff42-4c97-a379-d76bdb2aa1e3",
+            "metadata": {
+                "description": "GUID of the SpyCloud plaintext credential exposure analytic rule (AR_Breached_Users_20) that triggers the Conditional Access automation rule"
+            }
+        },
+        "MDE_Automation_Rule_Order": {
+            "type": "int",
+            "defaultValue": 1,
+            "metadata": {
+                "description": "Execution order of the MDE automation rule (lower = higher priority)"
+            }
+        },
+        "ConditionalAccess_Automation_Rule_Order": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "Execution order of the Conditional Access automation rule (lower = higher priority)"
+            }
+        }
+    },
+    "variables": {
+        "mdeAutomationRuleName": "[guid('SpyCloud-MDE-Rule', parameters('Sentinel_Workspace_Resource_Id'))]",
+        "conditionalAccessAutomationRuleName": "[guid('SpyCloud-ConditionalAccess-Rule', parameters('Sentinel_Workspace_Resource_Id'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "name": "[variables('mdeAutomationRuleName')]",
+            "scope": "[parameters('Sentinel_Workspace_Resource_Id')]",
+            "apiVersion": "2023-02-01-preview",
+            "properties": {
+                "displayName": "SpyCloud - Isolate compromised device on malware exposure",
+                "order": "[parameters('MDE_Automation_Rule_Order')]",
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentRelatedAnalyticRuleIds",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "[extensionResourceId(parameters('Sentinel_Workspace_Resource_Id'), 'Microsoft.SecurityInsights/alertRules', parameters('MalwareAnalyticRuleId'))]"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('MDE_PlaybookName'))]",
+                            "tenantId": "[subscription().tenantId]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.SecurityInsights/automationRules",
+            "name": "[variables('conditionalAccessAutomationRuleName')]",
+            "scope": "[parameters('Sentinel_Workspace_Resource_Id')]",
+            "apiVersion": "2023-02-01-preview",
+            "properties": {
+                "displayName": "SpyCloud - Enforce Conditional Access on credential exposure",
+                "order": "[parameters('ConditionalAccess_Automation_Rule_Order')]",
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Created",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentRelatedAnalyticRuleIds",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "[extensionResourceId(parameters('Sentinel_Workspace_Resource_Id'), 'Microsoft.SecurityInsights/alertRules', parameters('BreachedUsersAnalyticRuleId'))]"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('ConditionalAccess_PlaybookName'))]",
+                            "tenantId": "[subscription().tenantId]"
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "mdeAutomationRuleId": {
+            "type": "string",
+            "value": "[variables('mdeAutomationRuleName')]"
+        },
+        "conditionalAccessAutomationRuleId": {
+            "type": "string",
+            "value": "[variables('conditionalAccessAutomationRuleName')]"
+        }
+    }
+}
