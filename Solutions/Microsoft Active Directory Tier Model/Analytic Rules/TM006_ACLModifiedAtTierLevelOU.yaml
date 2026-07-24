@@ -1,0 +1,107 @@
+id: f3e2433b-6456-4009-a1cb-0d4eb3a36125
+name: 'PROD (TM006.1) - ACL - Modified at Tier Level OU'
+description: |
+  ACL modification of any Tier Model OU.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1222.001
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and (EventData matches regex @"(?i)OU=Domain Controllers"
+          or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 1 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Accounts"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Devices"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Groups"
+          or EventData matches regex @"(?i)OU=Tier Model Administration"
+          or EventData matches regex @"(?i)OU=Tier Model Computer Quarantine")
+      and Activity has "modified" 
+      and EventData has '"ObjectClass">organizationalUnit'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">nTSecurityDescriptor</Data>'
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("(?i)<Data Name=\"ObjectDN\">(((?i)OU=[^,]+,?)+),[dD][cC]=", 1, EventData)
+  | extend ObjectTier = case(
+      ObjectName has "Tier 0", "Tier 0",
+      ObjectName has "Tier 1", "Tier 1",
+      ObjectName has "Tier 2", "Tier 2",
+      ObjectName has "Tier Model Administration", "Tier 0",
+      ObjectName has "Tier Model Computer Quarantine", "Tier 0",
+      ObjectName has "Domain Controllers", "Tier 0",
+      "Unknown")
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+  | extend OperationType = iff(EventData has 'nTSecurityDescriptor', "ACL Modified", tostring(OperationType))
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , OperationType
+     , ActivityType
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  OperationType: OperationType
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM006.1) A {{ObjectTier}} OU ACL was modified at the following {{ObjectName}} OU'
+  alertDescriptionFormat: 'Modification to any Tier Model OU ACL.'
+version: 1.0.0
+kind: Scheduled

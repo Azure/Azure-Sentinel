@@ -1,0 +1,115 @@
+id: 1d858e12-777d-4156-b0af-b5ef410739e6
+name: 'PROD (TM003.1) - OBJECT - Moved or Recovered a Tier Level Account'
+description: |
+  Moving or Recovering of a Tier Model object.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.002
+query: |
+  SecurityEvent 
+  | where (EventID == 5138
+      or EventID == 5139)
+      and (EventData matches regex @"(?i)OU=Domain Controllers"
+          or EventData matches regex @"(?i)OU=Tier 0 Accounts" 
+          or EventData matches regex @"(?i)OU=Tier 1 Accounts" 
+          or EventData matches regex @"(?i)OU=Tier 2 Accounts"
+          or EventData matches regex @"(?i)OU=Tier 0 Service Accounts" 
+          or EventData matches regex @"(?i)OU=Tier 1 Service Accounts" 
+          or EventData matches regex @"(?i)OU=Tier 2 Service Accounts"
+          or EventData matches regex @"(?i)OU=Tier 0 Groups"
+          or EventData matches regex @"(?i)OU=Tier 1 Groups"
+          or EventData matches regex @"(?i)OU=Tier 2 Groups"
+          or EventData matches regex @"(?i)OU=Tier 0 PAW"
+          or EventData matches regex @"(?i)OU=Tier 1 PAW"
+          or EventData matches regex @"(?i)OU=Tier 2 PAW"
+          or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 1 Member Servers")
+  | extend OldObject_e = extract("<Data Name=\"OldObjectDN\">([^<]+)</Data>", 1, EventData)
+  | extend OldObject = extract("(?i)CN=([^,]+)", 1, OldObject_e)
+  | extend OldObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, OldObject_e)
+  | extend OldObjectTier = iff(isempty(OldObjectTier), "Outside Tier Model", OldObjectTier)
+  | extend NewObject_e = extract("<Data Name=\"NewObjectDN\">([^<]+)</Data>", 1, EventData)
+  | extend NewObject = extract("(?i)CN=([^,]+)", 1, NewObject_e)
+  | extend NewObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, NewObject_e)
+  | extend SubjectUserName = extract("<Data Name=\"SubjectUserName\">([^<]+)</Data>", 1, EventData)
+  | extend SubjectDomainName = extract("<Data Name=\"SubjectDomainName\">([^<]+)</Data>", 1, EventData)
+  | extend Account = strcat(SubjectDomainName, "\\", SubjectUserName)
+  | extend NewObjectTier = iff(isempty(NewObjectTier), 
+      iff(NewObject_e matches regex @"(?i)OU=Domain Controllers", "Tier 0", "Outside Tier Model"), 
+      NewObjectTier)
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | where OldObject != NewObjectTier
+  | project TimeGenerated
+      , ObjectName = OldObject
+      , NewObjectTier
+      , NewObjectOU = NewObject_e
+      , ObjectClass
+      , PreviousTier = OldObjectTier
+      , PreviousOU = OldObject_e
+      , ActivityType
+      , Account
+      , Domain
+      , Computer
+      , Channel
+      , EventID
+      , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  NewObjectTier: NewObjectTier
+  NewObjectOU: NewObjectOU
+  ObjectClass: ObjectClass
+  PreviousTier: PreviousTier
+  PreviousOU: PreviousOU
+  ActivityType: ActivityType
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM003.1) A {{NewObjectTier}} {{ObjectClass}} was {{ActivityType}}'
+  alertDescriptionFormat: '{{ObjectName}} was moved from {{PreviousOU}} to the following OU {{NewObjectOU}}.'
+version: 1.0.0
+kind: Scheduled

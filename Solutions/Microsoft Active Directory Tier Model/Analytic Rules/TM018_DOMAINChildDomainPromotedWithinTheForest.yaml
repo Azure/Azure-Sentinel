@@ -1,0 +1,75 @@
+id: ff1bec81-e241-44bf-98ed-c6e37805a2e3
+name: 'PROD (TM018.1) - DOMAIN - Child Domain promoted within the Forest'
+description: |
+  New child domain has been promoted within the Forest and should have the Tier Model deployed.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1484.002
+query: |
+  SecurityEvent 
+  | where EventID == 5137 and EventData has '"ObjectClass">crossRef' and EventData has 'CN=Partitions,CN=Configuration'
+  | extend ObjectName = extract("(?i)CN=([^,]+),(?i)CN=Partitions,(?i)CN=Configuration", 1, EventData)
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+          , ObjectName
+          , ActivityType
+          , Account
+          , Domain
+          , Computer
+          , Channel
+          , EventID
+          , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ActivityType: ActivityType
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM018.1) A new Child Domain has been promoted and requires the Tier Model to be deployed'
+  alertDescriptionFormat: 'New child domains do not have a Tier Model by default. Deploy and configure the Tier Model within the new child domain.'
+version: 1.0.0
+kind: Scheduled

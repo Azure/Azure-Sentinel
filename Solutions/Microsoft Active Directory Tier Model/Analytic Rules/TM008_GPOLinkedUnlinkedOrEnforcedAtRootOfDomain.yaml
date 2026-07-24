@@ -1,0 +1,99 @@
+id: fe468726-b1dc-4e76-adad-3480de4a2c56
+name: 'PROD (TM008.1) - GPO - Linked, Unlinked, or Enforced at Root of Domain'
+description: |
+  Linked, Unlinked, or Enforced GPOs at the Root of the Domain which could overwrite Tier Model GPOs.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1484.001
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and EventData matches regex @"(?i)DC="
+      and Activity has "modified" 
+      and EventData has '"ObjectClass">domainDNS'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">gPLink</Data>' 
+      and (EventData has ';0]' 
+          or EventData has ';1]' 
+          or EventData has ';2]')
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+  | where ObjectName startswith "DC=" or ObjectName startswith "dc="
+  | extend ObjectTier = "Tier 0"
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+  | extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)
+  | extend AttributeValueDescription = case(
+      LastThreeChars == ";0", "Linked",
+      LastThreeChars == ";1", "Unlinked",
+      LastThreeChars == ";2", "Enforced",
+      "Unknown")
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , ActivityType = AttributeValueDescription
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM008.1) A Tier 0 GPO was {{ActivityType}} at the Root of the Domain'
+  alertDescriptionFormat: 'Changes to the Root of the Domain GPO could impact the Tier Model GPOs and other security controls.'
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,397 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/MicrosoftADTierModel.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20Active%20Directory%20Tier%20Model/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe Microsoft Active Directory Tier Model solution for Microsoft Sentinel provides detection, triage automation, and reporting for the Active Directory (AD) administrative tier model - Tier 0 (T0), Tier 1 (T1), and Tier 2 (T2) - across Active Directory Domain Services (AD DS / ADDS). It monitors tier-sensitive changes on Domain Controllers, including group membership, object creation and deletion, ACL modifications, Group Policy (GPO) links and enforcement, organizational unit (OU) changes, block inheritance, domain trusts, child-domain promotion, BitLocker recovery keys, and LAPS activity, using Windows Security Event logs.\n\nThe analytic rules dynamically build each alert title from the affected object's tier and type, which keeps the number of rules low instead of duplicating a rule per tier. Automation rules then tag Tier Model incidents and automatically set severity or close expected, low-value activity, and a workbook provides Tier Model metrics.\n\n**Important:** The analytic rules, automation rules, and workbook are linked by the rule names - each alert title carries a (TMxxx.1) identifier that the automation rules and workbook depend on. Do not rename or modify the default analytic and automation rule names, or the automation rules and workbook will not function correctly.\n\n**Prerequisites:**\n\n1. Active Directory Tier Model deployed. This solution monitors an existing Tier Model and expects the standard Tier 0 / Tier 1 / Tier 2 organizational unit (OU) structure (for example, OU=Tier 0 Accounts, OU=Tier 1 Member Servers, OU=Tier 0 PAW, OU=Tier 0 Groups). If your OU names differ, adjust the analytic rule queries to match. To deploy and audit the Tier Model, see the [Microsoft Active Directory Tier Model project](https://github.com/microsoft/ActiveDirectoryTierModel/) and its [documentation](https://microsoft.github.io/ActiveDirectoryTierModel/).\n\n2. Domain Controller telemetry. All Domain Controllers must run as Azure virtual machines or be onboarded to Azure Arc, with a Data Collection Rule (DCR) that collects Security event logs from every Domain Controller into the Microsoft Sentinel workspace.\n\n3. Automation rules (required). The solution's automation rules are provided as an ARM template in the solution's Automation Rules folder and must be deployed as a required post-installation step for incident tagging, severity assignment, and the workbook to function correctly. See the Automation Rules README for one-click deployment.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:\n\n1. [Azure Monitor Agent (AMA) and Data Collection Rules](https://learn.microsoft.com/azure/azure-monitor/agents/data-collection-rule-azure-monitor-agent)\n\n2. [Windows Security Events via AMA](https://learn.microsoft.com/azure/sentinel/data-connectors/windows-security-events-via-ama)\n\n**Workbooks:** 1, **Analytic Rules:** 19\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Microsoft Active Directory Tier Model",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Provides a visual summary of incidents and alerts generated by the Microsoft Active Directory Tier Model analytic rules, broken down by severity and status. Requires all Domain Controllers to forward Security events to Microsoft Sentinel and the Tier Model analytic and automation rules to be active."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Added an object to a member of a Tier Model group that is outside of the same Tier. Example a Tier 0 user added to a Tier 1 group."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM002.1) - OBJECT - Created or Deleted a Tier Level Object",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A Tier Model object was created or deleted"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM003.1) - OBJECT - Moved or Recovered a Tier Level Account",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Moving or Recovering of a Tier Model object."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM004.1) - OBJECT - Enabled, Disabled, Unlocked, or Password Reset of a Tier Level Object",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A Tier Model object has been modified to Enable, Disable, or Unlock of a Tier Level Object."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM005.1) - GPO - Linked, Unlinked, or Enforced at Tier Level OU",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Linking, Unlinking, or Enforcing of a GPO within the Tier Level OU structure"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM006.1) - ACL - Modified at Tier Level OU",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "ACL modification of any Tier Model OU."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM007.1) - OU - Created or Deleted at Tier Level",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Creation or Deletion of an OU within the Tier Model"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM008.1) - GPO - Linked, Unlinked, or Enforced at Root of Domain",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Linked, Unlinked, or Enforced GPOs at the Root of the Domain which could overwrite Tier Model GPOs."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM009.1) - ACL - Modified at Root of the Domain",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "ACL Modification at the Root of the Domain."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A Bitlocker recovery key was stored within a Tier Model computer object."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM011.1) - LAPS - Tier Level Computer Object LAPS Password Expiration Time Set Manually",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Alert if a Tier Model computer object LAPS password was manually expired."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic12",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM012.1) - GPO - Enforced Outside of Tier Model",
+            "elements": [
+              {
+                "name": "analytic12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Enforcing of a GPO could bypass or override Tier Model GPOs."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic13",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM013.1) - OU - Block Inheritance was Enabled on an OU",
+            "elements": [
+              {
+                "name": "analytic13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Blocking Inheritance on an OU will deny Tier Model GPOs from applying."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic14",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM014.1) - GPO - Linked, Unlinked, or Enforced at the AD Site Level",
+            "elements": [
+              {
+                "name": "analytic14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Monitoring AD Site GPOs being Linked, Unlinked, or Enforced."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic15",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM015.1) - ACL - Modified at KRBTGT or AdminSDHolder Object Level",
+            "elements": [
+              {
+                "name": "analytic15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "ACL changes to the KRBTGT or AdminSDHolder special objects."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic16",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM016.1) - GROUP - Added to Well-Known or Tier Model Group",
+            "elements": [
+              {
+                "name": "analytic16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Well-Known Groups are classified as Tier 0, and Tier Model groups that provide permission over Tier Model objects."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic17",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM017.1) - GROUP - Tier 0 Added to Allow RODC Password Replication Group",
+            "elements": [
+              {
+                "name": "analytic17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Adding a Tier 0 object to the Allow RODC Password Replication Group."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic18",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM018.1) - DOMAIN - Child Domain promoted within the Forest",
+            "elements": [
+              {
+                "name": "analytic18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "New child domain has been promoted within the Forest and should have the Tier Model deployed."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic19",
+            "type": "Microsoft.Common.Section",
+            "label": "PROD (TM019.1) - TRUST - A new AD Trust has been established",
+            "elements": [
+              {
+                "name": "analytic19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A new Trust has been established with the Forest or Domains. The other forest should have a Tier Model deployed."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

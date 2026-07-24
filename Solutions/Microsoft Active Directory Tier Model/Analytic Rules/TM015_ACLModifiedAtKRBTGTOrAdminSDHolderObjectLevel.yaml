@@ -1,0 +1,92 @@
+id: a9f94bf1-856e-40ff-a176-24f967da1e27
+name: 'PROD (TM015.1) - ACL - Modified at KRBTGT or AdminSDHolder Object Level'
+description: |
+  ACL changes to the KRBTGT or AdminSDHolder special objects.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.002
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and (EventData matches regex @"(?i)CN=AdminSDHolder" or EventData matches regex @"(?i)CN=krbtgt")
+      and Activity has "modified"
+      and (EventData has '"ObjectClass">container' or EventData matches regex @"(?i)user")
+      and EventData has '<Data Name="AttributeLDAPDisplayName">nTSecurityDescriptor</Data>' 
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">(((?i)CN=[^,]+,?)+),[dD][cC]=", 1, EventData)
+  | extend ObjectTier = "Tier 0"
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend OperationType = iff(EventData has 'nTSecurityDescriptor', "ACL Modified", tostring(OperationType))
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , OperationType
+     , ActivityType
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  OperationType: OperationType
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM015.1) The {{ObjectTier}} {{ObjectName}} ACL was modified'
+  alertDescriptionFormat: 'The following user {{Account}} modified the {{ObjectName}} ACLs.'
+version: 1.0.0
+kind: Scheduled

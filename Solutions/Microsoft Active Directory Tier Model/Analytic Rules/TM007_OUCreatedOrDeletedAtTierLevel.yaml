@@ -1,0 +1,101 @@
+id: 4e027b5f-fc4a-4de6-be24-3eb9324e2fc8
+name: 'PROD (TM007.1) - OU - Created or Deleted at Tier Level'
+description: |
+  Creation or Deletion of an OU within the Tier Model
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1222.001
+query: |
+  SecurityEvent 
+  | where (EventID == 5137
+      or EventID == 5141)
+      and (EventData matches regex @"(?i)OU=Domain Controllers"
+          or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 1 Member Servers"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Accounts"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Devices"
+          or EventData matches regex @"(?i)OU=Tier 2 End-User Groups"
+          or EventData matches regex @"(?i)OU=Tier Model Administration"
+          or EventData matches regex @"(?i)OU=Tier Model Computer Quarantine")
+      and EventData has '"ObjectClass">organizationalUnit'
+  | extend ObjectName = extract("(?i)<Data Name=\"ObjectDN\">(((?i)OU=[^,]+,?)+),(?i)DC=", 1, EventData)
+  | extend ObjectTier = case(
+      ObjectName has "Tier 0", "Tier 0",
+      ObjectName has "Tier 1", "Tier 1",
+      ObjectName has "Tier 2", "Tier 2",
+      ObjectName has "Tier Model Administration", "Tier 0",
+      ObjectName has "Tier Model Computer Quarantine", "Tier 0",
+      ObjectName has "Domain Controllers", "Tier 0",
+      "Unknown")
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | extend SubjectUserName = extract("<Data Name=\"SubjectUserName\">([^<]+)</Data>", 1, EventData)
+  | extend SubjectDomainName = extract("<Data Name=\"SubjectDomainName\">([^<]+)</Data>", 1, EventData)
+  | extend Account = strcat(SubjectDomainName, "\\", SubjectUserName)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , ActivityType
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  ActivityType: ActivityType
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM007.1) A {{ObjectTier}} OU was {{ActivityType}}'
+  alertDescriptionFormat: 'A OU was deleted or created within the Tier Model.'
+version: 1.0.0
+kind: Scheduled

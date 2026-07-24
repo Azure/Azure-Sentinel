@@ -1,0 +1,94 @@
+id: 7437402c-800b-4cf3-90d9-0c1f12204375
+name: 'PROD (TM009.1) - ACL - Modified at Root of the Domain'
+description: |
+  ACL Modification at the Root of the Domain.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1222.001
+query: |
+  SecurityEvent 
+  | where EventID == 5136 
+      and EventData matches regex @"(?i)DC="
+      and Activity has "modified" 
+      and EventData has '"ObjectClass">domainDNS'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">nTSecurityDescriptor</Data>'
+      and EventData has '"OperationType">%%14674'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+  | where ObjectName startswith "DC=" or ObjectName startswith "dc="
+  | extend ObjectTier = "Tier 0"
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+  | extend OperationType = iff(EventData has 'nTSecurityDescriptor', "ACL Modified", tostring(OperationType))
+  | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+     , ObjectName
+     , ObjectTier
+     , ObjectClass
+     , OperationType
+     , ActivityType
+     , AttributeLDAP
+     , Account
+     , Domain
+     , Computer
+     , Channel
+     , EventID
+     , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectTier: ObjectTier
+  ObjectClass: ObjectClass
+  OperationType: OperationType
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM009.1) A Tier 0 ACL was modified at the Root of the Domain'
+  alertDescriptionFormat: 'Any ACL changes at the root of the domain could impact or bypass the Tier Model security controls.'
+version: 1.0.0
+kind: Scheduled

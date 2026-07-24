@@ -1,0 +1,88 @@
+id: 17371300-904a-4af5-9550-cf57ee727bb7
+name: 'PROD (TM013.1) - OU - Block Inheritance was Enabled on an OU'
+description: |
+  Blocking Inheritance on an OU will deny Tier Model GPOs from applying.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1484.001
+query: |
+  SecurityEvent
+  | where EventID == 5136
+      and Activity has "modified"
+      and EventData has '"ObjectClass">organizationalUnit'
+      and EventData has '<Data Name="AttributeLDAPDisplayName">gPOptions</Data>'
+  | extend ObjectName = extract("<Data Name=\"ObjectDN\">((?i)OU=[^,]+(,(?i)OU=[^,]+)*),(?i)DC=", 1, EventData)
+  | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+  | extend AttributeValue = extract("<Data Name=\"AttributeValue\">([0-9]+)</Data>", 1, EventData)
+  | extend ActivityType = case(
+      AttributeValue == "1", "Block Inheritance Enabled",
+      AttributeValue == "0", "Block Inheritance Disabled",
+      "Block Inheritance Modified")
+  | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+  | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+  | project TimeGenerated
+      , ObjectName
+      , ObjectClass
+      , ActivityType
+      , AttributeLDAP
+      , Account
+      , Domain
+      , Computer
+      , Channel
+      , EventID
+      , EventData
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ObjectName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+customDetails:
+  ObjectName: ObjectName
+  ObjectClass: ObjectClass
+  ActivityType: ActivityType
+  AttributeLDAP: AttributeLDAP
+  Account: Account
+  Domain: Domain
+  Computer: Computer
+  Channel: Channel
+  EventID: EventID
+  EventData: EventData
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+  alertDisplayNameFormat: '(TM013.1) An OU was configured for Block Inheritance and is overwriting Tier Model GPOs'
+  alertDescriptionFormat: 'Block Inheritance was configured by {{Account}}'
+version: 1.0.0
+kind: Scheduled
