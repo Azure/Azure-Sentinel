@@ -2,8 +2,8 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "Infoblox-IQ-for-TD-Get-Insights-API",
-        "description": "Leverages the Infoblox IQ for Threat Defense Insights API to ingest IQ for TD Insights at time of run into the custom InfobloxInsight table. This playbook is scheduled to run on a daily basis.",
+        "title": "Infoblox-IQ-for-TD-Take-Action-API",
+        "description": "Leverages the Infoblox IQ for Threat Defense Insights API to take action on an Insight by applying the provided recommendation, then ingests the updated Insight details into the custom InfobloxInsight table. This playbook is triggered on demand with an insight_id and recommendation_id.",
         "prerequisites": [
             "1. User must have a valid Infoblox IQ for Threat Defense API Key",
             "2. An existing Log Analytics Workspace where the InfobloxInsight table will be created"
@@ -19,7 +19,9 @@
         "prerequisitesDeployTemplateFile": "",
         "lastUpdateTime": "2026-07-08T16:15:48.355Z",
         "entities": [],
-        "tags": [],
+        "tags": [
+            "Action"
+        ],
         "support": {
             "tier": "Community",
             "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
@@ -30,17 +32,10 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Infoblox-IQ-for-TD-Get-Insights-API",
+            "defaultValue": "Infoblox-IQ-for-TD-Take-Action-API",
             "type": "string",
             "metadata": {
                 "description": "Name of the Logic App (Playbook) resource"
-            }
-        },
-        "Location": {
-            "defaultValue": "[resourceGroup().location]",
-            "type": "string",
-            "metadata": {
-                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
             }
         },
         "Infoblox API Key": {
@@ -59,9 +54,10 @@
     },
     "variables": {
         "suffix": "[concat('IB', uniqueString(resourceGroup().id, parameters('WorkspaceName')))]",
+        "Location": "[resourceGroup().location]",
         "TableName": "InfobloxInsight",
-        "DCEName": "[concat('infobloxsoc-dce-', variables('suffix'))]",
-        "DCRName": "[concat('infobloxsoc-dcr-', variables('suffix'))]",
+        "DCEName": "[concat('infobloxta-dce-', variables('suffix'))]",
+        "DCRName": "[concat('infobloxta-dcr-', variables('suffix'))]",
         "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
         "StreamName": "Custom-InfobloxInsight",
         "_MonitoringMetricsPublisherRole": "3913510d-42f4-4e42-8a64-420c390055eb",
@@ -72,7 +68,7 @@
             "type": "Microsoft.Insights/dataCollectionEndpoints",
             "apiVersion": "2022-06-01",
             "name": "[variables('DCEName')]",
-            "location": "[parameters('Location')]",
+            "location": "[variables('Location')]",
             "kind": "Linux",
             "properties": {
                 "description": "Data collection endpoint for Infoblox IQ for Threat Defense Insights ingestion",
@@ -202,7 +198,7 @@
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2022-06-01",
             "name": "[variables('DCRName')]",
-            "location": "[parameters('Location')]",
+            "location": "[variables('Location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
                 "[concat(variables('logWsResId'), '/tables/', variables('TableName'), '_CL')]"
@@ -365,8 +361,8 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "Infoblox API Key": {
-                            "defaultValue": "[trim(parameters('Infoblox API Key'))]",
-                            "type": "string"
+                            "type": "String",
+                            "defaultValue": "[trim(parameters('Infoblox API Key'))]"
                         },
                         "DCEIngestionEndpoint": {
                             "defaultValue": "[concat(reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))).logsIngestion.endpoint, '/dataCollectionRules/', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))).immutableId, '/streams/', variables('StreamName'), '?api-version=2023-01-01')]",
@@ -374,16 +370,26 @@
                         }
                     },
                     "triggers": {
-                        "Recurrence": {
-                            "recurrence": {
-                                "frequency": "Day",
-                                "interval": 1
-                            },
-                            "evaluatedRecurrence": {
-                                "frequency": "Day",
-                                "interval": 1
-                            },
-                            "type": "Recurrence"
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "insight_id": {
+                                            "type": "string"
+                                        },
+                                        "recommendation_id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "insight_id",
+                                        "recommendation_id"
+                                    ]
+                                }
+                            }
                         }
                     },
                     "actions": {
@@ -415,193 +421,236 @@
                                 ]
                             }
                         },
-                        "Initialize_Insights_Array": {
+                        "Take_Action_on_Insight": {
                             "runAfter": {
                                 "Initialize_Infoblox_Customer_Id": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "InsightsArray",
-                                        "type": "array",
-                                        "value": []
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_Extra_Cols": {
-                            "runAfter": {
-                                "Initialize_Insights_Array": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "Extra Cols",
-                                        "type": "object",
-                                        "value": {
-                                            "InfobloxInsightLogType": "Insight"
-                                        }
-                                    }
-                                ]
-                            }
-                        },
-                        "Get_All_Insights": {
-                            "runAfter": {
-                                "Initialize_Extra_Cols": [
-                                    "Succeeded"
-                                ]
-                            },
                             "type": "Http",
                             "inputs": {
-                                "uri": "https://csp.infoblox.com/api/v2/insights",
-                                "method": "GET",
+                                "uri": "https://csp.infoblox.com/api/v2/insights/@{triggerBody()?['insight_id']}/actions",
+                                "method": "POST",
                                 "headers": {
+                                    "Content-Type": "application/json",
                                     "Authorization": "Token @{parameters('Infoblox API Key')}",
-                                    "x-Infoblox-client": "AzureSentinel-GetOpenInsightsAPI",
+                                    "x-Infoblox-client": "AzureSentinel-TakeActionOnInsightAPI",
                                     "x-Infoblox-customer": "@{variables('InfobloxCustomerId')}"
+                                },
+                                "body": {
+                                    "items": [
+                                        {
+                                            "recommendation_id": "@{triggerBody()?['recommendation_id']}"
+                                        }
+                                    ]
                                 }
                             }
                         },
-                        "Parse_JSON": {
+                        "Validate_Action_Status": {
+                            "actions": {
+                                "Get_Insight_Data": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://csp.infoblox.com/api/v2/insights/@{triggerBody()?['insight_id']}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Token @{parameters('Infoblox API Key')}",
+                                            "x-Infoblox-client": "AzureSentinel-GetInsightDetails",
+                                            "x-Infoblox-customer": "@{variables('InfobloxCustomerId')}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Parse_Insight_JSON": {
+                                    "runAfter": {
+                                        "Get_Insight_Data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_Insight_Data')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total_events": {
+                                                    "type": "integer"
+                                                },
+                                                "total_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "insight_id": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "severity": {
+                                                    "type": "string"
+                                                },
+                                                "date_created": {
+                                                    "type": "string"
+                                                },
+                                                "evaluation_start_date": {
+                                                    "type": "string"
+                                                },
+                                                "evaluation_end_date": {
+                                                    "type": "string"
+                                                },
+                                                "total_indicators": {
+                                                    "type": "integer"
+                                                },
+                                                "total_users": {
+                                                    "type": "integer"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "expiring_in_days": {
+                                                    "type": "integer"
+                                                },
+                                                "threat_properties": {
+                                                    "type": "array"
+                                                },
+                                                "total_verified_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "total_unverified_assets": {
+                                                    "type": "integer"
+                                                },
+                                                "top_indicators": {
+                                                    "type": "array"
+                                                },
+                                                "top_assets": {
+                                                    "type": "array"
+                                                },
+                                                "threat_actors": {
+                                                    "type": "array"
+                                                },
+                                                "overview": {
+                                                    "type": "array"
+                                                },
+                                                "key_recommendations": {
+                                                    "type": "array"
+                                                },
+                                                "time_saved_seconds": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Condition_To_Ingest_Insight_Data_If_It_Is_Not_Null": {
+                                    "actions": {
+                                        "Send_Insight_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "POST",
+                                                "uri": "@parameters('DCEIngestionEndpoint')",
+                                                "headers": {
+                                                    "Content-Type": "application/json",
+                                                    "User-Agent": "azure-sentinel-infoblox-iq-td-playbook/1.0.0"
+                                                },
+                                                "body": "@array(addProperty(addProperty(body('Parse_Insight_JSON'), 'InfobloxInsightLogType', 'Insight'),'InsightDetail',true))",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com/"
+                                                },
+                                                "retryPolicy": {
+                                                    "type": "exponential",
+                                                    "count": 3,
+                                                    "interval": "PT10S",
+                                                    "minimumInterval": "PT10S",
+                                                    "maximumInterval": "PT1H"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Insight_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_Insight_JSON')",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Mark_Playbook_Succeeded": {
+                                    "runAfter": {
+                                        "Condition_To_Ingest_Insight_Data_If_It_Is_Not_Null": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped",
+                                            "TimedOut"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
                             "runAfter": {
-                                "Get_All_Insights": [
-                                    "Succeeded"
+                                "Take_Action_on_Insight": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
                                 ]
                             },
-                            "type": "ParseJson",
-                            "inputs": {
-                                "content": "@body('Get_All_Insights')",
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "insight_list": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "total_events": {
-                                                        "type": "integer"
-                                                    },
-                                                    "total_assets": {
-                                                        "type": "integer"
-                                                    },
-                                                    "insight_id": {
-                                                        "type": "string"
-                                                    },
-                                                    "name": {
-                                                        "type": "string"
-                                                    },
-                                                    "description": {
-                                                        "type": "string"
-                                                    },
-                                                    "severity": {
-                                                        "type": "string"
-                                                    },
-                                                    "date_created": {
-                                                        "type": "string"
-                                                    },
-                                                    "evaluation_start_date": {
-                                                        "type": "string"
-                                                    },
-                                                    "evaluation_end_date": {
-                                                        "type": "string"
-                                                    },
-                                                    "total_indicators": {
-                                                        "type": "integer"
-                                                    },
-                                                    "total_users": {
-                                                        "type": "integer"
-                                                    },
-                                                    "status": {
-                                                        "type": "string"
-                                                    },
-                                                    "expiring_in_days": {
-                                                        "type": "integer"
-                                                    },
-                                                    "threat_properties": {
-                                                        "type": "array",
-                                                        "items": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "time_saved_seconds": {
-                                                        "type": "integer"
-                                                    }
-                                                },
-                                                "required": []
+                            "else": {
+                                "actions": {
+                                    "Mark_Playbook_Failed": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Failed",
+                                            "runError": {
+                                                "code": "InfobloxActionNotApplied",
+                                                "message": "@{coalesce(body('Take_Action_on_Insight')?['results']?[0]?['message'], body('Take_Action_on_Insight')?['results']?[0]?['reason'], 'Take_Action_on_Insight did not succeed. Check the playbook run history for details.')}"
                                             }
                                         }
                                     }
                                 }
-                            }
-                        },
-                        "For_each_Insight": {
-                            "foreach": "@body('Parse_JSON')?['insight_list']",
-                            "actions": {
-                                "Append_to_array": {
-                                    "type": "AppendToArrayVariable",
-                                    "inputs": {
-                                        "name": "InsightsArray",
-                                        "value": "@union(variables('Extra Cols'), items('For_Each_Insight'))"
-                                    }
-                                }
                             },
-                            "runAfter": {
-                                "Parse_JSON": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "Condition_Check_Insights_Array": {
-                            "type": "If",
                             "expression": {
                                 "and": [
                                     {
-                                        "greater": [
-                                            "@length(variables('InsightsArray'))",
-                                            0
+                                        "equals": [
+                                            "@actions('Take_Action_on_Insight')['status']",
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@coalesce(body('Take_Action_on_Insight')?['results']?[0]?['status'], '')",
+                                            "succeeded"
                                         ]
                                     }
                                 ]
                             },
-                            "actions": {
-                                "Ingest_Insights_to_Log_Analytics": {
-                                    "type": "Http",
-                                    "inputs": {
-                                        "method": "POST",
-                                        "uri": "@parameters('DCEIngestionEndpoint')",
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "User-Agent": "azure-sentinel-infoblox-iq-td-playbook/1.0.0"
-                                        },
-                                        "body": "@variables('InsightsArray')",
-                                        "authentication": {
-                                            "type": "ManagedServiceIdentity",
-                                            "audience": "https://monitor.azure.com/"
-                                        },
-                                        "retryPolicy": {
-                                            "type": "exponential",
-                                            "count": 3,
-                                            "interval": "PT10S",
-                                            "minimumInterval": "PT10S",
-                                            "maximumInterval": "PT1H"
-                                        }
-                                    },
-                                    "runAfter": {}
-                                }
-                            },
-                            "runAfter": {
-                                "For_each_Insight": [
-                                    "Succeeded"
-                                ]
-                            }
+                            "type": "If"
                         }
                     }
                 },
@@ -609,9 +658,10 @@
             },
             "name": "[parameters('PlaybookName')]",
             "type": "Microsoft.Logic/workflows",
-            "location": "[parameters('Location')]",
+            "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateName": "Infoblox-IQ-for-TD-Get-Insights-API",
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "Infoblox-IQ-for-TD-Take-Action-API",
                 "hidden-SentinelTemplateVersion": "1.0"
             },
             "identity": {
