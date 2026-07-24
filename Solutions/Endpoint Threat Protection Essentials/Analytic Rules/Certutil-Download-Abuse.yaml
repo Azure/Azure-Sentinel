@@ -1,0 +1,86 @@
+id: 4a9d3c2e-7f1b-4e58-9a0c-2d5b8e3f1a7c
+name: CertUtil Used for File Download (Living off the Land)
+description: |
+  Detects certutil.exe being used to download files from remote URLs via the
+  -urlcache or -verifyctl flags. CertUtil is a signed Windows binary (LOLBin)
+  that attackers abuse to download payloads while bypassing application
+  whitelisting and network controls.
+  Tune AllowlistedDomains to match your PKI/CA infrastructure.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - DefenseEvasion
+relevantTechniques:
+  - T1105
+  - T1218
+  - T1140
+query: |
+  let Lookback = 1h;
+  let AllowlistedDomains = dynamic([
+    "windowsupdate.microsoft.com",
+    "download.microsoft.com",
+    "dl.delivery.mp.microsoft.com",
+    "ctldl.windowsupdate.com"
+  ]);
+  let MDE_Results =
+    DeviceProcessEvents
+    | where Timestamp >= ago(Lookback)
+    | where FileName =~ "certutil.exe"
+    | where ProcessCommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+    | where ProcessCommandLine has_any ("http://", "https://", "ftp://")
+    | where not(ProcessCommandLine has_any (AllowlistedDomains))
+    | extend
+        AccountName   = InitiatingProcessAccountName,
+        AccountDomain = InitiatingProcessAccountDomain,
+        HostName      = DeviceName,
+        EventTime     = Timestamp
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName;
+  let SecEvent_Results =
+    SecurityEvent
+    | where TimeGenerated >= ago(Lookback)
+    | where EventID == 4688
+    | where NewProcessName endswith "\\certutil.exe"
+    | where CommandLine has_any ("-urlcache", "-verifyctl", "-decode", "-decodehex")
+    | where CommandLine has_any ("http://", "https://", "ftp://")
+    | where not(CommandLine has_any (AllowlistedDomains))
+    | extend
+        AccountName   = SubjectUserName,
+        AccountDomain = SubjectDomainName,
+        HostName      = Computer,
+        EventTime     = TimeGenerated,
+        ProcessCommandLine = CommandLine,
+        InitiatingProcessFileName = ParentProcessName
+    | project EventTime, HostName, AccountName, AccountDomain,
+        ProcessCommandLine, InitiatingProcessFileName;
+  union MDE_Results, SecEvent_Results
+  | sort by EventTime desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.5
+kind: Scheduled

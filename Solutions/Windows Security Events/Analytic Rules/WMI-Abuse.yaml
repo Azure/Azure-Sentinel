@@ -1,0 +1,106 @@
+id: 3c8e5f0b-1d4a-4b69-9c2e-7f0d3a5e8b1f
+name: WMI Spawning Suspicious Child Process (Living off the Land)
+description: |
+  Detects WmiPrvSE.exe (the WMI Provider Host) spawning high-risk processes
+  such as PowerShell, cmd.exe, cscript, or other LOLBins.
+  WMI requires no external tools, generates minimal disk artifacts, and can
+  execute code on remote systems over DCOM/RPC while bypassing many controls.
+  Tune AllowlistedCmdPatterns for known-safe management tools such as SCCM.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - LateralMovement
+  - Persistence
+relevantTechniques:
+  - T1047
+  - T1021.006
+  - T1059.001
+  - T1059.003
+  - T1059.005
+query: |
+  let Lookback = 1h;
+  let SuspiciousChildProcesses = dynamic([
+    "powershell.exe", "pwsh.exe", "cmd.exe", "cscript.exe", "wscript.exe",
+    "mshta.exe", "certutil.exe", "bitsadmin.exe", "regsvr32.exe",
+    "rundll32.exe", "msiexec.exe", "installutil.exe", "cmstp.exe",
+    "msbuild.exe", "wmic.exe", "net.exe", "net1.exe", "nltest.exe",
+    "whoami.exe", "ipconfig.exe", "tasklist.exe", "schtasks.exe",
+    "at.exe", "sc.exe", "reg.exe"
+  ]);
+  let AllowlistedCmdPatterns = dynamic([
+    "ccmexec", "SMSAgent", "MOMAgent", "nessus", "qualys"
+  ]);
+  let NetworkIndicators = dynamic([
+    "http://", "https://", "ftp://", "Net.WebClient",
+    "DownloadString", "IEX", "Invoke-Expression", "/transfer", "-urlcache"
+  ]);
+  let CredentialIndicators = dynamic([
+    "lsass", "mimikatz", "sekurlsa", "dump", "sam", "ntds"
+  ]);
+  let MDE_Results =
+    DeviceProcessEvents
+    | where Timestamp >= ago(Lookback)
+    | where InitiatingProcessFileName =~ "WmiPrvSE.exe"
+    | where FileName in~ (SuspiciousChildProcesses)
+    | where not(ProcessCommandLine has_any (AllowlistedCmdPatterns))
+    | extend
+        ChildProcess       = FileName,
+        ChildCmdLine       = ProcessCommandLine,
+        AccountName        = InitiatingProcessAccountName,
+        AccountDomain      = InitiatingProcessAccountDomain,
+        HostName           = DeviceName,
+        EventTime          = Timestamp,
+        NetworkActivity    = ProcessCommandLine has_any (NetworkIndicators),
+        CredentialActivity = ProcessCommandLine has_any (CredentialIndicators)
+    | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+        ChildCmdLine, NetworkActivity, CredentialActivity;
+  let SecEvent_Results =
+    SecurityEvent
+    | where TimeGenerated >= ago(Lookback)
+    | where EventID == 4688
+    | where ParentProcessName endswith "\\WmiPrvSE.exe"
+    | extend ChildProcess = tostring(split(NewProcessName, "\\")[-1])
+    | where ChildProcess in~ (SuspiciousChildProcesses)
+    | where not(CommandLine has_any (AllowlistedCmdPatterns))
+    | extend
+        ChildCmdLine       = CommandLine,
+        AccountName        = SubjectUserName,
+        AccountDomain      = SubjectDomainName,
+        HostName           = Computer,
+        EventTime          = TimeGenerated,
+        NetworkActivity    = CommandLine has_any (NetworkIndicators),
+        CredentialActivity = CommandLine has_any (CredentialIndicators)
+    | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,
+        ChildCmdLine, NetworkActivity, CredentialActivity;
+  union MDE_Results, SecEvent_Results
+  | extend RiskScore = iif(CredentialActivity == true, 3, iif(NetworkActivity == true, 2, 1))
+  | sort by RiskScore desc, EventTime desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ChildCmdLine
+version: 1.0.5
+kind: Scheduled
