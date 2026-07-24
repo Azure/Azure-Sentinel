@@ -1,0 +1,66 @@
+id: d2d3bbc2-6e57-4043-ab24-988a6a6c88db
+name: PowerShell Encoded Command Execution
+description: |
+  Looks for valid variations of the -EncodedCommand parameter. This is commonly used to encode or obfuscate commands, and not all occurrences are malicious. For example, benign complex commands may require encoding to properly run on a target system. Analysis of the encoded command by base64 decoding the encoded data will be necessary. 
+
+  NOTE: When excessive results are received, notes provided in the Deployment Steps may be able to aid in tuning the dataset, per tool. Some general suggestions may be to group by parent processes to identify common, approved and legitimate, applications; group by common line and only review command lines observed less than 3 times, across 3 hosts (indicating single execution across multiple hosts); or limit the results by distinct number of hosts and event counts, such as limiting to less than 5 observed hosts or total execution count.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+tactics:
+  - DefenseEvasion
+  - Execution
+relevantTechniques:
+  - T1027
+  - T1059.001
+query: |
+  union 
+  (
+      SecurityEvent
+      | project 
+          TimeGenerated,
+          DeviceName=Computer,
+          EventID=tostring(EventID),
+          ParentProcessName,
+          ProcessName=NewProcessName,
+          CommandLine,
+          SubjectUserName,
+          SourceComputerId,
+          processID=tolong(NewProcessId),
+          parentProcessID=tolong(ProcessId)
+  ),
+  (
+      DeviceEvents
+      | project
+          TimeGenerated,
+          DeviceName,
+          ProcessName=InitiatingProcessFolderPath,
+          CommandLine=ProcessCommandLine,
+          SubjectUserName=InitiatingProcessAccountName,
+          SourceComputerId=DeviceId,
+          processID=InitiatingProcessId,
+          parentProcessID=InitiatingProcessId,
+          ParentProcessName=InitiatingProcessParentFileName,
+          AdditionalFields,
+          EventID=ActionType
+  )
+  | where 
+      ProcessName has_any (
+        "powershell.exe",
+        "powershell_ise.exe", 
+        "pwsh.exe"
+        )
+  | extend CommandLine_ = tostring(AdditionalFields.Command)
+  | extend AllCommandLine=coalesce(CommandLine_,CommandLine)
+  | where AllCommandLine matches regex "-([Ee\\^]{1,2}[NnCcOoDdEeMmAaPpHh\\^` ]+|[Ee])\\s+\"?[a-zA-Z0-9+/=]{10,}"
+  | where not (ParentProcessName has "Plugins\\Microsoft.GuestConfiguration.ConfigurationforWindows" and ParentProcessName endswith "gc_worker.exe")
+  | order by TimeGenerated
+  | project TimeGenerated,DeviceName,EventID,ParentProcessName,ProcessName,AllCommandLine,SubjectUserName,processID,parentProcessID,SourceComputerId
+version: 1.0.0

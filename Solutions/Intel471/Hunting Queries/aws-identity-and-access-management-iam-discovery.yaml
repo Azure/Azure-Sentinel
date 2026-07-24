@@ -1,0 +1,27 @@
+id: fcdafb78-7ac3-4b83-bbb4-cd182408e6eb
+name: AWS Identity and Access Management (IAM) Discovery
+description: |
+  This Hunt Package identifies activity that could be associated with discovery behaviors targeting AWS Identity and Access Management (IAM).
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1087.004
+query: |
+  AWSCloudTrail
+  | where TimeGenerated >= ago(7d)
+  | where EventName has_any (
+    "ListRoles",
+    "ListIdentities",
+    "ListAccountAliases",
+    "GetUser",
+    "GetCallerIdentity"
+  )
+  | project TimeGenerated, EventSource, EventName, UserIdentityType, UserIdentityArn, UserIdentityAccountId, UserIdentityUserName, UserAgent, IpAddress, timeWindowSeen = bin(TimeGenerated, 5m)
+  | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), EventSources=make_set(EventSource), ApiCalls=make_set(EventName), UserIdentityTypes=make_set(UserIdentityType), UserName=make_set(UserIdentityUserName), AccountId=make_set(UserIdentityAccountId), UserAgents=make_set(UserAgent), SrcIPs=make_set(IpAddress), distinctApiCnt=dcount(EventName) by UserIdentityArn, timeWindowSeen
+  | where distinctApiCnt > 1
+  | order by timeWindowSeen
+version: 1.0.0
