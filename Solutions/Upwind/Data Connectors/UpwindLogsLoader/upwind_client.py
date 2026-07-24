@@ -6,10 +6,33 @@ import time
 import requests
 
 
+def rename_reserved_columns(records: list, rename_map: dict) -> list:
+    """
+    Rename dictionary keys that collide with reserved/invalid Log Analytics
+    custom-table column names (e.g. "title", "type" are rejected by the
+    workspace table schema API) before the records are uploaded.
+
+    :param records: List of raw API record dictionaries.
+    :param rename_map: Mapping of {original_key: new_key} to apply per record.
+    :return: New list of dictionaries with the renamed keys (original list is
+        not mutated).
+    """
+
+    if not rename_map:
+        return records
+
+    renamed = []
+    for record in records:
+        new_record = dict(record)
+        for old_key, new_key in rename_map.items():
+            if old_key in new_record:
+                new_record[new_key] = new_record.pop(old_key)
+        renamed.append(new_record)
+    return renamed
+
+
 class UpwindClient:
     """Base client for the Upwind API with authentication, retry, and pagination."""
-
-    _RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
 
     def __init__(self, config):
         self.org_id = config.get("upwind_org_id")
@@ -26,7 +49,7 @@ class UpwindClient:
     def _get_access_token(self) -> str:
         """Obtain a bearer token from the Upwind auth endpoint using client credentials."""
 
-        logging.debug("Requesting Upwind API access token...")
+        logging.info("Requesting Upwind API access token...")
 
         payload = {
             "client_id": self.client_id,
@@ -39,7 +62,7 @@ class UpwindClient:
         response.raise_for_status()
 
         self._access_token = response.json()["access_token"]
-        logging.debug("Upwind API access token obtained.")
+        logging.info("Upwind API access token obtained.")
         return self._access_token
 
     def _fetch_paginated(self, url: str, search_body: dict) -> list:
@@ -81,7 +104,7 @@ class UpwindClient:
             items = result.get("items", [])
             all_items.extend(items)
 
-            logging.debug(
+            logging.info(
                 "Page %d: fetched %d items (total so far: %d)",
                 page_number,
                 len(items),
@@ -93,55 +116,152 @@ class UpwindClient:
             if not cursor:
                 break
 
-        logging.debug("Fetched %d total items from Upwind API.", len(all_items))
+        logging.info("Fetched %d total items from Upwind API.", len(all_items))
         return all_items
 
     def _request_with_retry(self, url, headers, json_body, params) -> requests.Response:
-        """Execute a POST request with exponential backoff on retryable errors."""
+        """Execute a POST request with exponential backoff on 429 responses."""
 
         for attempt in range(self.max_retries + 1):
-            try:
-                response = requests.post(
-                    url, json=json_body, headers=headers, params=params, timeout=60
+            response = requests.post(
+                url, json=json_body, headers=headers, params=params, timeout=60
+            )
+
+            if response.status_code != 429:
+                return response
+
+            if attempt < self.max_retries:
+                wait = min(
+                    self.initial_backoff_seconds * (2**attempt),
+                    self.max_backoff_seconds,
+                )
+                logging.warning(
+                    "Rate limited (429). Retrying in %ds (attempt %d/%d)...",
+                    wait,
+                    attempt + 1,
+                    self.max_retries,
+                )
+                time.sleep(wait)
+            else:
+                raise RuntimeError(
+                    f"Upwind API rate limit exceeded after {self.max_retries} retries: "
+                    f"{response.text}"
                 )
 
-                if response.status_code not in self._RETRYABLE_STATUS_CODES:
-                    return response
+    def _get_with_retry(self, url, headers, params) -> requests.Response:
+        """Execute a GET request with exponential backoff on 429 responses."""
 
-                if attempt < self.max_retries:
-                    wait = min(
-                        self.initial_backoff_seconds * (2**attempt),
-                        self.max_backoff_seconds,
-                    )
-                    logging.warning(
-                        "Retryable status %d. Retrying in %ds (attempt %d/%d)...",
-                        response.status_code,
-                        wait,
-                        attempt + 1,
-                        self.max_retries,
-                    )
-                    time.sleep(wait)
-                else:
-                    raise RuntimeError(
-                        f"Upwind API request failed after {self.max_retries} retries "
-                        f"(status {response.status_code}): {response.text}"
-                    )
+        for attempt in range(self.max_retries + 1):
+            response = requests.get(url, headers=headers, params=params, timeout=60)
 
-            except (requests.ConnectionError, requests.Timeout) as e:
-                if attempt < self.max_retries:
-                    wait = min(
-                        self.initial_backoff_seconds * (2**attempt),
-                        self.max_backoff_seconds,
-                    )
-                    logging.warning(
-                        "%s. Retrying in %ds (attempt %d/%d)...",
-                        type(e).__name__,
-                        wait,
-                        attempt + 1,
-                        self.max_retries,
-                    )
-                    time.sleep(wait)
-                else:
-                    raise RuntimeError(
-                        f"Upwind API request failed after {self.max_retries} retries: {e}"
-                    ) from e
+            if response.status_code != 429:
+                return response
+
+            if attempt < self.max_retries:
+                wait = min(
+                    self.initial_backoff_seconds * (2**attempt),
+                    self.max_backoff_seconds,
+                )
+                logging.warning(
+                    "Rate limited (429). Retrying in %ds (attempt %d/%d)...",
+                    wait,
+                    attempt + 1,
+                    self.max_retries,
+                )
+                time.sleep(wait)
+            else:
+                raise RuntimeError(
+                    f"Upwind API rate limit exceeded after {self.max_retries} retries: "
+                    f"{response.text}"
+                )
+
+    def _fetch_page_paginated(self, url: str, base_params: dict) -> list:
+        """
+        Fetch all items from a GET endpoint using 1-based page-number pagination
+        (page + per-page query params). Stops when a page returns fewer items
+        than the requested page size, or an empty page.
+
+        :param url: The full API endpoint URL.
+        :param base_params: Query params to send on every page (time window, per-page, etc).
+        :return: List of item dictionaries from all pages.
+        """
+
+        token = self._get_access_token()
+        headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
+
+        all_items = []
+        page = 1
+
+        while True:
+            params = dict(base_params)
+            params["page"] = page
+
+            response = self._get_with_retry(url, headers, params)
+
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Upwind API returned status {response.status_code}: {response.text}"
+                )
+
+            result = response.json()
+            items = result if isinstance(result, list) else result.get("items", result.get("data", []))
+            all_items.extend(items)
+
+            logging.info(
+                "Page %d: fetched %d items (total so far: %d)",
+                page,
+                len(items),
+                len(all_items),
+            )
+
+            if len(items) < self.page_size:
+                break
+            page += 1
+
+        logging.info("Fetched %d total items from Upwind API.", len(all_items))
+        return all_items
+
+    def _fetch_link_header_paginated(self, url: str, base_params: dict) -> list:
+        """
+        Fetch all items from a GET endpoint that paginates via the standard
+        HTTP `Link` response header (rel="next"), e.g. GitHub-style pagination.
+
+        :param url: The full API endpoint URL.
+        :param base_params: Query params to send on the first request (e.g. per-page).
+        :return: List of item dictionaries from all pages.
+        """
+
+        token = self._get_access_token()
+        headers = {"Authorization": "Bearer " + token, "Accept": "application/json"}
+
+        all_items = []
+        next_url = url
+        params = dict(base_params)
+        page_number = 0
+
+        while next_url:
+            page_number += 1
+            response = self._get_with_retry(next_url, headers, params)
+
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Upwind API returned status {response.status_code}: {response.text}"
+                )
+
+            result = response.json()
+            items = result if isinstance(result, list) else result.get("items", result.get("data", []))
+            all_items.extend(items)
+
+            logging.info(
+                "Page %d: fetched %d items (total so far: %d)",
+                page_number,
+                len(items),
+                len(all_items),
+            )
+
+            next_link = response.links.get("next")
+            next_url = next_link["url"] if next_link else None
+            params = None  # the next-page URL already carries its own query string
+
+        logging.info("Fetched %d total items from Upwind API.", len(all_items))
+        return all_items
