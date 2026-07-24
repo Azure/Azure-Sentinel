@@ -1,0 +1,157 @@
+id: 4720d7a5-6845-4ce4-aa45-79334e1a1176
+name: Cayosoft Guardian - Core Identity and Infrastructure Threats
+description: |
+  Creates Microsoft Sentinel incidents for identity and infrastructure security threats reported by Cayosoft Guardian across on-premises Active Directory and Microsoft Entra ID. This includes threats related to accounts, service accounts, computers, security groups, and trusted domains. Incident severity is determined dynamically based on the severity of the detected threat.
+
+  This rule complements the Cloud Application Security Threats rule, which covers cloud application and service principal threat alerts not included in this rule.
+
+  Alerts with the same Cayosoft ThreatId are grouped into a single incident within a 1-day lookback window. Each alert includes a link to the Cayosoft Threat Directory for guidance on remediation.
+contentId: CayosoftGuardianMainAlerts
+status: Available
+requiredDataConnectors:
+- connectorId: CayosoftGuardianConnector
+  dataTypes:
+  - CayosoftThreatAlerts_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 1h
+suppressionEnabled: false
+severity: Medium
+tactics: []
+relevantTechniques: []
+query: |
+  // ATTENTION: ruleFrequency must match the "queryFrequency" value in the rule's scheduling settings!
+  // ATTENTION: lookbackPeriod must match the "queryPeriod" value in the rule's scheduling settings!
+  // If you change one, change both, in every location, or you will reintroduce duplicate alerts.
+  // Pattern reference: https://learn.microsoft.com/en-us/azure/sentinel/ingestion-delay
+  let ruleFrequency = 1h;
+  let lookbackPeriod = 1d;
+  let window_end = bin(now(), ruleFrequency);      
+  let window_start = window_end - ruleFrequency;   
+  CayosoftThreatAlerts_CL
+  | where TimeGenerated >= ago(lookbackPeriod)
+  | where ingestion_time() > window_start and ingestion_time() <= window_end
+  | extend ParsedCategories = todynamic(Categories)
+  | extend TargetObjectTypeNormalized = tostring(TargetObjectType)
+  | extend TargetLocationNormalized = tostring(TargetLocation)
+  | mv-apply Cat = ParsedCategories on (
+      summarize Values = make_list(tostring(Cat.value)) by Key = tostring(Cat.name)
+  | summarize CleanCategories = make_bag(pack(Key, strcat_array(Values, ', ')))
+      )
+  | extend Tactics = replace_string(tostring(CleanCategories['Attack tactics']), ' ', '')
+  | extend ExtractedDomain = tostring(split(TargetLocationNormalized, '/')[0])
+  | extend IsEntra = TargetObjectTypeNormalized startswith 'microsoft.graph'
+  | extend IsAD = TargetObjectTypeNormalized startswith 'microsoft.ad' or TargetObjectTypeNormalized has 'ServiceAccount'
+  | extend IsGMSA = TargetObjectTypeNormalized contains 'ManagedServiceAccount'
+  | extend ParsedUser = case(
+      TargetObjectTypeNormalized has 'user' or TargetObjectTypeNormalized has 'ServiceAccount' or TargetObjectTypeNormalized has 'inetOrgPerson', TargetObjectName,
+      extract("member\\s+'([^']+)'", 1, Subject)
+      )
+  | extend TargetAccountAadUserId = iff(IsEntra and TargetObjectTypeNormalized has 'user', TargetObjectId, dynamic(null))
+  | extend TargetAccountName = case(
+      IsEntra and TargetObjectTypeNormalized has 'user', iff(ParsedUser contains '@', tostring(split(ParsedUser, '@')[0]), ParsedUser),
+      IsAD and (TargetObjectTypeNormalized has 'user' or TargetObjectTypeNormalized has 'foreignSecurityPrincipal' or IsGMSA), TargetObjectName,
+      IsAD and TargetObjectTypeNormalized has 'directoryObject', TargetObjectName,
+      isnotempty(ParsedUser), iff(ParsedUser contains '@', tostring(split(ParsedUser, '@')[0]), ParsedUser),
+      dynamic(null)
+      )
+  | extend TargetAccountObjectGuid = iff(IsAD and (TargetObjectTypeNormalized has 'user' or TargetObjectTypeNormalized has 'foreignSecurityPrincipal' or IsGMSA), TargetObjectId, dynamic(null))
+  | extend TargetHostName = iff(TargetObjectTypeNormalized has 'computer' or TargetObjectTypeNormalized has 'device', TargetObjectName, dynamic(null))
+  | extend TargetHostDomain = iff(IsAD and TargetObjectTypeNormalized has 'computer', ExtractedDomain, dynamic(null))
+  | extend TargetHostAzureID = iff(IsEntra and TargetObjectTypeNormalized has 'device', TargetObjectId, dynamic(null))
+  | extend RawPath = iff(TargetLocationNormalized contains '/', substring(TargetLocationNormalized, indexof(TargetLocationNormalized, '/') + 1), '')
+  // Convert domain
+  | extend DomainDN = strcat('DC=', replace_string(ExtractedDomain, '.', ',DC='))
+  // Smart path processing
+  | extend PathDN = case(
+      isempty(RawPath), '',
+      RawPath has_any ('Builtin', 'Users', 'Computers', 'ForeignSecurityPrincipals', 'Managed Service Accounts'), strcat('CN=', replace_string(RawPath, '/', ',CN=')),
+      strcat('OU=', replace_string(RawPath, '/', ',OU='))
+  )
+  // Assemble the final DistinguishedName and Name for the group
+  | extend TargetGroupName = iff(TargetObjectTypeNormalized has 'group', TargetObjectName, dynamic(null))
+  | extend TargetGroupDistinguishedName = iff(
+      TargetObjectTypeNormalized has 'group', 
+      strcat('CN=', TargetObjectName, iff(isnotempty(PathDN), strcat(',', PathDN), ''), ',', DomainDN), 
+      dynamic(null)
+  )
+  | extend TargetGroupObjectGuid = iff(TargetObjectTypeNormalized has 'group', TargetObjectId, dynamic(null))
+  | extend TargetDNSName = case(
+      IsAD and TargetObjectTypeNormalized has 'trustedDomain', TargetObjectName,
+      isnotempty(TargetLocationNormalized), ExtractedDomain,
+      dynamic(null)
+      )
+  | extend ThreatDocUrl = tolower( strcat('https://www.cayosoft.com/threat-directory/', ThreatId, '/'))
+  | extend AlertSeverity = case(
+      Severity == 'high', 'High',
+      Severity == 'medium', 'Medium',
+      Severity == 'low', 'Low',
+      Severity == 'informational', 'Informational',
+      'Informational'
+      )
+  | project-away Categories, ParsedCategories
+  | project-rename Categories = CleanCategories
+  | where not(IsEntra and (TargetObjectType has 'application' or TargetObjectType has 'servicePrincipal'))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+    - ThreatId
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{Subject}}"
+  alertDescriptionFormat: "Details: {{ThreatDocUrl}}"
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties:
+  - alertProperty: AlertLink
+    value: ThreatDocUrl
+customDetails:
+  ThreatId: ThreatId
+  Categories: Categories
+  Evidence: Evidence
+  Where: TargetLocation
+  TargetName: TargetObjectName
+  TargetType: TargetObjectType
+  CreatedDateTime: CreatedDateTime
+  RemediationComplex: RemediationComplexity
+  ThreatDocUrl: ThreatDocUrl
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: AadUserId
+    columnName: TargetAccountAadUserId
+  - identifier: Name
+    columnName: TargetAccountName
+  - identifier: ObjectGuid
+    columnName: TargetAccountObjectGuid
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: TargetHostName
+  - identifier: NTDomain
+    columnName: TargetHostDomain
+  - identifier: AzureID
+    columnName: TargetHostAzureID
+- entityType: SecurityGroup
+  fieldMappings:
+  - identifier: DistinguishedName
+    columnName: TargetGroupDistinguishedName
+  - identifier: ObjectGuid
+    columnName: TargetGroupObjectGuid
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: TargetDNSName
+version: 1.0.0
+kind: Scheduled
+
