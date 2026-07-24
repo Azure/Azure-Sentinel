@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.5       | 22-07-2026                     | Adding parser & analytic rules from legacy Cortex XDR connector and removed 'CCP' from solution name |
 | 3.0.4       | 12-06-2026                     | Updating CCF Polling file to implement parameters                           |
 | 3.0.3       | 09-04-2025                     | Updating CCF connector parameters                                        |
 | 3.0.2       | 10-02-2025                     | Advancing CCF **Data Connector** from Public preview to Global Availability.|
