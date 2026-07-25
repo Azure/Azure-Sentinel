@@ -3,7 +3,7 @@ name: HoneyLabs TI Map URL Entity to CommonSecurityLog
 version: 1.0.0
 kind: Scheduled
 description: |
-  'Identifies requests in CommonSecurityLog (proxy, firewall URL logging) to loader and C2 URLs that HoneyLabs extracted from payloads captured on its honeypot sensors. A match usually means a host inside your network fetched or contacted live malware infrastructure.'
+  'Identifies requests in CommonSecurityLog to malware loader or command-and-control URLs that HoneyLabs pulled out of payloads captured by its honeypot sensors. A hit usually means a host inside your estate reached out to attacker-controlled infrastructure, so treat it as post-compromise until proven otherwise. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'
 severity: High
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
@@ -25,29 +25,33 @@ relevantTechniques:
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | where SourceSystem startswith 'HoneyLabs'
-  | where isnotempty(Url)
+  let HoneyLabs_URLs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'url:value'
+    | extend TI_urlEntity = tostring(ObservableValue),
+             HoneyLabsConfidence = Confidence,
+             IndicatorDescription = tostring(Data.description);
+  HoneyLabs_URLs
   | join kind=innerunique (
       CommonSecurityLog
       | where TimeGenerated >= ago(dt_lookBack)
       | where isnotempty(RequestURL)
       | extend CommonSecurityLog_TimeGenerated = TimeGenerated
-  )
-  on $left.Url == $right.RequestURL
-  | where CommonSecurityLog_TimeGenerated < ExpirationDateTime
-  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Url
-  | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  Url, SourceIP, DestinationIP, DeviceName, DeviceAction, SourceUserName, RequestClientApplication
+  ) on $left.TI_urlEntity == $right.RequestURL
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, TI_urlEntity
+  | project CommonSecurityLog_TimeGenerated, IndicatorDescription, Id, ThreatType, ValidUntil,
+    HoneyLabsConfidence, TI_urlEntity, SourceIP, DestinationIP, DeviceName, DeviceAction,
+    SourceUserName, RequestClientApplication
   | extend timestamp = CommonSecurityLog_TimeGenerated
 entityMappings:
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Url
+        columnName: TI_urlEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address

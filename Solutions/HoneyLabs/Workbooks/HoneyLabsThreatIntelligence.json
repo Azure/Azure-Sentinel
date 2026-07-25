@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## HoneyLabs Threat Intelligence\n\nIndicators from internet-facing honeypot sensors. Every one is **evidence-backed**: the IP ran an exploit or loader command against a sensor, or the URL was pulled out of a payload those commands fetched. Known research scanners are excluded and indicators expire as activity stops.\n\n`ConfidenceScore` grades the evidence behind each indicator (90 = 100+ observed attacks, 60 = a single sighting), so you can pick an alerting threshold instead of muting the feed. `Tags` carry the source network (`asn:ASxxxx`), origin (`country:XX`) and the indicator kind."
+        "json": "## HoneyLabs Threat Intelligence\n\nIndicators from internet-facing honeypot sensors. Every one is **evidence-backed**: the IP ran an exploit or loader command against a sensor, or the URL was pulled out of a payload those commands fetched. Known research scanners are excluded and indicators expire as activity stops.\n\n`Confidence` grades the evidence behind each indicator (90 = 100+ observed attacks, 60 = a single sighting), so you can pick an alerting threshold instead of muting the feed. Labels carry the source network (`asn:ASxxxx`), origin (`country:XX`) and the indicator kind."
       },
       "name": "Header"
     },
@@ -61,7 +61,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = dcount(IndicatorId), LastReceived = max(LatestIndicatorTime)\n| extend Status = iff(isempty(LastReceived), 'No HoneyLabs indicators yet: check the TAXII connector', 'Connected')\n| project Status, Indicators, LastReceived",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = dcount(Id), LastReceived = max(TimeGenerated)\n| extend Status = iff(isempty(LastReceived), 'No HoneyLabs indicators yet: check the TAXII connector', 'Connected')\n| project Status, Indicators, LastReceived",
         "size": 4,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -74,7 +74,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = dcount(IndicatorId) by bin(LatestIndicatorTime, 1h)",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = dcount(Id) by bin(TimeGenerated, 1h)",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -87,7 +87,7 @@
     {
       "type": 1,
       "content": {
-        "json": "### Choosing an alerting threshold\n\nHigher confidence means more observed attacks behind the indicator. A practical starting point is to alert on the top band and watchlist the rest, then widen once you see the real volume in your environment."
+        "json": "### Choosing an alerting threshold\n\nHigher confidence means more observed attacks behind the indicator. A practical start is to alert on the top band and watchlist the rest, then widen once you see the real volume in your environment."
       },
       "name": "Tuning header"
     },
@@ -95,7 +95,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = count() by ConfidenceScore\n| extend Evidence = case(ConfidenceScore >= 90, '100+ observed attacks', ConfidenceScore >= 80, '10-99 observed attacks', ConfidenceScore >= 70, '3-9 observed attacks', '1-2 observed attacks')\n| project ConfidenceScore, Evidence, Indicators\n| sort by ConfidenceScore desc",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| summarize Indicators = count() by Confidence\n| extend Evidence = case(Confidence >= 90, '100+ observed attacks', Confidence >= 80, '10-99 observed attacks', Confidence >= 70, '3-9 observed attacks', '1-2 observed attacks')\n| project Confidence, Evidence, Indicators\n| sort by Confidence desc",
         "size": 1,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -108,7 +108,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| extend Kind = case(isnotempty(Url), 'Malware loader/C2 URL', 'Exploiter source IP')\n| summarize Indicators = count() by Kind",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| extend Kind = case(ObservableKey == 'url:value', 'Malware loader/C2 URL', ObservableKey == 'ipv4-addr:value', 'Exploiter source IP', 'Other')\n| summarize Indicators = count() by Kind",
         "size": 1,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -129,7 +129,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Tag = todynamic(Tags) to typeof(string)\n| where Tag startswith 'asn:'\n| extend ASN = replace_string(Tag, 'asn:', '')\n| summarize Indicators = count() by ASN\n| top 15 by Indicators desc",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Label = Data.labels to typeof(string)\n| where Label startswith 'asn:'\n| extend ASN = replace_string(Label, 'asn:', '')\n| summarize Indicators = count() by ASN\n| top 15 by Indicators desc",
         "size": 1,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -143,7 +143,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Tag = todynamic(Tags) to typeof(string)\n| where Tag startswith 'country:'\n| extend Country = replace_string(Tag, 'country:', '')\n| summarize Indicators = count() by Country\n| top 15 by Indicators desc",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| mv-expand Label = Data.labels to typeof(string)\n| where Label startswith 'country:'\n| extend Country = replace_string(Label, 'country:', '')\n| summarize Indicators = count() by Country\n| top 15 by Indicators desc",
         "size": 1,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -164,7 +164,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)\n| extend TI_ip = iff(isnotempty(NetworkIP), NetworkIP, NetworkSourceIP)\n| join kind=innerunique (CommonSecurityLog\n    | extend CS_ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\n    | where isnotempty(CS_ip)) on $left.TI_ip == $right.CS_ip\n| summarize Matches = count() by bin(TimeGenerated, 1h)",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| where ObservableKey == 'ipv4-addr:value'\n| extend TI_ip = tostring(ObservableValue)\n| join kind=innerunique (CommonSecurityLog\n    | extend CS_ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\n    | where isnotempty(CS_ip)) on $left.TI_ip == $right.CS_ip\n| summarize Matches = count() by bin(TimeGenerated, 1h)",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,
@@ -178,7 +178,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(14d)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem startswith 'HoneyLabs'\n| where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)\n| extend TI_ip = iff(isnotempty(NetworkIP), NetworkIP, NetworkSourceIP)\n| join kind=innerunique (CommonSecurityLog\n    | extend CS_ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\n    | where isnotempty(CS_ip)) on $left.TI_ip == $right.CS_ip\n| summarize Events = count(), Hosts = dcount(DeviceName), Blocked = countif(DeviceAction has_any ('block', 'deny', 'drop')), LastSeen = max(TimeGenerated) by TI_ip, ConfidenceScore, Description\n| extend Report = strcat('https://honeylabs.net/lookup/', TI_ip)\n| sort by ConfidenceScore desc, Events desc\n| take 50",
+        "query": "ThreatIntelIndicators\n| where TimeGenerated >= ago(14d)\n| where IsActive == true and ValidUntil > now()\n| summarize arg_max(TimeGenerated, *) by Id\n| where SourceSystem startswith 'HoneyLabs'\n| where ObservableKey == 'ipv4-addr:value'\n| extend TI_ip = tostring(ObservableValue)\n| join kind=innerunique (CommonSecurityLog\n    | extend CS_ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)\n    | where isnotempty(CS_ip)) on $left.TI_ip == $right.CS_ip\n| summarize Events = count(), Hosts = dcount(DeviceName), Blocked = countif(DeviceAction has_any ('block', 'deny', 'drop')), LastSeen = max(TimeGenerated) by TI_ip, Confidence\n| extend Report = strcat('https://honeylabs.net/lookup/', TI_ip)\n| sort by Confidence desc, Events desc\n| take 50",
         "size": 0,
         "timeContextFromParameter": "TimeRange",
         "queryType": 0,

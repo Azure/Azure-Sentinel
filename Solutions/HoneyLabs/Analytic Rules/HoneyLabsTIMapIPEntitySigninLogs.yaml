@@ -3,7 +3,7 @@ name: HoneyLabs TI Map IP Entity to SigninLogs
 version: 1.0.0
 kind: Scheduled
 description: |
-  'Identifies sign-ins (interactive and non-interactive) from IP addresses that HoneyLabs honeypot telemetry has observed running exploit or loader commands. A hit means credential access is being attempted from infrastructure with recent, evidenced malicious activity.'
+  'Identifies sign-ins (interactive and non-interactive) from IP addresses that HoneyLabs honeypot telemetry has observed running exploit or loader commands. A hit means credential access is being attempted from infrastructure with recent, evidenced malicious activity. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
@@ -20,47 +20,46 @@ queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-  - CredentialAccess
   - InitialAccess
+  - CredentialAccess
 relevantTechniques:
+  - T1190
   - T1110
-  - T1078
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
-  let aadFunc = (tableName:string){
-  ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | where SourceSystem startswith 'HoneyLabs'
-  | where isnotempty(NetworkIP) or isnotempty(NetworkSourceIP)
-  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkSourceIP)
-  | join kind=innerunique (
-      table(tableName) | where TimeGenerated >= ago(dt_lookBack)
-      | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)
-      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)
-      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
-      | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
-  )
-  on $left.TI_ipEntity == $right.IPAddress
-  | where SigninLogs_TimeGenerated < ExpirationDateTime
-  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress
-  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, Type
-  | extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
-  };
-  let aadSignin = aadFunc("SigninLogs");
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  union isfuzzy=true aadSignin, aadNonInt
+  let HoneyLabs_IPs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = tostring(ObservableValue),
+             HoneyLabsConfidence = Confidence,
+             HoneyLabsLabels = tostring(Data.labels),
+             IndicatorDescription = tostring(Data.description),
+             HoneyLabsReport = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue));
+  let aadSignin = SigninLogs | where TimeGenerated >= ago(dt_lookBack)
+    | project TimeGenerated, IPAddress, UserPrincipalName, ResultType, AppDisplayName, Location;
+  let aadNonInt = AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)
+    | project TimeGenerated, IPAddress, UserPrincipalName, ResultType, AppDisplayName, Location;
+  HoneyLabs_IPs
+  | join kind=innerunique (union isfuzzy=true aadSignin, aadNonInt
+      | extend CS_ipEntity = IPAddress
+      | extend Signin_TimeGenerated = TimeGenerated
+  ) on $left.TI_ipEntity == $right.CS_ipEntity
+  | where Signin_TimeGenerated < ValidUntil
+  | summarize Signin_TimeGenerated = arg_max(Signin_TimeGenerated, *) by Id, CS_ipEntity
+  | project Signin_TimeGenerated, IndicatorDescription, Id, ThreatType, ValidUntil, HoneyLabsConfidence,
+    HoneyLabsLabels, HoneyLabsReport, TI_ipEntity, CS_ipEntity, UserPrincipalName, ResultType,
+    AppDisplayName, Location
+  | extend timestamp = Signin_TimeGenerated
 entityMappings:
-  - entityType: Account
-    fieldMappings:
-      - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPAddress
+        columnName: CS_ipEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
