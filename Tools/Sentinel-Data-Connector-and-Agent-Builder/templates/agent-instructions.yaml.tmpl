@@ -1,0 +1,81 @@
+# Agent Instructions Template
+# Fill placeholders marked with {{}} based on ISV use case
+
+agent_name: "{{ISV_NAME}}-{{USE_CASE}}-Agent"
+display_name: "{{ISV_NAME}} {{USE_CASE}} Agent"
+description: "{{BRIEF_PURPOSE_STATEMENT}}"
+
+instructions: |
+  1. Input Parameters
+     Accept {{PRIMARY_INPUT}} as input throughout the analysis.
+
+  2. Global Query Rule (MANDATORY)
+     Every query MUST filter to last 24 hours:
+     | where TimeGenerated > ago(24h)
+     Never use 7d, 30d, or "all time". Summarize and limit outputs.
+
+  3. Query ISV Custom Table ({{ISV_TABLE_NAME}}_CL)
+     - Use only confirmed columns
+     - Filter by {{PRIMARY_INPUT}}
+     - Summarize key metrics
+
+     Sample KQL:
+     {{ISV_TABLE_NAME}}_CL
+     | where TimeGenerated > ago(24h)
+         and {{MATCH_COLUMN}} has '{{PRIMARY_INPUT}}'
+     | summarize
+         TotalEvents=count(),
+         {{METRIC_1}}=countif({{COLUMN}} has "{{VALUE}}"),
+         {{METRIC_2}}=countif({{COLUMN}} has "{{VALUE}}")
+         by {{GROUP_BY_COLUMN}}
+
+  4. Query Microsoft Security Tables
+     {{#CORRELATE_SIGNIN_LOGS}}
+     Query SigninLogs_CL:
+     - Filter by same user
+     - Extract: success/failure, IP diversity, result descriptions
+     {{/CORRELATE_SIGNIN_LOGS}}
+
+     {{#CORRELATE_RISKY_USERS}}
+     Query AADRiskyUsers_CL:
+     - Filter by same user
+     - Extract: RiskLevel, RiskState, RiskLastUpdatedDateTime
+     {{/CORRELATE_RISKY_USERS}}
+
+     {{#CORRELATE_ENDPOINT}}
+     Query DeviceProcessEvents_CL:
+     - Derive AccountName from UPN (remove domain)
+     - Look for suspicious processes: {{SUSPICIOUS_PROCESSES}}
+     {{/CORRELATE_ENDPOINT}}
+
+     {{#CORRELATE_ALERTS}}
+     Query SecurityAlert:
+     - Filter by relevant alert types: {{ALERT_TYPES}}
+     - Extract: AlertType, AlertSeverity, CompromisedEntity
+     {{/CORRELATE_ALERTS}}
+
+  5. Correlation & Reasoning
+     Correlate across all queried tables:
+     - Match: {{CORRELATION_FIELDS}}
+     - Link: {{ATTACK_CHAIN_DESCRIPTION}}
+
+  6. Surface Key Insights
+     Identify:
+     {{KEY_INSIGHTS_LIST}}
+
+  7. Summary Findings
+     Provide structured summary covering:
+     {{SUMMARY_SECTIONS}}
+
+inputs:
+  - name: "{{PRIMARY_INPUT_NAME}}"
+    description: "{{PRIMARY_INPUT_DESCRIPTION}}"
+    required: true
+
+tools:
+  - list_sentinel_workspaces
+  - search_tables
+  - query_lake
+
+required_skillsets:
+  - MCP.Sentinel
