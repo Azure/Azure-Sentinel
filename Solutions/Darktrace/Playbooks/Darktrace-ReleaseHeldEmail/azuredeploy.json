@@ -1,0 +1,390 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Darktrace - Release Held Email",
+    "description": "This playbook releases an email held by Darktrace /Email when a SOC analyst triggers it from a Microsoft Sentinel incident.",
+    "prerequisites": [
+      "A Darktrace ActiveAI Platform instance with API access enabled.",
+      "OAuth2 client credentials (Client ID and Client Secret) with permissions to release held emails.",
+      "The Darktrace instance ID for your deployment."
+    ],
+    "postDeployment": [
+      "1. Grant the Logic App managed identity the Microsoft Sentinel Responder role on the resource group.",
+      "2. Attach this playbook to incidents created by the DarktraceEmailHeldForRelease analytic rule."
+    ],
+    "lastUpdateTime": "2025-06-25T00:00:00.000Z",
+    "support": {
+      "tier": "Partner",
+      "name": "Darktrace",
+      "email": "customers@darktrace.com",
+      "link": "https://www.darktrace.com/contact/"
+    },
+    "author": {
+      "name": "Darktrace"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Darktrace-ReleaseHeldEmail",
+      "metadata": {
+        "description": "Name of the Logic App resource."
+      }
+    },
+    "DarktraceInstanceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Your Darktrace instance ID (used in API path: /products/{instanceId}/...)."
+      }
+    },
+    "DarktraceClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "OAuth2 Client ID for Darktrace API authentication."
+      }
+    },
+    "DarktraceClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "OAuth2 Client Secret for Darktrace API authentication."
+      }
+    },
+    "CloseIncidentOnRelease": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "If true, the incident will be closed with BenignPositive classification after a successful email release."
+      }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "DarktraceTokenEndpoint": "https://auth.activeai.darktrace.com/oauth/token",
+    "DarktraceApiBase": "[concat('https://api.darktrace.com/products/', parameters('DarktraceInstanceId'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object"
+            },
+            "DarktraceClientId": {
+              "type": "String"
+            },
+            "DarktraceClientSecret": {
+              "type": "SecureString"
+            },
+            "DarktraceInstanceId": {
+              "type": "String"
+            },
+            "CloseIncidentOnRelease": {
+              "type": "Bool"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Get_alerts_for_incident": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Relations/(@{triggerBody()?['object']?['properties']?['incidentNumber']})/Alerts",
+                "queries": {
+                  "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                  "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                  "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
+                }
+              },
+              "runAfter": {}
+            },
+            "For_each_alert": {
+              "type": "Foreach",
+              "foreach": "@body('Get_alerts_for_incident')?['value']",
+              "actions": {
+                "Extract_custom_details": {
+                  "type": "Compose",
+                  "inputs": "@items('For_each_alert')?['properties']?['additionalData']?['Custom Details']",
+                  "runAfter": {}
+                },
+                "Parse_custom_details": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@outputs('Extract_custom_details')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "emailUuid": {
+                          "type": "array"
+                        },
+                        "recipients": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Extract_custom_details": ["Succeeded"]
+                  }
+                },
+                "Parse_recipients_array": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Parse_custom_details')?['recipients']?[0]",
+                    "schema": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_custom_details": ["Succeeded"]
+                  }
+                },
+                "Get_OAuth_token": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "https://auth.activeai.darktrace.com/oauth/token",
+                    "headers": {
+                      "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    "body": "grant_type=client_credentials&client_id=@{encodeUriComponent(parameters('DarktraceClientId'))}&client_secret=@{encodeUriComponent(parameters('DarktraceClientSecret'))}&scope=.default"
+                  },
+                  "runAfter": {
+                    "Parse_recipients_array": ["Succeeded"]
+                  }
+                },
+                "Release_email": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat('https://api.darktrace.com/products/', parameters('DarktraceInstanceId'), '/agemail/api/v1.0/emails/', body('Parse_custom_details')?['emailUuid']?[0], '/action')}",
+                    "headers": {
+                      "Authorization": "Bearer @{body('Get_OAuth_token')?['access_token']}",
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "action": "release",
+                      "recipients": "@body('Parse_recipients_array')"
+                    }
+                  },
+                  "runAfter": {
+                    "Get_OAuth_token": ["Succeeded"]
+                  }
+                },
+                "Check_release_success": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": ["@outputs('Release_email')['statusCode']", 200]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Release_email": ["Succeeded", "Failed"]
+                  },
+                  "actions": {
+                    "Add_success_comment": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment/(@{triggerBody()?['object']?['properties']?['incidentNumber']})",
+                        "queries": {
+                          "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                          "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                          "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
+                        },
+                        "body": {
+                          "message": "Email released successfully at @{utcNow()}"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Check_close_incident": {
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": ["@parameters('CloseIncidentOnRelease')", true]
+                          }
+                        ]
+                      },
+                      "runAfter": {
+                        "Add_success_comment": ["Succeeded"]
+                      },
+                      "actions": {
+                        "Close_incident": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "put",
+                            "path": "/Incidents",
+                            "queries": {
+                              "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                              "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                              "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
+                            },
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "status": "Closed",
+                              "classification": {
+                                "ClassificationAndReason": "BenignPositive - SuspiciousButExpected"
+                              }
+                            }
+                          },
+                          "runAfter": {}
+                        }
+                      },
+                      "else": {
+                        "actions": {}
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Add_error_comment": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment/(@{triggerBody()?['object']?['properties']?['incidentNumber']})",
+                          "queries": {
+                            "subscriptionId": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                            "resourceGroupName": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                            "workspaceName": "@triggerBody()?['workspaceInfo']?['WorkspaceName']"
+                          },
+                          "body": {
+                            "message": "Release failed (@{outputs('Release_email')['statusCode']}): @{body('Release_email')}"
+                          }
+                        },
+                        "runAfter": {}
+                      },
+                      "Terminate_on_failure": {
+                        "type": "Terminate",
+                        "inputs": {
+                          "runStatus": "Failed",
+                          "runError": {
+                            "code": "ReleaseEmailFailed",
+                            "message": "Failed to release email: @{body('Release_email')}"
+                          }
+                        },
+                        "runAfter": {
+                          "Add_error_comment": ["Succeeded"]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Get_alerts_for_incident": ["Succeeded"]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "DarktraceClientId": {
+            "value": "[parameters('DarktraceClientId')]"
+          },
+          "DarktraceClientSecret": {
+            "value": "[parameters('DarktraceClientSecret')]"
+          },
+          "DarktraceInstanceId": {
+            "value": "[parameters('DarktraceInstanceId')]"
+          },
+          "CloseIncidentOnRelease": {
+            "value": "[parameters('CloseIncidentOnRelease')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppName": {
+      "type": "string",
+      "value": "[parameters('PlaybookName')]"
+    },
+    "logicAppResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    }
+  }
+}
