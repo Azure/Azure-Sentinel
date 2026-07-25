@@ -57,10 +57,10 @@ XBOW_API_TOKEN          = os.environ.get("XBOW_API_TOKEN")
 XBOW_ORG_ID             = os.environ.get("XBOW_ORG_ID")
 STORAGE_CONN_STR        = os.environ.get("AzureWebJobsStorage")
 
-__version__ = "1.1"
+__version__ = "1.2"
 
 XBOW_API_BASE    = "https://console.xbow.com/api/v1"
-XBOW_API_VERSION = "2026-04-01"
+XBOW_API_VERSION = "2026-07-01"
 PAGE_SIZE        = 100
 INGEST_BATCH_SIZE = 500          # max records per upload() call
 STATE_CONTAINER  = "xbow-connector-state"
