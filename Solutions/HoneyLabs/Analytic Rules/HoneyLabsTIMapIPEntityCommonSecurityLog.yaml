@@ -3,7 +3,7 @@ name: HoneyLabs TI Map IP Entity to CommonSecurityLog
 version: 1.0.0
 kind: Scheduled
 description: |
-  'Identifies matches in CommonSecurityLog (firewall, proxy and other CEF sources) against IP indicators from HoneyLabs honeypot telemetry. A match means a source IP that ran exploit or loader commands against HoneyLabs sensors also appeared in your own logs.'
+  'Identifies matches in CommonSecurityLog (firewall, proxy and other CEF sources) against IP indicators from HoneyLabs honeypot telemetry. A match means a source IP that ran exploit or loader commands against HoneyLabs sensors also appeared in your own logs. Only the structured SourceIP and DestinationIP fields are matched; IPs merely mentioned inside the free-text Message are ignored, since those are frequently unrelated and generate false positives. Indicator confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks), so raise the threshold here if you want a quieter rule.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligenceTaxii
@@ -35,8 +35,8 @@ query: |
   | join kind=innerunique (
       CommonSecurityLog
       | where TimeGenerated >= ago(dt_lookBack)
-      | extend MessageIP = extract(@"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", 1, Message)
-      | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, iff(isnotempty(DestinationIP), DestinationIP, MessageIP))
+      | where isnotempty(SourceIP) or isnotempty(DestinationIP)
+      | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, DestinationIP)
       | extend CommonSecurityLog_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.CS_ipEntity
