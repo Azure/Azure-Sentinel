@@ -1,0 +1,627 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Log Analytics / Microsoft Sentinel workspace name. Deploy into the resource group that contains this workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "Azure region for the DCE, DCR, Sentinel content resources, and workspace location. Example: westeurope."
+      }
+    }
+  },
+  "variables": {
+    "dceName": "dce-frendsauditlogs",
+    "dcrName": "dcr-frendsauditlogs",
+    "tableName": "FrendsAuditLogs_CL",
+    "tablePlan": "Analytics",
+    "tableTotalRetentionDays": 365,
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "dceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+    "dcrId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+    "solutionName": "Frends iPaaS Audit Logs",
+    "solutionId": "azuresentinel.azure-sentinel-solution-frendsauditlogs-ccf",
+    "solutionVersion": "1.0.0",
+    "solutionAuthor": "Konstantinos Lianos",
+    "supportName": "KanenasCS",
+    "supportEmail": "Konstantinos_lianos@hotmail.com",
+    "connectorDefinitionName": "FrendsAuditLogsDefinition",
+    "connectionContentId": "FrendsAuditLogsConnection",
+    "dataConnectorVersionConnectorDefinition": "1.0.0",
+    "dataConnectorVersionConnections": "1.0.0",
+    "definitionTemplateName": "[concat(parameters('workspaceName'),'-dc-',uniqueString(variables('connectorDefinitionName')))]",
+    "connectionTemplateName": "[concat(parameters('workspaceName'),'-rdc-',uniqueString(variables('connectionContentId')))]",
+    "connectorDefinitionResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectorDefinitionName'))]",
+    "solutionContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-sl-',uniqueString(concat(variables('solutionId'),'-Solution-',variables('solutionId'),'-',variables('solutionVersion'))))]",
+    "dataConnectorContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-dc-',uniqueString(concat(variables('solutionId'),'-DataConnector-',variables('connectorDefinitionName'),'-',variables('dataConnectorVersionConnectorDefinition'))))]",
+    "resourcesDataConnectorContentProductId": "[concat(substring(variables('solutionId'), 0, 50),'-rdc-',uniqueString(concat(variables('solutionId'),'-ResourcesDataConnector-',variables('connectionContentId'),'-',variables('dataConnectorVersionConnections'))))]",
+    "solutionProvider": "Microsoft Security Community",
+    "connectionDataConnectorName": "FrendsAuditLogsConnectorUI",
+    "solutionIcon": ""
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-02-01",
+      "name": "[concat(parameters('workspaceName'), '/', variables('tableName'))]",
+      "properties": {
+        "plan": "[variables('tablePlan')]",
+        "totalRetentionInDays": "[variables('tableTotalRetentionDays')]",
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime"
+            },
+            {
+              "name": "ActionName",
+              "type": "string"
+            },
+            {
+              "name": "UserName",
+              "type": "string"
+            },
+            {
+              "name": "EventTimestampUtc",
+              "type": "dateTime"
+            },
+            {
+              "name": "Parameters",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]",
+        "[variables('dceId')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[variables('dceId')]",
+        "streamDeclarations": {
+          "Custom-FrendsAuditLogs_CL": {
+            "columns": [
+              {
+                "name": "actionName",
+                "type": "string"
+              },
+              {
+                "name": "userName",
+                "type": "string"
+              },
+              {
+                "name": "timestamp",
+                "type": "string"
+              },
+              {
+                "name": "parameters",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "sentinelWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-FrendsAuditLogs_CL"
+            ],
+            "destinations": [
+              "sentinelWorkspace"
+            ],
+            "transformKql": "source | extend EventTimestampUtc = todatetime(timestamp) | extend TimeGenerated = iif(isnull(EventTimestampUtc), now(), EventTimestampUtc) | project TimeGenerated, ActionName = actionName, UserName = userName, EventTimestampUtc, Parameters = parameters",
+            "outputStream": "Custom-FrendsAuditLogs_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('solutionId'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "version": "[variables('solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('solutionName')]",
+          "sourceId": "[variables('solutionId')]"
+        },
+        "author": {
+          "name": "[variables('solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('supportName')]",
+          "email": "[variables('supportEmail')]",
+          "tier": "Community"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('connectorDefinitionName')]",
+              "version": "[variables('dataConnectorVersionConnectorDefinition')]"
+            }
+          ]
+        },
+        "providers": [
+          "[variables('solutionProvider')]"
+        ],
+        "categories": {
+          "domains": [
+            "IT Operations"
+          ]
+        },
+        "contentKind": "Solution",
+        "packageId": "[variables('solutionId')]",
+        "contentProductId": "[variables('solutionContentProductId')]",
+        "displayName": "[variables('solutionName')]",
+        "publisherDisplayName": "[variables('solutionProvider')]",
+        "descriptionHtml": "Frends iPaaS Audit Trail Log connector for Microsoft Sentinel using the Codeless Connector Framework. Entra ID credentials and the Frends tenant name are provided during connector configuration.",
+        "icon": "[variables('solutionIcon')]",
+        "firstPublishDate": "2026-07-07"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "apiVersion": "2023-11-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/', variables('connectorDefinitionName'))]",
+      "location": "[parameters('location')]",
+      "kind": "Customizable",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+      ],
+      "properties": {
+        "connectorUiConfig": {
+          "id": "[variables('connectorDefinitionName')]",
+          "title": "Frends iPaaS Audit Logs (via Codeless Connector Framework)",
+          "publisher": "Microsoft Security Community",
+          "descriptionMarkdown": "Ingests the [Frends iPaaS](https://frends.com) Tenant audit trail (configuration changes, user actions and system events) into Microsoft Sentinel via the Frends Platform API Audit Trail Log endpoint. Prerequisites: the Frends Platform API and the Audit Log API route (Flags:EnableFrendsApiAuditLogRoute) must be enabled by Frends Support, and an Entra ID app registration with an admin-consented 'Administrator' application role is required. Any Platform API IP allowlist must permit calls from Azure.",
+          "graphQueriesTableName": "FrendsAuditLogs_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Frends audit log events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Frends audit events, latest first",
+              "query": "FrendsAuditLogs_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Process deployments in the last 7 days",
+              "query": "FrendsAuditLogs_CL\n| where TimeGenerated > ago(7d)\n| where ActionName startswith \"Process.\"\n| project TimeGenerated, ActionName, UserName, Parameters"
+            },
+            {
+              "description": "Actions per user, last 24 hours",
+              "query": "FrendsAuditLogs_CL\n| where TimeGenerated > ago(1d)\n| summarize Actions = count() by UserName\n| sort by Actions desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "FrendsAuditLogs_CL",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Frends Platform API",
+                "description": "Platform API and Audit Log API route enabled by Frends Support; IP allowlist must permit Azure/Sentinel egress."
+              },
+              {
+                "name": "Entra ID app registration",
+                "description": "App registration with client secret and an 'Administrator' app role (Applications member type) granted admin consent. Token audience must match the Application ID URI registered with Frends Support."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect the Frends Platform API Audit Trail Log",
+              "description": "Provide the Entra ID app registration used for Frends Platform API access and your Frends tenant name (the subdomain of frendsapp.com). These values are stored on the data connector connection, not in the initial ARM deployment parameters.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Entra ID Tenant ID",
+                    "placeholder": "Directory (tenant) ID",
+                    "type": "text",
+                    "name": "tenantId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Application (client) ID",
+                    "placeholder": "Application (client) ID",
+                    "type": "text",
+                    "name": "clientId",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Client Secret",
+                    "placeholder": "Client secret value",
+                    "type": "password",
+                    "name": "clientSecret",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Frends Tenant Name",
+                    "placeholder": "e.g. contoso (for contoso.frendsapp.com)",
+                    "type": "text",
+                    "name": "frendsTenant",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "name": "connectFrendsAuditLog",
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "isPrimary": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('definitionTemplateName'), variables('dataConnectorVersionConnectorDefinition'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentPackages', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('solutionId'))]",
+        "[variables('connectorDefinitionResourceId')]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectorDefinitionName')]",
+        "displayName": "[variables('solutionName')]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectorDefinitionName')))]",
+              "properties": {
+                "parentId": "[variables('connectorDefinitionResourceId')]",
+                "contentId": "[variables('connectorDefinitionName')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                  "sourceId": "[variables('solutionId')]",
+                  "name": "[variables('solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('supportName')]",
+                  "email": "[variables('supportEmail')]",
+                  "tier": "Community"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorVersionConnections')]",
+                      "contentId": "[variables('connectionContentId')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[variables('dataConnectorContentProductId')]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectionTemplateName'), variables('dataConnectorVersionConnections'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentPackages', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('solutionId'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectionContentId')]",
+        "displayName": "Frends iPaaS Audit Logs connection",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnections')]",
+          "parameters": {
+            "tenantId": {
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "Entra ID Directory (tenant) ID."
+              }
+            },
+            "clientId": {
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "Application (client) ID of the Entra app registration for the Frends Platform API."
+              }
+            },
+            "clientSecret": {
+              "type": "securestring",
+              "minLength": 1,
+              "metadata": {
+                "description": "Client secret value."
+              }
+            },
+            "frendsTenant": {
+              "type": "string",
+              "minLength": 1,
+              "metadata": {
+                "description": "Frends tenant subdomain, e.g. contoso for contoso.frendsapp.com."
+              }
+            },
+            "connectorDefinitionName": {
+              "type": "string",
+              "defaultValue": "[variables('connectorDefinitionName')]",
+              "minLength": 1
+            },
+            "workspace": {
+              "type": "string",
+              "defaultValue": "[parameters('workspaceName')]"
+            },
+            "workspaceLocation": {
+              "type": "string",
+              "defaultValue": "[parameters('location')]"
+            },
+            "dcrConfig": {
+              "type": "object",
+              "defaultValue": {
+                "dataCollectionEndpoint": "[reference(variables('dceId'), '2023-03-11').logsIngestion.endpoint]",
+                "dataCollectionRuleImmutableId": "[reference(variables('dcrId'), '2023-03-11').immutableId]"
+              }
+            }
+          },
+          "variables": {
+            "connectionContentId": "[variables('connectionContentId')]",
+            "connectionDataConnectorName": "[variables('connectionDataConnectorName')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "apiVersion": "2023-11-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('connectionDataConnectorName'))]",
+              "location": "[parameters('location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "[variables('connectorDefinitionName')]",
+                "dataType": "FrendsAuditLogs_CL",
+                "isActive": true,
+                "dcrConfig": {
+                  "streamName": "Custom-FrendsAuditLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "grantType": "client_credentials",
+                  "TokenEndpoint": "[[concat('https://login.microsoftonline.com/', parameters('tenantId'), '/oauth2/v2.0/token')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "ClientId": "[[parameters('clientId')]",
+                  "Scope": "[[concat('api://', parameters('clientId'), '/.default')]"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('frendsTenant'), '.frendsapp.com/api/v1/audit-log')]",
+                  "httpMethod": "Get",
+                  "queryParameters": {
+                    "PageSize": 200
+                  },
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "startDateTimeUtc",
+                  "endTimeAttributeName": "endDateTimeUtc",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.items[*]"
+                  ],
+                  "format": "json"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectionContentId')))]",
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectionDataConnectorName'))]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspaceName'), 'Microsoft.SecurityInsights', variables('connectionDataConnectorName'))]",
+                "contentId": "[variables('connectionContentId')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorVersionConnections')]",
+                "source": {
+                  "sourceId": "[variables('solutionId')]",
+                  "name": "[variables('solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('supportName')]",
+                  "email": "[variables('supportEmail')]",
+                  "tier": "Community"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[variables('resourcesDataConnectorContentProductId')]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('connectorDefinitionName')))]",
+      "dependsOn": [
+        "[variables('connectorDefinitionResourceId')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/contentTemplates', parameters('workspaceName'), 'Microsoft.SecurityInsights', concat(variables('connectionTemplateName'), variables('dataConnectorVersionConnections')))]"
+      ],
+      "properties": {
+        "parentId": "[variables('connectorDefinitionResourceId')]",
+        "contentId": "[variables('connectorDefinitionName')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+        "source": {
+          "sourceId": "[variables('solutionId')]",
+          "name": "[variables('solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "[variables('solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('supportName')]",
+          "email": "[variables('supportEmail')]",
+          "tier": "Community"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorVersionConnections')]",
+              "contentId": "[variables('connectionContentId')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "tableName": {
+      "type": "string",
+      "value": "[variables('tableName')]"
+    },
+    "streamName": {
+      "type": "string",
+      "value": "Custom-FrendsAuditLogs_CL"
+    },
+    "connectorDefinitionName": {
+      "type": "string",
+      "value": "[variables('connectorDefinitionName')]"
+    },
+    "dceLogsIngestionEndpoint": {
+      "type": "string",
+      "value": "[reference(variables('dceId'), '2023-03-11').logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(variables('dcrId'), '2023-03-11').immutableId]"
+    }
+  }
+}

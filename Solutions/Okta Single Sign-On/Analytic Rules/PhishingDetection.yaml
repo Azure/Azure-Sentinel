@@ -1,7 +1,7 @@
 id: 78d2b06c-8dc0-40e1-91c8-66d916c186f3
 name: Okta Fast Pass phishing Detection
 description: |
-  'This query detects cases in which Okta FastPass effectively prevented access to a known phishing website.'
+  This query detects cases in which Okta FastPass effectively prevented access to a known phishing website.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -18,30 +18,38 @@ triggerThreshold: 0
 tactics:
   - InitialAccess
 relevantTechniques:
-  - T1566
+  - T1566.002
 tags:
   - Okta
 query: |
+ // Add any known good IPs to this list to reduce noise
+ let AllowedIPList = dynamic([]);
  OktaSSO
+ | where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPList)
  | where eventType_s == 'user.authentication.auth_via_mfa'
  | where outcome_result_s == 'FAILURE'
  | where outcome_reason_s == 'FastPass declined phishing attempt'
  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,
   outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, client_geographicalContext_city_s, client_geographicalContext_country_s
- | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s)
+ | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s), AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: actor_alternateId_s
-      - identifier: DisplayName
-        columnName: actor_displayName_s
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: client_ipAddress_s
 customDetails:
   UserAgent: client_userAgent_rawUserAgent_s
+  UserAgentOS: client_userAgent_os_s
+  UserAgentBrowser: client_userAgent_browser_s
   Location: Location
-version: 1.1.0
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Okta FastPass phishing attempt declined for {{actor_alternateId_s}}'
+  alertDescriptionFormat: 'Okta FastPass declined a phishing attempt for {{actor_alternateId_s}} from {{client_ipAddress_s}} using {{client_userAgent_browser_s}}.'
+version: 1.1.1
 kind: Scheduled
