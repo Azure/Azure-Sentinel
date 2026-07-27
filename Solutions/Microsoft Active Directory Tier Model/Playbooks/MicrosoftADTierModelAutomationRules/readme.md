@@ -16,7 +16,7 @@ The rules match incidents by the `(TMxxx.1)` tag that the solution's analytic ru
 
 ## Deploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Active%2520Directory%2520Tier%2520Model%2FAutomation%2520Rules%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Active%2520Directory%2520Tier%2520Model%2FPlaybooks%2FMicrosoftADTierModelAutomationRules%2Fazuredeploy.json)
 
 1. Click **Deploy to Azure** above.
 2. Select the subscription and the resource group that contains your Microsoft Sentinel–enabled Log Analytics workspace.

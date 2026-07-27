@@ -38,7 +38,7 @@ This solution **monitors an existing Active Directory Tier Model deployment**. W
 
 ### Deploying the Automation Rules
 
-Microsoft Sentinel automation rules are not part of the Content Hub solution package, so they are shipped as a separate ARM template that must be deployed as a **required** post-installation step. See [Automation Rules/README.md](Automation%20Rules/README.md) for the one-click **Deploy to Azure** button and details.
+Microsoft Sentinel automation rules are not part of the Content Hub solution package, so they are shipped as a separate ARM template that must be deployed as a **required** post-installation step. See [Playbooks/MicrosoftADTierModelAutomationRules/readme.md](Playbooks/MicrosoftADTierModelAutomationRules/readme.md) for the one-click **Deploy to Azure** button and details.
 
 ## Analytic Rules
 
