@@ -1,0 +1,47 @@
+id: 81ff8c3c-b7c1-40ff-9389-800fcf2d484e
+name: AWS GuardDuty - Publicly exposed or weakly protected S3 buckets
+description: |
+  Identifies AWS GuardDuty findings that flag an S3 bucket becoming publicly accessible, having public-access-block protections disabled, or showing anomalous discovery/exfiltration activity against its objects. Groups by bucket so a hunter can see the full sequence of policy-weakening and access events against a single bucket over the lookback period.
+  Reference: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-types-s3.html
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSGuardDuty
+tactics:
+  - Exfiltration
+  - Discovery
+  - DefenseEvasion
+relevantTechniques:
+  - T1530
+  - T1580
+query: |
+  AWSGuardDuty
+  | where ResourceDetails.resourceType == "S3Bucket"
+      and ActivityType has_any ("Policy:S3", "Exfiltration:S3", "Discovery:S3", "Impact:S3", "Stealth:S3")
+  | extend
+      ThreatPurpose = tostring(split(ActivityType, ":")[0]),
+      BucketName = tostring(ResourceDetails.s3BucketDetails[0].name),
+      BucketArn = tostring(ResourceDetails.s3BucketDetails[0].arn),
+      PublicAccessEffective = tostring(ResourceDetails.s3BucketDetails[0].publicAccess.effectivePermission),
+      ActorUserName = coalesce(
+          tostring(ResourceDetails.accessKeyDetails.userName),
+          tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4)
+      ),
+      CallerIp = tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4)
+  | summarize
+      FindingCount = dcount(Id),
+      FindingTypes = make_set(ActivityType, 10),
+      PublicAccessStates = make_set(PublicAccessEffective, 5),
+      Actors = make_set(ActorUserName, 10),
+      CallerIps = make_set(CallerIp, 10),
+      MaxSeverity = max(Severity),
+      FirstSeen = min(TimeCreated),
+      LastSeen = max(TimeGenerated)
+      by AccountId, Region, ThreatPurpose, BucketName, BucketArn
+  | order by MaxSeverity desc, FindingCount desc
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: AccountId
+version: 1.0.0
