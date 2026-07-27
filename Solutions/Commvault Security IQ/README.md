@@ -55,7 +55,7 @@ Installation
 **4\. Configure the Connection:**
 
 *   Under **Configuration**, enter the following:
-    - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL (e.g., `https://hostname/commandcenter/api`)
+    - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL including the `/commandcenter/api` path (e.g., `https://m901.metallic.io/commandcenter/api`)
     - **QSDK Token**: The API token generated in Step 1
 *   Click **Connect**.
 
