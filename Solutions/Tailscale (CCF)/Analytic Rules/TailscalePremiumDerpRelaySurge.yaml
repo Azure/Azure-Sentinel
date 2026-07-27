@@ -1,0 +1,51 @@
+id: 0a1c8d12-e7d3-4890-8b89-8d6dbc1be2f0
+name: "Tailscale Premium: DERP relay traffic surge"
+description: Identifies when a source node has more than 75 percent of its recent flows falling back to a DERP relay (Tailscale IsRelayed flag, traffic via 127.3.3.40). Operational signal useful for spotting policy drift.
+description-detailed: |
+  Identifies when a source node has more than 75 percent of its recent flows falling back to a DERP relay (Tailscale's IsRelayed flag, traffic via 127.3.3.40). Sustained high relay rate indicates direct WireGuard peer-to-peer is failing - causes include NAT/firewall changes, a network blocking UDP 41641, or potential evasion attempts. Operational signal but useful for spotting policy drift. Requires Tailscale Premium or Enterprise.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1572
+query: |
+  let minFlows = 20;
+  let relayedPctThreshold = 75.0;
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(15m)
+  | summarize
+      TotalFlows = count(),
+      RelayedFlows = countif(IsRelayed)
+      by SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags)
+  | where TotalFlows >= minFlows
+  | extend RelayedPct = round(100.0 * RelayedFlows / TotalFlows, 1)
+  | where RelayedPct > relayedPctThreshold
+  | project SrcNodeName, SrcUser, SrcOs, SrcTags, TotalFlows, RelayedFlows, RelayedPct
+  | order by RelayedPct desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT6H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0
