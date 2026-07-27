@@ -7,7 +7,19 @@
 >
 > These playbooks previously used the deprecated Azure Log Analytics Data Collector connector, which Microsoft is retiring on September 14, 2026. They have been updated to use the Log Ingestion API via a Data Collection Endpoint (DCE) and Data Collection Rules (DCRs).
 >
-> **If you have existing deployments**, you must redeploy the Data Connectors infrastructure (step 1 below) and each affected playbook (`RFI-lookup-and-save-user`, `RFI-search-external-user`, `RFI-search-workforce-user`) using the updated templates before the deadline.
+> Notable solution changes:
+> - `RFI-lookup-and-save-user`, `RFI-search-external-user`, and `RFI-search-workforce-user` now authenticate to Log Analytics via managed identity and route data through a DCE and DCRs rather than a shared workspace key.
+> - The Log Analytics table names have changed. The following tables are created by the new Data Connectors infrastructure (step 1):
+>   - `RFI_UsersLookupResults_V2_CL` (previously `RFI_UsersLookupResults_CL`)
+>   - `RFI_CredentialDumps_V2_CL` (previously `RFI_CredentialDumps_CL`)
+>   - `RFI_MalwareLogs_V2_CL` (previously `RFI_MalwareLogs_CL`)
+>
+>   Microsoft doesn't allow targeting existing "v1" tables with DCR/DCE without running migration scripts, so new tables were needed. If you have KQL queries, workbooks, or alerts targeting the old table names, update them to the new names.
+>
+> **Migration path:**
+> 1. Deploy the updated Data Connectors infrastructure (step 1 below).
+> 2. Redeploy each affected playbook (`RFI-lookup-and-save-user`, `RFI-search-external-user`, `RFI-search-workforce-user`) using the updated templates.
+> 3. _Optional_: If you have KQL queries, workbooks, or alerts referencing the old table names, update them to the `_V2_CL` equivalents listed above.
 
 ## Table of Contents
 
@@ -47,7 +59,7 @@ This Solution consists of 6 playbooks (Logic Apps). Due to inconsistent naming o
 <br/>
 
 Connector playbooks:
-Custom connector are used to communicate and authorize towards Recorded Future backend API.
+Custom connectors are used to communicate and authorize towards Recorded Future backend API.
 
 | Playbook Name| Description  |
 |-|-|
@@ -81,6 +93,8 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). Note its name — it is required during deployment. If you don't have one, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace).
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
+
+<a id="required-permissions"></a>
 
 #### Required permissions (resource group scope)
 
@@ -127,8 +141,8 @@ This connector is used by other playbooks in this solution to communicate with R
 
 ### Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -145,7 +159,7 @@ This connector is used by other playbooks in this solution to communicate with R
 
 ## Base-playbooks
 
-Base playbooks is called within the search playbooks to take action and mitigate the risks.
+Base playbooks are called within the search playbooks to take action and mitigate the risks.
 
 ## RFI-add-EntraID-security-group-user
 
@@ -167,8 +181,8 @@ Expand Playbook Workflow
 
 ### Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-add-EntraID-security-group-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -210,8 +224,8 @@ Expand Playbook Workflow
 
 ### Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank" >![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank" >![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-confirm-EntraID-risky-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -245,8 +259,8 @@ Expand Playbook Workflow
 
 ### Deployment
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-lookup-and-save-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -283,8 +297,8 @@ External search playbook - will get data from Recorded Future on your clients le
 <a id="RFI-search-workforce-user"></a>
 ### Deployment RFI-search-workforce-user
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-search-workforce-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -303,8 +317,8 @@ External search playbook - will get data from Recorded Future on your clients le
 <a id="RFI-search-external-user"></a>
 ### Deployment RFI-search-external-user (Service Providers or MSSPs)
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2v3.0%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2Fv3.0%2FRFI-search-external-user%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 <details>
 <summary>Expand deployment parameters:</summary>
@@ -342,28 +356,15 @@ The Recorded Future identity solution uses the following connectors. Information
 |-|-|
 | **/recordedfutureidenti** | [Microsoft power platform connector](https://learn.microsoft.com/en-us/connectors/recordedfutureidenti/).<br/> [How to obtain Recorded Future API token](#how_to_obtain_Recorded_Future_API_token) |
 | **/RFI-CustomConnector** | [RecordedFuture-CustomConnector](../../../Recorded%20Future/Playbooks/Connectors/RecordedFuture-CustomConnector/readme.md) <br/> Same API token as the recordedfutureidenti connector. |
-| **/azuremonitorlogs** | [Azure Monitor Logs](https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/) |
 | **/azuread** | [Microsoft Entra ID power platform connectors](https://learn.microsoft.com/en-us/connectors/azuread/). |
 | **/azureadip** | [Azure AD Identity Protection](https://learn.microsoft.com/en-us/connectors/azureadip/) |
 
 <a id="how_to_obtain_Recorded_Future_API_token"></a>
 ### How to obtain Recorded Future API token
 
-Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this [Integration Support Ticket form](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).  Please fill out the following fields, based on intended API usage.
+You can issue a Recorded Future Identity API token yourself by visiting the Integration Center within the [Recorded Future Portal](https://app.recordedfuture.com).
 
-<details>
-<summary>Expand for example image of request form.</summary>
-
-![API request form](../images/APIRequest.png)
-</details>
-Select:
-
-- Recorded Future API Services - Identity API
-- Integration Partner Category - Recorded Future Owned Integrations (Premier)
-- Premier Integration - Recorded Future Identity Intelligence for Azure Active Directory (Entra ID)
-- Select Your Type of Inquiry (optional) - New Installation
-
-Recorded Future Support will connect with your account team to confirm licensing and ensure the token is set up with the correct specifications and permissions. Additional questions about API token requests not covered by the above can be sent via email to our support team, support@recordedfuture.com.
+For questions or support, contact **support@recordedfuture.com**.
 
 
 <a id="configuration_parameters"></a>
@@ -379,7 +380,7 @@ Search playbooks are configured using Playbooks Parameters. Parameters can be fo
 
 - **You need to create a Microsoft EntraID Group, and provide the Object ID as a parameter to the Playbook. For more information, see [Microsoft EntraID Groups](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-manage-groups) documentation.**
 - **You need to create a Log Analytics Workspace and provide the ID as a parameter to the playbook.**
-- **Recorded Future must be authorize `organization_domain` to search for connected to the API Tokens. This is done during the API request process**
+- **Recorded Future must authorize `organization_domain` to search for connected to the API Tokens. This is done during the API request process**
 
 > [!IMPORTANT]
 > Make sure to set `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise, you can encounter a situation when you get empty results on Lookup for the compromised credentials from the search.
@@ -388,14 +389,11 @@ Search playbooks are configured using Playbooks Parameters. Parameters can be fo
 |-|-|
 | **organization_domain** | Organization domain to search exposures for. |
 | **search_lookback_days** | Time range for Search / number of days before today to search (e.g. input "-14" to search the last 14 days). |
-| **malware_logs_log_analytics_custom_log_name** | Name for Log Analytics Custom Log to save Credential Dumps Search results at (**needs to end with "`_CL`"**). |
-| **credential_dumps_log_analytics_custom_log_name** | Name for Log Analytics Custom Log to save Malware Logs Search results at (**needs to end with "`_CL`"**).  |
 | **active_directory_security_group_id** | Object ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation. |
 | **lookup_lookback_days**  | Time range for Lookup / number of days before today to search (e.g. input "-14" to search the last 14 days). **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.** |
-| **lookup_results_log_analytics_custom_log_name**   | Name for Log Analytics Custom Log to save Lookup results at (**needs to end with "`_CL`"**). |
 | **active_directory_domain** | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com), your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
-Playbook parameters for Search playbook "External use case" are the same as for "Workforce use case", except "External use case" does NOT need `credential_dumps_log_analytics_custom_log_name` parameter.
+Playbook parameters for Search playbook "External use case" are the same as for "Workforce use case".
 
 <br/>
 
@@ -422,7 +420,7 @@ RFI-search-workforce-user or/and RFI-search-external-user are running on recurre
 ## How to access Log Analytics Custom Logs
 
 To see Log Analytics Custom Logs:
--   From then Azure Portal, navigate to the `Log Analytics workspaces` service
+-   From the Azure Portal, navigate to the `Log Analytics workspaces` service
 -   There, select the Log Analytic Workspace in which you have deployed the Solution
 -   There, in the left-side menu click on Logs, and expand second left side menu, and select Custom Logs
 
