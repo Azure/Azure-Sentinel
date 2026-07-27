@@ -1,5 +1,14 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.16
+
+- (2026-07-16) Add the Palo Alto Prisma Cloud Compute Authentication filtering parser.
+- (2026-07-17) Correct the Palo Alto PanOS disabled-parser watchlist key.
+
+## Version 0.3.15
+
+- (2026-07-16) Add parser Google Workspace Logins Authentication - [PR #14638](https://github.com/Azure/Azure-Sentinel/pull/14638)
+
 ## Version 0.3.14
 
 - (2026-06-29) Add parser Cisco FTD/Firepower from Syslog - [PR #14581](https://github.com/Azure/Azure-Sentinel/pull/14581)
@@ -82,4 +91,3 @@
 ## Version 0.0
 
 - (2021-10-21) Adding parameters to Authentication + 1 expansion - [PR #3235](https://github.com/Azure/Azure-Sentinel/pull/3235)
-
