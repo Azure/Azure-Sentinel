@@ -1,0 +1,169 @@
+Parser:
+  Title: Network Session ASIM parser for AWS GuardDuty findings
+  Version: '0.1.0'
+  LastUpdated: Jul 27, 2026
+Product:
+  Name: AWS GuardDuty
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Amazon GuardDuty finding types
+    Link: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-types-active.html
+  - Title: Amazon GuardDuty finding format
+    Link: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-format.html
+Description: |
+  This ASIM parser supports normalizing AWS GuardDuty findings that carry network context (service.action.networkConnectionAction or service.action.awsApiCallAction) to the ASIM Network Session normalized schema. Findings are ingested through the Microsoft Sentinel AWS S3 connector into the AWSGuardDuty table; findings without network context (for example, pure S3 policy or EKS control-plane findings) are filtered out by this parser and are better served by AssumedRole/S3/EKS-specific content.
+ParserName: ASimNetworkSessionAWSGuardDuty
+EquivalentBuiltInParser: _ASim_NetworkSession_AWSGuardDuty
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false) {
+    AWSGuardDuty
+    | where not(disabled)
+    // Only findings that carry network context are in scope for this parser.
+    | extend ActionType_ = tostring(ServiceDetails.action.actionType)
+    | where ActionType_ in ("NETWORK_CONNECTION", "AWS_API_CALL", "PORT_PROBE", "DNS_REQUEST")
+    | extend
+        NetworkAction_ = ServiceDetails.action.networkConnectionAction,
+        ApiCallAction_ = ServiceDetails.action.awsApiCallAction,
+        PortProbeAction_ = ServiceDetails.action.portProbeAction,
+        DnsAction_ = ServiceDetails.action.dnsRequestAction
+    // Prefer the network-connection view; fall back to the API-call caller IP for IAM-driven findings.
+    | extend RemoteDetails_ = case(
+        ActionType_ == "NETWORK_CONNECTION", NetworkAction_.remoteIpDetails,
+        ActionType_ == "AWS_API_CALL",       ApiCallAction_.remoteIpDetails,
+        ActionType_ == "PORT_PROBE",         PortProbeAction_.portProbeDetails[0].remoteIpDetails,
+        dynamic(null)
+      )
+    | extend DstIpAddr_ = tostring(RemoteDetails_.ipAddressV4)
+    | where isnotempty(DstIpAddr_)
+    | extend
+        InstanceDetails_ = ResourceDetails.instanceDetails,
+        NetIf0_ = ResourceDetails.instanceDetails.networkInterfaces[0]
+    // ASIM event metadata
+    | extend
+        EventStartTime  = TimeGenerated,
+        EventEndTime    = TimeGenerated,
+        EventType       = "NetworkSession",
+        EventSchema     = "NetworkSession",
+        EventSchemaVersion = "0.2.6",
+        EventVendor     = "AWS",
+        EventProduct    = "GuardDuty",
+        EventProductVersion = SchemaVersion,
+        EventCount      = toint(1),
+        EventResult     = case(
+            ActionType_ == "PORT_PROBE", "Failure",
+            tobool(NetworkAction_.blocked) == true, "Failure",
+            "Success"
+        ),
+        EventSeverity   = case(
+            Severity >= 7, "High",
+            Severity >= 4, "Medium",
+            Severity >= 1, "Low",
+            "Informational"
+        ),
+        EventOriginalSeverity = tostring(Severity),
+        EventMessage    = Title,
+        EventOriginalType = ActivityType,
+        EventOriginalUid  = Id,
+        EventUid        = strcat("guardduty-", Id)
+    // Source (the AWS resource the finding is about)
+    | extend
+        SrcIpAddr     = coalesce(tostring(NetIf0_.privateIpAddress), tostring(NetIf0_.publicIp), ""),
+        SrcPortNumber = toint(NetworkAction_.localPortDetails.port),
+        SrcHostname   = tostring(InstanceDetails_.instanceId),
+        SrcDvcId      = tostring(InstanceDetails_.instanceId),
+        SrcDvcIdType  = iff(isnotempty(tostring(InstanceDetails_.instanceId)), "Other", ""),
+        SrcDomain     = tostring(NetIf0_.vpcId),
+        SrcDomainType = iff(isnotempty(tostring(NetIf0_.vpcId)), "Other", "")
+    // Destination (the remote endpoint GuardDuty observed)
+    | extend
+        DstIpAddr    = DstIpAddr_,
+        DstPortNumber = toint(coalesce(NetworkAction_.remotePortDetails.port, dynamic(null))),
+        DstGeoCountry = tostring(RemoteDetails_.country.countryName),
+        DstGeoCity    = tostring(RemoteDetails_.city.cityName),
+        DstDescription = tostring(RemoteDetails_.organization.org)
+    // Network fields
+    | extend
+        NetworkProtocol = toupper(tostring(coalesce(NetworkAction_.protocol, dynamic("")))),
+        NetworkDirection = case(
+            tostring(NetworkAction_.connectionDirection) == "INBOUND",  "Inbound",
+            tostring(NetworkAction_.connectionDirection) == "OUTBOUND", "Outbound",
+            "Unknown"
+        ),
+        NetworkSessionId = Id,
+        NetworkBytes   = int(0),
+        NetworkPackets = int(0),
+        NetworkApplicationProtocol = case(
+            toint(NetworkAction_.remotePortDetails.port) == 80,   "HTTP",
+            toint(NetworkAction_.remotePortDetails.port) == 443,  "HTTPS",
+            toint(NetworkAction_.remotePortDetails.port) == 53,   "DNS",
+            toint(NetworkAction_.remotePortDetails.port) == 22,   "SSH",
+            toint(NetworkAction_.remotePortDetails.port) == 3389, "RDP",
+            ""
+        )
+    // Device (the EC2 instance or resource the finding is about, when present)
+    | extend
+        DvcId       = tostring(InstanceDetails_.instanceId),
+        DvcIdType   = iff(isnotempty(tostring(InstanceDetails_.instanceId)), "Other", ""),
+        DvcHostname = tostring(InstanceDetails_.instanceId),
+        DvcOs       = case(
+            tostring(InstanceDetails_.platform) == "windows", "Windows",
+            isnotempty(tostring(InstanceDetails_.platform)),  tostring(InstanceDetails_.platform),
+            ""
+        ),
+        DvcAction   = iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
+        DvcInterface = tostring(NetIf0_.networkInterfaceId)
+    // Threat fields
+    | extend
+        ThreatName              = ActivityType,
+        ThreatRiskLevel         = toint(Severity * 10),
+        ThreatOriginalRiskLevel = tostring(Severity),
+        ThreatField             = "DstIpAddr",
+        ThreatIpAddr            = DstIpAddr,
+        ThreatIsActive          = true,
+        ThreatFirstReportedTime = TimeCreated,
+        ThreatLastReportedTime  = TimeGenerated
+    // Rule fields
+    | extend
+        RuleName   = ActivityType,
+        RuleNumber = int(0),
+        RuleAction = "Alert"
+    // AWS-specific context, packed for ASIM AdditionalFields
+    | extend AdditionalFields = bag_pack(
+        "AwsAccountId",   AccountId,
+        "AwsRegion",      Region,
+        "AwsPartition",   Partition,
+        "VpcId",          tostring(NetIf0_.vpcId),
+        "SubnetId",       tostring(NetIf0_.subnetId),
+        "InstanceId",     tostring(InstanceDetails_.instanceId),
+        "InstanceType",   tostring(InstanceDetails_.instanceType),
+        "GuardDutyFindingArn", Arn,
+        "GuardDutyActionType", ActionType_,
+        "RemoteAsn",      tostring(RemoteDetails_.organization.asn),
+        "RemoteIsp",      tostring(RemoteDetails_.organization.isp)
+    )
+    | project
+        EventStartTime, EventEndTime, EventType, EventSchema, EventSchemaVersion,
+        EventVendor, EventProduct, EventProductVersion, EventCount, EventResult,
+        EventSeverity, EventOriginalSeverity, EventMessage, EventOriginalType,
+        EventOriginalUid, EventUid,
+        SrcIpAddr, SrcPortNumber, SrcHostname, SrcDvcId, SrcDvcIdType, SrcDomain, SrcDomainType,
+        DstIpAddr, DstPortNumber, DstGeoCountry, DstGeoCity, DstDescription,
+        NetworkProtocol, NetworkDirection, NetworkSessionId, NetworkBytes, NetworkPackets, NetworkApplicationProtocol,
+        DvcId, DvcIdType, DvcHostname, DvcOs, DvcAction, DvcInterface,
+        ThreatName, ThreatRiskLevel, ThreatOriginalRiskLevel, ThreatField, ThreatIpAddr,
+        ThreatIsActive, ThreatFirstReportedTime, ThreatLastReportedTime,
+        RuleName, RuleNumber, RuleAction,
+        AdditionalFields,
+        TimeGenerated
+  };
+  parser (disabled)

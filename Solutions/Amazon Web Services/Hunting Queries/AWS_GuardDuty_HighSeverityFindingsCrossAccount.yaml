@@ -1,0 +1,47 @@
+id: d9329491-ab19-4903-aa0f-7affb388b011
+name: AWS GuardDuty - High severity findings clustered by account and actor
+description: |
+  Surfaces AWS GuardDuty findings with severity 7.0 or higher, grouped by AWS account, activity family and the underlying actor (instance, IAM principal, or access key) so a hunter can quickly spot an account or identity generating a disproportionate share of high-severity activity, rather than triaging findings one at a time.
+  Reference: https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings.html#guardduty_findings-severity
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSGuardDuty
+tactics:
+  - Discovery
+  - InitialAccess
+relevantTechniques:
+  - T1580
+query: |
+  AWSGuardDuty
+  | where Severity >= 7.0
+  | extend
+      ThreatPurpose = tostring(split(ActivityType, ":")[0]),
+      ResourceType = tostring(ResourceDetails.resourceType),
+      InstanceId = tostring(ResourceDetails.instanceDetails.instanceId),
+      AccessKeyUserName = tostring(ResourceDetails.accessKeyDetails.userName),
+      RemoteIp = coalesce(
+          tostring(ServiceDetails.action.networkConnectionAction.remoteIpDetails.ipAddressV4),
+          tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4)
+      )
+  | extend Actor = coalesce(AccessKeyUserName, InstanceId, "unknown")
+  | summarize
+      FindingCount = dcount(Id),
+      DistinctFindingTypes = dcount(ActivityType),
+      FindingTypes = make_set(ActivityType, 10),
+      RemoteIps = make_set(RemoteIp, 10),
+      FirstSeen = min(TimeCreated),
+      LastSeen = max(TimeGenerated)
+      by AccountId, Region, ThreatPurpose, ResourceType, Actor
+  | where FindingCount >= 2
+  | order by FindingCount desc
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: AccountId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+version: 1.0.0
