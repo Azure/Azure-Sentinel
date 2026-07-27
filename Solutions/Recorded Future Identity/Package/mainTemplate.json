@@ -3874,6 +3874,15 @@
                                 },
                                 "path": "/v1.0/groups/@{encodeURIComponent(parameters('entra_id_security_group_id'))}/members/$ref"
                               }
+                            },
+                            "Catch_security_group_errors": {
+                              "runAfter": {
+                                "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": [
+                                  "Failed"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@if(equals(body('Add_risky_user_to_Active_Directory_security_group_for_users_at_risk')?['error']?['message'], 'One or more added object references already exist for the following modified properties: ''members''.'), '- User was already present in security group.', '- Unknown error when adding user to security group.')"
                             }
                           },
                           "runAfter": {
@@ -3949,46 +3958,6 @@
                         },
                         "If_save_to_LAW": {
                           "actions": {
-                            "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": {
-                              "type": "ApiConnection",
-                              "inputs": {
-                                "host": {
-                                  "connection": {
-                                    "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                  }
-                                },
-                                "method": "get",
-                                "path": "/playbook-alerts/@{encodeURIComponent(item()?['alert_id'])}",
-                                "queries": {
-                                  "return_html": false
-                                }
-                              }
-                            },
-                            "Playbook_Alerts_-_Update_Playbook_Alert_-_Saved_to_LAW": {
-                              "runAfter": {
-                                "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": [
-                                  "Succeeded"
-                                ]
-                              },
-                              "type": "ApiConnection",
-                              "inputs": {
-                                "host": {
-                                  "connection": {
-                                    "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                  }
-                                },
-                                "method": "put",
-                                "body": {
-                                  "alert_id": "@item()?['alert_id']",
-                                  "log_entry": "Actions taken in Entra ID integration: \n- User found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), string('- Placed into security group.'), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
-                                  "status": "Resolved",
-                                  "added_actions_taken": [
-                                    "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
-                                  ]
-                                },
-                                "path": "/playbook-alerts/update"
-                              }
-                            },
                             "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": {
                               "runAfter": {
                                 "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
@@ -4008,12 +3977,24 @@
                                   "audience": "https://monitor.azure.com"
                                 }
                               }
+                            },
+                            "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": {
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                  }
+                                },
+                                "method": "get",
+                                "path": "/playbook-alerts/@{encodeURIComponent(item()?['alert_id'])}",
+                                "queries": {
+                                  "return_html": false
+                                }
+                              }
                             }
                           },
                           "runAfter": {
-                            "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                              "Succeeded"
-                            ],
                             "Add_user_to_Entra_ID_security_group": [
                               "Succeeded",
                               "Skipped"
@@ -4023,30 +4004,6 @@
                               "Failed",
                               "Skipped"
                             ]
-                          },
-                          "else": {
-                            "actions": {
-                              "Playbook_Alerts_-_Update_Playbook_Alert-_If_user_found": {
-                                "type": "ApiConnection",
-                                "inputs": {
-                                  "host": {
-                                    "connection": {
-                                      "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                    }
-                                  },
-                                  "method": "put",
-                                  "body": {
-                                    "alert_id": "@item()?['alert_id']",
-                                    "log_entry": "Actions taken in Entra ID integration: \n- User found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), string('- Placed into security group.'), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
-                                    "status": "Resolved",
-                                    "added_actions_taken": [
-                                      "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
-                                    ]
-                                  },
-                                  "path": "/playbook-alerts/update"
-                                }
-                              }
-                            }
                           },
                           "expression": {
                             "or": [
@@ -4060,42 +4017,90 @@
                           },
                           "type": "If"
                         },
-                        "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
-                          "inputs": {
-                            "body": {
-                              "alert_id": "@item()?['alert_id']",
-                              "log_entry": "User not found. Might be false positive. Dismissed",
-                              "status": "Dismissed"
-                            },
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                              }
-                            },
-                            "method": "put",
-                            "path": "/playbook-alerts/update"
-                          },
-                          "runAfter": {
-                            "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                              "Failed"
-                            ],
-                            "Workaround_-_Current_Time": [
-                              "Succeeded"
-                            ]
-                          },
-                          "type": "ApiConnection"
-                        },
                         "Workaround_-_Current_Time": {
-                          "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct",
-                          "inputs": "[variables('TemplateEmptyObject')]",
-                          "kind": "CurrentTime",
                           "runAfter": {
                             "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
                               "Succeeded",
                               "Failed"
                             ]
                           },
-                          "type": "Expression"
+                          "type": "Expression",
+                          "kind": "CurrentTime",
+                          "inputs": "[variables('TemplateEmptyObject')]",
+                          "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct"
+                        },
+                        "Update_Playbook_Alert": {
+                          "actions": {
+                            "User_exists_in_EntraID": {
+                              "actions": {
+                                "Playbook_Alerts_-_Update_Playbook_Alert_-_Saved_to_LAW": {
+                                  "type": "ApiConnection",
+                                  "inputs": {
+                                    "host": {
+                                      "connection": {
+                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                      }
+                                    },
+                                    "method": "put",
+                                    "body": {
+                                      "alert_id": "@item()?['alert_id']",
+                                      "log_entry": "Actions taken in Entra ID integration: \n- User @{outputs('Compute_user_principal_name')} found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), if(not(equals(outputs('Catch_security_group_errors'), null)), outputs('Catch_security_group_errors'), string('- Placed into security group.')), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
+                                      "status": "Resolved",
+                                      "added_actions_taken": [
+                                        "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
+                                      ]
+                                    },
+                                    "path": "/playbook-alerts/update"
+                                  }
+                                }
+                              },
+                              "else": {
+                                "actions": {
+                                  "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                      "host": {
+                                        "connection": {
+                                          "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                        }
+                                      },
+                                      "method": "put",
+                                      "body": {
+                                        "alert_id": "@item()?['alert_id']",
+                                        "log_entry": "User not found. Might be false positive. Dismissed",
+                                        "status": "Dismissed"
+                                      },
+                                      "path": "/playbook-alerts/update"
+                                    }
+                                  }
+                                }
+                              },
+                              "expression": {
+                                "and": [
+                                  {
+                                    "equals": [
+                                      "@actions('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['status']",
+                                      "Succeeded"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "type": "If"
+                            }
+                          },
+                          "runAfter": {
+                            "If_save_to_LAW": [
+                              "Succeeded"
+                            ],
+                            "Workaround_-_Current_Time": [
+                              "Succeeded"
+                            ],
+                            "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                              "Succeeded",
+                              "Failed"
+                            ]
+                          },
+                          "type": "Scope"
                         }
                       },
                       "foreach": "@body('Playbook_Alerts_-_Search_for_novel_identity_exposures')?['pba_items']",
@@ -5137,10 +5142,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RecordedFutureIdentityAlertImporter",
                     "dataTypes": [
                       "RFI_PlaybookAlertResults_V2_CL"
-                    ]
+                    ],
+                    "connectorId": "RecordedFutureIdentityAlertImporter"
                   }
                 ],
                 "tactics": [
@@ -5148,39 +5153,39 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "panel_status_entity_name",
-                        "identifier": "Name"
+                        "identifier": "Name",
+                        "columnName": "panel_status_entity_name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "RFLabel": "Type",
-                  "AlertId": "playbook_alert_id"
+                  "AlertId": "playbook_alert_id",
+                  "RFLabel": "Type"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Identity Exposure: {{panel_status_entity_name}} with priority: {{panel_status_priority}}",
                   "alertDescriptionFormat": "_Recorded Future Identity Alert_\n\n**Rule Name:** {{panel_status_alert_rule_name}}\n\n**Alert ID:** {{playbook_alert_id}}\n\n**Evidence Summary:** {{alert_description}}\n\nInvestigate this identity by searching in log analytics workspace for the Alert ID.\n",
-                  "alertDynamicProperties": []
+                  "alertDynamicProperties": [],
+                  "alertDisplayNameFormat": "Identity Exposure: {{panel_status_entity_name}} with priority: {{panel_status_priority}}"
                 },
                 "incidentConfiguration": {
                   "createIncident": true,
                   "groupingConfiguration": {
-                    "groupByAlertDetails": [],
-                    "matchingMethod": "AllEntities",
-                    "lookbackDuration": "PT15M",
-                    "enabled": true,
                     "reopenClosedIncident": false,
                     "groupByCustomDetails": [],
+                    "lookbackDuration": "PT15M",
                     "groupByEntities": [
                       "Account"
-                    ]
+                    ],
+                    "matchingMethod": "AllEntities",
+                    "groupByAlertDetails": [],
+                    "enabled": true
                   }
                 }
               }
