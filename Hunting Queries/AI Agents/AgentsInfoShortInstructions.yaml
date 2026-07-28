@@ -1,0 +1,42 @@
+id: 2f1f88de-d79f-44bf-96d0-52fd9cbf49c4
+name: AI Agents - Published Agents with Short Instructions
+description: |
+  This query identifies AI agents that are published but have short or insufficient instructions (fewer than 100 characters).
+  Short instructions increase the risk of prompt injection attacks, where malicious input can influence the agent to deviate from its intended behavior.
+  Without clear guidance, the agent may respond unpredictably or expose sensitive data.
+  Recommended Action: Ensure all published agents have well-defined instructions that specify the agent's purpose, boundaries, and allowed actions.
+  Regularly review and update instructions to maintain security and prevent misuse.
+requiredDataConnectors: []
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1499
+  - T1562
+query: |
+  let IdentityIdtoUPN = materialize (
+      IdentityInfo
+      | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
+      | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn);
+  AgentsInfo
+  | summarize arg_max(Timestamp, *) by AgentId
+  | where LifecycleStatus != "Deleted"
+  | where PublishedStatus == "Published"
+  | where isnotempty(Instructions) and Instructions != "N/A"
+  | where strlen(Instructions) < 100
+  | extend OwnerId = tostring(Owners[0])
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | project-away OwnerId, AccountObjectId
+  | project-reorder CreatedDateTime, AgentId, Name, Platform, Instructions, OwnerUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0

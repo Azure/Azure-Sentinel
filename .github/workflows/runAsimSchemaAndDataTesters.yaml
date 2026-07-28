@@ -1,6 +1,15 @@
 # Each pull request that updates ASIM parsers triggers the script.
-# The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
-name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
+# The script runs ASIM Schema and Data testers on the "ASIM-SchemaDataTester-GithubShared-Canary" workspace.
+#
+# SECURITY BOUNDARIES:
+# - OIDC federated identity (AZURE_ASIM_CLIENT_ID) is scoped to canary workspace only:
+#   Workspace: ASIM-SchemaDataTester-GithubShared-Canary
+#   Resource Group: asim-schemadatatester-githubshared-canary
+#   Identity permissions: Canary RG/workspace only; deny cross-workspace and out-of-RG access
+# - Fork PRs require explicit "SafeToRun" label approval from maintainer
+# - Label is auto-removed on new commits (synchronize event) to prevent TOCTOU
+# - All validation scripts are re-downloaded from master branch before execution
+name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared-Canary" workspace
 on:
   pull_request_target:
     types: [labeled, synchronize]
@@ -50,6 +59,44 @@ jobs:
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
     steps:
+      - name: Verify approver has write access (fork + SafeToRun)
+        # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
+        # Only collaborators can add labels, but a triage-only account could still apply
+        # SafeToRun; this rejects anyone without write/maintain/admin from approving a
+        # fork PR test run that uses the canary Azure credentials. Failing here fails the
+        # whole security-gate job, so every downstream (needs: security-gate) job is skipped.
+        if: |
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'SafeToRun'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            const approver = context.payload.sender.login;
+            log('info', `Validating approver permissions for @${approver}`);
+
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: approver,
+            });
+
+            // Legacy `permission` maps maintain->write and triage->read, so this
+            // allowlist authorizes admin/maintain/write and rejects triage/read/none.
+            const allowed = ['admin', 'maintain', 'write'];
+            log('info', `@${approver} permission level: ${perm.permission}`);
+
+            if (!allowed.includes(perm.permission)) {
+              core.setFailed(`@${approver} lacks write access (has '${perm.permission}') and is not authorized to approve fork PR test runs`);
+            } else {
+              log('success', `@${approver} is authorized to approve fork PR test runs`);
+            }
+
       - name: Check if PR needs approval
         id: check-approval
         run: |
@@ -261,12 +308,27 @@ jobs:
               
               // Always create a new comment for maximum visibility
               // Keep existing comments for audit trail - don't delete them
+              // Update security guidance to emphasize KQL and CSV review
+              let enhancedCommentBody = commentBody;
+              if (enhancedCommentBody.includes('**Verify file types**')) {
+                enhancedCommentBody = enhancedCommentBody.replace(
+                  '2. ✅ **Verify file types** - This PR should only contain `.yml`, `.yaml`, or `.json` files. Check for any executable scripts (.ps1, .py, .sh, .exe, etc.) which are not allowed in this context.',
+                  '2. ✅ **Verify file types** - This PR should only contain `.yml`, `.yaml`, `.json`, or `.csv` files. Reject any executable scripts (.ps1, .py, .sh, .exe, etc.).\n   ⚠️ **CRITICAL: Review KQL and CSV content for abuse:**\n      - Read the **ParserQuery** KQL for unauthorized data access/manipulation and reject cross-workspace/cluster references (e.g. `workspace(...)`, `cluster(...)`, `externaldata`)\n      - Inspect the **sample-data** CSV `Type` column for path-traversal-shaped or non-allowlisted table names (must match the builtin allowlist or a `_CL` suffix)\n      - Examine **sample-data** CSVs for injection attempts or sensitive data disclosure\n      - Check that queries are read-only and target only the fixed test/canary workspace'
+                );
+              }
+              if (enhancedCommentBody.includes('**Verify file types** - Ensure')) {
+                enhancedCommentBody = enhancedCommentBody.replace(
+                  '2. ✅ **Verify file types** - Ensure commits only contain `.yml`, `.yaml`, or `.json` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.',
+                  '2. ✅ **Verify file types** - Ensure commits only contain `.yml`, `.yaml`, `.json`, or `.csv` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.\n   ⚠️ **CRITICAL: Review KQL and CSV content for abuse:**\n      - Read the **ParserQuery** KQL for unauthorized data access/manipulation and reject cross-workspace/cluster references (e.g. `workspace(...)`, `cluster(...)`, `externaldata`)\n      - Inspect the **sample-data** CSV `Type` column for path-traversal-shaped or non-allowlisted table names (must match the builtin allowlist or a `_CL` suffix)\n      - Examine **sample-data** CSVs for injection attempts or sensitive data disclosure\n      - Check that queries are read-only and target only the fixed test/canary workspace'
+                );
+              }
+              
               log('info', 'Creating new security guidance comment (preserving audit trail)');
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: commentBody
+                body: enhancedCommentBody
               });
               log('success', 'Created new security guidance comment');
               
@@ -287,7 +349,7 @@ jobs:
     if: |
       needs.security-gate.outputs.approved == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
-       github.event.action == 'labeled')
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout pull request branch
@@ -338,7 +400,7 @@ jobs:
     name: Run ASim Sample Data Ingestion
     if: |
       (github.event.pull_request.head.repo.fork == false ||
-       github.event.action == 'labeled')
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -377,6 +439,11 @@ jobs:
           pip install azure-monitor-ingestion
           pip install azure-core
       - name: Login to Azure Public Cloud
+        # SECURITY: AZURE_ASIM_CLIENT_ID federated identity must be scoped to canary resources only:
+        # - Workspace: ASIM-SchemaDataTester-GithubShared-Canary
+        # - Resource Group: asim-schemadatatester-githubshared-canary
+        # - Deny read access to other workspaces/subscriptions
+        # - Deny write access outside canary RG
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
@@ -402,7 +469,7 @@ jobs:
     name: Run ASim Schema and Data tests
     if: |
       (github.event.pull_request.head.repo.fork == false ||
-       github.event.action == 'labeled')
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -417,6 +484,11 @@ jobs:
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
 
       - name: Login to Azure Public Cloud with AzPowershell
+        # SECURITY: AZURE_ASIM_CLIENT_ID federated identity must be scoped to canary resources only:
+        # - Workspace: ASIM-SchemaDataTester-GithubShared-Canary
+        # - Resource Group: asim-schemadatatester-githubshared-canary
+        # - Deny read access to other workspaces/subscriptions
+        # - Deny write access outside canary RG
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
@@ -467,6 +539,11 @@ jobs:
   Run-ASim-Parser-Filtering-Tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Parser Filtering tests
+    # SECURITY: same fork-PR gate as the other secret-bearing jobs - fork PRs may only
+    # run on the 'labeled' (SafeToRun) event; internal PRs run unconditionally.
+    if: |
+      (github.event.pull_request.head.repo.fork == false ||
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -503,6 +580,11 @@ jobs:
           pip install azure-identity
           pip install azure-monitor-query
       - name: Login to Azure Public Cloud
+        # SECURITY: AZURE_ASIM_CLIENT_ID federated identity must be scoped to canary resources only:
+        # - Workspace: ASIM-SchemaDataTester-GithubShared-Canary
+        # - Resource Group: asim-schemadatatester-githubshared-canary
+        # - Deny read access to other workspaces/subscriptions
+        # - Deny write access outside canary RG
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
           client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}

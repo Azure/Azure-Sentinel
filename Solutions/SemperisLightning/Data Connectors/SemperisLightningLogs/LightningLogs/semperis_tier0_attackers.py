@@ -32,7 +32,6 @@ class SemperisTier0Attackers:
                 endpoint,
                 headers=headers,
                 json=payload,
-                verify=False,
                 timeout=30,
             )
             response.raise_for_status()
