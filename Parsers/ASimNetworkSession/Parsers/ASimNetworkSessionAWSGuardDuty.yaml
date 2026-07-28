@@ -1,6 +1,6 @@
 Parser:
   Title: Network Session ASIM parser for AWS GuardDuty findings
-  Version: '0.1.1'
+  Version: '0.1.2'
   LastUpdated: Jul 28, 2026
 Product:
   Name: AWS GuardDuty
@@ -37,11 +37,15 @@ ParserQuery: |
         NetworkAction_ = ServiceDetails.action.networkConnectionAction,
         ApiCallAction_ = ServiceDetails.action.awsApiCallAction,
         PortProbeAction_ = ServiceDetails.action.portProbeAction
+    // A port-probe finding can list several probed ports/remote IPs; expand so each probe
+    // becomes its own normalized session instead of silently keeping only the first. This is a
+    // no-op for other action types (PortProbeAction_ is null, so mv-expand yields one row unchanged).
+    | mv-expand PortProbeDetail_ = PortProbeAction_.portProbeDetails
     // The IP GuardDuty flagged as the other party in the session (not yet Src/Dst - direction is resolved below).
     | extend RemoteDetails_ = case(
         ActionType_ == "NETWORK_CONNECTION", NetworkAction_.remoteIpDetails,
         ActionType_ == "AWS_API_CALL",       ApiCallAction_.remoteIpDetails,
-        ActionType_ == "PORT_PROBE",         PortProbeAction_.portProbeDetails[0].remoteIpDetails,
+        ActionType_ == "PORT_PROBE",         PortProbeDetail_.remoteIpDetails,
         dynamic(null)
       )
     | extend RemoteIp_ = tostring(RemoteDetails_.ipAddressV4)
@@ -56,7 +60,7 @@ ParserQuery: |
         LocalIp_   = coalesce(tostring(NetIf0_.privateIpAddress), tostring(NetIf0_.publicIp), ""),
         LocalPort_ = case(
             ActionType_ == "NETWORK_CONNECTION", toint(NetworkAction_.localPortDetails.port),
-            ActionType_ == "PORT_PROBE", toint(PortProbeAction_.portProbeDetails[0].localPortDetails.port),
+            ActionType_ == "PORT_PROBE", toint(PortProbeDetail_.localPortDetails.port),
             int(null)
         ),
         RemotePort_ = case(
@@ -122,14 +126,18 @@ ParserQuery: |
     // i.e. whichever side holds the well-known service port once direction is resolved.
     | extend
         NetworkProtocol = toupper(tostring(coalesce(NetworkAction_.protocol, dynamic("")))),
+        // Derived from the same direction logic as Src/Dst above, not just connectionDirection,
+        // since NetworkAction_ (and so connectionDirection) is null for PORT_PROBE and AWS_API_CALL.
         NetworkDirection = case(
-            tostring(NetworkAction_.connectionDirection) == "INBOUND",  "Inbound",
-            tostring(NetworkAction_.connectionDirection) == "OUTBOUND", "Outbound",
+            IsApiCall_, "Unknown",
+            IsInbound_, "Inbound",
+            ActionType_ == "NETWORK_CONNECTION" and tostring(NetworkAction_.connectionDirection) == "OUTBOUND", "Outbound",
             "Unknown"
         ),
         NetworkSessionId = Id,
-        NetworkBytes   = int(0),
-        NetworkPackets = int(0),
+        // Not zero - GuardDuty does not report byte/packet counts, so these are unknown, not measured zeros.
+        NetworkBytes   = long(null),
+        NetworkPackets = long(null),
         NetworkApplicationProtocol = case(
             DstPortNumber == 80,   "HTTP",
             DstPortNumber == 443,  "HTTPS",
@@ -148,7 +156,12 @@ ParserQuery: |
             isnotempty(tostring(InstanceDetails_.platform)),  tostring(InstanceDetails_.platform),
             ""
         ),
-        DvcAction   = iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
+        // Only NETWORK_CONNECTION carries a "blocked" flag; defaulting AWS_API_CALL/PORT_PROBE
+        // to "Allow" here would be a fabricated result, not an observed one.
+        DvcAction   = case(
+            ActionType_ == "NETWORK_CONNECTION", iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
+            ""
+        ),
         DvcInterface = tostring(NetIf0_.networkInterfaceId)
     // Threat fields - always point at the remote party GuardDuty actually flagged,
     // regardless of which ASIM side (Src/Dst) it landed on above.

@@ -25,12 +25,15 @@ query: |
       PublicAccessEffective = tostring(ResourceDetails.s3BucketDetails[0].publicAccess.effectivePermission),
       ActorUserName = tostring(ResourceDetails.accessKeyDetails.userName),
       CallerIp = tostring(ServiceDetails.action.awsApiCallAction.remoteIpDetails.ipAddressV4)
+  // A missing/empty s3BucketDetails array would otherwise collapse every unrelated finding
+  // without a bucket ARN into one bogus group.
+  | where isnotempty(BucketArn)
   | summarize
-      FindingCount = dcount(Id),
+      FindingCount = count(),
       FindingTypes = make_set(ActivityType, 10),
-      PublicAccessStates = make_set(PublicAccessEffective, 5),
-      Actors = make_set(ActorUserName, 10),
-      CallerIps = make_set(CallerIp, 10),
+      PublicAccessStates = make_set_if(PublicAccessEffective, isnotempty(PublicAccessEffective), 5),
+      Actors = make_set_if(ActorUserName, isnotempty(ActorUserName), 10),
+      CallerIps = make_set_if(CallerIp, isnotempty(CallerIp), 10),
       MaxSeverity = max(Severity),
       FirstSeen = min(TimeCreated),
       LastSeen = max(TimeGenerated)
@@ -41,4 +44,4 @@ entityMappings:
     fieldMappings:
       - identifier: AppId
         columnName: AccountId
-version: 1.0.1
+version: 1.0.2
