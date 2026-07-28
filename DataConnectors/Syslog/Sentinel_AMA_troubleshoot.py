@@ -18,7 +18,7 @@ import sys
 def _parse_version(v):
     return tuple(int(x) for x in v.split('.'))
 
-SCRIPT_VERSION = 2.51
+SCRIPT_VERSION = 2.52
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
