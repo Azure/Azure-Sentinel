@@ -1,0 +1,71 @@
+id: c3f8e4d6-0d57-4a3b-9e2c-4f6a8b0d3e52
+name: Netskope - DLP Incident Spike
+description: |
+  Detects a spike in Netskope DLP incidents within a short window. A sudden increase in
+  DLP violations for a single user or DLP profile can indicate active data exfiltration,
+  a misconfigured policy, or bulk handling of sensitive data. Triggers when a user
+  generates more DLP incidents in the last hour than a configurable threshold.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeAlertEventsConnector
+    dataTypes:
+      - NetskopeAlertEvents_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1530
+query: |
+  let dlpIncidentThreshold = 10;
+  NetskopeAlertEvents_CL
+  | where TimeGenerated > ago(1h)
+  | where AlertType =~ "DLP" or isnotempty(DlpProfile) or isnotempty(DlpIncidentId)
+  | summarize
+      IncidentCount = count(),
+      DistinctIncidents = dcount(DlpIncidentId),
+      Profiles = make_set(DlpProfile, 20),
+      Rules = make_set(DlpRule, 20),
+      Applications = make_set(App, 20),
+      Files = make_set(DlpFile, 20),
+      Activities = make_set(Activity, 10),
+      Actions = make_set(Action, 10),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by User, Userip, Hostname
+  | where IncidentCount > dlpIncidentThreshold
+  | order by IncidentCount desc
+  | project
+      LastSeen,
+      User,
+      Userip,
+      Hostname,
+      IncidentCount,
+      DistinctIncidents,
+      Profiles,
+      Rules,
+      Applications,
+      Files,
+      Activities,
+      Actions,
+      FirstSeen
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Userip
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+version: 1.0.0
+kind: Scheduled

@@ -1,5 +1,9 @@
 # Changelog for ASimDnsAzureFirewall.yaml
 
+## Version 0.4.1
+
+- (2026-06-26) Use column_ifexists for msg_s in the legacy AzureDiagnostics branch to prevent union failures when msg_s is absent (resource-specific logging) - [PR #14609](https://github.com/Azure/Azure-Sentinel/pull/14609)
+
 ## Version 0.4.0
 
 - (2025-12-02) AZFW ASIM Parsers - [PR #13181](https://github.com/Azure/Azure-Sentinel/pull/13181)

@@ -1,7 +1,7 @@
 id: 41e843a8-92e7-444d-8d72-638f1145d1e1
 name: New Device/Location sign-in along with critical operation
 description: |
-  'This query identifies users seen login from new geo location/country as well as a new device and performing critical operations.'
+  This query identifies users seen login from a new geo location/country and a new device, then correlates that sign-in with successful risky operations such as policy changes, MFA changes, API token actions etc. This can be an indication of an attacker gaining access to a user's credentials and then performing critical operations, which typically requires admin privileges. By detecting such patterns, organizations can quickly respond to potential security incidents and mitigate risks associated with unauthorized access and privilege escalation.
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -18,9 +18,11 @@ triggerThreshold: 0
 tactics:
   - InitialAccess
   - Persistence
+  - PrivilegeEscalation
 relevantTechniques:
   - T1078
   - T1556
+  - T1098
 query: |
   let timeframe = 1h;
   let RiskyOperations = dynamic(["policy.rule.update","policy.rule.create","policy.rule.delete", "policy.rule.deactivate", "policy.lifecycle.update", "policy.rule.modify", "policy.lifecycle.create", "policy.lifecycle.delete", "policy.lifecycle.deactivate", "policy.lifecycle.modify", "network_zone.rule.disabled", "system.api_token.create", "system.api_token.revoke", "application.policy.sign_on.update", "application.policy.sign_on.rule.delete","user.mfa.factor.deactivate", "user.mfa.factor.reset_all", "system.mfa.factor.deactivate", "user.mfa.attempt_bypass"]);
@@ -28,9 +30,10 @@ query: |
   | where eventType_s == "user.session.start"
   | where outcome_result_s == "SUCCESS"
   | extend debugContext_debugData_logOnlySecurityData_s = column_ifexists('debugContext_debugData_logOnlySecurityData_s', '{}')
-  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Country"] == "POSITIVE"
-  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Geo-Location"] == "POSITIVE"
-  | where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors)).["New Device"] == "POSITIVE"
+  | extend behaviors = parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).behaviors))
+  | where tostring(behaviors.["New Country"]) == "POSITIVE"
+  | where tostring(behaviors.["New Geo-Location"]) == "POSITIVE"
+  | where tostring(behaviors.["New Device"]) == "POSITIVE"
   | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d
   | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s);
   let RiskyOperationsObserved = OktaSSO
@@ -39,23 +42,30 @@ query: |
   | summarize by timekey = bin(TimeGenerated, timeframe), actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d;
   UserLoginNewCountryDevice
   | join kind=inner (RiskyOperationsObserved) on timekey, actor_displayName_s, client_ipAddress_s
+  | project TimeGenerated = timekey, actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, authenticationContext_externalSessionId_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, Location
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: actor_alternateId_s
-      - identifier: DisplayName
-        columnName: actor_displayName_s
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: client_ipAddress_s
 customDetails:
+  ActorDisplayName: actor_displayName_s
+  ActorDevice: client_device_s
+  ActorOS: client_userAgent_os_s
+  ActorBrowser: client_userAgent_browser_s
+  UserAgent: client_userAgent_rawUserAgent_s
   SessionId: authenticationContext_externalSessionId_s
   Location:  Location
 alertDetailsOverride:
-  alertDisplayNameFormat: New Device/Location {{Location}} sign-in along with critical operation
+  alertDisplayNameFormat: 'New Device/Location {{Location}} sign-in along with critical operation'
   alertDescriptionFormat: |
-    This query identifies users seen login from new geo location/country {{Location}} as well as a new device and performing critical operations
-version: 1.1.1
+    This query identifies users seen login from new geo location/country {{Location}} as well as a new device and performing critical operations.
+version: 1.1.2
 kind: Scheduled

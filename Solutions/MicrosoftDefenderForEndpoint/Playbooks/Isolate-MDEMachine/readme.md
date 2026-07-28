@@ -36,17 +36,21 @@ After deployment, you can run this playbook manually on an alert or attach it to
    - Select Role - Microsoft Sentinel Responder,
    - Click Save.
 2. You will need to grant Machine.Isolate permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+
+   > **Note:** `Machine.Isolate` alone is not sufficient. The playbook also looks up the device (e.g. by hostname) before isolating it, which requires `Machine.Read.All`. Without it, the playbook fails with `Forbidden: Missing application roles. API required roles: Machine.Read.All,Machine.ReadWrite.All`. Grant both permissions as shown below.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $MDEAppId = "fc780465-2017-40d4-a0c5-307022471b92"
-$PermissionName = "Machine.Isolate" 
+$PermissionNames = "Machine.Isolate","Machine.Read.All"
 
 $MDEServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$MDEAppId'"
-$AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
-New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
--ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+foreach ($PermissionName in $PermissionNames) {
+    $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
+    New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
+    -ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+}
 ```
 
 ## Screenshots
