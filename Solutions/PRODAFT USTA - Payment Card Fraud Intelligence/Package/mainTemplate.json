@@ -248,21 +248,21 @@
                   "T1657"
                 ],
                 "customDetails": {
-                  "Status": "Status",
-                  "Ticket": "TicketId",
                   "Brand": "CardBrand",
-                  "Company": "CompanyName",
+                  "Status": "Status",
                   "Card": "CardMasked",
-                  "Expiration": "ExpirationDate"
+                  "Ticket": "TicketId",
+                  "Expiration": "ExpirationDate",
+                  "Company": "CompanyName"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
                     "enabled": true,
-                    "reopenClosedIncident": false,
+                    "matchingMethod": "AnyAlert",
                     "lookbackDuration": "1h",
-                    "matchingMethod": "AnyAlert"
-                  }
+                    "reopenClosedIncident": false
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -358,21 +358,21 @@
                   "T1657"
                 ],
                 "customDetails": {
-                  "Status": "Status",
-                  "Ticket": "TicketId",
                   "Brand": "CardBrand",
-                  "Company": "CompanyName",
+                  "Status": "Status",
                   "Card": "CardMasked",
-                  "Expiration": "ExpirationDate"
+                  "Ticket": "TicketId",
+                  "Expiration": "ExpirationDate",
+                  "Company": "CompanyName"
                 },
                 "incidentConfiguration": {
-                  "createIncident": true,
                   "groupingConfiguration": {
                     "enabled": true,
-                    "reopenClosedIncident": false,
+                    "matchingMethod": "AnyAlert",
                     "lookbackDuration": "1h",
-                    "matchingMethod": "AnyAlert"
-                  }
+                    "reopenClosedIncident": false
+                  },
+                  "createIncident": true
                 }
               }
             },
@@ -1235,16 +1235,23 @@
                 "description": "Name of the Logic App playbook."
               }
             },
-            "DataCollectionEndpointUri": {
+            "WorkspaceName": {
               "type": "string",
               "metadata": {
-                "description": "Logs-ingestion URI of the connector's Data Collection Endpoint, e.g. https://<dce-name>-a1b2.westeurope-1.ingest.monitor.azure.com"
+                "description": "Name of the existing Microsoft Sentinel / Log Analytics workspace that the PCFI connector ingests into."
               }
             },
-            "DataCollectionRuleImmutableId": {
+            "WorkspaceLocation": {
               "type": "string",
               "metadata": {
-                "description": "Immutable ID of the connector's Data Collection Rule, e.g. dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                "description": "Region of the workspace. The backfill Data Collection Endpoint and Rule are created in this region."
+              }
+            },
+            "WorkspaceResourceGroup": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().name]",
+              "metadata": {
+                "description": "Resource group of the workspace. Leave as default if it is in the same resource group as this deployment."
               }
             },
             "UstaBaseUrl": {
@@ -1269,11 +1276,96 @@
             }
           },
           "variables": {
+            "WorkspaceResourceId": "[[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+            "DceName": "[[concat(parameters('PlaybookName'), '-DCE')]",
+            "DcrName": "[[concat(parameters('PlaybookName'), '-DCR')]",
+            "DceResourceId": "[[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+            "DcrResourceId": "[[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+            "MonitoringMetricsPublisherRoleId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]",
             "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
           },
           "resources": [
+            {
+              "type": "Microsoft.Insights/dataCollectionEndpoints",
+              "apiVersion": "2024-03-11",
+              "name": "[[variables('DceName')]",
+              "location": "[[parameters('WorkspaceLocation')]",
+              "properties": {
+                "description": "Data Collection Endpoint for the PRODAFT USTA PCFI backfill playbook (Logs Ingestion API).",
+                "networkAcls": {
+                  "publicNetworkAccess": "Enabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2024-03-11",
+              "name": "[[variables('DcrName')]",
+              "location": "[[parameters('WorkspaceLocation')]",
+              "dependsOn": [
+                "[[variables('DceResourceId')]"
+              ],
+              "properties": {
+                "description": "DCR for the PRODAFT USTA PCFI backfill playbook. Applies the same transform as the connector DCR and writes to the existing PRODAFTUstaCompromisedCards_CL table.",
+                "dataCollectionEndpointId": "[[variables('DceResourceId')]",
+                "streamDeclarations": {
+                  "Custom-PRODAFTUstaCompromisedCards_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "long"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "status_timestamp",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "created",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "content_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "company",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "content",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[[variables('WorkspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-PRODAFTUstaCompromisedCards_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend c = content, co = company | extend n = tostring(c.number) | project TimeGenerated = now(), TicketId = tolong(id), Status = tostring(status), StatusTimestamp = todatetime(status_timestamp), Created = todatetime(created), ContentType = tostring(content_type), CompanyId = toint(co.id), CompanyName = tostring(co.name), CardBin = iff(strlen(n) >= 6, substring(n, 0, 6), ''), CardLast4 = iff(strlen(n) >= 4, substring(n, strlen(n) - 4, 4), n), CardMasked = strcat(iff(strlen(n) >= 6, substring(n, 0, 6), ''), '******', iff(strlen(n) >= 4, substring(n, strlen(n) - 4, 4), n)), CardBrand = case(substring(n, 0, 1) == '4', 'Visa', toint(substring(n, 0, 2)) >= 51 and toint(substring(n, 0, 2)) <= 55, 'Mastercard', toint(substring(n, 0, 2)) >= 22 and toint(substring(n, 0, 2)) <= 27, 'Mastercard', substring(n, 0, 2) == '34' or substring(n, 0, 2) == '37', 'Amex', substring(n, 0, 4) == '6011' or substring(n, 0, 2) == '65', 'Discover', substring(n, 0, 2) == '36' or substring(n, 0, 2) == '38', 'Diners Club', 'Other'), CardLength = toint(strlen(n)), ExpirationDate = todatetime(c.expiration_date)",
+                    "outputStream": "Custom-PRODAFTUstaCompromisedCards_CL"
+                  }
+                ]
+              }
+            },
             {
               "type": "Microsoft.Logic/workflows",
               "apiVersion": "2019-05-01",
@@ -1282,6 +1374,10 @@
               "identity": {
                 "type": "SystemAssigned"
               },
+              "dependsOn": [
+                "[[variables('DceResourceId')]",
+                "[[variables('DcrResourceId')]"
+              ],
               "tags": {
                 "hidden-SentinelTemplateName": "PRODAFTUstaPCFI-Backfill",
                 "hidden-SentinelTemplateVersion": "1.0",
@@ -1295,11 +1391,11 @@
                   "parameters": {
                     "DataCollectionEndpointUri": {
                       "type": "String",
-                      "defaultValue": "[[parameters('DataCollectionEndpointUri')]"
+                      "defaultValue": "[[reference(variables('DceResourceId'), '2024-03-11').logsIngestion.endpoint]"
                     },
                     "DataCollectionRuleImmutableId": {
                       "type": "String",
-                      "defaultValue": "[[parameters('DataCollectionRuleImmutableId')]"
+                      "defaultValue": "[[reference(variables('DcrResourceId'), '2024-03-11').immutableId]"
                     },
                     "UstaBaseUrl": {
                       "type": "String",
@@ -1427,6 +1523,21 @@
               }
             },
             {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[[guid(variables('DcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+              "scope": "[[variables('DcrResourceId')]",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[[variables('DcrResourceId')]"
+              ],
+              "properties": {
+                "roleDefinitionId": "[[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
@@ -1455,14 +1566,14 @@
           ],
           "metadata": {
             "title": "PRODAFTUstaPCFI-Backfill",
-            "description": "On-demand backfill playbook for PRODAFT USTA - Payment Card Fraud Intelligence. Pages through the USTA credit-card API and pushes historical tickets to the connector's Data Collection Endpoint (Logs Ingestion API), so the same DCR transform (PAN redaction, field mapping) is applied as for live polling. The codeless connector only polls forward from connection time; run this playbook once after connecting to load history.",
+            "description": "On-demand backfill playbook for PRODAFT USTA - Payment Card Fraud Intelligence. Pages through the USTA credit-card API and pushes historical tickets into the workspace via the Logs Ingestion API, applying the same transform (PAN redaction, field mapping) as live polling. The deployment is self-contained: it creates its own Data Collection Endpoint and Rule (writing into the existing PRODAFTUstaCompromisedCards_CL table) and assigns its identity the required role. The codeless connector only polls forward from connection time; run this playbook once after installing the solution to load history.",
             "prerequisites": [
-              "The PRODAFT USTA - Payment Card Fraud Intelligence solution installed and its data connector connected (this creates the DCE, DCR, and table).",
-              "The Data Collection Endpoint logs-ingestion URI and the DCR immutable ID (see readme.md for how to find them).",
-              "A PRODAFT USTA long-lived API key."
+              "The PRODAFT USTA - Payment Card Fraud Intelligence solution installed (this creates the PRODAFTUstaCompromisedCards_CL table the backfill writes into); connecting the data connector starts forward polling.",
+              "A PRODAFT USTA long-lived API key.",
+              "Permission to create role assignments in the workspace resource group (Owner or User Access Administrator), since the template grants its identity 'Monitoring Metrics Publisher' automatically."
             ],
             "postDeployment": [
-              "Grant the playbook's system-assigned managed identity the 'Monitoring Metrics Publisher' role on the connector's Data Collection Rule, then run the trigger once (see readme.md)."
+              "Run the playbook's trigger once to start the backfill (see readme.md)."
             ],
             "lastUpdateTime": "2026-07-08T00:00:00Z",
             "tags": [
