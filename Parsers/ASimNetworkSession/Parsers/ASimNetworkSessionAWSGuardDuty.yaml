@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for AWS GuardDuty findings
-  Version: '0.1.0'
-  LastUpdated: Jul 27, 2026
+  Version: '0.1.1'
+  LastUpdated: Jul 28, 2026
 Product:
   Name: AWS GuardDuty
 Normalization:
@@ -29,29 +29,47 @@ ParserQuery: |
     AWSGuardDuty
     | where not(disabled)
     // Only findings that carry network context are in scope for this parser.
+    // (DNS_REQUEST is intentionally excluded: GuardDuty's dnsRequestAction has no
+    // remoteIpDetails, so it cannot be normalized to a network session here.)
     | extend ActionType_ = tostring(ServiceDetails.action.actionType)
-    | where ActionType_ in ("NETWORK_CONNECTION", "AWS_API_CALL", "PORT_PROBE", "DNS_REQUEST")
+    | where ActionType_ in ("NETWORK_CONNECTION", "AWS_API_CALL", "PORT_PROBE")
     | extend
         NetworkAction_ = ServiceDetails.action.networkConnectionAction,
         ApiCallAction_ = ServiceDetails.action.awsApiCallAction,
-        PortProbeAction_ = ServiceDetails.action.portProbeAction,
-        DnsAction_ = ServiceDetails.action.dnsRequestAction
-    // Prefer the network-connection view; fall back to the API-call caller IP for IAM-driven findings.
+        PortProbeAction_ = ServiceDetails.action.portProbeAction
+    // The IP GuardDuty flagged as the other party in the session (not yet Src/Dst - direction is resolved below).
     | extend RemoteDetails_ = case(
         ActionType_ == "NETWORK_CONNECTION", NetworkAction_.remoteIpDetails,
         ActionType_ == "AWS_API_CALL",       ApiCallAction_.remoteIpDetails,
         ActionType_ == "PORT_PROBE",         PortProbeAction_.portProbeDetails[0].remoteIpDetails,
         dynamic(null)
       )
-    | extend DstIpAddr_ = tostring(RemoteDetails_.ipAddressV4)
-    | where isnotempty(DstIpAddr_)
+    | extend RemoteIp_ = tostring(RemoteDetails_.ipAddressV4)
+    | where isnotempty(RemoteIp_)
     | extend
         InstanceDetails_ = ResourceDetails.instanceDetails,
         NetIf0_ = ResourceDetails.instanceDetails.networkInterfaces[0]
+    // Local (AWS-side) and remote port, and connection direction. AWS_API_CALL has no local
+    // network peer (it targets an AWS control-plane API, not a traceable endpoint), and
+    // PORT_PROBE is always effectively inbound - GuardDuty does not report a port for the prober.
+    | extend
+        LocalIp_   = coalesce(tostring(NetIf0_.privateIpAddress), tostring(NetIf0_.publicIp), ""),
+        LocalPort_ = case(
+            ActionType_ == "NETWORK_CONNECTION", toint(NetworkAction_.localPortDetails.port),
+            ActionType_ == "PORT_PROBE", toint(PortProbeAction_.portProbeDetails[0].localPortDetails.port),
+            int(null)
+        ),
+        RemotePort_ = case(
+            ActionType_ == "NETWORK_CONNECTION", toint(NetworkAction_.remotePortDetails.port),
+            int(null)
+        ),
+        IsApiCall_  = ActionType_ == "AWS_API_CALL",
+        IsInbound_  = ActionType_ == "PORT_PROBE"
+            or (ActionType_ == "NETWORK_CONNECTION" and tostring(NetworkAction_.connectionDirection) == "INBOUND")
     // ASIM event metadata
     | extend
-        EventStartTime  = TimeGenerated,
-        EventEndTime    = TimeGenerated,
+        EventStartTime  = TimeCreated,
+        EventEndTime    = TimeCreated,
         EventType       = "NetworkSession",
         EventSchema     = "NetworkSession",
         EventSchemaVersion = "0.2.6",
@@ -75,23 +93,33 @@ ParserQuery: |
         EventOriginalType = ActivityType,
         EventOriginalUid  = Id,
         EventUid        = strcat("guardduty-", Id)
-    // Source (the AWS resource the finding is about)
+    // Source/destination, resolved by direction. Inbound & port-probe: the remote party
+    // initiated, so it is Src and the AWS resource is Dst. Outbound: the reverse. AWS_API_CALL:
+    // the caller is always Src; there is no meaningful destination endpoint to report.
     | extend
-        SrcIpAddr     = coalesce(tostring(NetIf0_.privateIpAddress), tostring(NetIf0_.publicIp), ""),
-        SrcPortNumber = toint(NetworkAction_.localPortDetails.port),
-        SrcHostname   = tostring(InstanceDetails_.instanceId),
-        SrcDvcId      = tostring(InstanceDetails_.instanceId),
-        SrcDvcIdType  = iff(isnotempty(tostring(InstanceDetails_.instanceId)), "Other", ""),
-        SrcDomain     = tostring(NetIf0_.vpcId),
-        SrcDomainType = iff(isnotempty(tostring(NetIf0_.vpcId)), "Other", "")
-    // Destination (the remote endpoint GuardDuty observed)
+        SrcIpAddr      = case(IsApiCall_, RemoteIp_, IsInbound_, RemoteIp_, LocalIp_),
+        DstIpAddr      = case(IsApiCall_, "", IsInbound_, LocalIp_, RemoteIp_),
+        SrcPortNumber  = case(IsApiCall_, int(null), IsInbound_, RemotePort_, LocalPort_),
+        DstPortNumber  = case(IsApiCall_, int(null), IsInbound_, LocalPort_, RemotePort_),
+        SrcHostname    = case(IsApiCall_ or IsInbound_, "", tostring(InstanceDetails_.instanceId)),
+        DstHostname    = case(not(IsApiCall_) and IsInbound_, tostring(InstanceDetails_.instanceId), ""),
+        SrcDvcId       = case(IsApiCall_ or IsInbound_, "", tostring(InstanceDetails_.instanceId)),
+        DstDvcId       = case(not(IsApiCall_) and IsInbound_, tostring(InstanceDetails_.instanceId), ""),
+        SrcDomain      = case(IsApiCall_ or IsInbound_, "", tostring(NetIf0_.vpcId)),
+        DstDomain      = case(not(IsApiCall_) and IsInbound_, tostring(NetIf0_.vpcId), ""),
+        SrcGeoCountry  = case(IsApiCall_ or IsInbound_, tostring(RemoteDetails_.country.countryName), ""),
+        DstGeoCountry  = case(not(IsApiCall_) and not(IsInbound_), tostring(RemoteDetails_.country.countryName), ""),
+        SrcGeoCity     = case(IsApiCall_ or IsInbound_, tostring(RemoteDetails_.city.cityName), ""),
+        DstGeoCity     = case(not(IsApiCall_) and not(IsInbound_), tostring(RemoteDetails_.city.cityName), ""),
+        SrcDescription = case(IsApiCall_ or IsInbound_, tostring(RemoteDetails_.organization.org), ""),
+        DstDescription = case(not(IsApiCall_) and not(IsInbound_), tostring(RemoteDetails_.organization.org), "")
     | extend
-        DstIpAddr    = DstIpAddr_,
-        DstPortNumber = toint(coalesce(NetworkAction_.remotePortDetails.port, dynamic(null))),
-        DstGeoCountry = tostring(RemoteDetails_.country.countryName),
-        DstGeoCity    = tostring(RemoteDetails_.city.cityName),
-        DstDescription = tostring(RemoteDetails_.organization.org)
-    // Network fields
+        SrcDvcIdType  = iff(isnotempty(SrcDvcId), "Other", ""),
+        DstDvcIdType  = iff(isnotempty(DstDvcId), "Other", ""),
+        SrcDomainType = iff(isnotempty(SrcDomain), "Other", ""),
+        DstDomainType = iff(isnotempty(DstDomain), "Other", "")
+    // Network fields. NetworkApplicationProtocol is derived from the destination port,
+    // i.e. whichever side holds the well-known service port once direction is resolved.
     | extend
         NetworkProtocol = toupper(tostring(coalesce(NetworkAction_.protocol, dynamic("")))),
         NetworkDirection = case(
@@ -103,11 +131,11 @@ ParserQuery: |
         NetworkBytes   = int(0),
         NetworkPackets = int(0),
         NetworkApplicationProtocol = case(
-            toint(NetworkAction_.remotePortDetails.port) == 80,   "HTTP",
-            toint(NetworkAction_.remotePortDetails.port) == 443,  "HTTPS",
-            toint(NetworkAction_.remotePortDetails.port) == 53,   "DNS",
-            toint(NetworkAction_.remotePortDetails.port) == 22,   "SSH",
-            toint(NetworkAction_.remotePortDetails.port) == 3389, "RDP",
+            DstPortNumber == 80,   "HTTP",
+            DstPortNumber == 443,  "HTTPS",
+            DstPortNumber == 53,   "DNS",
+            DstPortNumber == 22,   "SSH",
+            DstPortNumber == 3389, "RDP",
             ""
         )
     // Device (the EC2 instance or resource the finding is about, when present)
@@ -122,13 +150,14 @@ ParserQuery: |
         ),
         DvcAction   = iff(tobool(NetworkAction_.blocked) == true, "Deny", "Allow"),
         DvcInterface = tostring(NetIf0_.networkInterfaceId)
-    // Threat fields
+    // Threat fields - always point at the remote party GuardDuty actually flagged,
+    // regardless of which ASIM side (Src/Dst) it landed on above.
     | extend
         ThreatName              = ActivityType,
         ThreatRiskLevel         = toint(Severity * 10),
         ThreatOriginalRiskLevel = tostring(Severity),
-        ThreatField             = "DstIpAddr",
-        ThreatIpAddr            = DstIpAddr,
+        ThreatField             = iff(IsApiCall_ or IsInbound_, "SrcIpAddr", "DstIpAddr"),
+        ThreatIpAddr            = RemoteIp_,
         ThreatIsActive          = true,
         ThreatFirstReportedTime = TimeCreated,
         ThreatLastReportedTime  = TimeGenerated
@@ -157,7 +186,9 @@ ParserQuery: |
         EventSeverity, EventOriginalSeverity, EventMessage, EventOriginalType,
         EventOriginalUid, EventUid,
         SrcIpAddr, SrcPortNumber, SrcHostname, SrcDvcId, SrcDvcIdType, SrcDomain, SrcDomainType,
-        DstIpAddr, DstPortNumber, DstGeoCountry, DstGeoCity, DstDescription,
+        SrcGeoCountry, SrcGeoCity, SrcDescription,
+        DstIpAddr, DstPortNumber, DstHostname, DstDvcId, DstDvcIdType, DstDomain, DstDomainType,
+        DstGeoCountry, DstGeoCity, DstDescription,
         NetworkProtocol, NetworkDirection, NetworkSessionId, NetworkBytes, NetworkPackets, NetworkApplicationProtocol,
         DvcId, DvcIdType, DvcHostname, DvcOs, DvcAction, DvcInterface,
         ThreatName, ThreatRiskLevel, ThreatOriginalRiskLevel, ThreatField, ThreatIpAddr,
