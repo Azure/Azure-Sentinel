@@ -268,7 +268,6 @@ Expand Playbook Workflow
 | Parameter | Description |
 |-|-|
 | **Playbook-Name** | Playbook name to use for this playbook (default: `RFI-lookup-and-save-user`). |
-| **log_analytics_workspace_name** | Name of your Log Analytics Workspace. Used to resolve the DCE and DCR deployed in step 1. |
 | **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
 
 </details>
