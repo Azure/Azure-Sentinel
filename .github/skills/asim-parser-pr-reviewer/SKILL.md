@@ -46,6 +46,8 @@ Review the parameter-less parser for the following:
 
 - **`pack` parameter**: If the query uses `AdditionalFields`, verify that a `pack: bool = false` parameter is included. This allows users to choose whether to populate `AdditionalFields` or return an empty dynamic, improving performance for users who do not need the extra information.
 
+- **Placeholder entity fields**: Verify that the parser outputs `entityKey = ""`, `AdditionalIds = dynamic([])`, and `additionalEntities = dynamic([])`. These fields must remain empty until mappings for them are defined.
+
 - **Parsing operator efficiency**: Check that high-performance parsing operators are used (`split`, `parse-kv`, `parse`) and that regular expressions are avoided where simpler operators would work.
 
 - **General KQL performance**: Flag any other inefficient patterns such as unnecessary `let` statements, redundant filters, expensive joins, or operations that could be reordered for better performance.
@@ -81,6 +83,7 @@ Please review:
 2. **Filter efficiency**: Are the parameter-based filters using native columns and indexed fields where possible?
 3. **Redundant computation**: Are there any calculated fields or parsing operations that occur before the parameter filters, when they could be moved after?
 4. **Parameter completeness**: Are the filtering parameters comprehensive enough to allow efficient querying for common use cases?
+5. **Placeholder entity fields**: Does the parameterized parser preserve `entityKey = ""`, `AdditionalIds = dynamic([])`, and `additionalEntities = dynamic([])`? Flag this only when the fields are present in the parameter-less parser but missing or populated in the parameterized parser, so the same issue is not reported twice.
 
 **Output format:**
 

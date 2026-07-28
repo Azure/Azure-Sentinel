@@ -61,6 +61,13 @@ Parsers are KQL functions that follow a clear flow: **Filter → Parse → Map**
 ### Required columns
 
 - Include the column `Type` in the output of the ASIM parser. This column indicates the source table name.
+- Include `entityKey`, `AdditionalIds`, and `additionalEntities` in the parser output. Until mappings for these fields are defined, set `entityKey` to an empty string and both `AdditionalIds` and `additionalEntities` to empty dynamic arrays:
+
+  ```kusto
+  entityKey = "",
+  AdditionalIds = dynamic([]),
+  additionalEntities = dynamic([])
+  ```
 
 ### Required parameters
 
