@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.1.7
+
+- (2027-07-27) Alert Schema Parsers - [PR #XXXXX](https://github.com/Azure/Azure-Sentinel/pull/XXXXX)
+
 ## Version 0.1.6
 
 - (2026-06-19) Alert Schema Parsers - [PR #14221](https://github.com/Azure/Azure-Sentinel/pull/14221)
