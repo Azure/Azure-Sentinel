@@ -22,13 +22,15 @@ query: |
     | extend TI_ip = tostring(ObservableValue);
   let seenBefore = CommonSecurityLog
     | where TimeGenerated between (ago(lookBack) .. ago(recent))
-    | extend ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)
+  | where isnotempty(SourceIP)
+  | extend ip = SourceIP
     | distinct ip;
   HoneyLabs_IPs
   | join kind=innerunique (
       CommonSecurityLog
       | where TimeGenerated >= ago(recent)
-      | extend ip = iff(isnotempty(SourceIP), SourceIP, DestinationIP)
+    | where isnotempty(SourceIP)
+    | extend ip = SourceIP
   ) on $left.TI_ip == $right.ip
   | where ip !in (seenBefore)
   | summarize Events = count(), Hosts = dcount(DeviceName), FirstSeen = min(TimeGenerated) by TI_ip, Confidence
