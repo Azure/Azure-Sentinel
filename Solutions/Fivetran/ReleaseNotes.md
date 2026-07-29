@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.1       | 29-07-2026                     | Added four ASIM parsers over `Fivetran_CL`: Authentication (`ASimAuthenticationFivetran` / `vimAuthenticationFivetran`) and AuditEvent (`ASimAuditEventFivetran` / `vimAuditEventFivetran`), enabling normalized cross-source queries and ASIM-based analytics. |
 | 3.0.0       | 22-07-2026                     | Initial Solution release. DCR-based custom table (Logs Ingestion API), data-connector tile, parser, two analytics rules (ingestion-gap / Defense Evasion T1562 and auth-failures / Credential Access T1110), SEVERE-spike hunting query and overview workbook. |

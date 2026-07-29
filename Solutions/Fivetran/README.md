@@ -13,6 +13,10 @@ using an Entra ID app registration; nothing polls Fivetran.
 | Data Collection Rule (ARM) | `Data Connectors/Fivetran_CCF/Fivetran_DCR.json` |
 | Data connector tile | `Data Connectors/Fivetran_CCF/Fivetran_DataConnector.json` |
 | Parser (KQL function `Fivetran`) | `Parsers/Fivetran.yaml` |
+| ASIM Authentication parser (parameterless) | `Parsers/ASimAuthenticationFivetran.yaml` |
+| ASIM Authentication parser (filtering) | `Parsers/vimAuthenticationFivetran.yaml` |
+| ASIM AuditEvent parser (parameterless) | `Parsers/ASimAuditEventFivetran.yaml` |
+| ASIM AuditEvent parser (filtering) | `Parsers/vimAuditEventFivetran.yaml` |
 | Analytics rule - ingestion gap (Defense Evasion / T1562) | `Analytic Rules/FivetranIngestionGap.yaml` |
 | Analytics rule - auth failures (Credential Access / T1110) | `Analytic Rules/FivetranAuthFailures.yaml` |
 | Hunting query - SEVERE spike | `Hunting Queries/FivetranSevereSpike.yaml` |

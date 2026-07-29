@@ -1,0 +1,138 @@
+id: vimAuditEventFivetran
+Function:
+  Title: Audit Event ASIM filtering parser for Fivetran
+  Version: '0.1.0'
+  LastUpdated: '2026-07-29'
+Category: Microsoft Sentinel Parser
+FunctionName: vimAuditEventFivetran
+FunctionAlias: vimAuditEventFivetran
+FunctionParams:
+  - Name: starttime
+    Type: datetime
+    Default: 'datetime(null)'
+  - Name: endtime
+    Type: datetime
+    Default: 'datetime(null)'
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: eventtype_in
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: operation_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: object_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: 'dynamic([])'
+  - Name: disabled
+    Type: bool
+    Default: false
+FunctionQuery: |
+    let AuditConnectorEvents = dynamic(['create_table','drop_table','alter_table','create_schema','schema_migration_start','schema_migration_end','change_schema_config','change_schema_config_via_sync','create_connector','forced_resync_connector','forced_resync_table','update_state','diagnostic_access_granted','diagnostic_access_ended','diagnostic_access_expired']);
+    let parser = (
+        starttime: datetime = datetime(null),
+        endtime: datetime = datetime(null),
+        srcipaddr_has_any_prefix: dynamic = dynamic([]),
+        eventtype_in: dynamic = dynamic([]),
+        eventresult: string = '*',
+        actorusername_has_any: dynamic = dynamic([]),
+        operation_has_any: dynamic = dynamic([]),
+        object_has_any: dynamic = dynamic([]),
+        newvalue_has_any: dynamic = dynamic([]),
+        disabled: bool = false)
+    {
+        Fivetran_CL | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        | extend _evt = parse_json(Message)
+        | extend
+            _event = tostring(coalesce(_evt.event, column_ifexists('event_s', ''), '')),
+            _conn_name = tostring(coalesce(_evt.connection_name, column_ifexists('connection_name_s', ''), '')),
+            _conn_type = tostring(coalesce(_evt.connector_type, column_ifexists('connector_type_s', ''), '')),
+            _exc = tostring(coalesce(_evt.exception_id, column_ifexists('exception_id_s', ''), '')),
+            _data = _evt.data
+        | extend _event = iff(isempty(_event),
+            tostring(extract(@'(?i)\b([A-Z_]{4,}|create_table|drop_table|alter_table|create_schema|schema_migration_start|schema_migration_end|change_schema_config|change_schema_config_via_sync|create_connector|forced_resync_connector|forced_resync_table|update_state|diagnostic_access_granted|diagnostic_access_ended|diagnostic_access_expired)\b', 1, tostring(Message))),
+            _event)
+        // Include documented connector config events, plus Audit Trail user actions
+        // (Fivetran emits these as UPPERCASE_WITH_UNDERSCORES event names).
+        | extend _isUpperAudit = (isnotempty(_event) and _event == toupper(_event) and _event matches regex @'^[A-Z][A-Z0-9_]{3,}$')
+        | where _event in (AuditConnectorEvents) or _isUpperAudit
+        | extend Operation = _event
+        | extend EventType = case(
+                Operation has_any ('create', 'CREATE', 'add', 'ADD'), 'Create',
+                Operation has_any ('drop', 'DROP', 'delete', 'DELETE', 'remove', 'REMOVE'), 'Delete',
+                Operation has_any ('pause', 'PAUSE', 'disable', 'DISABLE'), 'Disable',
+                Operation has_any ('resume', 'RESUME', 'enable', 'ENABLE'), 'Enable',
+                Operation has_any ('migration_start', 'INITIALIZE', 'initialize'), 'Initialize',
+                Operation has_any ('edit', 'EDIT', 'alter', 'change', 'update', 'UPDATE', 'set', 'SET', 'modify', 'MODIFY'), 'Set',
+                Operation has_any ('diagnostic_access', 'access', 'ACCESS', 'read', 'READ'), 'Read',
+                'Other')
+        | extend EventResult = case(
+                isnotempty(_exc), 'Failure',
+                Level =~ 'SEVERE', 'Failure',
+                'Success')
+        | where (eventresult == '*' or EventResult =~ eventresult)
+        | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+        | where (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+        | extend
+            Object = tostring(coalesce(_data['table'], _data['schema'], _data['name'], iff(isnotempty(_conn_name), _conn_name, ''), '')),
+            NewValue = tostring(coalesce(_data['new_value'], _data['status'], '')),
+            OldValue = tostring(coalesce(_data['old_value'], '')),
+            ActorUsername = tostring(coalesce(_data['actor'], _data['user'], _data['email'], _data['owner'], ''))
+        | extend
+            Object = iff(isempty(Object), 'Unknown', Object),
+            ObjectType = case(
+                Operation has 'table' or Operation has 'schema', 'Directory Service Object',
+                Operation has_any ('CONNECTION', 'CONNECTOR', 'connector'), 'Cloud Resource',
+                'Other')
+        | where (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+        | where (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+        | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
+        | extend
+            EventCount = int(1),
+            EventStartTime = todatetime(coalesce(column_ifexists('CreatedAt', TimeGenerated), TimeGenerated)),
+            EventEndTime = todatetime(coalesce(column_ifexists('CreatedAt', TimeGenerated), TimeGenerated)),
+            EventVendor = 'Fivetran',
+            EventProduct = 'Fivetran Platform',
+            EventSchema = 'AuditEvent',
+            EventSchemaVersion = '0.1.2',
+            EventOriginalType = _event,
+            EventOriginalSeverity = tostring(Level),
+            EventOriginalUid = _exc,
+            EventMessage = tostring(Message),
+            Dvc = 'Fivetran',
+            DvcHostname = 'Fivetran',
+            TargetAppName = iff(isnotempty(_conn_type), _conn_type, 'Fivetran'),
+            TargetAppType = 'Service'
+        | extend
+            ActorUsername = iff(isempty(ActorUsername), 'Unknown', ActorUsername),
+            ActorUsernameType = 'Simple',
+            User = ActorUsername,
+            Application = TargetAppName,
+            Value = NewValue
+        // Fivetran audit events carry no source IP, so any caller filtering on it excludes this source.
+        | where (array_length(srcipaddr_has_any_prefix) == 0)
+        | project-away _evt, _event, _conn_name, _conn_type, _exc, _data, _isUpperAudit
+    };
+    parser(
+        starttime = starttime,
+        endtime = endtime,
+        srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+        eventtype_in = eventtype_in,
+        eventresult = eventresult,
+        actorusername_has_any = actorusername_has_any,
+        operation_has_any = operation_has_any,
+        object_has_any = object_has_any,
+        newvalue_has_any = newvalue_has_any,
+        disabled = disabled)
