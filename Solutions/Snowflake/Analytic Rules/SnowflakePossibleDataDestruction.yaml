@@ -1,7 +1,7 @@
 id: c2f93727-e4b0-4cb9-8f80-f52ebbd96ece
 name: Snowflake - Possible data destraction
 description: |
-  'Detects possible data destruction.'
+  'Detects successful DROP operations in Snowflake that may indicate destructive activity against database objects. The rule triggers when the number of successful DROP queries reaches the configured threshold within the 5-minute bin over the 1-hour query period. Investigate the TargetUsername account and the dropped object context in Snowflake audit data to determine whether the activity was authorized maintenance or malicious destruction.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -21,7 +21,7 @@ query: |
   Snowflake
   | where QueryType =~ 'DROP'
   | where QueryExecutionStatus =~ 'SUCCESS'
-  | summarize count() by TargetUsername, bin(TimeGenerated, 5m)
+  | summarize count_ = count() by TargetUsername, QueryType, QueryExecutionStatus, bin(TimeGenerated, 5m)
   | where count_ > threshold
   | extend AccountCustomEntity = TargetUsername
 entityMappings:
@@ -29,5 +29,14 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: AccountCustomEntity
-version: 1.0.1
+alertDetailsOverride:
+  alertDisplayNameFormat: Snowflake possible data destruction by {{TargetUsername}}
+  alertDescriptionFormat: Detected {{count_}} successful DROP queries by {{TargetUsername}} in a 5-minute window, exceeding
+    the configured threshold.
+customDetails:
+  DroppedObjectType: QueryType
+  QueryStatus: QueryExecutionStatus
+  EventCount: count_
+  Threshold: threshold
+version: 1.0.2
 kind: Scheduled
