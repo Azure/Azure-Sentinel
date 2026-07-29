@@ -4,7 +4,7 @@
 
 The Exchange Security Insight Collector is a PowerShell script that collects data from Exchange Servers and Exchange Online. The script is designed to be run on a Windows machine and can be scheduled to run at regular intervals. The script collects data from Exchange Servers and Exchange Online and sends it to the Microsoft Exchange Security Insight solution for Microsoft Sentinel.
 
-You can refer to the Exchange Securitty Insight Collector [here](https://github.com/nlepagnez/ESI-PublicContent/blob/main/ESICollector.md)
+You can refer to the Exchange Securitty Insight Collector [here](./../../Documentations/ESICollector.md)
 
 Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
 
@@ -47,7 +47,7 @@ Replace the old script version with the new one. Additional tasks depending on y
 
 - **Staying on the legacy API temporarily** : nothing else to do. The collector will display a runtime warning banner at each execution until the migration is completed.
 - **Switching to the Log Ingestion API** :
-  1. Deploy the ARM template `ExchSecIns/Deployments/azuredeploy_ESI_LogIngestionAPI.json` to provision the DCE, tables (`ESIAPIExchangeOnPremConfig_CL`, `ESIAPIExchangeOnlineConfig_CL`, `ExchangeOnlineMessageTracking_CL`) and DCRs.
+  1. Deploy the ARM template `Deployments/azuredeploy_ESI_LogIngestionAPI.json` (in Zip) or `Data Connectors/azuredeploy_ESI_LogIngestionAPI.json` (In Sentinel Solution) to provision the DCE, tables (`ESIAPIExchangeOnPremConfig_CL`, `ESIAPIExchangeOnlineConfig_CL`, `ExchangeOnlineMessageTracking_CL`) and DCRs.
   2. Assign **Monitoring Metrics Publisher** on each target DCR to the identity used by the collector (managed identity or Entra ID service principal).
   3. Update the configuration keys listed above.
   4. Trigger a manual run and verify the new `_CL` tables are populated.
