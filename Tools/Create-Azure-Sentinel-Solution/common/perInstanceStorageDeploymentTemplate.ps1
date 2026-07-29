@@ -21,6 +21,56 @@ function Set-PerInstanceTemplateVariable {
     $Template.variables | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
 }
 
+function Get-PerInstanceArmStringLiteral {
+    param(
+        [Parameter(Mandatory = $true)] [AllowEmptyString()] [string] $Value
+    )
+
+    return "'" + $Value.Replace("'", "''") + "'"
+}
+
+function Get-PerInstanceAttributionTransform {
+    # Connection-scoped values such as the Cloudflare account name are not carried in
+    # the ingested payload, and addOnAttributes is stored on the connector ARM resource
+    # only - it is never injected into the DCR or the destination table. Because each
+    # connection owns its own DCR, the values are instead baked into that DCR's
+    # transform at packaging time so the columns actually land in the table.
+    param(
+        [Parameter(Mandatory = $true)] [string] $Transform,
+        [Parameter(Mandatory = $true)] $Attribution
+    )
+
+    $segments = @()
+    $pending = ""
+    $cursor = 0
+
+    foreach ($property in $Attribution.PSObject.Properties) {
+        $columnName = $property.Name
+        $parameterName = [string]$property.Value
+        $placeholder = "$columnName = ''"
+        $index = $Transform.IndexOf($placeholder, $cursor, [System.StringComparison]::Ordinal)
+        if ($index -lt 0) {
+            throw "attributionColumns column '$columnName' has no `"$placeholder`" placeholder in the authoritative DCR transform."
+        }
+        if ($Transform.IndexOf($placeholder, $index + $placeholder.Length, [System.StringComparison]::Ordinal) -ge 0) {
+            throw "attributionColumns column '$columnName' has more than one `"$placeholder`" placeholder in the authoritative DCR transform."
+        }
+
+        $literal = $pending + $Transform.Substring($cursor, $index - $cursor) + "$columnName = '"
+        $segments += Get-PerInstanceArmStringLiteral -Value $literal
+        # Single quotes and backslashes are stripped rather than escaped: they are the
+        # only characters that can terminate or escape a KQL string literal, so removing
+        # them keeps operator-supplied values from altering the transform.
+        $segments += "replace(replace(parameters('$parameterName'), '''', ''), '\', '')"
+        $pending = "'"
+        $cursor = $index + $placeholder.Length
+    }
+
+    $segments += Get-PerInstanceArmStringLiteral -Value ($pending + $Transform.Substring($cursor))
+
+    return "[[concat($($segments -join ', '))]"
+}
+
 function Get-PerInstanceStorageDeployment {
     param(
         [Parameter(Mandatory = $true)] $DeploymentConfig
@@ -227,6 +277,7 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         $queuePrefix = [string]$DeploymentConfig.queuePrefix
         $tableName = [string]$DeploymentConfig.tableName
         $identityParameters = @($DeploymentConfig.identityParameters)
+        $attributionColumns = $DeploymentConfig.attributionColumns
         $rolePropagationDelaySeconds = [int]$DeploymentConfig.rolePropagationDelaySeconds
 
         if ($resourcePrefix -notmatch '^[a-z][a-z0-9-]{1,19}$') {
@@ -250,6 +301,14 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         foreach ($parameterName in $identityParameters) {
             if ($null -eq $template.parameters.PSObject.Properties[$parameterName]) {
                 throw "Immutable identity parameter '$parameterName' is not present in the generated connection template."
+            }
+        }
+
+        if ($null -ne $attributionColumns) {
+            foreach ($property in $attributionColumns.PSObject.Properties) {
+                if ($null -eq $template.parameters.PSObject.Properties[[string]$property.Value]) {
+                    throw "attributionColumns column '$($property.Name)' maps to parameter '$($property.Value)', which is not present in the generated connection template."
+                }
             }
         }
 
@@ -330,6 +389,13 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         if ($tableSource.name -ne $tableName) {
             throw "connectionDeployment.tableName '$tableName' does not match the authoritative table source '$($tableSource.name)'."
         }
+        if ($null -ne $attributionColumns) {
+            foreach ($property in $attributionColumns.PSObject.Properties) {
+                if (-not ($tableSource.properties.schema.columns.name -contains $property.Name)) {
+                    throw "attributionColumns column '$($property.Name)' is not declared in the authoritative table schema."
+                }
+            }
+        }
         $tableProperties = Copy-PerInstanceJsonObject -InputObject $tableSource.properties
         if ($null -eq $tableProperties.schema) {
             throw "The authoritative table source must contain a schema object."
@@ -376,6 +442,9 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
                 throw "DCR data flow outputStream '$($dataFlow.outputStream)' does not match the authoritative table 'Custom-$tableName'."
             }
             $dataFlow.outputStream = "[[variables('outputStreamName')]"
+            if ($null -ne $attributionColumns) {
+                $dataFlow.transformKql = Get-PerInstanceAttributionTransform -Transform $dataFlow.transformKql -Attribution $attributionColumns
+            }
         }
 
         $dcrResource = [ordered]@{

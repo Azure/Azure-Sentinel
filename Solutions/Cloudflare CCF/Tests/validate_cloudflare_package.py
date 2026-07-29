@@ -69,7 +69,11 @@ def projected_columns(transform: str) -> list[str]:
     marker = "| project "
     if marker not in transform:
         raise AssertionError("DCR transform does not contain a final project operator")
-    return [column.strip() for column in transform.rsplit(marker, 1)[1].split(",")]
+    tail = transform.rsplit(marker, 1)[1]
+    # A packaged transform is an ARM concat() expression, so the final projected column
+    # is followed by the closing string literal and bracket.
+    tail = tail.split("')]")[0].rstrip("'")
+    return [column.strip() for column in tail.split(",")]
 
 
 def git_show_json(repo_root: Path, ref: str, relative_path: Path) -> Any | None:
@@ -112,8 +116,18 @@ def validate(repo_root: Path) -> list[str]:
     transform = dcr["properties"]["dataFlows"][0]["transformKql"]
     project_columns = set(projected_columns(transform))
     assert account_columns <= table_columns
-    assert account_columns <= stream_columns
+    # The account columns are synthesized per connection, not ingested: Cloudflare blob
+    # payloads never carry them, so declaring them on the input stream would guarantee
+    # nulls. They must be assigned in the transform instead.
+    assert not (account_columns & stream_columns), (
+        "account columns must not be declared on the input stream: "
+        f"{sorted(account_columns & stream_columns)}"
+    )
     assert account_columns <= project_columns
+    for column in sorted(account_columns):
+        assert f"{column} = ''" in transform, (
+            f"authoritative transform is missing the '{column} = \\'\\'' attribution placeholder"
+        )
     assert table_columns == project_columns, (
         f"DCR/table mismatch. Missing from project: {sorted(table_columns - project_columns)}; "
         f"not in table: {sorted(project_columns - table_columns)}"
@@ -228,6 +242,22 @@ def validate(repo_root: Path) -> list[str]:
     packaged_transform = packaged_dcr["properties"]["dataFlows"][0]["transformKql"]
     assert account_columns <= set(projected_columns(packaged_transform))
     assert "NELType = Type" in packaged_transform
+    # Each connection owns its DCR, so the connection-scoped account values are baked
+    # into that DCR's transform. addOnAttributes lives on the connector ARM resource and
+    # is never injected into the DCR or the destination table, so relying on it alone
+    # would ingest the columns as null.
+    assert packaged_transform.startswith("[[concat("), (
+        "packaged transform must be an ARM expression that injects per-connection attribution"
+    )
+    for column in sorted(account_columns):
+        # In the packaged ARM expression the opening KQL quote is escaped as '', so the
+        # assignment must be immediately followed by the scrubbed parameter injection.
+        expected = (
+            f"{column} = ''', replace(replace(parameters('{column}'), '''', ''), '\\', '')"
+        )
+        assert expected in packaged_transform, (
+            f"packaged transform does not inject a scrubbed parameters('{column}') value"
+        )
 
     diagnostics = first_resource(resources, "Microsoft.Insights/diagnosticSettings")
     assert diagnostics["properties"]["workspaceId"] == "[[variables('workspaceResourceId')]"
