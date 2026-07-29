@@ -1,0 +1,117 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionAppName": {
+            "type": "string",
+            "defaultValue": "ContosoMockApi",
+            "minLength": 3,
+            "maxLength": 24,
+            "metadata": {
+                "description": "Name prefix for the Function App and related resources. Must be globally unique — a random suffix is appended automatically."
+            }
+        },
+        "Location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Azure region for all resources. Defaults to the resource group location."
+            }
+        }
+    },
+    "variables": {
+        "uniqueSuffix": "[take(uniqueString(resourceGroup().id), 8)]",
+        "functionAppName": "[toLower(concat(parameters('FunctionAppName'), variables('uniqueSuffix')))]",
+        "storageAccountName": "[take(toLower(replace(variables('functionAppName'), '-', '')), 24)]",
+        "appInsightsName": "[concat(variables('functionAppName'), '-ai')]",
+        "storageSuffix": "[environment().suffixes.storage]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-09-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('Location')]",
+            "sku": { "name": "Standard_LRS" },
+            "kind": "StorageV2",
+            "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('appInsightsName')]",
+            "location": "[parameters('Location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "RetentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[parameters('Location')]",
+            "kind": "functionapp,linux",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+            ],
+            "properties": {
+                "httpsOnly": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.11",
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-09-01').keys[0].value, ';EndpointSuffix=', variables('storageSuffix'))]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                            "value": "true"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "functionAppName": {
+            "type": "string",
+            "value": "[variables('functionAppName')]"
+        },
+        "mockApiBaseUrl": {
+            "type": "string",
+            "value": "[concat('https://', variables('functionAppName'), '.azurewebsites.net/api')]"
+        },
+        "listIncidentsUrl": {
+            "type": "string",
+            "value": "[concat('https://', variables('functionAppName'), '.azurewebsites.net/api/incidents')]"
+        },
+        "getIncidentDetailsUrl": {
+            "type": "string",
+            "value": "[concat('https://', variables('functionAppName'), '.azurewebsites.net/api/incidents/{incidentId}/details')]"
+        }
+    }
+}
