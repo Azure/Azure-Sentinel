@@ -61,12 +61,15 @@ Parsers are KQL functions that follow a clear flow: **Filter → Parse → Map**
 ### Required columns
 
 - Include the column `Type` in the output of the ASIM parser. This column indicates the source table name.
-- Include `entityKey`, `AdditionalIds`, and `additionalEntities` in the parser output. Until mappings for these fields are defined, set `entityKey` to an empty string and both `AdditionalIds` and `additionalEntities` to empty dynamic arrays:
+- Determine the placeholder entity fields applicable to the parser from the target schema and `Common` rows in `ASimTester.csv`. Include every defined column whose name ends in `EntityKey` or `AdditionalIds`, as well as `AdditionalEntities` when it is defined for the schema.
+- Preserve the exact field names and casing from `ASimTester.csv`. Entity fields are role-specific (for example, `ActorUserEntityKey`, `SrcSystemEntityKey`, and `ActorUserAdditionalIds`); do not replace them with generic names such as `entityKey` or `AdditionalIds`.
+- Until mappings for these fields are defined, set every `*EntityKey` field to an empty string and every `*AdditionalIds` field and `AdditionalEntities` to an empty dynamic array. For example:
 
   ```kusto
-  entityKey = "",
-  AdditionalIds = dynamic([]),
-  additionalEntities = dynamic([])
+  ActorUserEntityKey = "",
+  SrcSystemEntityKey = "",
+  ActorUserAdditionalIds = dynamic([]),
+  AdditionalEntities = dynamic([])
   ```
 
 ### Required parameters
