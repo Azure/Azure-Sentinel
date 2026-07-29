@@ -23,9 +23,18 @@ possibility of such damages
     .\CollectExchSecIns.ps1
         
 .OUTPUTS
-    The output a csv file of collected data
+    Ingestion in Azure Sentinel
 .NOTES
     Developed by ksangui@microsoft.com and Nicolas Lepagnez (nilepagn@microsoft.com)
+
+    Version : 8.0.0.0 - Released : IN DEV - nilepagn
+        - Implement Log Ingestion API for Sentinel
+        - Create $Script:ESIDataPath to store data in a specific folder and become independant from CSV configuration
+        - Move ExportDomainsInformation to LogCollection Section in configuration. If set to true, the Domain Information will be exported in the Log Collection. Default Value is True as before.
+        - Change Github link for Configuration file to use the new repository
+        - Adding possibility to use github API insteafd of direct download for configuration file
+        - Adding runtime warning banner when the collector still uses the legacy Log Analytics HTTP Data Collector API.
+          See ESI-PublicContent/Documentations/Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI.md for the migration procedure.
 
     Version : 7.6.0.1 - Released : 26/07/2024 - nilepagn
         - Adding Try-Catch on Get-AutomationVariable Test
@@ -142,48 +151,6 @@ possibility of such damages
         - Prepare the ability to retrieve Add-On files from Internet
         - Prepare the ability to check a checksum of AuditFunctions.
 
-    Version : 6.5 - Released : 27/09/2022 - nilepagn
-        - Correction of bug on retrieving Exchange Servers
-        - Adding ESIEnvironment Information to correlate Configuration with logs in Sentinel
-
-    Version : 6.4 - Released : 22/09/2022 - nilepagn
-        - Filtering EDGE Servers that can't be analyzed
-        - Correcting a bug on Custom Select Fields
-        - Adding possibility to generate information for a specific Sentinel API Table. Add '//' in OutputStream of the function. Like "myfile.csv//SpecificSentinelTable"
-
-    Version : 6.3 - Released : 19/09/2022 - nilepagn
-        - Correct bug on AD Requests on a multi-domain environment
-        - Add the processing of the JobStatus type "Error" during transformation
-        - Changes how Errors from jobs are displayed in logs : Display as warning to doesn't throw error
-        - Add a correct error processing when user domain doesn't have the homeMBD attribute
-        - Modify the end of script to correctly ends the logging
-
-    Version : 6.2.2 - Released : 12/09/2022 - Ksangui
-        -Add Get-inboundConnecot and Get OutboungConnector for Online
-
-    Version : 6.2.1 - Released : 10/09/2022 - nilepagn
-        - Possibility to display TargetServer on Select (It was a regression from 4.x version)
-
-    Version : 6.2 - Released : ? - nilepagn
-        - Possibility to use Log Analytics API and CSV in same time.
-
-    Version : 6.1.1 - Released : 24/08/2022 - nilepagn
-        - Correcting bug on multithreading.
-        - Version published on On-Premises testing environment and validated.
-
-    Version : 6.1 - Released : 24/08/2022 - nilepagn
-        - Adding ESIEnvironment column in entries adding the possibility to audit multiple On-Premises and Online Exchange configuration
-
-    Version : 6.0.1 - Released : 24/08/2022 - nilepagn
-        - Bug on Write-LogMessage during function loading.
-        
-    Version : 6.0 - Released : 24/08/2022 - nilepagn
-        - Merge of On-Premises version and Cloud Version of ESI Collector
-        - Deactivate the possibility to launch multi-threading in Azure Automation
-        - Add "ESIProcessingType":"Online" in Global Section of JSON File. The value can be "Online" or "On-Premises"
-        - Add "ProcessingCategory":"All" for Audit Functions. The value can be "All", "Online" or "On-Premises"
-        - Reorganization of functions in the code by category
-
     ** For Previous version history, see Github page **
     
 #>
@@ -196,12 +163,14 @@ Param (
     $EPS2010=$false,
     [switch] $NoDateTracing, 
     [string] $InstanceName = "Default",
+    [switch] $ExchangeSimulationInjection,
+    [String] $SimulationInformation = "Internal",
     [switch] $GetVersion,
     [string] $ReceivedTenantName,
     [switch] $IsOutsideAzureAutomation
 )
 
-$ESICollectorCurrentVersion = "7.6.0.1"
+$ESICollectorCurrentVersion = "8.0.0.0"
 if ($GetVersion) {return $ESICollectorCurrentVersion}
 
 $Script:SupportedConfigurationVersion = "2.4"
@@ -571,6 +540,12 @@ $Script:SupportedConfigurationVersion = "2.4"
             $CapabilitiesList = @('OP', 'ADINFOS')
         )
 
+        if ($Script:_InternalInjection)
+        {
+            Write-LogMessage -Message "Internal Injection, Capabilities are not loaded" -Level Warning
+            return
+        }
+
         $script:CapabilityLoaded = @()
 
         foreach ($Capability in $CapabilitiesList)
@@ -713,9 +688,9 @@ $Script:SupportedConfigurationVersion = "2.4"
 
             if ($Global:InstanceName -ne "Default") { $fileName = "DateTracking-$($Global:InstanceName).esi"}
 
-            if (Test-Path ((Split-Path $outputpath) + "\$fileName"))
+            if (Test-Path (($Script:ESIDataPath) + "\$fileName"))
             {
-                $ContentDate = Get-Content ((Split-Path $outputpath) + "\$fileName")
+                $ContentDate = Get-Content (($Script:ESIDataPath) + "\$fileName")
             }
             else {
                 $ContentDate = $null
@@ -923,9 +898,9 @@ $Script:SupportedConfigurationVersion = "2.4"
             else 
             { 
                 if ($Global:InstanceName -ne "Default") {
-                    $JSNToSave | Set-ESIContent ((Split-Path $outputpath) + "\DateTracking-$($Global:InstanceName).esi")
+                    $JSNToSave | Set-ESIContent -Path (($Script:ESIDataPath) + "\DateTracking-$($Global:InstanceName).esi")
                 }
-                else { $JSNToSave | Set-ESIContent ((Split-Path $outputpath) + "\DateTracking.esi") }
+                else { $JSNToSave | Set-ESIContent -Path (($Script:ESIDataPath) + "\DateTracking.esi") }
             }
         }
     }
@@ -1272,6 +1247,43 @@ $Script:SupportedConfigurationVersion = "2.4"
         return $object
     }
 
+    function Connect-LogIngestionAPI
+    {
+        Write-LogMessage -Message ("Generate Log Ingestion API Token with Type $($Script:ESIProcessingType) ...")
+        Write-LogMessage -Message "Connect to Azure RM"
+
+        if (-not $Global:AlreadyAzSentinelConnected)
+        {
+            # Ensures you do not inherit an AzContext in your runbook
+            Disable-AzContextAutosave -Scope Process
+            
+            if ($isRunbook -and $Script:SentinelLogCollector.UseManagedIdentity)
+            {
+                # Connect to Azure with system-assigned managed identity
+                $AzureContext = (Connect-AzAccount -Identity -ContextName "SentinelIngestion").context
+                $Global:AlreadyAzSentinelConnected = $true
+            }
+            else {
+                if ($Global:Interactive)
+                {
+                    Write-LogMessage -Message "Az Connect with Interactive Logon"
+                    $AzureContext = (Connect-AzAccount -ContextName "SentinelIngestion").context
+                }
+                else {
+                    Write-LogMessage -Message "Az Connect with Interactive Logon"
+                    $AzureContext = (Connect-AzAccount -ContextName "SentinelIngestion" -CertificateThumbprint $Script:SentinelLogCollector.TargetLogCertificateThumbprint -Tenant $Script:SentinelLogCollector.TargetLogTenantID -ApplicationId $Script:SentinelLogCollector.TargetLogAppID).context
+                }
+                $Global:AlreadyAzSentinelConnected = $true
+            }
+        }
+        else {$AzureContext = Get-AzContext -Name "SentinelIngestion"}
+
+        #$AzureContext = Set-AzContext -SubscriptionName $AzureContext.Subscription -DefaultProfile $AzureContext
+        $context = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile.Contexts["SentinelIngestion"]
+
+        $Script:SentinelLogIngestionToken = [Microsoft.Azure.Commands.Common.Authentication.AzureSession]::Instance.AuthenticationFactory.Authenticate($context.Account, $context.Environment, $context.Tenant.Id.ToString(), $null, [Microsoft.Azure.Commands.Common.Authentication.ShowDialog]::Never, $null, "https://monitor.azure.com")
+    }
+
     function Get-OutputOptions
     {
         Param(
@@ -1284,6 +1296,7 @@ $Script:SupportedConfigurationVersion = "2.4"
         $OutputOptions | Add-Member Noteproperty -Name OutputFileName -value $null
         $OutputOptions | Add-Member Noteproperty -Name IsPartial -value $false
         $OutputOptions | Add-Member Noteproperty -Name AlreadyBackuped -value $false
+        $OutputOptions | Add-Member Noteproperty -Name LogTypeName -value $Script:SentinelLogCollector.LogTypeName
 
         if ($OutputName -match '_Page')
         {
@@ -1304,7 +1317,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             {
                 if ([string]::IsNullOrEmpty($Script:InstanceConfiguration.OutputName)) 
                 { 
-                    $TargetOutputName = $script:outputpath -replace '.csv',"-$($Script:InstanceName).csv"
+                    $TargetOutputName = $script:CSVOutputFile -replace '.csv',"-$($Script:InstanceName).csv"
                     $OutputOptions.OutputFileName = $Script:InstanceName 
                 }
                 else 
@@ -1319,7 +1332,7 @@ $Script:SupportedConfigurationVersion = "2.4"
                     $OutputOptions.OutputSentinelAPI = $Script:InstanceConfiguration.OutputName
                 }
             }
-            else { $OutputOptions.OutputFileName = $script:outputpath }
+            else { $OutputOptions.OutputFileName = $script:CSVOutputFile }
         }
         else {
             $OutputOptions.OutputFileName = $OutputName
@@ -1347,12 +1360,83 @@ $Script:SupportedConfigurationVersion = "2.4"
 
         if ($Script:SentinelLogCollector.ActivateLogUpdloadToSentinel)
         {
-            Start-LogsInjestion -OutputName $OutputName -PartialData:$PartialData -PartialDataName $PartialDataName -PartialDataRawFormat:$PartialDataRawFormat -RawData $RawData
+            if ($Script:SentinelLogCollector.UseForwarder)
+            {
+                Write-LogMessage -Message "Forwarder mode activated, logs will written to target directory for forwarder pickup"
+                SaveLogs-To-ForwarderPickup -OutputName $OutputName -PartialData:$PartialData -PartialDataName $PartialDataName -PartialDataRawFormat:$PartialDataRawFormat -RawData $RawData -TargetPath $Script:SentinelLogCollector.ForwarderPickupPath
+            }
+            else {
+                Write-LogMessage -Message "Logs will be sent to Sentinel during the script execution"   
+                Start-LogsInjestion -OutputName $OutputName -PartialData:$PartialData -PartialDataName $PartialDataName -PartialDataRawFormat:$PartialDataRawFormat -RawData $RawData
+            }
         }
 
         if (-not $Script:SentinelLogCollector.ActivateLogUpdloadToSentinel -or $Script:SentinelLogCollector.TogetherMode)
         {
             Save-LogsToCSV -OutputName $OutputName -PartialData:$PartialData -PartialDataName $PartialDataName -PartialDataRawFormat:$PartialDataRawFormat -RawData $RawData
+        }
+    }
+
+    function Send-SentinelSegment {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory=$true)]
+            [array]$SegmentData,
+
+            [Parameter(Mandatory=$true)]
+            [string]$LogType,
+
+            [Parameter(Mandatory=$true)]
+            [double]$MaxSize,
+
+            [Parameter(Mandatory=$false)]
+            [string]$SegmentLabel = "segment"
+        )
+
+        # always be sure that $segmentData is an array, even if it contains only one element
+        if ($SegmentData -isnot [array]) {
+            $SegmentData = @($SegmentData)
+        }
+
+        $segmentJson = $SegmentData | ConvertTo-Json -Compress -Depth 10
+        $segmentLength = [System.Text.Encoding]::UTF8.GetBytes($segmentJson).Length
+
+        if ($segmentLength -gt $MaxSize) {
+            if ($SegmentData.Count -lt 2) {
+                Write-LogMessage "$SegmentLabel is larger than max size ($([Math]::Round($segmentLength/1MB, 2)) MB > $([Math]::Round($MaxSize/1MB, 2)) MB) and cannot be split further" -Level Error
+                return $false
+            }
+
+            Write-LogMessage "$SegmentLabel is larger than max size ($([Math]::Round($segmentLength/1MB, 2)) MB). Retrying in 2 parts" -Level Warning
+
+            $mid = [math]::Floor($SegmentData.Count / 2)
+
+            if ($mid -lt 1) {
+                Write-LogMessage "Unable to split $SegmentLabel into 2 valid parts" -Level Error
+                return $false
+            }
+
+            $firstHalf = @($SegmentData[0..($mid - 1)])
+            $secondHalf = @($SegmentData[$mid..($SegmentData.Count - 1)])
+
+            $firstResult = Send-SentinelSegment -SegmentData $firstHalf -LogType $LogType -MaxSize $MaxSize -SegmentLabel "$SegmentLabel part 1/2"
+            $secondResult = Send-SentinelSegment -SegmentData $secondHalf -LogType $LogType -MaxSize $MaxSize -SegmentLabel "$SegmentLabel part 2/2"
+
+            return ($firstResult -and $secondResult)
+        }
+
+        Write-LogMessage "Sending $SegmentLabel ($([Math]::Round($segmentLength/1MB, 2)) MB) to Sentinel API $LogType"
+
+        if ($Script:SentinelLogCollector.SentinelLogIngestionAPIActivated) {
+            return (Post-LogMonitorData -body $segmentJson -logType $LogType)
+        }
+        else {
+            $segmentBytes = [System.Text.Encoding]::UTF8.GetBytes($segmentJson)
+            return (Post-LogAnalyticsData `
+                -customerId $Script:SentinelLogCollector.WorkspaceId `
+                -sharedKey $Script:SentinelLogCollector.WorkspaceKey `
+                -body $segmentBytes `
+                -logType $LogType)
         }
     }
 
@@ -1393,68 +1477,72 @@ $Script:SupportedConfigurationVersion = "2.4"
             throw("Input data cannot be converted into a JSON object. Please make sure that the input data is a standard PowerShell table")
         }
 
-        if ([String]::IsNullOrEmpty($OutputSentinelAPI)) {$OutputSentinelAPI = $Script:SentinelLogCollector.LogTypeName}
+        if ([String]::IsNullOrEmpty($OutputSentinelAPI)) 
+        {
+            $OutputSentinelAPI = $Script:SentinelLogCollector.LogTypeName
+        }
 
         if ($Script:InstanceConfiguration.FileFilterType -match "Categorize" -and [String]::IsNullOrEmpty($Script:InstanceConfiguration.OutputName))
         {
             $OutputSentinelAPI  = $OutputSentinelAPI -replace 'ESI', "ESI-$($Script:InstanceConfiguration.Category)-"
         }
 
+        $maxSize = $Script:MaximalSentinelPacketSizeMb *1024*1024
+
         $ResultLength = [System.Text.Encoding]::UTF8.GetBytes($ResultInjsonFormat).Length
-        $contentDivision = [math]::Ceiling($ResultLength / ($Script:MaximalSentinelPacketSizeMb *1024*1024))
+        $contentDivision = [math]::Ceiling($ResultLength / $maxSize)
 
         if ($contentDivision -le 1)
         {
-            Write-LogMessage -Message ("Upload payload size is less than $($Script:MaximalSentinelPacketSizeMb)Mb. It will be sent in 1 segment")
-            # Submit the data to the API endpoint
-            Post-LogAnalyticsData -customerId $Script:SentinelLogCollector.WorkspaceId `
-            -sharedKey $Script:SentinelLogCollector.WorkspaceKey `
-            -body ([System.Text.Encoding]::UTF8.GetBytes($ResultInjsonFormat)) `
-            -logType $OutputSentinelAPI
+            Write-LogMessage -Message ("Upload payload size is less than $($Script:MaximalSentinelPacketSizeMb)Mb. It will be sent in 1 segment to $OutputSentinelAPI")
+
+            try {
+                $result = Send-SentinelSegment -SegmentData $ResultInjsonFormat -LogType $OutputSentinelAPI -MaxSize $maxSize -SegmentLabel "segment 1/1"
+                
+                if (-not $result) {
+                    Write-LogMessage -Message "Failed to send logs to Sentinel" -Level Error
+                }
+            }
+            catch
+            {
+                Write-LogMessage -Message ("Error sending to Sentinel. $_") -Level Error
+            }
         }
         else {
             
-            Write-LogMessage -Message ("Upload payload size is " + ($ResultLength/1024/1024).ToString("#.#") + "Mb, greater than $($Script:MaximalSentinelPacketSizeMb)Mb. It will be sent in $contentDivision segments")
+            Write-LogMessage -Message ("Upload payload size is " + ($ResultLength/1024/1024).ToString("#.#") + "Mb, greater than $($Script:MaximalSentinelPacketSizeMb)Mb. It will be sent in $contentDivision segments to $OutputSentinelAPI")
 
             $maxCount = [math]::Floor($ProcessedData.Count / $contentDivision)
+            $currentIndex = 0
 
-            $maxSegmentCount = $maxCount
-            $CounterStart = 0
-            $exitNextTime = $false
-            while ($exitNextTime -eq $false)
-            {
-                if ($maxSegmentCount -ge $ProcessedData.Count)
-                {
-                    $maxSegmentCount = $ProcessedData.Count
-                    $exitNextTime = $true
+            $allSucceeded = $true
+            
+            for ($i = 0; $i -lt $contentDivision; $i++) {
+                $endIndex = [math]::Min($currentIndex + $maxCount, $ProcessedData.Count)
+                
+                if ($i -eq ($contentDivision - 1)) {
+                    $endIndex = $ProcessedData.Count
                 }
                 
-                Write-LogMessage -Message ("Sending Segment $CounterStart to $maxSegmentCount")
-
-                $TempTable = @()
-                for ($Counter = $CounterStart; $Counter -lt $maxSegmentCount; $Counter++)
+                $segment = $ProcessedData[$currentIndex..($endIndex - 1)]
+                
+                Write-LogMessage "Sending segment $($i + 1)/$contentDivision (items $currentIndex to $($endIndex - 1)) for $OutputSentinelAPI"
+                try
                 {
-                    $TempTable += $ProcessedData[$Counter]
+                    $result = Send-SentinelSegment -SegmentData $segment -LogType $OutputSentinelAPI -MaxSize $maxSize -SegmentLabel "segment $($i + 1)/$contentDivision"
+                    
+                    if (-not $result) {
+                        $allSucceeded = $false
+                        Write-LogMessage "Failed to send segment $($i + 1) for $OutputSentinelAPI" -Level Error
+                    }
                 }
-
-                $CounterStart = $maxSegmentCount
-                $maxSegmentCount += $maxCount
-
-                $ResultInjsonFormat = $TempTable | ConvertTo-Json -Compress
-
-                Write-LogMessage -Message ("Sending payload : $ResultInjsonFormat")
-
-                try {
-                    # Submit the data to the API endpoint
-                    Post-LogAnalyticsData -customerId $Script:SentinelLogCollector.WorkspaceId `
-                    -sharedKey $Script:SentinelLogCollector.WorkspaceKey `
-                    -body ([System.Text.Encoding]::UTF8.GetBytes($ResultInjsonFormat)) `
-                    -logType $OutputSentinelAPI
-                }
-                catch {
-                    Write-LogMessage -Message ("Error sending to Sentinel. $_") -Level Error
+                catch
+                {
+                    $allSucceeded = $false
+                    Write-LogMessage ("Error sending segment $($i + 1) for $OutputSentinelAPI. $_") -Level Error
                 }
                 
+                $currentIndex = $endIndex
             }
         }
     }
@@ -1500,7 +1588,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             }
         }
 
-        $outputdirectorypath = Split-Path $script:outputpath
+        $outputdirectorypath = Split-Path $script:CSVOutputFile
 
         # If $OutputFileName does not end with .csv, add it
         if ($OutputFileName -notmatch ".csv$")
@@ -1514,6 +1602,112 @@ $Script:SupportedConfigurationVersion = "2.4"
         }
         if ([String]::IsNullOrEmpty((Split-Path $OutputFileName))) {$OutputFileName = $outputdirectorypath+ "\" + $OutputFileName}
         $ProcessedData | Export-Csv -Path $OutputFileName -NoTypeInformation
+    }
+
+    function SaveLogs-To-ForwarderPickup
+    {
+        Param(
+            $OutputName,
+            [switch] $PartialData,
+            $PartialDataName,
+            [switch] $PartialDataRawFormat,
+            $RawData,
+            [Parameter(Mandatory=$true)]
+            [string] $TargetPath
+        )
+
+        Write-LogMessage -Message "Forwarder Pickup - Saving logs to forwarder directory"
+
+        # Validate and create target directory if needed
+        if (-not (Test-Path $TargetPath))
+        {
+            try {
+                Write-LogMessage -Message "Creating forwarder pickup directory: $TargetPath"
+                New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+            }
+            catch {
+                Write-LogMessage -Message "Failed to create forwarder pickup directory: $($_.Exception.Message)" -Level Error
+                throw "Unable to create forwarder pickup directory at $TargetPath"
+            }
+        }
+
+        # Determine which data to process
+        if ($PartialDataRawFormat)
+        {
+            $ProcessedData = $RawData
+        }
+        elseif ($PartialData)
+        {
+            $ProcessedData = $script:Results[$OutputName][$PartialDataName]
+        }
+        else {
+            $ProcessedData = $script:Results[$OutputName]
+        }
+
+        # Get output options and prepare filename
+        $OutputOptions = Get-OutputOptions -OutputName $OutputName
+        if ($OutputName -eq "Default")
+        {
+            $OutputOptions.OutputFileName = $OutputOptions.LogTypeName
+        }
+        else { $OutputFileName = $OutputOptions.OutputFileName }
+
+        # If OutputFileName is a full/relative path, keep only the filename portion
+        # (the forwarder pickup directory is provided via $TargetPath and joined below)
+        if (-not [String]::IsNullOrEmpty($OutputFileName) -and ($OutputFileName -match '[\\/]'))
+        {
+            $OutputFileName = Split-Path -Path $OutputFileName -Leaf
+        }
+
+        # Handle partial data naming
+        if ($PartialData -or $PartialDataRawFormat)
+        {
+            if ([String]::IsNullOrEmpty($PartialDataName))
+            {
+                $Guid = [guid]::NewGuid().ToString()
+                $OutputFileName = $OutputFileName -replace ".csv|.json", "-$Guid.json"
+            }
+            else
+            {
+                $OutputFileName = $OutputFileName -replace ".csv|.json", "-$PartialDataName.json"
+            }
+        }
+
+        # Ensure .json extension for forwarder pickup
+        if ($OutputFileName -notmatch ".json$")
+        {
+            $OutputFileName = $OutputFileName -replace ".csv$", ".json"
+            if ($OutputFileName -notmatch ".json$")
+            {
+                $OutputFileName = $OutputFileName + ".json"
+            }
+        }
+
+        # Add timestamp if not present
+        if ((-not $ForceOutputWithoutDate -or $null -eq $ForceOutputWithoutDate) -and $OutputFileName -notmatch "-$DateSuffixForFile.json")
+        {
+            $OutputFileName = $OutputFileName -replace ".json", "-$DateSuffixForFile.json"
+        }
+
+        # Build full path
+        $FullOutputPath = Join-Path -Path $TargetPath -ChildPath $OutputFileName
+
+        try {
+            # Convert to JSON and save
+            Write-LogMessage -Message "Writing forwarder pickup file: $FullOutputPath"
+            
+            # For forwarder, we typically want an array of objects
+            $JsonOutput = $ProcessedData | ConvertTo-Json -Depth 10 -Compress
+            
+            # Write to file
+            $JsonOutput | Set-ESIContent -Path $FullOutputPath
+            
+            Write-LogMessage -Message "Successfully saved forwarder pickup file: $FullOutputPath (Size: $([Math]::Round(($JsonOutput.Length/1KB), 2)) KB)"
+        }
+        catch {
+            Write-LogMessage -Message "Failed to save forwarder pickup file: $($_.Exception.Message)" -Level Error
+            throw "Unable to save forwarder pickup file: $($_.Exception.Message)"
+        }
     }
 
     Function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
@@ -1563,7 +1757,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             throw("Upload payload is too big and exceed the 32Mb limit for a single upload. Please reduce the payload size. Current payload size is: " + ($body.Length/1024/1024).ToString("#.#") + "Mb")
         }
 
-        Write-LogMessage -Message ("Upload payload size is " + ($body.Length/1024).ToString("#.#") + "Kb")
+        Write-LogMessage -Message ("Analytics API - Upload payload size is " + ($body.Length/1024).ToString("#.#") + "Kb - $logType")
 
         try {
             if ($Useproxy)
@@ -1589,6 +1783,73 @@ $Script:SupportedConfigurationVersion = "2.4"
         else
         { throw ("Server returned an error response code:" + $response.StatusCode)}
     }
+
+    Function Post-LogMonitorData        
+    {
+        Param(
+            [string]$body, 
+            [string]$logType
+        )
+
+        $method = "POST"
+
+        $DceUri = $Script:SentinelLogCollector.DataCollectionEndpointURI
+        $DCRImmutableID = $Script:SentinelLogCollector.DCRImmutableId
+        $streamName = $logType
+
+        # if StreamName doesn't begin with 'Custom-', add it
+        if (-not $streamName.StartsWith("Custom-")) {
+            $streamName = "Custom-$streamName"
+        }
+
+        if ($null -eq $Script:SentinelLogIngestionToken)
+        {
+            Connect-LogIngestionAPI
+        }
+
+        $bearerToken = $Script:SentinelLogIngestionToken.AccessToken
+
+        $uri = "$DceUri/dataCollectionRules/$DCRImmutableID/streams/$($streamName)?api-version=2023-01-01"
+ 
+        $headers = @{
+            "Authorization" = "Bearer $bearerToken";
+            "Content-Type"="application/json"
+        }
+
+        #validate that payload data does not exceed limits
+        if ($body.Length -gt (0.9 *1024*1024))
+        {
+            throw("Upload payload is too big and exceed the 1Mb limit for a single upload. Please reduce the payload size. Current payload size is: " + ($body.Length/1024/1024).ToString("#.#") + "Mb")
+        }
+
+        Write-LogMessage -Message ("Upload payload size is " + ($body.Length/1024).ToString("#.#") + "Kb - Uri : $uri")
+        #Write-LogMessage -Message ("Body: $body")
+
+        try {
+            if ($Useproxy)
+            {
+                $response = Invoke-WebRequest -Uri $uri -Method $method -Headers $headers -Body $body -UseBasicParsing -Proxy $Script:ProxyUrl
+            }
+            else {
+                $response = Invoke-WebRequest -Uri $uri -Method $method -Headers $headers -Body $body -UseBasicParsing
+            }
+        }
+        catch {
+            if ($_.Exception.Message.startswith('The remote name could not be resolved'))
+            {
+                throw ("Error - data could not be uploaded. Might be because workspace ID or private key are incorrect")
+            }
+
+            throw ("Error - data could not be uploaded: " + $_.Exception.Message)
+        }
+        
+        # Present message according to the response code
+        if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 204) 
+        { Write-LogMessage  "200 - Data was successfully uploaded" }
+        else
+        { throw ("Server returned an error response code:" + $response.StatusCode)}
+    }
+
 #endregion Sentinel Upload Management
 
 #region Dynamic Cmdlet Management
@@ -1671,6 +1932,25 @@ $Script:SupportedConfigurationVersion = "2.4"
         $Object | Add-Member Noteproperty -Name SpecificFormat -value $SpecificFormat
         
         return $Object
+    }
+
+    Function New-ExchangeSimulationInjection
+    {
+        Param(
+            [Parameter(Mandatory=$True)] [String] $InjectionInfo
+        )
+        
+            
+        $Script:_InternalInjection = $true
+        $Script:Results["Default"] += New-Result -Section "InjectionMode" -PSCmdL "InjectionMode" -EntryDate $Script:DateSuffix -ScriptInstanceID $Script:ScriptInstanceID
+
+        if ($InjectionInfo -match "Internal")
+        {
+            $Script:_InternalExchangeInformation = $Global:InjectionTest | ConvertFrom-Json
+        }
+        else {
+            $Script:_InternalExchangeInformation = Get-Content -Path $InjectionInfo | ConvertFrom-Json
+        }
     }
 
     #Function to construct the output file which depend on the section currently processing
@@ -1889,6 +2169,8 @@ $Script:SupportedConfigurationVersion = "2.4"
             if (-not [String]::IsNullOrEmpty($ServerProcessed))
             {
                 $Object | Add-Member Noteproperty -Name ProcessedByServer -value $ServerProcessed
+            }else {
+                $Object | Add-Member Noteproperty -Name ProcessedByServer -value $null
             }
         
             if ($EmptyCmdlet)
@@ -1934,6 +2216,9 @@ $Script:SupportedConfigurationVersion = "2.4"
                 if (-not [String]::IsNullOrEmpty($ServerProcessed))
                 {
                     $Object | Add-Member Noteproperty -Name ProcessedByServer -value $ServerProcessed
+                }
+                else {
+                    $Object | Add-Member Noteproperty -Name ProcessedByServer -value $null
                 }
             
                 # Compile other Attributes
@@ -2286,11 +2571,19 @@ $Script:SupportedConfigurationVersion = "2.4"
         Param(
             $NumberRunspace
         )
+
         
         $Script:RunspaceResults = [hashtable]::Synchronized(@{})
         $Script:RunspaceResults.AvailableRunspaces = 0
 
         $JobList = @()
+
+        if ($Script:_InternalInjection)
+        {
+            Write-LogMessage -Message ("`tInternal Injection Mode - Runspace Creation - Ignored due to Injection Simulation") -NoOutput -Level Warning
+            return
+        }
+        
         Write-Host "Launching Runspace creation ..."
 
         for ($i = 0; $i -lt $NumberRunspace; $i++)
@@ -3069,17 +3362,6 @@ $Script:SupportedConfigurationVersion = "2.4"
                 $Script:GlobalParallelProcess = $false
             }
 
-            if ([string]::IsNullOrEmpty($jsonConfig.Output.DefaultOutputFile) -and -not $Global:isRunbook) {throw "No Output file in config, mandatory"} else {$Script:outputpath = $jsonConfig.Output.DefaultOutputFile}
-            if (-not [string]::IsNullOrEmpty($jsonConfig.Output.ExportDomainsInformation))
-            {
-                $Script:ExportDomainsInformation = [Convert]::ToBoolean($jsonConfig.Output.ExportDomainsInformation)
-            }
-            else
-            {
-                $Script:ExportDomainsInformation = $false
-            }
-
-
             [int] $Script:ParralelWaitRunning
             if ($null -eq $jsonConfig.Advanced.ParralelWaitRunning) {[int] $Script:ParralelWaitRunning = 60} else {[int] $Script:ParralelWaitRunning = $jsonConfig.Advanced.ParralelWaitRunning}
             if ($null -eq $jsonConfig.Advanced.ParralelPingWaitRunning) {[int] $Script:ParralelPingWaitRunning = $Script:ParralelWaitRunning} else {[int] $Script:ParralelPingWaitRunning = $jsonConfig.Advanced.ParralelPingWaitRunning}
@@ -3147,22 +3429,32 @@ $Script:SupportedConfigurationVersion = "2.4"
             }
             else { $Script:UpdateVersionCheckingDeactivated = $false }
 
-            
-
-            if ($null -eq $jsonConfig.Advanced.MaximalSentinelPacketSizeMb) {
-                $script:MaximalSentinelPacketSizeMb = 31.9
-            } 
-            else {
-                if ($jsonConfig.Advanced.MaximalSentinelPacketSizeMb -ge 32)
-                {
-                    Write-LogMessage -Message "Packet size $($jsonConfig.Advanced.MaximalSentinelPacketSizeMb) greater than 31.9Kb. Maximum size for Sentinel is 31.9Kb."
-                    $script:MaximalSentinelPacketSizeMb = 31.9
-                }
-                else
-                {
-                    [int] $Script:MaximalSentinelPacketSizeMb = $jsonConfig.Advanced.MaximalSentinelPacketSizeMb - 0.1
+            if (-not [string]::IsNullOrEmpty($jsonConfig.Advanced.ExplicitESIDataPath)) 
+            {   
+                $Script:ESIDataPath = $jsonConfig.Advanced.ExplicitESIDataPath
+                if (-not (Test-Path $Script:ESIDataPath)) 
+                {   
+                    try {
+                        New-Item -Path $Script:ESIDataPath -ItemType Directory -ErrorAction Stop
+                    }
+                    catch {
+                        throw "Path $($Script:ESIDataPath) not found and impossible to create"
+                    }
                 }
             }
+            else 
+            { 
+                $Script:ESIDataPath = $Script:scriptFolder + "\Data" 
+                try {
+                    if (-not (Test-Path $Script:ESIDataPath)) { New-Item -Path $Script:ESIDataPath -ItemType Directory -ErrorAction Stop }
+                }
+                catch {
+                    throw "Path $($Script:ESIDataPath) not found and impossible to create"
+                }
+            }
+
+            
+
 
             if ($null -eq $jsonConfig.Advanced.PaginationErrorThreshold) {
                 $script:PaginationErrorThreshold = 10
@@ -3241,6 +3533,51 @@ $Script:SupportedConfigurationVersion = "2.4"
             else {
                 $Script:MGGraphAzureRMCertificate = "Unknown"
                 $Script:MGGraphAzureRMAppId = "Unknown"
+            }
+
+            if ($null -ne $jsonConfig.InternetAddonCollectionConfiguration) {
+                $Script:InternetAddonCollectionConfiguration = New-Object PSObject
+
+                # Load properties UseGithubAPI, GithubRawUrlforOnPremises, GithubRawUrlforOnline, GithubAPIToken, GithubAPIConnectionType
+                if (-not [String]::IsNullOrEmpty($jsonConfig.InternetAddonCollectionConfiguration.UseGithubAPI)) {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name UseGithubAPI -value ([Convert]::ToBoolean($jsonConfig.InternetAddonCollectionConfiguration.UseGithubAPI))
+                }
+                else {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name UseGithubAPI -value $false
+                }
+                if (-not [String]::IsNullOrEmpty($jsonConfig.InternetAddonCollectionConfiguration.GithubRawUrlforOnPremises)) {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnPremises -value $jsonConfig.InternetAddonCollectionConfiguration.GithubRawUrlforOnPremises
+                }
+                else {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnPremises -value "https://raw.githubusercontent.com/ESICollector/ESICollector-Addons/master"
+                }
+                if (-not [String]::IsNullOrEmpty($jsonConfig.InternetAddonCollectionConfiguration.GithubRawUrlforOnline)) {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnline -value $jsonConfig.InternetAddonCollectionConfiguration.GithubRawUrlforOnline
+                }
+                else {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnline -value "https://raw.githubusercontent.com/ESICollector/ESICollector-Addons/master"
+                }
+                if (-not [String]::IsNullOrEmpty($jsonConfig.InternetAddonCollectionConfiguration.GithubAPIToken)) {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIToken -value $jsonConfig.InternetAddonCollectionConfiguration.GithubAPIToken
+                }
+                else {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIToken -value ""
+                }
+                if (-not [String]::IsNullOrEmpty($jsonConfig.InternetAddonCollectionConfiguration.GithubAPIConnectionType)) {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIConnectionType -value $jsonConfig.InternetAddonCollectionConfiguration.GithubAPIConnectionType
+                }
+                else {
+                    $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIConnectionType -value "NoAuth"
+                }
+            }
+            else {
+                $Script:InternetAddonCollectionConfiguration = New-Object PSObject
+                $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name UseGithubAPI -value $false
+                $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnPremises -value "https://raw.githubusercontent.com/ESICollector/ESICollector-Addons/master"
+                $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubRawUrlforOnline -value "https://raw.githubusercontent.com/ESICollector/ESICollector-Addons/master"
+                $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIToken -value ""
+                $Script:InternetAddonCollectionConfiguration | Add-Member Noteproperty -Name GithubAPIConnectionType -value "NoAuth"
+
             }
 
             if ($null -ne $jsonConfig.InstanceConfiguration) {
@@ -3338,14 +3675,113 @@ $Script:SupportedConfigurationVersion = "2.4"
                 $Script:SentinelLogCollector | Add-Member Noteproperty -Name WorkspaceKey -value $jsonConfig.LogCollection.WorkspaceKey
                 $Script:SentinelLogCollector | Add-Member Noteproperty -Name LogTypeName -value $jsonConfig.LogCollection.LogTypeName
                 $Script:SentinelLogCollector | Add-Member Noteproperty -Name TogetherMode -value ([Convert]::ToBoolean($jsonConfig.LogCollection.TogetherMode))
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name SentinelLogIngestionAPIActivated -value $false
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name DataCollectionEndpointURI -value $jsonConfig.LogCollection.DataCollectionEndpointURI
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name DCRImmutableId -value $jsonConfig.LogCollection.DCRImmutableId
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name TargetLogTenantID -value $jsonConfig.LogCollection.TargetLogTenantID
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name TargetLogAppID -value $jsonConfig.LogCollection.TargetLogAppID
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name TargetLogCertificateThumbprint -value $jsonConfig.LogCollection.TargetLogCertificateThumbprint
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name UseManagedIdentity -value ([Convert]::ToBoolean($jsonConfig.LogCollection.UseManagedIdentity))
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name TargetLogAppSecretReference -value $jsonConfig.LogCollection.TargetLogAppSecretReference
+                $script:SentinelLogCollector | Add-Member Noteproperty -Name UseForwarder -value ([Convert]::ToBoolean($jsonConfig.LogCollection.UseForwarder))
+                $Script:SentinelLogCollector | Add-Member Noteproperty -Name ForwarderPickupPath -value $jsonConfig.LogCollection.ForwarderPickupPath
 
                 if ($Script:SentinelLogCollector.ActivateLogUpdloadToSentinel)
                 {
-                    if ([string]::IsNullOrEmpty($Script:SentinelLogCollector.WorkspaceId) -or
-                    [string]::IsNullOrEmpty($Script:SentinelLogCollector.WorkspaceKey) -or
-                    [string]::IsNullOrEmpty($Script:SentinelLogCollector.LogTypeName))
+                    if ([string]::IsNullOrEmpty($Script:SentinelLogCollector.LogTypeName))
                     {
-                        throw "Sentinel Log Collector configuration is activated and contains wrong values."
+                        throw "Sentinel Log Collector configuration is activated and LogTypeName is missing"
+                    }
+                }
+
+                if (-not [string]::IsNullOrEmpty($jsonConfig.LogCollection.SentinelLogIngestionAPIActivated)) 
+                {   
+                    $Script:SentinelLogCollector.SentinelLogIngestionAPIActivated = [Convert]::ToBoolean($jsonConfig.LogCollection.SentinelLogIngestionAPIActivated)
+                }
+                else { $Script:SentinelLogCollector.SentinelLogIngestionAPIActivated = $false }
+
+
+                if ($Script:SentinelLogCollector.SentinelLogIngestionAPIActivated)
+                {
+                    
+                    #throw "Sentinel Log Collector configuration with new Log Ingestion API is currently not supported."
+
+                    if ([string]::IsNullOrEmpty($Script:SentinelLogCollector.DataCollectionEndpointURI) -or
+                    [string]::IsNullOrEmpty($Script:SentinelLogCollector.DCRImmutableId) -or
+                    $null -eq $Script:SentinelLogCollector.UseManagedIdentity -or (
+                        $Script:SentinelLogCollector.UseManagedIdentity -eq $false -and (
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogTenantID) -or
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogAppID) -or
+                            [string]::IsNullOrEmpty($Script:SentinelLogCollector.TargetLogCertificateThumbprint)
+                        )
+                    ))
+                    {
+                        throw "Sentinel Log Collector configuration with new Log Ingestion API Endpoint is activated but DCE URI or DCR Immutable Id or Authentication information are missing."
+                    }
+
+                    if ($script:IsRunbook -and -not $Script:SentinelLogCollector.UseManagedIdentity)
+                    {
+                        try {
+                            Get-AutomationVariable -Name $Script:SentinelLogCollector.TargetLogAppSecretReference -ErrorAction Stop | Out-Null
+                        }
+                        catch {
+                            throw "Sentinel Log Collector configuration with new Log Ingestion API Endpoint is activated but Secret information is missing. Exception : $($_.Exception.Message)"
+                        }
+                    }
+                    
+                }
+                else
+                {
+                    if ($Script:SentinelLogCollector.ActivateLogUpdloadToSentinel)
+                    {
+                        if ([string]::IsNullOrEmpty($Script:SentinelLogCollector.WorkspaceId) -or
+                        [string]::IsNullOrEmpty($Script:SentinelLogCollector.WorkspaceKey))
+                        {
+                            throw "Sentinel Log Collector configuration is activated and contains wrong values."
+                        }
+
+                        # ------------------------------------------------------------------
+                        # Legacy Log Analytics HTTP Data Collector API deprecation warning
+                        # ------------------------------------------------------------------
+                        # Displayed on every execution while the collector still targets the
+                        # legacy Log Analytics API. Clears once SentinelLogIngestionAPIActivated
+                        # is set to true and the DCE/DCR configuration is provided.
+                        # See migration guide:
+                        #   https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "================================================================================"
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! LEGACY LOG ANALYTICS HTTP DATA COLLECTOR API IS STILL IN USE"
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! This API is deprecated by Microsoft and will be retired."
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Migrate to the Azure Monitor Log Ingestion API BEFORE end of support."
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Set 'SentinelLogIngestionAPIActivated' to 'true' after deploying DCE/DCR."
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "!! Migration guide: https://aka.ms/MES-Migrate_From_LogAnalyticsAPI_To_LogIngestionAPI"
+                        Write-LogMessage -Level Warning -Category "APIDeprecation" -Message "================================================================================"
+                    }
+                }
+
+
+                if ($null -eq $jsonConfig.Advanced.MaximalSentinelPacketSizeMb) {
+                    if ($Script:SentinelLogCollector.SentinelLogIngestionAPIActivated) {
+                        Write-LogMessage -Message "Sentinel Log Ingestion API activated. Maximum size for Sentinel Log Ingestion is 1Mb."
+                        $script:MaximalSentinelPacketSizeMb = 0.9
+                    }
+                    else {
+                        $script:MaximalSentinelPacketSizeMb = 31.9
+                    }  
+                } 
+                else {
+                    if ($Script:SentinelLogCollector.SentinelLogIngestionAPIActivated -and $jsonConfig.Advanced.MaximalSentinelPacketSizeMb -ge 1)
+                    {
+                        Write-LogMessage -Message "Packet size $($jsonConfig.Advanced.MaximalSentinelPacketSizeMb) greater than 1Mb. Maximum size for Sentinel is 1 Mb."
+                        $script:MaximalSentinelPacketSizeMb = 0.9
+                    }
+                    elseif ($jsonConfig.Advanced.MaximalSentinelPacketSizeMb -ge 32)
+                    {
+                        Write-LogMessage -Message "Packet size $($jsonConfig.Advanced.MaximalSentinelPacketSizeMb) greater than 31.9Mb. Maximum size for Sentinel is 31.9Mb."
+                        $script:MaximalSentinelPacketSizeMb = 31.9
+                    }
+                    else
+                    {
+                        [int] $Script:MaximalSentinelPacketSizeMb = $jsonConfig.Advanced.MaximalSentinelPacketSizeMb - 0.1
                     }
                 }
 
@@ -3357,6 +3793,29 @@ $Script:SupportedConfigurationVersion = "2.4"
                 {
                     $Script:SentinelLogCollector.LogTypeName -replace "ESIExchangeConfig", "ESIExchangeOnlineConfig"
                 }
+
+                if ([string]::IsNullOrEmpty($jsonConfig.LogCollection.CSVOutputFile) ) {$Script:CSVOutputFile = "ExchSecIns.csv"} else 
+                {
+                    $Script:CSVOutputFile = $jsonConfig.LogCollection.CSVOutputFile
+                }
+
+                # if CSVOutputFile is not a full path, add the default path
+                if (-not $Script:CSVOutputFile.Contains(":")) { $Script:CSVOutputFile = $Script:scriptFolder + "\" + $Script:CSVOutputFile }
+
+                # check if the output path is valid and create it if needed
+                if (-not $Script:SentinelLogCollector.ActivateLogUpdloadToSentinel -or $Script:SentinelLogCollector.TogetherMode)
+                {
+                    if (-not (Test-Path (Split-Path $Script:CSVOutputFile))) { New-Item -Path (Split-Path $Script:CSVOutputFile) -ItemType Directory -ErrorAction Stop }
+                }
+    
+                if (-not [string]::IsNullOrEmpty($jsonConfig.LogCollection.ExportDomainsInformation))
+                {
+                    $Script:ExportDomainsInformation = [Convert]::ToBoolean($jsonConfig.LogCollection.ExportDomainsInformation)
+                }
+                else
+                {
+                    $Script:ExportDomainsInformation = $true
+                }
             }
 
         }
@@ -3365,6 +3824,100 @@ $Script:SupportedConfigurationVersion = "2.4"
             Write-LogMessage -Message "Impossible to process configuration - Exception: $($_.Exception.Message) `n StackTrace: $($_.ScriptStackTrace) `n PositionMessage: $($_.InvocationInfo.PositionMessage)" -Level Error
             throw $_
         }
+    }
+
+    
+    function InvokeGithubGetFileContent
+    {
+        Param (
+            $GithubSourcePath,
+            $FileName,
+            [switch] $Raw
+        )
+
+        if (-not $Script:InternetAddonCollectionConfiguration.UseGithubAPI)
+        {
+            Write-LogMessage -Message "UseGithubAPI is set to False, no Github API call will be made, Raw Content will be used" -NoOutput -Level Warning
+
+            $uri = "$GithubSourcePath/$($FileName)"
+            
+            try {
+                if ($Useproxy)
+                {
+                    $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing -Proxy $Script:ProxyUrl
+                }
+                else {
+                    $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing
+                }
+            }
+            catch {
+                Write-LogMessage -Message "Impossible to retrieve file $($FileName) from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
+                Throw "Impossible to load Audit Functions, Critical for collection. Error :" + $_
+            }
+            
+            if ($Raw)
+            {
+                return $WebResult.Content
+            }
+            else
+            {
+                return $WebResult.Content | ConvertFrom-Json
+            }
+        }
+        else
+        {
+            # Use Github API to retrieve file content
+            $uri = "$GithubSourcePath/$($FileName)"
+            $headers = @{}
+            
+            $headers.Add("Accept", "application/vnd.github.raw+json")
+            $headers.Add("X-GitHub-Api-Version","2022-11-28")
+
+            if (-not [string]::IsNullOrEmpty($Script:InternetAddonCollectionConfiguration.GithubAPIToken) -and 
+                $Script:InternetAddonCollectionConfiguration.GithubAPIConnectionType -like "Bearer")
+            {
+                $headers.Add("Authorization", "Bearer $($Script:InternetAddonCollectionConfiguration.GithubAPIToken)")
+            }
+
+            try {
+                if ($Useproxy)
+                {
+                    $WebResult = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get -UseBasicParsing -Proxy $Script:ProxyUrl
+                }
+                else {
+                    $WebResult = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get -UseBasicParsing
+                }
+            }
+            catch {
+                Write-LogMessage -Message "Impossible to retrieve file $($FileName) from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
+                Throw "Impossible to load Audit Functions, Critical for collection. Error :" + $_
+            }
+
+            if ($null -eq $WebResult -or $null -eq $WebResult.Content)
+            {
+                Write-LogMessage -Message "Impossible to retrieve file $($FileName) from Online Github. Content is null" -NoOutput -Level Warning; 
+                Throw "Impossible to load Audit Functions, Critical for collection. Error : Content is null"
+            }
+
+            $Content = $WebResult.Content
+
+            if ($WebResult.Encoding -eq "base64")
+            {
+                # Content is base64 encoded, decode it
+                $Content = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Contentt))
+            }
+
+            if ($Raw)
+            {
+                return $Content
+            }
+            else
+            {
+                return $Content | ConvertFrom-Json
+            }
+        }
+
+        
     }
 
     function LoadAuditFunctionsFromInternetRepository
@@ -3381,17 +3934,18 @@ $Script:SupportedConfigurationVersion = "2.4"
             # Verify the cache directory exists
             $scriptFolder = $Script:scriptFolder
             $ScriptAddonCachePath = $scriptFolder + '\Config\Add-Ons\OnlineCache\'
-            $GithubSourcePath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Operations/ESICollector-Addons"
+            $GithubSourcePath = $Script:InternetAddonCollectionConfiguration.GithubRawUrlforOnPremises
+            $GithubSourceRelativePath = "";
 
             if ($Beta)
             {
-                $GithubSourcePath += "/Beta"
+                $GithubSourceRelativePath += "/Beta"
             }
 
             if ($Script:InstanceConfiguration.FileFilterType -match "Categorize")
             {
                 $ScriptAddonCachePath += "Categories\$($Script:InstanceConfiguration.Category)\"
-                $GithubSourcePath += "/Categories/$($Script:InstanceConfiguration.Category)/"
+                $GithubSourceRelativePath += "/Categories/$($Script:InstanceConfiguration.Category)/"
             }
 
             Push-Location ($scriptFolder);
@@ -3440,14 +3994,8 @@ $Script:SupportedConfigurationVersion = "2.4"
             # Retrieve File Checksum list
             
             try {
-                if ($Useproxy)
-                {
-                    $WebResult = invoke-WebRequest -Uri "$GithubSourcePath/ESIChecksumFiles.json" -UseBasicParsing -Proxy $Script:ProxyUrl
-                }
-                else
-                {
-                    $WebResult = invoke-WebRequest -Uri "$GithubSourcePath/ESIChecksumFiles.json" -UseBasicParsing
-                }
+                $GithubSourcePathFileName = $GithubSourceRelativePath + "ESIChecksumFiles.json"
+                $WebResult = InvokeGithubGetFileContent -GithubSourcePath $GithubSourcePath -FileName $GithubSourcePathFileName -Raw
             }
             catch {
                 Write-LogMessage -Message "Impossible to retrieve files from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
@@ -3465,7 +4013,7 @@ $Script:SupportedConfigurationVersion = "2.4"
             # If not empty, check each file from checksum list
             if (-not $CacheEmpty)
             {
-                $localHash = Get-FileHash -Path $ScriptAddonCachePath + "ESIChecksumFiles.json" -Algorithm SHA256
+                $localHash = Get-FileHash -Path ($ScriptAddonCachePath + "ESIChecksumFiles.json") -Algorithm SHA256
 
                 $stringAsStream = [System.IO.MemoryStream]::new()
                 $writer = [System.IO.StreamWriter]::new($stringAsStream)
@@ -3491,16 +4039,10 @@ $Script:SupportedConfigurationVersion = "2.4"
                 # Add all file in the list
                 foreach ($OnlineFile in $OnlineFiles.Files)
                 {
-                    $uri = "$GithubSourcePath/$($OnlineFile.FileName)"
+                    $uri = "$GithubSourceRelativePath/$($OnlineFile.FileName)"
                     try {
-                        if ($Useproxy)
-                        {
-                            $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing -Proxy $Script:ProxyUrl
-                        }
-                        else
-                        {
-                            $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing
-                        }
+
+                        $WebResult = InvokeGithubGetFileContent -GithubSourcePath $GithubSourcePath -FileName $uri -Raw
                     }
                     catch {
                         Write-LogMessage -Message "Impossible to retrieve file $($OnlineFile.FileName) from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
@@ -3518,6 +4060,10 @@ $Script:SupportedConfigurationVersion = "2.4"
         }
     }
 
+    # Load Audit Functions from Online Github repository
+    # This function is used in Runbook mode
+    # It retrieves the list of Audit Functions from the Online Github repository
+
     function LoadAuditFunctionsForRunBook
     {
         Param (
@@ -3527,29 +4073,25 @@ $Script:SupportedConfigurationVersion = "2.4"
 
         # Process in Memory without storage
         # Retrieve File Checksum list
-        $GithubSourcePath = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Operations/ESICollector-Addons"
+        $GithubSourcePath = $Script:InternetAddonCollectionConfiguration.GithubRawUrlforOnline
+        $GithubSourceRelativePath = "";
         
         if ($Beta)
         {
-            $GithubSourcePath += "/Beta"
+            $GithubSourceRelativePath += "/Beta"
         }
 
         Write-LogMessage "Filter $($Script:InstanceConfiguration.FileFilterType) - Category $($Script:InstanceConfiguration.Category)" -NoOutput
 
         if ($Script:InstanceConfiguration.FileFilterType -match "Categorize")
         {
-            $GithubSourcePath += "/Categories/$($Script:InstanceConfiguration.Category)/"
+            $GithubSourceRelativePath += "/Categories/$($Script:InstanceConfiguration.Category)/"
         }
+
+        $GithubSourcePathFileName = $GithubSourceRelativePath + "ESIChecksumFiles.json"
         
         try {
-            if ($Useproxy)
-            {
-                $WebResult = invoke-WebRequest -Uri "$GithubSourcePath/ESIChecksumFiles.json" -UseBasicParsing -Proxy $Script:ProxyUrl
-            }
-            else
-            {
-                $WebResult = invoke-WebRequest -Uri "$GithubSourcePath/ESIChecksumFiles.json" -UseBasicParsing 
-            }
+            $OnlineFiles = InvokeGithubGetFileContent -GithubSourcePath $GithubSourcePath -FileName $GithubSourcePathFileName 
         }   
         catch {
             Write-LogMessage -Message "Impossible to retrieve files from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
@@ -3557,7 +4099,6 @@ $Script:SupportedConfigurationVersion = "2.4"
         }
 
         # Retrieve all list
-        $OnlineFiles = $WebResult.Content | ConvertFrom-Json
         $AuditFunctionList = @()
 
         foreach ($OnlineFile in $OnlineFiles.Files)
@@ -3593,21 +4134,14 @@ $Script:SupportedConfigurationVersion = "2.4"
 
             if ($FileToIgnore) {continue;}
             
-            $uri = "$GithubSourcePath/$($OnlineFile.FileName)"
+            $urifilename = $GithubSourceRelativePath + $OnlineFile.FileName
             try {
-                if ($Useproxy)
-                {
-                    $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing -Proxy $Script:ProxyUrl
-                }
-                else {
-                    $WebResult = invoke-WebRequest -Uri $uri -UseBasicParsing
-                }
+                $OnlineAuditFunctionsFile = InvokeGithubGetFileContent -GithubSourcePath $GithubSourcePath -FileName $urifilename 
             }
             catch {
                 Write-LogMessage -Message "Impossible to retrieve file $($OnlineFile.FileName) from Online Github. Error : $($_.Exception)" -NoOutput -Level Warning; 
                 Throw "Impossible to load Audit Functions, Critical for collection. Error :" + $_
             }
-            $OnlineAuditFunctionsFile = $WebResult.Content | ConvertFrom-Json
             Write-LogMessage -Message "Nb Audit Functions found :$($OnlineAuditFunctionsFile.AuditFunctions.count) for $($OnlineFile.FileName)" -NoOutput -Level Info;
             $AuditFunctionList += $OnlineAuditFunctionsFile.AuditFunctions 
         }
@@ -3887,6 +4421,13 @@ if (-not $NoDateTracing)
     Get-LastLaunchTime
 }
 
+if ($ExchangeSimulationInjection)
+{
+    Write-LogMessage -Message "Injection mode activated, no real data will be collected"
+
+    New-ExchangeSimulationInjection -InjectionInfo $SimulationInformation
+}
+
 Write-LogMessage -Message "Launching Capability analysis"
 Set-Capabilities -CapabilitiesList $Script:InstanceConfiguration.Capabilities
 
@@ -3897,16 +4438,6 @@ if ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess) {
 
 [System.Collections.ArrayList] $script:RunningProcesses = @()
 
-if (-not $Global:isRunbook)
-{
-    Write-Host ("Create/Validate Output file path")
-    if (-not (Test-Path (Split-Path $script:outputpath))) {mkdir (Split-Path $script:outputpath)}
-    if (-not $ForceOutputWithoutDate -or $null -eq $ForceOutputWithoutDate)
-    {
-        $script:outputpath = $script:outputpath -replace ".csv", "-$DateSuffixForFile.csv"
-    }
-}
-
 if (-not $Script:FunctionsListWithoutInternet)
 {
     $FunctionList = LoadAuditFunctionsFromInternetRepository -ProcessingType $Script:ESIProcessingType -Beta:$Script:BetaActivated
@@ -3915,130 +4446,134 @@ else {
     $FunctionList = LoadAuditFunctions -AuditFunctionList $Script:JSonAuditFunctionList -ProcessingType $Script:ESIProcessingType -FromAddOnFolder:(-not $Script:FunctionsListInline)
 }
 
-Write-LogMessage -Message ("Launch Data collection ...")
-$inc = 1
-
-Write-LogMessage -Message ("Launch Audit Function loop Collection ...")
-foreach ($Entry in $FunctionList)
+if (-not $Script:_InternalInjection)
 {
-    if ([string]::IsNullOrEmpty($Entry.Section)) 
-    { 
-        try {
-            Write-LogMessage -Message ("`tNo Section found for $($Entry.ToString()) / Collection aborted for this object due to security issue, continue to next object") -NoOutput -Level Error;
-        }
-        catch {
-            Write-LogMessage -Message ("`tNo Section found and Entry format can't be displayed for analysis / Collection aborted for this object due to security issue, continue to next object") -NoOutput -Level Error;
-        }
-        $inc++
-        continue
-    }
-    
-    Write-LogMessage -Message ("`tLaunch collection $inc on $($FunctionList.count) for $($Entry.Section)")
 
-    $PaginationExecution = $false
-    if ($null -ne $Entry.PaginationInformation -and $Entry.PaginationInformation.PaginationActivated) {
+    Write-LogMessage -Message ("Launch Data collection ...")
+    $inc = 1
 
-        Write-LogMessage -Message ("`tPagination information found for $($Entry.Section) $($Entry.PaginationInformation)")
-
-        $PaginationExecution = $true
-        $EntryOutStream = $Entry.OutputStream + "_Page"
-
-        if ($Entry.PaginationInformation.PartialDataUpload)
-        {
-            $EntryOutStream = $EntryOutStream + "_SentDuringExecution"
-        }
-
-    }
-    else {
-        Write-LogMessage -Message ("`tNo Pagination information found for $($Entry.Section)")
-        $EntryOutStream = $Entry.OutputStream
-    }
-
-    if ($Entry.DateStorageInformation.DateStorageActivated -and $Entry.DateStorageInformation.DateStorageMode -eq "DateFromAttribute")
+    Write-LogMessage -Message ("Launch Audit Function loop Collection ...")
+    foreach ($Entry in $FunctionList)
     {
-        $SaveDate = $True
-        $DateStorageAttribute = $Entry.DateStorageInformation.DateAttribute
-    }
-    else {
-        $SaveDate = $False
-    }
+        if ([string]::IsNullOrEmpty($Entry.Section)) 
+        { 
+            try {
+                Write-LogMessage -Message ("`tNo Section found for $($Entry.ToString()) / Collection aborted for this object due to security issue, continue to next object") -NoOutput -Level Error;
+            }
+            catch {
+                Write-LogMessage -Message ("`tNo Section found and Entry format can't be displayed for analysis / Collection aborted for this object due to security issue, continue to next object") -NoOutput -Level Error;
+            }
+            $inc++
+            continue
+        }
+        
+        Write-LogMessage -Message ("`tLaunch collection $inc on $($FunctionList.count) for $($Entry.Section)")
 
-    if ($EntryOutStream -notin $Script:Results.Keys) {
-        Write-LogMessage -Message ("`tCreating Output Table for $($EntryOutStream)")
-        if ($PaginationExecution) {
-            $Script:Results[$EntryOutStream] = @{}
+        $PaginationExecution = $false
+        if ($null -ne $Entry.PaginationInformation -and $Entry.PaginationInformation.PaginationActivated) {
+
+            Write-LogMessage -Message ("`tPagination information found for $($Entry.Section) $($Entry.PaginationInformation)")
+
+            $PaginationExecution = $true
+            $EntryOutStream = $Entry.OutputStream + "_Page"
+
+            if ($Entry.PaginationInformation.PartialDataUpload)
+            {
+                $EntryOutStream = $EntryOutStream + "_SentDuringExecution"
+            }
+
         }
         else {
-            $Script:Results[$EntryOutStream] = @()
-        }
-    }
-
-    $EntryCmdlet = $Entry.PSCmdL
-
-    if ($EntryCmdlet -match "#LastDateOfSection#" -and $Entry.DateStorageInformation.DateStorageActivated) 
-    {
-        $EntryCmdlet = $EntryCmdlet -replace "#LastDateOfSection#", $Entry.DateStorageInformation.LastDateTracking
-    }
-
-    if ($Entry.ProcessPerServer)
-    {
-        if ($script:CapabilityLoaded -notcontains "OP") {
-            Write-LogMessage -Message ("`tImpossible to launch a Per Server action without OP capability") -Level Warning
-            $ErrorMessage = "`tImpossible to launch a Per Server action without OP capability"
-            
-            $Script:Results[$EntryOutStream] += New-Result -Section $Entry.Section -PSCmdL $EntryCmdlet -ErrorText $ErrorMessage -EntryDate $Script:DateSuffix -ScriptInstanceID $Script:ScriptInstanceID
-            continue;
+            Write-LogMessage -Message ("`tNo Pagination information found for $($Entry.Section)")
+            $EntryOutStream = $Entry.OutputStream
         }
 
-        foreach ($ExchangeServer in $script:ExchangeServerList.ListSRVUp)
+        if ($Entry.DateStorageInformation.DateStorageActivated -and $Entry.DateStorageInformation.DateStorageMode -eq "DateFromAttribute")
         {
-            if (($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess) -and $Entry.NoRunpace -eq $false -and -not $PaginationExecution) {
-                processParallel -Entry $Entry -TargetServer $ExchangeServer -EntryCmdlet $EntryCmdlet -EntryOutStream $EntryOutStream -EntrySuboutputPage $EntrySuboutputPage -IsPaginated:$PaginationExecution
+            $SaveDate = $True
+            $DateStorageAttribute = $Entry.DateStorageInformation.DateAttribute
+        }
+        else {
+            $SaveDate = $False
+        }
+
+        if ($EntryOutStream -notin $Script:Results.Keys) {
+            Write-LogMessage -Message ("`tCreating Output Table for $($EntryOutStream)")
+            if ($PaginationExecution) {
+                $Script:Results[$EntryOutStream] = @{}
+            }
+            else {
+                $Script:Results[$EntryOutStream] = @()
+            }
+        }
+
+        $EntryCmdlet = $Entry.PSCmdL
+
+        if ($EntryCmdlet -match "#LastDateOfSection#" -and $Entry.DateStorageInformation.DateStorageActivated) 
+        {
+            $EntryCmdlet = $EntryCmdlet -replace "#LastDateOfSection#", $Entry.DateStorageInformation.LastDateTracking
+        }
+
+        if ($Entry.ProcessPerServer)
+        {
+            if ($script:CapabilityLoaded -notcontains "OP") {
+                Write-LogMessage -Message ("`tImpossible to launch a Per Server action without OP capability") -Level Warning
+                $ErrorMessage = "`tImpossible to launch a Per Server action without OP capability"
+                
+                $Script:Results[$EntryOutStream] += New-Result -Section $Entry.Section -PSCmdL $EntryCmdlet -ErrorText $ErrorMessage -EntryDate $Script:DateSuffix -ScriptInstanceID $Script:ScriptInstanceID
+                continue;
+            }
+
+            foreach ($ExchangeServer in $script:ExchangeServerList.ListSRVUp)
+            {
+                if (($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess) -and $Entry.NoRunpace -eq $false -and -not $PaginationExecution) {
+                    processParallel -Entry $Entry -TargetServer $ExchangeServer -EntryCmdlet $EntryCmdlet -EntryOutStream $EntryOutStream -EntrySuboutputPage $EntrySuboutputPage -IsPaginated:$PaginationExecution
+                }
+                else {
+                    if ($PaginationExecution -and ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess))
+                    {
+                        Write-LogMessage -Message ("`tParallel process for pagination not supported, fallback to sequential process for the section $($Entry.Section)") -Level Warning
+                    }
+                    
+                    $Script:Results[$EntryOutStream] += GetCmdletExec -Section $Entry.Section -PSCmdL $EntryCmdlet -Select $Entry.Select -TransformationFunction $Entry.TransformationFunction -TargetServer $ExchangeServer -TransformationForeach:$Entry.TransformationForeach -SaveDate:$SaveDate -SaveDateAttribute $DateStorageAttribute -Entry $Entry -PaginationExecution:$PaginationExecution
+                }
+            }  
+        }
+        else
+        {
+            if ($Script:GlobalParallelProcess -and $Entry.NoRunpace -eq $false -and -not $PaginationExecution) {
+                processParallel -Entry $Entry -EntryCmdlet $EntryCmdlet -EntryOutStream $EntryOutStream -EntrySuboutputPage $EntrySuboutputPage -IsPaginated:$PaginationExecution
             }
             else {
                 if ($PaginationExecution -and ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess))
                 {
                     Write-LogMessage -Message ("`tParallel process for pagination not supported, fallback to sequential process for the section $($Entry.Section)") -Level Warning
                 }
-                
-                $Script:Results[$EntryOutStream] += GetCmdletExec -Section $Entry.Section -PSCmdL $EntryCmdlet -Select $Entry.Select -TransformationFunction $Entry.TransformationFunction -TargetServer $ExchangeServer -TransformationForeach:$Entry.TransformationForeach -SaveDate:$SaveDate -SaveDateAttribute $DateStorageAttribute -Entry $Entry -PaginationExecution:$PaginationExecution
+
+                $Script:Results[$EntryOutStream] += GetCmdletExec -Section $Entry.Section -PSCmdL $EntryCmdlet -Select $Entry.Select -TransformationFunction $Entry.TransformationFunction -TransformationForeach:$Entry.TransformationForeach  -SaveDate:$SaveDate -SaveDateAttribute $DateStorageAttribute -Entry $Entry -PaginationExecution:$PaginationExecution
+
             }
-        }  
-    }
-    else
-    {
-        if ($Script:GlobalParallelProcess -and $Entry.NoRunpace -eq $false -and -not $PaginationExecution) {
-            processParallel -Entry $Entry -EntryCmdlet $EntryCmdlet -EntryOutStream $EntryOutStream -EntrySuboutputPage $EntrySuboutputPage -IsPaginated:$PaginationExecution
         }
-        else {
-            if ($PaginationExecution -and ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess))
-            {
-                Write-LogMessage -Message ("`tParallel process for pagination not supported, fallback to sequential process for the section $($Entry.Section)") -Level Warning
-            }
 
-            $Script:Results[$EntryOutStream] += GetCmdletExec -Section $Entry.Section -PSCmdL $EntryCmdlet -Select $Entry.Select -TransformationFunction $Entry.TransformationFunction -TransformationForeach:$Entry.TransformationForeach  -SaveDate:$SaveDate -SaveDateAttribute $DateStorageAttribute -Entry $Entry -PaginationExecution:$PaginationExecution
-
-        }
-    }
-
-    if ($Entry.DateStorageInformation.DateStorageActivated -and -not $SaveDate)
-    {
-        switch ($Entry.DateStorageInformation.DateStorageMode)
+        if ($Entry.DateStorageInformation.DateStorageActivated -and -not $SaveDate)
         {
-            "LastDate" {
-                Set-CurrentLaunchTime -SpecificFunction -FunctionName $Entry.Section -DateSuffix (Get-Date -Format "yyyy-MM-dd HH:mm:ss K")
-            }
-            "StartDateScript" {
-                Set-CurrentLaunchTime -SpecificFunction -FunctionName $Entry.Section -DateSuffix $Script:DateSuffix
+            switch ($Entry.DateStorageInformation.DateStorageMode)
+            {
+                "LastDate" {
+                    Set-CurrentLaunchTime -SpecificFunction -FunctionName $Entry.Section -DateSuffix (Get-Date -Format "yyyy-MM-dd HH:mm:ss K")
+                }
+                "StartDateScript" {
+                    Set-CurrentLaunchTime -SpecificFunction -FunctionName $Entry.Section -DateSuffix $Script:DateSuffix
+                }
             }
         }
+
+        $inc++
     }
 
-    $inc++
-}
-
-if ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess) {
-    WaitAndProcess
+    if ($Script:ParallelProcessPerServer -or $Script:GlobalParallelProcess) {
+        WaitAndProcess
+    }
 }
 
 Write-LogMessage -Message ("Launch CSV Creation / Sentinel Payload uploading ...")

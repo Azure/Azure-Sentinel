@@ -1,0 +1,970 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "deployTables": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Master switch: deploy the custom Log Analytics tables. Set to false to deploy only the Data Collection Endpoint/Rules (assumes tables already exist)."
+            }
+        },
+        "deployDataCollection": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Master switch: deploy the Data Collection Endpoint and Data Collection Rules. Set to false to deploy only the custom tables."
+            }
+        },
+        "deployOnlineConfigTable": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Deploy the Online Configuration (ESIExchangeOnlineConfig_CL and its associated data flow)"
+            }
+        }
+        ,
+        "deployOnPremConfigTable": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Deploy the On-Premises Configuration (ESIExchangeConfig_CL and its associated data flow)"
+            }
+        },
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace (has to be in same subscription, resource group, and region as the Data Collection Endpoint)"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources : Data Collection Endpoint and Log Analytics workspace (has to be in same subscription, resource group, and region as the Data Collection Endpoint)"
+            }
+        },
+        "dataCollectionEndpointName": {
+            "type": "string",
+            "defaultValue": "DCE-ESI-LogIngestion",
+            "metadata": {
+                "description": "Name of the Data Collection Endpoint"
+            }
+        },
+        "dataCollectionRuleOnlineConfigName": {
+            "type": "string",
+            "defaultValue": "DCR-ESI-OnlineConfig",
+            "metadata": {
+                "description": "Name of the Data Collection Rule for Online Config table"
+            }
+        },
+        "dataCollectionRuleOnPremisesConfigName": {
+            "type": "string",
+            "defaultValue": "DCR-ESI-OnPremisesConfig",
+            "metadata": {
+                "description": "Name of the Data Collection Rule for On-Premises Config table"
+            }
+        },
+        "dataCollectionRuleMessageTrackingName": {
+            "type": "string",
+            "defaultValue": "DCR-ESI-MessageTracking",
+            "metadata": {
+                "description": "Name of the Data Collection Rule for Message Tracking table"
+            }
+        },
+        "retentionInDays": {
+            "type": "int",
+            "defaultValue": 90,
+            "minValue": 30,
+            "maxValue": 730,
+            "metadata": {
+                "description": "Retention period in days for the custom tables"
+            }
+        },
+        "deployMessageTrackingTable": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Deploy the Message Tracking table (ExchangeOnlineMessageTracking_CL and its associated data flow)"
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+        "configTableName": "ESIAPIExchangeOnlineConfig_CL",
+        "onPremConfigTableName": "ESIAPIExchangeOnPremisesConfig_CL",
+        "messageTrackingTableName": "ExchangeOnlineMessageTracking_CL",
+        "onPremConfigoutputStream": "Custom-ESIAPIExchangeOnPremisesConfig_CL",
+        "onlineConfigoutputStream": "Custom-ESIAPIExchangeOnlineConfig_CL"
+    },
+    "resources": [
+        {
+            "condition": "[parameters('deployDataCollection')]",
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[parameters('dataCollectionEndpointName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "condition": "[and(parameters('deployTables'), parameters('deployOnPremConfigTable'))]",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('onPremConfigTableName'))]",
+            "properties": {
+                "totalRetentionInDays": "[parameters('retentionInDays')]",
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('onPremConfigTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime",
+                            "description": "The timestamp when the log was generated"
+                        },
+                        {
+                            "name": "EntryDate_s",
+                            "type": "string",
+                            "description": "Date of the configuration entry"
+                        },
+                        {
+                            "name": "GenerationInstanceID_g",
+                            "type": "string",
+                            "description": "Unique identifier for the generation instance"
+                        },
+                        {
+                            "name": "ESIEnvironment_s",
+                            "type": "string",
+                            "description": "Exchange environment identifier"
+                        },
+                        {
+                            "name": "Section_s",
+                            "type": "string",
+                            "description": "Configuration section name"
+                        },
+                        {
+                            "name": "ExecutionResult_s",
+                            "type": "string",
+                            "description": "Execution result"
+                        },
+                        {
+                            "name": "Identity_s",
+                            "type": "string",
+                            "description": "Identity"
+                        },
+                        {
+                            "name": "Identity_Depth_d",
+                            "type": "real",
+                            "description": "Identity depth in the directory hierarchy"
+                        },
+                        {
+                            "name": "Identity_DistinguishedName_s",
+                            "type": "string",
+                            "description": "Identity distinguished name (LDAP DN)"
+                        },
+                        {
+                            "name": "Identity_DomainId_s",
+                            "type": "string",
+                            "description": "Identity domain identifier (serialized when object)"
+                        },
+                        {
+                            "name": "Identity_IsDeleted_b",
+                            "type": "boolean",
+                            "description": "Indicates whether the identity is deleted"
+                        },
+                        {
+                            "name": "Identity_IsRelativeDn_b",
+                            "type": "boolean",
+                            "description": "Indicates whether the DN is relative"
+                        },
+                        {
+                            "name": "Identity_Name_s",
+                            "type": "string",
+                            "description": "Identity name"
+                        },
+                        {
+                            "name": "Identity_ObjectGuid_g",
+                            "type": "string",
+                            "description": "Identity object GUID"
+                        },
+                        {
+                            "name": "Identity_Parent_s",
+                            "type": "string",
+                            "description": "Identity parent (serialized when object)"
+                        },
+                        {
+                            "name": "Identity_PartitionFQDN_s",
+                            "type": "string",
+                            "description": "Identity partition FQDN"
+                        },
+                        {
+                            "name": "Identity_PartitionGuid_g",
+                            "type": "string",
+                            "description": "Identity partition GUID"
+                        },
+                        {
+                            "name": "Identity_Rdn_s",
+                            "type": "string",
+                            "description": "Identity relative distinguished name (RDN, serialized when object)"
+                        },
+                        {
+                            "name": "IdentityString_s",
+                            "type": "string",
+                            "description": "Identity string"
+                        },
+                        {
+                            "name": "RawData_s",
+                            "type": "string",
+                            "description": "Raw configuration data in JSON format"
+                        },
+                        {
+                            "name": "Name_s",
+                            "type": "string",
+                            "description": "Name"
+                        },
+                        {
+                            "name": "ProcessedByServer_s",
+                            "type": "string",
+                            "description": "Processed by server"
+                        },
+                        {
+                            "name": "PSCmdL_s",
+                            "type": "string",
+                            "description": "PowerShell cmdlet"
+                        },
+                        {
+                            "name": "WhenChanged_t",
+                            "type": "datetime",
+                            "description": "When changed timestamp"
+                        },
+                        {
+                            "name": "WhenCreated_t",
+                            "type": "datetime",
+                            "description": "When created timestamp"
+                        }
+                    ]
+                },
+                "retentionInDays": "[parameters('retentionInDays')]"
+            }
+        },
+        {
+            "condition": "[and(parameters('deployTables'), parameters('deployOnlineConfigTable'))]",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('configTableName'))]",
+            "properties": {
+                "totalRetentionInDays": "[parameters('retentionInDays')]",
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('configTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime",
+                            "description": "The timestamp when the log was generated"
+                        },
+                        {
+                            "name": "EntryDate_s",
+                            "type": "string",
+                            "description": "Date of the configuration entry"
+                        },
+                        {
+                            "name": "GenerationInstanceID_g",
+                            "type": "string",
+                            "description": "Unique identifier for the generation instance"
+                        },
+                        {
+                            "name": "ESIEnvironment_s",
+                            "type": "string",
+                            "description": "Exchange environment identifier"
+                        },
+                        {
+                            "name": "Section_s",
+                            "type": "string",
+                            "description": "Configuration section name"
+                        },
+                        {
+                            "name": "ExecutionResult_s",
+                            "type": "string",
+                            "description": "Execution result"
+                        },
+                        {
+                            "name": "Identity_s",
+                            "type": "string",
+                            "description": "Identity"
+                        },
+                        {
+                            "name": "Identity_Depth_d",
+                            "type": "real",
+                            "description": "Identity depth in the directory hierarchy"
+                        },
+                        {
+                            "name": "Identity_DistinguishedName_s",
+                            "type": "string",
+                            "description": "Identity distinguished name (LDAP DN)"
+                        },
+                        {
+                            "name": "Identity_DomainId_s",
+                            "type": "string",
+                            "description": "Identity domain identifier (serialized when object)"
+                        },
+                        {
+                            "name": "Identity_IsDeleted_b",
+                            "type": "boolean",
+                            "description": "Indicates whether the identity is deleted"
+                        },
+                        {
+                            "name": "Identity_IsRelativeDn_b",
+                            "type": "boolean",
+                            "description": "Indicates whether the DN is relative"
+                        },
+                        {
+                            "name": "Identity_Name_s",
+                            "type": "string",
+                            "description": "Identity name"
+                        },
+                        {
+                            "name": "Identity_ObjectGuid_g",
+                            "type": "string",
+                            "description": "Identity object GUID"
+                        },
+                        {
+                            "name": "Identity_Parent_s",
+                            "type": "string",
+                            "description": "Identity parent (serialized when object)"
+                        },
+                        {
+                            "name": "Identity_PartitionFQDN_s",
+                            "type": "string",
+                            "description": "Identity partition FQDN"
+                        },
+                        {
+                            "name": "Identity_PartitionGuid_g",
+                            "type": "string",
+                            "description": "Identity partition GUID"
+                        },
+                        {
+                            "name": "Identity_Rdn_s",
+                            "type": "string",
+                            "description": "Identity relative distinguished name (RDN, serialized when object)"
+                        },
+                        {
+                            "name": "IdentityString_s",
+                            "type": "string",
+                            "description": "Identity string"
+                        },
+                        {
+                            "name": "RawData_s",
+                            "type": "string",
+                            "description": "Raw configuration data in JSON format"
+                        },
+                        {
+                            "name": "Name_s",
+                            "type": "string",
+                            "description": "Name"
+                        },
+                        {
+                            "name": "ProcessedByServer_s",
+                            "type": "string",
+                            "description": "Processed by server"
+                        },
+                        {
+                            "name": "PSCmdL_s",
+                            "type": "string",
+                            "description": "PowerShell cmdlet"
+                        },
+                        {
+                            "name": "WhenChanged_t",
+                            "type": "datetime",
+                            "description": "When changed timestamp"
+                        },
+                        {
+                            "name": "WhenCreated_t",
+                            "type": "datetime",
+                            "description": "When created timestamp"
+                        }
+                    ]
+                },
+                "retentionInDays": "[parameters('retentionInDays')]"
+            }
+        },
+        {
+            "condition": "[and(parameters('deployTables'), parameters('deployMessageTrackingTable'))]",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('messageTrackingTableName'))]",
+            "properties": {
+                "totalRetentionInDays": "[parameters('retentionInDays')]",
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('messageTrackingTableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime",
+                            "description": "The timestamp when the log was generated"
+                        },
+                        {
+                            "name": "schemaVersion_s",
+                            "type": "string",
+                            "description": "Schema version of the log entry"
+                        },
+                        {
+                            "name": "clientIp_s",
+                            "type": "string",
+                            "description": "Client IP address"
+                        },
+                        {
+                            "name": "clientHostname_s",
+                            "type": "string",
+                            "description": "Client hostname"
+                        },
+                        {
+                            "name": "serverIp_s",
+                            "type": "string",
+                            "description": "Server IP address"
+                        },
+                        {
+                            "name": "senderHostname_s",
+                            "type": "string",
+                            "description": "Sender hostname"
+                        },
+                        {
+                            "name": "sourceContext_s",
+                            "type": "string",
+                            "description": "Source context information"
+                        },
+                        {
+                            "name": "connectorId_s",
+                            "type": "string",
+                            "description": "Connector identifier"
+                        },
+                        {
+                            "name": "source_s",
+                            "type": "string",
+                            "description": "Message source"
+                        },
+                        {
+                            "name": "eventId_s",
+                            "type": "string",
+                            "description": "Event identifier"
+                        },
+                        {
+                            "name": "internalMessageId_s",
+                            "type": "string",
+                            "description": "Internal message identifier"
+                        },
+                        {
+                            "name": "messageId_s",
+                            "type": "string",
+                            "description": "Message identifier"
+                        },
+                        {
+                            "name": "networkMessageId_s",
+                            "type": "string",
+                            "description": "Network message identifier"
+                        },
+                        {
+                            "name": "recipientAddress_s",
+                            "type": "string",
+                            "description": "Recipient email address"
+                        },
+                        {
+                            "name": "recipientStatus_s",
+                            "type": "string",
+                            "description": "Recipient delivery status"
+                        },
+                        {
+                            "name": "totalBytes_l",
+                            "type": "long",
+                            "description": "Total message size in bytes"
+                        },
+                        {
+                            "name": "recipientCount_i",
+                            "type": "int",
+                            "description": "Number of recipients"
+                        },
+                        {
+                            "name": "relatedRecipientAddress_s",
+                            "type": "string",
+                            "description": "Related recipient address"
+                        },
+                        {
+                            "name": "reference_s",
+                            "type": "string",
+                            "description": "Message reference"
+                        },
+                        {
+                            "name": "messageSubject_s",
+                            "type": "string",
+                            "description": "Email subject line"
+                        },
+                        {
+                            "name": "senderAddress_s",
+                            "type": "string",
+                            "description": "Sender email address"
+                        },
+                        {
+                            "name": "returnPath_s",
+                            "type": "string",
+                            "description": "Return path address"
+                        },
+                        {
+                            "name": "directionality_s",
+                            "type": "string",
+                            "description": "Message directionality (Originating/Incoming)"
+                        },
+                        {
+                            "name": "messageInfo_s",
+                            "type": "string",
+                            "description": "Additional message information"
+                        },
+                        {
+                            "name": "originalClientIp_s",
+                            "type": "string",
+                            "description": "Original client IP address"
+                        },
+                        {
+                            "name": "originalServerIp_s",
+                            "type": "string",
+                            "description": "Original server IP address"
+                        },
+                        {
+                            "name": "customData_s",
+                            "type": "string",
+                            "description": "Custom metadata"
+                        },
+                        {
+                            "name": "transportTrafficType_s",
+                            "type": "string",
+                            "description": "Transport traffic type"
+                        },
+                        {
+                            "name": "FilePath_s",
+                            "type": "string",
+                            "description": "File path of the log entry"
+                        },
+                        {
+                            "name": "logId_s",
+                            "type": "string",
+                            "description": "Log identifier"
+                        },
+                        {
+                            "name": "messageTrackingTenantId_s",
+                            "type": "string",
+                            "description": "Tenant identifier for the message tracking log"
+                        }
+                    ]
+                },
+                "retentionInDays": "[parameters('retentionInDays')]"
+            }
+        },
+        {
+            "condition": "[and(parameters('deployDataCollection'), parameters('deployOnPremConfigTable'))]",
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[parameters('dataCollectionRuleOnPremisesConfigName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[variables('dataCollectionEndpointId')]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('onPremConfigTableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "Custom-ESIExchangeConfig": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "EntryDate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "GenerationInstanceID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ESIEnvironment",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Section",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ExecutionResult",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Identity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "IdentityString",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rawData",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ProcessedByServer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "PSCmdL",
+                                "type": "string"
+                            },
+                            {
+                                "name": "WhenChanged",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "WhenCreated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "ESIWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-ESIExchangeConfig"
+                        ],
+                        "destinations": [
+                            "ESIWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | extend _id = parse_json(Identity) | extend Identity_Depth_d = toreal(_id.Depth), Identity_DistinguishedName_s = tostring(_id.DistinguishedName), Identity_DomainId_s = tostring(_id.DomainId), Identity_IsDeleted_b = tobool(_id.IsDeleted), Identity_IsRelativeDn_b = tobool(_id.IsRelativeDn), Identity_Name_s = tostring(_id.Name), Identity_ObjectGuid_g = tostring(_id.ObjectGuid), Identity_Parent_s = tostring(_id.Parent), Identity_PartitionFQDN_s = tostring(_id.PartitionFQDN), Identity_PartitionGuid_g = tostring(_id.PartitionGuid), Identity_Rdn_s = tostring(_id.Rdn) | project-away _id | project-rename EntryDate_s = EntryDate, GenerationInstanceID_g = GenerationInstanceID, ESIEnvironment_s = ESIEnvironment, Section_s = Section, ExecutionResult_s = ExecutionResult, Identity_s = Identity, IdentityString_s = IdentityString, RawData_s = rawData, Name_s = Name, ProcessedByServer_s = ProcessedByServer, PSCmdL_s = PSCmdL, WhenChanged_t = WhenChanged, WhenCreated_t = WhenCreated",
+                        "outputStream": "[variables('onPremConfigoutputStream')]"
+                    }
+                ]
+            }
+        },
+        {
+            "condition": "[and(parameters('deployDataCollection'), parameters('deployOnlineConfigTable'))]",
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[parameters('dataCollectionRuleOnlineConfigName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[variables('dataCollectionEndpointId')]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('configTableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "Custom-ESIExchangeOnlineConfig": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "EntryDate",
+                                "type": "string"
+                            },
+                            {
+                                "name": "GenerationInstanceID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ESIEnvironment",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Section",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ExecutionResult",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Identity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "IdentityString",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rawData",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ProcessedByServer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "PSCmdL",
+                                "type": "string"
+                            },
+                            {
+                                "name": "WhenChanged",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "WhenCreated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "ESIWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-ESIExchangeOnlineConfig"
+                        ],
+                        "destinations": [
+                            "ESIWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | extend _id = parse_json(Identity) | extend Identity_Depth_d = toreal(_id.Depth), Identity_DistinguishedName_s = tostring(_id.DistinguishedName), Identity_DomainId_s = tostring(_id.DomainId), Identity_IsDeleted_b = tobool(_id.IsDeleted), Identity_IsRelativeDn_b = tobool(_id.IsRelativeDn), Identity_Name_s = tostring(_id.Name), Identity_ObjectGuid_g = tostring(_id.ObjectGuid), Identity_Parent_s = tostring(_id.Parent), Identity_PartitionFQDN_s = tostring(_id.PartitionFQDN), Identity_PartitionGuid_g = tostring(_id.PartitionGuid), Identity_Rdn_s = tostring(_id.Rdn) | project-away _id | project-rename EntryDate_s = EntryDate, GenerationInstanceID_g = GenerationInstanceID, ESIEnvironment_s = ESIEnvironment, Section_s = Section, ExecutionResult_s = ExecutionResult, Identity_s = Identity, IdentityString_s = IdentityString, RawData_s = rawData, Name_s = Name, ProcessedByServer_s = ProcessedByServer, PSCmdL_s = PSCmdL, WhenChanged_t = WhenChanged, WhenCreated_t = WhenCreated",
+                        "outputStream": "[variables('onlineConfigoutputStream')]"
+                    }
+                ]
+            }
+        },
+        {
+            "condition": "[and(parameters('deployDataCollection'), parameters('deployMessageTrackingTable'))]",
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[parameters('dataCollectionRuleMessageTrackingName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[variables('dataCollectionEndpointId')]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('messageTrackingTableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "Custom-ExchangeOnlineMessageTracking": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "schemaVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "clientIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "clientHostname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "serverIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "senderHostname",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sourceContext",
+                                "type": "string"
+                            },
+                            {
+                                "name": "connectorId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "internalMessageId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "messageId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "networkMessageId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "recipientAddress",
+                                "type": "string"
+                            },
+                            {
+                                "name": "recipientStatus",
+                                "type": "string"
+                            },
+                            {
+                                "name": "totalBytes",
+                                "type": "long"
+                            },
+                            {
+                                "name": "recipientCount",
+                                "type": "int"
+                            },
+                            {
+                                "name": "relatedRecipientAddress",
+                                "type": "string"
+                            },
+                            {
+                                "name": "reference",
+                                "type": "string"
+                            },
+                            {
+                                "name": "messageSubject",
+                                "type": "string"
+                            },
+                            {
+                                "name": "senderAddress",
+                                "type": "string"
+                            },
+                            {
+                                "name": "returnPath",
+                                "type": "string"
+                            },
+                            {
+                                "name": "directionality",
+                                "type": "string"
+                            },
+                            {
+                                "name": "messageInfo",
+                                "type": "string"
+                            },
+                            {
+                                "name": "originalClientIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "originalServerIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "customData",
+                                "type": "string"
+                            },
+                            {
+                                "name": "transportTrafficType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "FilePath",
+                                "type": "string"
+                            },
+                            {
+                                "name": "logId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "messageTrackingTenantId",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "ESIWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-ExchangeOnlineMessageTracking"
+                        ],
+                        "destinations": [
+                            "ESIWorkspace"
+                        ],
+                        "transformKql": "source | extend TimeGenerated = now() | project-rename schemaVersion_s = schemaVersion, clientIp_s = clientIp, clientHostname_s = clientHostname, serverIp_s = serverIp, senderHostname_s = senderHostname, sourceContext_s = sourceContext, connectorId_s = connectorId, source_s = source, eventId_s = eventId, internalMessageId_s = internalMessageId, messageId_s = messageId, networkMessageId_s = networkMessageId, recipientAddress_s = recipientAddress, recipientStatus_s = recipientStatus, totalBytes_l = totalBytes, recipientCount_i = recipientCount, relatedRecipientAddress_s = relatedRecipientAddress, reference_s = reference, messageSubject_s = messageSubject, senderAddress_s = senderAddress, returnPath_s = returnPath, directionality_s = directionality, messageInfo_s = messageInfo, originalClientIp_s = originalClientIp, originalServerIp_s = originalServerIp, customData_s = customData, transportTrafficType_s = transportTrafficType, FilePath_s = FilePath, logId_s = logId, messageTrackingTenantId_s = messageTrackingTenantId",
+                        "outputStream": "Custom-ExchangeOnlineMessageTracking_CL"
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "dataCollectionEndpointId": {
+            "type": "string",
+            "value": "[if(parameters('deployDataCollection'), variables('dataCollectionEndpointId'), 'Not deployed')]"
+        },
+        "dataCollectionEndpointUri": {
+            "type": "string",
+            "value": "[if(parameters('deployDataCollection'), reference(variables('dataCollectionEndpointId'), '2021-09-01-preview').logsIngestion.endpoint, 'Not deployed')]"
+        },
+        "dataCollectionRuleOnPremisesConfigId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployOnPremConfigTable')), resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleOnPremisesConfigName')), 'Not deployed')]"
+        },
+        "dataCollectionRuleOnPremisesConfigImmutableId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployOnPremConfigTable')), reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleOnPremisesConfigName')), '2021-09-01-preview').immutableId, 'Not deployed')]"
+        },
+        "dataCollectionRuleOnlineConfigId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployOnlineConfigTable')), resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleOnlineConfigName')), 'Not deployed')]"
+        },
+        "dataCollectionRuleOnlineConfigImmutableId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployOnlineConfigTable')), reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleOnlineConfigName')), '2021-09-01-preview').immutableId, 'Not deployed')]"
+        },
+        "dataCollectionRuleMessageTrackingId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployMessageTrackingTable')), resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleMessageTrackingName')), 'Not deployed')]"
+        },
+        "dataCollectionRuleMessageTrackingImmutableId": {
+            "type": "string",
+            "value": "[if(and(parameters('deployDataCollection'), parameters('deployMessageTrackingTable')), reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleMessageTrackingName')), '2021-09-01-preview').immutableId, 'Not deployed')]"
+        },
+        "configTableName": {
+            "type": "string",
+            "value": "[if(and(parameters('deployTables'), parameters('deployOnlineConfigTable')), variables('configTableName'), 'Not deployed')]"
+        },
+        "onPremConfigTableName": {
+            "type": "string",
+            "value": "[if(and(parameters('deployTables'), parameters('deployOnPremConfigTable')), variables('onPremConfigTableName'), 'Not deployed')]"
+        },
+        "messageTrackingTableName": {
+            "type": "string",
+            "value": "[if(and(parameters('deployTables'), parameters('deployMessageTrackingTable')), variables('messageTrackingTableName'), 'Not deployed')]"
+        }
+    }
+}
