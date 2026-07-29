@@ -43,6 +43,18 @@ tile is a classic status/documentation connector whose connection state is
 computed by a KQL `IsConnectedQuery` against the custom table. Data movement is
 performed by Fivetran plus the DCR, not by Sentinel.
 
+## Alternative connection paths
+
+The shipped solution above is the real-time push feed (External Logs -> DCR ->
+`Fivetran_CL`). For the structured Fivetran **Platform Connector** audit data (the
+full `AUDIT_TRAIL` and metadata tables, which are not carried by the External Logs
+feed), a self-contained reference build is provided under
+[`Platform-Connector-Ingest/`](Platform-Connector-Ingest/README.md): an Event Grid
+triggered Azure Function reads the lake parquet and ingests it into typed Sentinel
+tables (`Fivetran_AuditTrail_CL`, `Fivetran_Platform_CL`), with an ASIM AuditEvent
+parser and hunting query. It is documented IaC (not part of this Content Hub package)
+because it depends on a customer-owned ADLS Gen2 lake.
+
 ## Prerequisites (customer)
 
 - Log Analytics workspace with Microsoft Sentinel enabled.
