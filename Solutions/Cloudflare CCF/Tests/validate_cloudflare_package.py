@@ -277,6 +277,45 @@ def validate(repo_root: Path) -> list[str]:
             "PASS hardened package retains Sean's phase-one multi-instance resource topology"
         )
 
+    # Regression guard for the packaging defect that broke lab deployments: the
+    # storage-side nested deployment targets the storage account's own
+    # subscription/resource group, so it MUST evaluate expressions with inner
+    # scope. Under the ARM default (outer) scope every resourceId() below is
+    # resolved against the parent deployment's resource group, and ARM rejects
+    # the deployment with "The resource '.../queues/<name>' is not defined in
+    # the template."
+    nested = first_resource(connection_template["resources"], "Microsoft.Resources/deployments")
+    assert nested.get("subscriptionId") and nested.get("resourceGroup"), (
+        "storage nested deployment must target the storage account scope"
+    )
+    scope = nested["properties"].get("expressionEvaluationOptions", {}).get("scope")
+    assert scope == "inner", (
+        "storage nested deployment must set expressionEvaluationOptions.scope='inner'; "
+        f"found {scope!r}. Outer scope resolves resourceId() against the parent resource "
+        "group and breaks cross-resource-group deployment."
+    )
+
+    inner_template = nested["properties"]["template"]
+    declared = set(inner_template.get("parameters", {}))
+    passed = set(nested["properties"].get("parameters", {}))
+    assert declared == passed, (
+        f"inner template parameters {sorted(declared)} must match the values passed in {sorted(passed)}"
+    )
+
+    referenced: set[str] = set()
+    for value in walk(inner_template["resources"]):
+        if isinstance(value, str):
+            assert "variables(" not in value, (
+                f"inner-scope nested template cannot read parent variables: {value}"
+            )
+            referenced.update(re.findall(r"parameters\('([^']+)'\)", value))
+    assert referenced <= declared, (
+        f"inner template uses undeclared parameters: {sorted(referenced - declared)}"
+    )
+    messages.append(
+        "PASS storage nested deployment is inner-scoped and self-contained"
+    )
+
     return messages
 
 

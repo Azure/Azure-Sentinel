@@ -26,94 +26,141 @@ function Get-PerInstanceStorageDeployment {
         [Parameter(Mandatory = $true)] $DeploymentConfig
     )
 
+    # The storage-side resources are deployed into the storage account's own
+    # subscription/resource group, which is frequently different from the Sentinel
+    # workspace scope. The nested deployment therefore MUST use inner-scope
+    # expression evaluation: under the default (outer) scope, resourceId() inside
+    # this template is evaluated against the *parent* deployment's subscription and
+    # resource group, so every intra-template dependsOn resolves to an identifier
+    # that does not exist in the nested deployment and ARM fails validation with
+    # "The resource '<queue id>' is not defined in the template.".
+    # Inner scope means the nested template can only see its own parameters, so all
+    # parent values are passed in explicitly below.
     return [ordered]@{
         type           = "Microsoft.Resources/deployments"
         apiVersion     = "2021-04-01"
         name           = "[[variables('storageNestedDeploymentName')]"
         properties     = [ordered]@{
-            mode     = "Incremental"
-            template = [ordered]@{
+            mode                        = "Incremental"
+            expressionEvaluationOptions = [ordered]@{
+                scope = "inner"
+            }
+            parameters                  = [ordered]@{
+                storageAccountName            = [ordered]@{ value = "[[variables('storageAccountName')]" }
+                storageAccountId              = [ordered]@{ value = "[[variables('storageAccountId')]" }
+                blobContainerName             = [ordered]@{ value = "[[variables('blobContainerName')]" }
+                queueName                     = [ordered]@{ value = "[[variables('queueName')]" }
+                dlqName                       = [ordered]@{ value = "[[variables('dlqName')]" }
+                eventGridSystemTopicName      = [ordered]@{ value = "[[variables('eventGridSystemTopicName')]" }
+                eventGridSubscriptionName     = [ordered]@{ value = "[[variables('eventGridSubscriptionName')]" }
+                createEventGridSystemTopic    = [ordered]@{ value = "[[variables('createEventGridSystemTopic')]" }
+                principalId                   = [ordered]@{ value = "[[parameters('principalId')]" }
+                storageQueueContributorRoleId = [ordered]@{ value = "[[variables('storageQueueContributorRoleId')]" }
+                storageBlobContributorRoleId  = [ordered]@{ value = "[[variables('storageBlobContributorRoleId')]" }
+                notificationQueueRaGuid       = [ordered]@{ value = "[[variables('notificationQueueRaGuid')]" }
+                dlqRaGuid                     = [ordered]@{ value = "[[variables('dlqRaGuid')]" }
+                blobRaGuid                    = [ordered]@{ value = "[[variables('blobRaGuid')]" }
+            }
+            template                    = [ordered]@{
                 '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
                 contentVersion = "1.0.0.0"
+                parameters     = [ordered]@{
+                    storageAccountName            = [ordered]@{ type = "string" }
+                    storageAccountId              = [ordered]@{ type = "string" }
+                    blobContainerName             = [ordered]@{ type = "string" }
+                    queueName                     = [ordered]@{ type = "string" }
+                    dlqName                       = [ordered]@{ type = "string" }
+                    eventGridSystemTopicName      = [ordered]@{ type = "string" }
+                    eventGridSubscriptionName     = [ordered]@{ type = "string" }
+                    createEventGridSystemTopic    = [ordered]@{ type = "bool" }
+                    principalId                   = [ordered]@{ type = "securestring" }
+                    storageQueueContributorRoleId = [ordered]@{ type = "string" }
+                    storageBlobContributorRoleId  = [ordered]@{ type = "string" }
+                    notificationQueueRaGuid       = [ordered]@{ type = "string" }
+                    dlqRaGuid                     = [ordered]@{ type = "string" }
+                    blobRaGuid                    = [ordered]@{ type = "string" }
+                }
                 resources      = @(
                     [ordered]@{
                         type       = "Microsoft.Storage/storageAccounts/queueServices/queues"
-                        apiVersion = "2021-04-01"
-                        name       = "[[concat(variables('storageAccountName'), '/default/', variables('queueName'))]"
+                        apiVersion = "2025-06-01"
+                        name       = "[[concat(parameters('storageAccountName'), '/default/', parameters('queueName'))]"
                         properties = @{}
                     },
                     [ordered]@{
                         type       = "Microsoft.Storage/storageAccounts/queueServices/queues"
-                        apiVersion = "2021-04-01"
-                        name       = "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'))]"
+                        apiVersion = "2025-06-01"
+                        name       = "[[concat(parameters('storageAccountName'), '/default/', parameters('dlqName'))]"
                         properties = @{}
                     },
                     [ordered]@{
-                        type       = "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments"
+                        type       = "Microsoft.Authorization/roleAssignments"
                         apiVersion = "2022-04-01"
-                        name       = "[[concat(variables('storageAccountName'), '/default/', variables('queueName'), '/Microsoft.Authorization/', variables('notificationQueueRaGuid'))]"
+                        name       = "[[parameters('notificationQueueRaGuid')]"
+                        scope      = "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', parameters('storageAccountName'), 'default', parameters('queueName'))]"
                         dependsOn  = @(
-                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]"
+                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', parameters('storageAccountName'), 'default', parameters('queueName'))]"
                         )
                         properties = [ordered]@{
-                            roleDefinitionId = "[[variables('storageQueueContributorRoleId')]"
+                            roleDefinitionId = "[[parameters('storageQueueContributorRoleId')]"
                             principalId      = "[[parameters('principalId')]"
                             principalType    = "ServicePrincipal"
                         }
                     },
                     [ordered]@{
-                        type       = "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments"
+                        type       = "Microsoft.Authorization/roleAssignments"
                         apiVersion = "2022-04-01"
-                        name       = "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'), '/Microsoft.Authorization/', variables('dlqRaGuid'))]"
+                        name       = "[[parameters('dlqRaGuid')]"
+                        scope      = "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', parameters('storageAccountName'), 'default', parameters('dlqName'))]"
                         dependsOn  = @(
-                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]"
+                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', parameters('storageAccountName'), 'default', parameters('dlqName'))]"
                         )
                         properties = [ordered]@{
-                            roleDefinitionId = "[[variables('storageQueueContributorRoleId')]"
+                            roleDefinitionId = "[[parameters('storageQueueContributorRoleId')]"
                             principalId      = "[[parameters('principalId')]"
                             principalType    = "ServicePrincipal"
                         }
                     },
                     [ordered]@{
                         type       = "Microsoft.EventGrid/systemTopics"
-                        apiVersion = "2022-06-15"
-                        name       = "[[variables('eventGridSystemTopicName')]"
-                        location   = "[[reference(variables('storageAccountId'), '2022-09-01', 'Full').location]"
-                        condition  = "[[empty(parameters('EGSystemTopicName'))]"
+                        apiVersion = "2025-02-15"
+                        name       = "[[parameters('eventGridSystemTopicName')]"
+                        location   = "[[reference(parameters('storageAccountId'), '2022-09-01', 'Full').location]"
+                        condition  = "[[parameters('createEventGridSystemTopic')]"
                         properties = [ordered]@{
-                            source    = "[[variables('storageAccountId')]"
+                            source    = "[[parameters('storageAccountId')]"
                             topicType = "microsoft.storage.storageaccounts"
                         }
                     },
                     [ordered]@{
                         type       = "Microsoft.EventGrid/systemTopics/eventSubscriptions"
-                        apiVersion = "2023-12-15-preview"
-                        name       = "[[format('{0}/{1}', variables('eventGridSystemTopicName'), variables('eventGridSubscriptionName'))]"
+                        apiVersion = "2025-02-15"
+                        name       = "[[format('{0}/{1}', parameters('eventGridSystemTopicName'), parameters('eventGridSubscriptionName'))]"
                         dependsOn  = @(
-                            "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('eventGridSystemTopicName'))]",
-                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]"
+                            "[[resourceId('Microsoft.EventGrid/systemTopics', parameters('eventGridSystemTopicName'))]",
+                            "[[resourceId('Microsoft.Storage/storageAccounts/queueServices/queues', parameters('storageAccountName'), 'default', parameters('queueName'))]"
                         )
                         properties = [ordered]@{
                             destination = [ordered]@{
                                 endpointType = "StorageQueue"
                                 properties   = [ordered]@{
-                                    queueName  = "[[variables('queueName')]"
-                                    resourceId = "[[variables('storageAccountId')]"
+                                    queueName  = "[[parameters('queueName')]"
+                                    resourceId = "[[parameters('storageAccountId')]"
                                 }
                             }
                             filter      = [ordered]@{
                                 includedEventTypes = @("Microsoft.Storage.BlobCreated")
-                                subjectBeginsWith  = "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
+                                subjectBeginsWith  = "[[format('{0}/{1}', '/blobServices/default/containers', parameters('blobContainerName'))]"
                             }
                         }
                     },
                     [ordered]@{
                         type       = "Microsoft.Authorization/roleAssignments"
                         apiVersion = "2022-04-01"
-                        name       = "[[variables('blobRaGuid')]"
-                        scope      = "[[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('blobContainerName'))]"
+                        name       = "[[parameters('blobRaGuid')]"
+                        scope      = "[[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', parameters('storageAccountName'), 'default', parameters('blobContainerName'))]"
                         properties = [ordered]@{
-                            roleDefinitionId = "[[variables('storageBlobContributorRoleId')]"
+                            roleDefinitionId = "[[parameters('storageBlobContributorRoleId')]"
                             principalId      = "[[parameters('principalId')]"
                             principalType    = "ServicePrincipal"
                         }
@@ -222,6 +269,15 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         }
         $template.parameters | Add-Member -MemberType NoteProperty -Name "forceUpdateTag" -Value $forceUpdateTagParameter -Force
 
+        $tableNameParameter = [PSCustomObject]@{
+            type         = "string"
+            defaultValue = $tableName
+            metadata     = [PSCustomObject]@{
+                description = "Log Analytics custom table this collector writes to. Must end in _CL. Leave blank to use the solution default '$tableName'."
+            }
+        }
+        $template.parameters | Add-Member -MemberType NoteProperty -Name "TableName" -Value $tableNameParameter -Force
+
         $identityExpressions = @()
         foreach ($parameterName in $identityParameters) {
             $identityExpressions += "toLower(trim(parameters('$parameterName')))"
@@ -230,7 +286,9 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
 
         Set-PerInstanceTemplateVariable -Template $template -Name "resourcePrefix" -Value $resourcePrefix
         Set-PerInstanceTemplateVariable -Template $template -Name "queuePrefix" -Value $queuePrefix
-        Set-PerInstanceTemplateVariable -Template $template -Name "tableName" -Value $tableName
+        Set-PerInstanceTemplateVariable -Template $template -Name "tableNameDefault" -Value $tableName
+        Set-PerInstanceTemplateVariable -Template $template -Name "tableName" -Value "[[if(empty(trim(parameters('TableName'))), variables('tableNameDefault'), trim(parameters('TableName')))]"
+        Set-PerInstanceTemplateVariable -Template $template -Name "outputStreamName" -Value "[[concat('Custom-', variables('tableName'))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "workspaceResourceId" -Value "[[resourceId('Microsoft.OperationalInsights/workspaces', parameters('innerWorkspace'))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "instanceKey" -Value "[[uniqueString($($identityExpressions -join ', '))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "connectorName" -Value "[[format('{0}-{1}', variables('resourcePrefix'), variables('instanceKey'))]"
@@ -248,6 +306,10 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         Set-PerInstanceTemplateVariable -Template $template -Name "eventGridSystemTopicDefaultName" -Value "[[format('sentinel-{0}-{1}', variables('resourcePrefix'), uniqueString(toLower(trim(parameters('StorageAccountSubscription'))), toLower(trim(parameters('StorageAccountResourceGroupName'))), variables('storageAccountName')))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "eventGridSystemTopicName" -Value "[[if(empty(parameters('EGSystemTopicName')), variables('eventGridSystemTopicDefaultName'), parameters('EGSystemTopicName'))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "eventGridSubscriptionName" -Value "[[format('{0}-{1}-blobcreated', variables('resourcePrefix'), variables('instanceKey'))]"
+        # Resolved as a variable rather than inline in the nested deployment's parameter
+        # values so the inner boolean parameter is not type-compared against the
+        # securestring 'EGSystemTopicName' parameter it is derived from.
+        Set-PerInstanceTemplateVariable -Template $template -Name "createEventGridSystemTopic" -Value "[[empty(parameters('EGSystemTopicName'))]"
         Set-PerInstanceTemplateVariable -Template $template -Name "storageBlobContributorRoleId" -Value "[[subscriptionResourceId(trim(parameters('StorageAccountSubscription')), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
         Set-PerInstanceTemplateVariable -Template $template -Name "storageQueueContributorRoleId" -Value "[[subscriptionResourceId(trim(parameters('StorageAccountSubscription')), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
         Set-PerInstanceTemplateVariable -Template $template -Name "blobRaGuid" -Value "[[guid(variables('blobContainerResourceId'), parameters('principalId'), variables('storageBlobContributorRoleId'))]"
@@ -268,12 +330,17 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
         if ($tableSource.name -ne $tableName) {
             throw "connectionDeployment.tableName '$tableName' does not match the authoritative table source '$($tableSource.name)'."
         }
+        $tableProperties = Copy-PerInstanceJsonObject -InputObject $tableSource.properties
+        if ($null -eq $tableProperties.schema) {
+            throw "The authoritative table source must contain a schema object."
+        }
+        $tableProperties.schema.name = "[[variables('tableName')]"
         $tableResource = [ordered]@{
             type       = "Microsoft.OperationalInsights/workspaces/tables"
             apiVersion = "2022-10-01"
             name       = "[[concat(parameters('innerWorkspace'), '/', variables('tableName'))]"
             location   = "[parameters('workspace-location')]"
-            properties = Copy-PerInstanceJsonObject -InputObject $tableSource.properties
+            properties = $tableProperties
         }
 
         $dceResource = [ordered]@{
@@ -301,6 +368,15 @@ function CreatePerInstanceStorageAccountBlobContainerResourceProperties {
             throw "The authoritative DCR source must contain a Log Analytics destination."
         }
         $dcrProperties.destinations.logAnalytics[0].workspaceResourceId = "[[variables('workspaceResourceId')]"
+        if ($null -eq $dcrProperties.dataFlows -or $dcrProperties.dataFlows.Count -eq 0) {
+            throw "The authoritative DCR source must contain at least one data flow."
+        }
+        foreach ($dataFlow in $dcrProperties.dataFlows) {
+            if ($dataFlow.outputStream -ne "Custom-$tableName") {
+                throw "DCR data flow outputStream '$($dataFlow.outputStream)' does not match the authoritative table 'Custom-$tableName'."
+            }
+            $dataFlow.outputStream = "[[variables('outputStreamName')]"
+        }
 
         $dcrResource = [ordered]@{
             type       = "Microsoft.Insights/dataCollectionRules"
