@@ -23,6 +23,18 @@ The file name should be prefixed with vim, followed by the name of the schema, e
 
 Add the contents of the parameter-less version of the parser to the new file.
 
+## Preserve parser development restrictions
+
+The parameterized parser must preserve all development guidelines and prohibited patterns from the `asim-parser-create-parser` skill. Adding parameters or filters must not introduce:
+
+- Same-table enrichment, such as a second source-table read or self-join.
+- Cross-table or other table-shaped enrichment, including `join`, `lookup`, secondary `union` branches, `externaldata`, or inline `datatable` mappings.
+- One-to-many fan-out; each source record must still produce at most one normalized record.
+- Any `mv-*` operator, including `mv-expand` and `mv-apply`.
+- Aggregation, reaggregation, correlation, or deduplication, including `summarize`, `distinct`, `arg_min`, or `arg_max`.
+
+Use native source columns and scalar predicates for parameter filtering. If a parameter cannot be applied without a prohibited pattern, retain the standard empty-parameter check without adding enrichment, row expansion, or aggregation.
+
 ## Add parameters
 
 From the parameters you have gathered, add it to function arguments for both the function and the function call.
