@@ -4,7 +4,7 @@ Hourly import playbook for the **phishing-sites** USTA IoC feed. Each run resume
 **watermark** — the newest already-imported indicator's `created` time — maps each new record
 to a STIX 2.1 indicator, and uploads them to Microsoft Sentinel Threat Intelligence (Upload
 STIX Objects API) using its **system-assigned managed identity**. The feed has no expiry, so a
-validity window (`ValidityDays`, default 7) is synthesized from each site's `created` date.
+validity window (`ValidityDays`, default 365 — one year) is synthesized from each site's `created` date.
 Indicators appear in the Threat Intelligence blade / `ThreatIntelIndicators` table with
 `SourceSystem == "PRODAFT USTA - Phishing Sites"`.
 
@@ -16,7 +16,7 @@ At the start of every run the playbook queries the `ThreatIntelIndicators` table
 table after a **successful** upload, a failed run does not advance the watermark: the next run
 re-reads the same value and retries the missed window, so **no indicators are skipped on
 failure**. If the table has no such indicators yet (first run), it falls back to `LookBackHours`.
-The watermark query runs against `https://api.loganalytics.io` with the same managed identity
+The watermark query runs through the **Azure Monitor Logs** connection (managed-identity auth) with the same managed identity
 and the same **Microsoft Sentinel Contributor** role used for the upload (that role already
 grants `Microsoft.OperationalInsights/workspaces/query/read`) — no extra role assignment is needed.
 
@@ -27,13 +27,14 @@ grants `Microsoft.OperationalInsights/workspaces/query/read`) — no extra role 
 | `PlaybookName` | no | `PRODAFTUstaIoC-ImportPhishingSites` | Logic App name. |
 | `UstaBaseUrl` | no | `https://usta.prodaft.com` | USTA API base URL. |
 | `UstaApiKey` | **yes** | — | USTA long-lived API key (secured). |
-| `WorkspaceID` | **yes** | — | Log Analytics **workspace ID (GUID)** — workspace → *Overview*. |
+| `WorkspaceName` | **yes** | — | Name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to. |
+| `WorkspaceResourceGroup` | no | resource group of the deployment | Resource group of the workspace, if it differs from where the playbook is deployed. |
 | `LookBackHours` | no | `2` | First-run / fallback look-back window (hours), used only until the first indicator is imported (empty watermark). Afterwards each run resumes from the import watermark. |
-| `ValidityDays` | no | `7` | Validity window applied from each site's `created` date (the feed has no expiry). |
+| `ValidityDays` | no | `365` | Validity window (days) applied from each site's `created` date, since the feed has no expiry. |
 
 ## Deploy — from the portal
 
-1. **Microsoft Sentinel → Content hub → PRODAFT USTA - IoC Threat Intelligence → Manage → Playbook templates**, select **PRODAFT USTA - Import Phishing Sites**, choose **Create playbook**, and supply `UstaApiKey` and `WorkspaceID`. (Or **Automation → Create → Playbook**, then deploy this `azuredeploy.json`.)
+1. **Microsoft Sentinel → Content hub → PRODAFT USTA - IoC Threat Intelligence → Manage → Playbook templates**, select **PRODAFT USTA - Import Phishing Sites**, choose **Create playbook**, and supply `UstaApiKey` and `WorkspaceName`. (Or **Automation → Create → Playbook**, then deploy this `azuredeploy.json`.)
 2. The playbook is created with a **system-assigned managed identity** automatically.
 3. **Grant the role** (required for the upload): open the **Log Analytics workspace → Access control (IAM) → Add → Add role assignment** → Role **Microsoft Sentinel Contributor** → **Members: Managed identity** → pick this Logic App by name → **Review + assign**.
 4. It now runs hourly. To run immediately, open the Logic App → **Run Trigger → Recurrence**.
@@ -45,7 +46,6 @@ grants `Microsoft.OperationalInsights/workspaces/query/read`) — no extra role 
 SUB="<subscription-id>"
 RG="<resource-group>"                 # resource group of the Sentinel workspace
 WS="<workspace-name>"                  # Log Analytics workspace name
-WORKSPACE_ID="<workspace-guid>"        # workspace ID (GUID), from workspace Overview
 USTA_API_KEY="<usta-api-key>"
 PLAYBOOK="PRODAFTUstaIoC-ImportPhishingSites"
 
@@ -57,7 +57,7 @@ PRINCIPAL_ID=$(az deployment group create \
   --template-file azuredeploy.json \
   --parameters PlaybookName="$PLAYBOOK" \
                UstaApiKey="$USTA_API_KEY" \
-               WorkspaceID="$WORKSPACE_ID" \
+               WorkspaceName="$WS" \
   --query properties.outputs.playbookPrincipalId.value -o tsv)
 
 # 2. Grant that identity 'Microsoft Sentinel Contributor' on the workspace

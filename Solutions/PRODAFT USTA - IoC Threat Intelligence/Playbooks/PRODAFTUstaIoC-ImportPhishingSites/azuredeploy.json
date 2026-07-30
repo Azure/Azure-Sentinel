@@ -3,14 +3,14 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "PRODAFT USTA - Import Phishing Sites",
-    "description": "Polls the PRODAFT USTA phishing-site IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. This feed has no expiry, so a validity window (default 7 days) is synthesized from each site's created date. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Phishing Sites'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids derived from the feed id). The watermark query and the upload both use the playbook's managed identity and the same 'Microsoft Sentinel Contributor' role.",
+    "description": "Polls the PRODAFT USTA phishing-site IoC feed hourly, maps each record to a STIX 2.1 indicator, and uploads it to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects API. This feed has no expiry, so a validity window (default 365 days, one year) is synthesized from each site's created date. Indicators appear in the Threat Intelligence blade and the ThreatIntelIndicators table with SourceSystem 'PRODAFT USTA - Phishing Sites'. Each run starts its fetch window from a watermark - the newest already-imported indicator's created time, read from the ThreatIntelIndicators table - so a failed run does not advance the window and no records are skipped; re-uploads are idempotent (deterministic STIX ids derived from the feed id). The watermark query and the upload both use the playbook's managed identity and the same 'Microsoft Sentinel Contributor' role.",
     "prerequisites": [
       "1. A PRODAFT USTA long-lived API key with access to the Security Intelligence IoC endpoints.",
-      "2. The Log Analytics workspace ID (GUID) of the Microsoft Sentinel workspace.",
+      "2. The name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to.",
       "3. The core 'Threat Intelligence' solution installed from the Content hub (provides the Threat Intelligence blade and the ThreatIntelIndicators table)."
     ],
     "postDeployment": [
-      "1. Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace (Access control (IAM) -> Add role assignment). This is required for the Upload STIX Objects call.",
+      "1. Grant the playbook's system-assigned managed identity the 'Microsoft Sentinel Contributor' role on the Log Analytics workspace (Access control (IAM) -> Add role assignment). This is required for both the watermark query and the Upload STIX Objects call. Both API connections deployed with the playbook authenticate with that same managed identity, so no interactive connection authorization is needed.",
       "2. Optionally adjust the Recurrence frequency and the LookBackHours parameter."
     ],
     "lastUpdateTime": "2026-07-08T00:00:00.000Z",
@@ -39,9 +39,14 @@
       "type": "securestring",
       "metadata": { "description": "PRODAFT USTA long-lived API key." }
     },
-    "WorkspaceID": {
+    "WorkspaceName": {
       "type": "string",
-      "metadata": { "description": "Log Analytics workspace ID (GUID) of the Microsoft Sentinel workspace." }
+      "metadata": { "description": "Name of the Microsoft Sentinel (Log Analytics) workspace that indicators are uploaded to." }
+    },
+    "WorkspaceResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": { "description": "Resource group of the workspace. Leave as default if it is in the same resource group as this deployment." }
     },
     "LookBackHours": {
       "type": "int",
@@ -50,12 +55,14 @@
     },
     "ValidityDays": {
       "type": "int",
-      "defaultValue": 7,
-      "metadata": { "description": "Validity window (days) applied to phishing indicators from their created date, since the feed has no expiry." }
+      "defaultValue": 365,
+      "metadata": { "description": "Validity window (days) applied to phishing indicators from their created date, since the feed has no expiry. Defaults to one year." }
     }
   },
   "variables": {
-    "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "SentinelWorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
   },
   "resources": [
     {
@@ -74,13 +81,30 @@
       }
     },
     {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2018-07-01-preview",
+      "name": "[variables('AzureMonitorLogsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+        "parameterValueSet": {
+          "name": "managedIdentityAuth",
+          "values": {}
+        },
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+        }
+      }
+    },
+    {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "name": "[parameters('PlaybookName')]",
       "location": "[resourceGroup().location]",
       "identity": { "type": "SystemAssigned" },
       "dependsOn": [
-        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
       ],
       "tags": {
         "LogicAppsCategory": "security",
@@ -97,8 +121,11 @@
             "UstaBaseUrl": { "defaultValue": "", "type": "String" },
             "UstaApiKey": { "type": "SecureString" },
             "WorkspaceID": { "type": "String" },
+            "WorkspaceName": { "type": "String" },
+            "WorkspaceResourceGroup": { "type": "String" },
+            "SubscriptionId": { "type": "String" },
             "LookBackHours": { "defaultValue": 2, "type": "Int" },
-            "ValidityDays": { "defaultValue": 7, "type": "Int" }
+            "ValidityDays": { "defaultValue": 365, "type": "Int" }
           },
           "triggers": {
             "Recurrence": {
@@ -109,18 +136,21 @@
           },
           "actions": {
             "Get_Import_Watermark": {
-              "type": "Http",
+              "type": "ApiConnection",
               "runAfter": {},
               "inputs": {
-                "method": "POST",
-                "uri": "https://api.loganalytics.io/v1/workspaces/@{parameters('WorkspaceID')}/query",
-                "headers": { "Content-Type": "application/json" },
-                "body": {
-                  "query": "@{concat('ThreatIntelIndicators | where SourceSystem == ''PRODAFT USTA - Phishing Sites'' | summarize MaxCreated = max(Created) | extend StartTime = coalesce(MaxCreated, ago(', string(parameters('LookBackHours')), 'h)) - 5m | project StartTime')}"
+                "host": {
+                  "connection": { "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']" }
                 },
-                "authentication": {
-                  "type": "ManagedServiceIdentity",
-                  "audience": "https://api.loganalytics.io"
+                "method": "post",
+                "path": "/queryData",
+                "body": "ThreatIntelIndicators | where SourceSystem == 'PRODAFT USTA - Phishing Sites' | summarize MaxCreated = max(Created) | extend StartTime = coalesce(MaxCreated, ago(@{parameters('LookBackHours')}h)) - 5m | project StartTime",
+                "queries": {
+                  "subscriptions": "@parameters('SubscriptionId')",
+                  "resourcegroups": "@parameters('WorkspaceResourceGroup')",
+                  "resourcetype": "Log Analytics Workspace",
+                  "resourcename": "@parameters('WorkspaceName')",
+                  "timerange": "Set in query"
                 },
                 "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT20S" }
               }
@@ -133,7 +163,7 @@
                   {
                     "name": "NextUrl",
                     "type": "string",
-                    "value": "@{concat(parameters('UstaBaseUrl'), '/api/threat-stream/v4/security-intelligence/ioc/phishing-sites?ordering=created&size=100&start=', encodeUriComponent(formatDateTime(body('Get_Import_Watermark')?['tables']?[0]?['rows']?[0]?[0], 'yyyy-MM-ddTHH:mm:ssZ')))}"
+                    "value": "@{concat(parameters('UstaBaseUrl'), '/api/threat-stream/v4/security-intelligence/ioc/phishing-sites?ordering=created&size=100&start=', encodeUriComponent(formatDateTime(first(body('Get_Import_Watermark')?['value'])?['StartTime'], 'yyyy-MM-ddTHH:mm:ssZ')))}"
                   }
                 ]
               }
@@ -294,6 +324,14 @@
         "parameters": {
           "$connections": {
             "value": {
+              "azuremonitorlogs": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]",
+                "connectionProperties": {
+                  "authentication": { "type": "ManagedServiceIdentity" }
+                }
+              },
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
@@ -306,7 +344,10 @@
           },
           "UstaBaseUrl": { "value": "[parameters('UstaBaseUrl')]" },
           "UstaApiKey": { "value": "[parameters('UstaApiKey')]" },
-          "WorkspaceID": { "value": "[parameters('WorkspaceID')]" },
+          "WorkspaceID": { "value": "[reference(variables('SentinelWorkspaceResourceId'), '2025-02-01').customerId]" },
+          "WorkspaceName": { "value": "[parameters('WorkspaceName')]" },
+          "WorkspaceResourceGroup": { "value": "[parameters('WorkspaceResourceGroup')]" },
+          "SubscriptionId": { "value": "[subscription().subscriptionId]" },
           "LookBackHours": { "value": "[parameters('LookBackHours')]" },
           "ValidityDays": { "value": "[parameters('ValidityDays')]" }
         }

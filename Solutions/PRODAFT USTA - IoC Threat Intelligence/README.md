@@ -13,7 +13,7 @@ and the built-in `ThreatIntelIndicators` table with `SourceSystem == "PRODAFT US
 |---|---|
 | Data connector | `PRODAFTUstaIoC_UploadIndicatorsAPI` — a documentation/health card; ingestion is performed by the playbooks below |
 | Import playbooks | `PRODAFTUstaIoC-ImportMaliciousUrls`, `PRODAFTUstaIoC-ImportMalwareHashes`, `PRODAFTUstaIoC-ImportPhishingSites` — hourly, one per feed |
-| Backfill playbook | `PRODAFTUstaIoC-Backfill` — on-demand historical load (pick a feed + number of days) |
+| Backfill playbooks | `PRODAFTUstaIoC-BackfillMaliciousUrls`, `PRODAFTUstaIoC-BackfillMalwareHashes`, `PRODAFTUstaIoC-BackfillPhishingSites` — on-demand historical load, one per feed (default 90 days) |
 | Analytic rules | TI map URL → Syslog; TI map Domain → DnsEvents; TI map File Hash → CommonSecurityLog |
 | Workbook | `PRODAFTUstaIoCOverview` |
 
@@ -31,8 +31,10 @@ Each import playbook is a Logic App that, every hour:
 
 STIX ids are **deterministic** (the USTA record id for URLs/hashes; a stable UUID derived
 from the integer id for phishing sites), so re-uploads over the sliding window **update**
-rather than duplicate indicators. Phishing sites have no expiry in the feed, so a validity
-window (`ValidityDays`, default 7) is synthesized from each site's `created` date.
+rather than duplicate indicators. Malicious URLs and malware hashes carry `valid_from` and
+`valid_until` in the feed and those values are used as-is. Phishing sites have no expiry in
+the feed, so a validity window (`ValidityDays`, default 365) is synthesized from each site's
+`created` date.
 
 ## Deployment
 
@@ -41,19 +43,27 @@ window (`ValidityDays`, default 7) is synthesized from each site's `created` dat
 * Install the Microsoft **Threat Intelligence** solution from the Content hub first — it
   provides the Threat Intelligence blade, the `ThreatIntelIndicators` table, and 50+
   source-agnostic TI-map rules (which will also match PRODAFT USTA indicators).
-* A PRODAFT USTA long-lived API key and your Log Analytics **workspace ID** (GUID).
+* A PRODAFT USTA long-lived API key and the **name** of your Microsoft Sentinel (Log
+  Analytics) workspace.
 
 ### From the portal (Content Hub)
 
 1. Install **PRODAFT USTA - IoC Threat Intelligence** from **Microsoft Sentinel → Content hub**.
 2. From **Manage → Playbook templates**, deploy the three import playbooks, supplying the
-   USTA base URL, API key, and workspace ID.
+   USTA base URL, API key, and workspace name.
 3. For **each** import playbook, grant its system-assigned managed identity the
    **Microsoft Sentinel Contributor** role on the workspace
    (Log Analytics workspace → Access control (IAM) → Add role assignment). This is required
    for the Upload STIX Objects call.
-4. To load history, deploy and run **PRODAFTUstaIoC-Backfill** once per feed — see
-   [Playbooks/PRODAFTUstaIoC-Backfill/readme.md](Playbooks/PRODAFTUstaIoC-Backfill/readme.md).
+4. To load history, deploy the matching **backfill** playbook for each feed and run its trigger
+   once. It pages `BackfillDays` (default **90**) of history into the same `SourceSystem`, so the
+   data unifies with the hourly imports. See each playbook's readme —
+   [BackfillMaliciousUrls](Playbooks/PRODAFTUstaIoC-BackfillMaliciousUrls/readme.md),
+   [BackfillMalwareHashes](Playbooks/PRODAFTUstaIoC-BackfillMalwareHashes/readme.md),
+   [BackfillPhishingSites](Playbooks/PRODAFTUstaIoC-BackfillPhishingSites/readme.md).
+   Backfills are safe to run while the import playbooks are active: STIX ids are deterministic, so
+   re-uploads update rather than duplicate, and loading older records never moves an import
+   playbook's watermark backwards.
 
 ### Via scripts (this repository)
 
