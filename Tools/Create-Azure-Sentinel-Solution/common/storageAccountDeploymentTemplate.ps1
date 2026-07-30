@@ -36,6 +36,12 @@ function Set-ArmVariable {
 function CreateStorageAccountBlobContainerResourceProperties($armResource, $templateContentConnections, $fileType) {
     try {
         $kindType = 'StorageAccountBlobContainer'
+        $eventGridAdvancedFilters = $null
+        $hasEventGridAdvancedFilters = [bool]($armResource.PSObject.Properties.Name -contains "eventGridAdvancedFilters")
+        if ($hasEventGridAdvancedFilters) {
+            $eventGridAdvancedFilters = $armResource.eventGridAdvancedFilters
+        }
+
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'auth' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
@@ -58,7 +64,7 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
         }
 
         Set-ResourceVariables 
-        $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate
+        $templateContentConnections.properties.mainTemplate.resources += Get-StorageAccountDeploymentTemplate -eventGridAdvancedFilters $eventGridAdvancedFilters
     }
     catch {
         Write-Host "Error in CreateStorageAccountBlobContainerResourceProperties function. Error Details $_"
@@ -66,7 +72,11 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
 }
 
 function Get-StorageAccountDeploymentTemplate {
-        return [ordered]@{
+    param (
+        [object]$eventGridAdvancedFilters = $null
+    )
+
+        $storageDeploymentTemplate = [ordered]@{
             type           = "Microsoft.Resources/deployments"
             apiVersion     = "2021-04-01"
             name           = "[[variables('nestedDeploymentName')]"
@@ -161,6 +171,28 @@ function Get-StorageAccountDeploymentTemplate {
             subscriptionId = "[[parameters('StorageAccountSubscription')]"
             resourceGroup  = "[[parameters('StorageAccountResourceGroupName')]"
         }
+
+        $hasAdvancedFilters = $false
+        if ($null -ne $eventGridAdvancedFilters) {
+            if ($eventGridAdvancedFilters -is [System.Array]) {
+                $hasAdvancedFilters = $eventGridAdvancedFilters.Count -gt 0
+            }
+            else {
+                $hasAdvancedFilters = $true
+            }
+        }
+
+        if ($hasAdvancedFilters) {
+            $eventSubscriptionResource = $storageDeploymentTemplate.properties.template.resources |
+                Where-Object { $_.type -eq "Microsoft.EventGrid/systemTopics/eventSubscriptions" } |
+                Select-Object -First 1
+
+            if ($null -ne $eventSubscriptionResource) {
+                $eventSubscriptionResource.properties.filter["advancedFilters"] = $eventGridAdvancedFilters
+            }
+        }
+
+        return $storageDeploymentTemplate
 }
 
 function Set-ResourceVariables {
