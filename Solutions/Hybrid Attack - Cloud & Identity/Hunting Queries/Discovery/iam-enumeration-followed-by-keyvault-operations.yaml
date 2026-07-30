@@ -1,0 +1,66 @@
+id: 87ca398d-e3f8-4b2f-b665-57f6600f59fb
+name: IAM and subscription enumeration followed by Key Vault operations
+description: |
+  Detects cloud reconnaissance that progresses into Key Vault-focused operations by the same caller.
+description-detailed: |
+  This query correlates Azure IAM and resource discovery operations with subsequent Key Vault management operations to identify likely secret-targeting behavior.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+  - CredentialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1526
+  - T1087.004
+  - T1552
+tags:
+  - Key Vault
+  - IAM reconnaissance
+  - Subscription discovery
+  - AzureActivity
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let IamRecon =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has_any (
+        "microsoft.authorization/roleassignments/read",
+        "microsoft.authorization/roledefinitions/read",
+        "microsoft.resources/subscriptions/read",
+        "microsoft.resources/subscriptions/resourcegroups/read",
+        "microsoft.resources/subscriptions/resourcegroups/resources/read",
+        "microsoft.resources/subscriptions/providers/read"
+      )
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress)
+    | summarize EnumCount=count(), EnumOps=make_set(OperationNameValue, 20), FirstEnum=min(TimeGenerated), LastEnum=max(TimeGenerated)
+      by CallerNorm, CallerIp, SubscriptionId;
+  let KeyVaultOps =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where OperationNameValue has "microsoft.keyvault/vaults/"
+    | where isnotempty(Caller)
+    | extend CallerNorm = tolower(Caller), CallerIp = tostring(CallerIpAddress)
+    | summarize KvCount=count(), KvOps=make_set(OperationNameValue, 20), FirstKv=min(TimeGenerated), LastKv=max(TimeGenerated),
+                Resources=make_set(ResourceId, 20)
+      by CallerNorm, CallerIp, SubscriptionId;
+  IamRecon
+  | join kind=inner KeyVaultOps on CallerNorm, SubscriptionId
+  | where FirstKv between (FirstEnum .. (LastEnum + 2h))
+  | project TimeGenerated=FirstEnum, FirstEnum, LastEnum, FirstKv, LastKv, Caller=CallerNorm, CallerIp,
+            SubscriptionId, EnumCount, KvCount, EnumOps, KvOps, Resources
+  | order by FirstKv desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIp
+version: 1.0.0

@@ -25,27 +25,28 @@ relevantTechniques:
   - T1071
   - T1210
 query: |
-  let threshold = 1;
+  let threshold = 2;
   union isfuzzy=true(
   AZFWApplicationRule
   | where Action == "Deny"
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AZFWNetworkRule
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
-  | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | summarize StartTime = min(TimeGenerated), count_ = dcount(DestinationPort), Protocols = make_set(Protocol) by SourceIp, Fqdn, Action
+  | where count_ >= threshold
+  | extend Protocol = strcat_array(Protocols, "/")),
   (AZFWFlowTrace
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AZFWIdpsSignature
   | where Action == "Deny"
   | extend Fqdn = DestinationIp
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"]),
+  | where count_ >= threshold),
   (AzureDiagnostics
   | where OperationName in ("AzureFirewallApplicationRuleLog","AzureFirewallNetworkRuleLog")
   | extend msg_s_replaced0 = replace(@"\s\s",@" ",msg_s)
@@ -56,7 +57,7 @@ query: |
   | where Action == "Deny"
   | extend Fqdn = iff(DestinationIp matches regex "\\d+\\.\\d+\\.\\d+\\.\\d+","",DestinationIp)
   | summarize StartTime = min(TimeGenerated), count() by SourceIp, Fqdn, Action, Protocol
-  | where count_ >= ["threshold"])
+  | where count_ >= threshold)
 entityMappings:
   - entityType: IP
     fieldMappings:
@@ -71,5 +72,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: 'Multiple Deny Actions Detected from {{SourceIp}} to {{Fqdn}}'
   alertDescriptionFormat: 'Source IP {{SourceIp}} has triggered multiple deny actions to destination {{Fqdn}} using protocol {{Protocol}}, which may indicate malicious activity such as lateral movement or reconnaissance.'
-version: 1.1.2
+version: 1.1.3
 kind: Scheduled

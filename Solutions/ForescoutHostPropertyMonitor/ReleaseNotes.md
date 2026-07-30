@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.1.0       | 07-07-2026                     | Retained the legacy Forescout Host Property Monitor data connector alongside the new Codeless Connector Framework (CCF) push connector so the solution now ships both connector versions. The CCF connector adds a Data Collection Rule with three custom streams and tables (ForescoutHostProperties_CL, ForescoutPolicyStatus_CL, ForescoutComplianceStatus_CL). Updated solution and playbook support contact to Microsoft. |
 | 3.0.0       | 18-02-2025                     | Added new **Workbook** Forescout Host Property Monitor Workbook.<br/> Changes to **Analytic Rules** and **Playbook** corresponding to Customer table changes replaced HTTP Data Collector API with Log Ingestion API.|
 | 2.0.1       | 26-05-2022                     | Updated Support details from Microsoft to Forescout.                                                 |
 | 2.0.0       | 05-11-2023                     | Initial Solution Release.                                                 |

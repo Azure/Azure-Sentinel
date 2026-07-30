@@ -1,0 +1,62 @@
+id: d71e736b-f6e7-4acb-86f5-3696041868d7
+name: BadUSB LOLBIN execution via certutil (HID injection via Run dialog)
+description: |
+  Identifies certutil.exe or cmd.exe spawned by explorer.exe with download or decode flags,
+  consistent with BadUSB HID injection payloads that use WIN+R to invoke certutil as a
+  living-off-the-land binary. The explorer.exe parent distinguishes Run dialog execution from
+  scripted or interactive certutil use. Covers urlcache download and base64 decode paths.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - CommandAndControl
+relevantTechniques:
+  - T1200
+  - T1027
+  - T1105
+query: |
+  let timeframe = 1d;
+  let LolbinFlags = dynamic([
+      "urlcache",
+      "-decode",
+      "-decodehex",
+      "verifyctl"
+  ]);
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where (
+      FileName =~ "certutil.exe"
+      and InitiatingProcessFileName =~ "explorer.exe"
+      and ProcessCommandLine has_any (LolbinFlags)
+  )
+  or (
+      FileName =~ "cmd.exe"
+      and InitiatingProcessFileName =~ "explorer.exe"
+      and ProcessCommandLine has "certutil"
+      and ProcessCommandLine has_any (LolbinFlags)
+  )
+  | project
+      TimeGenerated,
+      DeviceName,
+      AccountName,
+      AccountDomain,
+      FileName,
+      ProcessCommandLine,
+      InitiatingProcessFileName,
+      InitiatingProcessCommandLine,
+      ReportId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
