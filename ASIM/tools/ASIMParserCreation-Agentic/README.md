@@ -60,6 +60,17 @@ Copilot skills for creating, validating, deploying, and packaging ASIM parsers l
 | `asim-parser-github-pr-packager` | Package parsers into a PR | No |
 | `log-analytics-workspace-queryer` | Run KQL queries against workspace | Yes |
 
+## Parser authoring constraints
+
+Keep every generated parser record-local. A source record can produce at most one normalized record.
+
+- Use only the declared source table and values in the current row. Do not use a second table read, `join`, `lookup`, a secondary `union` branch, `externaldata`, a watchlist query, or an inline `datatable` mapping.
+- Do not use any `mv-*` operator, including `mv-expand` and `mv-apply`.
+- Do not use `summarize`, `distinct`, `arg_min`, `arg_max`, or another operation to correlate, deduplicate, aggregate, or reaggregate records.
+- If a field cannot be mapped without these patterns, correct the connector or source event shape, or leave a nonmandatory field unmapped.
+
+For detailed manual authoring guidance, see [Develop ASIM parsers](https://learn.microsoft.com/en-us/azure/sentinel/normalization-develop-parsers).
+
 ## Outputs
 
 - `ASim<Schema><Vendor><Product>.kql` — parameter-less parser
