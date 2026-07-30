@@ -40,6 +40,8 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
         $hasEventGridAdvancedFilters = [bool]($armResource.PSObject.Properties.Name -contains "eventGridAdvancedFilters")
         if ($hasEventGridAdvancedFilters) {
             $eventGridAdvancedFilters = $armResource.eventGridAdvancedFilters
+            # This is generator metadata, not a valid data connector ARM property.
+            $armResource.PSObject.Properties.Remove("eventGridAdvancedFilters")
         }
 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties -propertyName 'dataType' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false

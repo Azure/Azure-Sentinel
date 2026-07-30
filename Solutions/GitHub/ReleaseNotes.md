@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
+| 4.0.0       | 30-07-2026                     | Promoted the GitHub Azure Storage Audit Logs data connector to GA and updated its generated configuration with advanced Event Grid filters. |
 | 3.4.0       | 25-06-2026                     | Added all api.request fields and created V3 table for AzStorage connector         |
 | 3.3.1       | 17-06-2026                     | Added SAS related instruction.          |
 | 3.3.0       | 04-06-2026                     | Introducing a new Azure Storage CCF GitHub Audit Log Connector for Public Preview.          |
