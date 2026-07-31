@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.9       | 28-07-2026                     | Fixed 429 rate limit errors: reduced rateLimitQPS from 10 to 1 and added limit=1000 query parameter to reduce pagination calls against Okta System Log API |
 | 3.1.8       | 10-07-2026                     | Update **Analytic rule** and **Hunting Queries** for Okta SSO.|
 | 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |
 | 3.1.6       | 14-04-2026                     | Deprecate Okta Single Sign-On (using Azure Function) |
