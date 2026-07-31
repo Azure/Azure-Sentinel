@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
-| 3.1.9       | 30-07-2026                     | Update KQL queries of Okta **Analytics rules** |
+| 3.1.9       | 30-07-2026                     | Update KQL queries of Okta **Analytics rules** <br> Updated Azure Gov button image link. |
 | 3.1.8       | 10-07-2026                     | Update **Analytic rule** and **Hunting Queries** for Okta SSO.|
 | 3.1.7       | 28-04-2026                     | Update query with OktaSSO **parser** so that the OktaV2_CL table is considered. |
 | 3.1.6       | 14-04-2026                     | Deprecate Okta Single Sign-On (using Azure Function) |
