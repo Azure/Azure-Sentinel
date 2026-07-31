@@ -15,8 +15,11 @@ import select
 import re
 import argparse
 import sys
+
+
 def _parse_version(v):
-    return tuple(int(x) for x in v.split('.'))
+    parts = tuple(int(x) for x in v.split('.'))
+    return parts + (0,) * (3 - len(parts))
 
 SCRIPT_VERSION = 2.52
 PY3 = sys.version_info.major == 3
