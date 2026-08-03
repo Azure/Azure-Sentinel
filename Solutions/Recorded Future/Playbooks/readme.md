@@ -11,7 +11,7 @@
 >
 > | Playbook | Previous Behavior | New Behavior (v3.2.20) |
 > |----------|-------------------|---------------------|
-> | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePortalAlerts_CL` log only |
+> | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFutureClassicAlerts_CL` log only |
 > | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
 > | **RecordedFuture-Sandbox_StorageAccount** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
 > | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
@@ -259,7 +259,7 @@ There is a general limitation of ***3*** fields in the alert description. More i
 
 |Use Case|Analytic Rule|Custom Log Name|
 |-|-|-|
-|Alerts|RecordedFutureAlerts|RecordedFuturePortalAlerts_CL|
+|Alerts|RecordedFutureAlerts|RecordedFutureClassicAlerts_CL|
 |Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_CL|
 |Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_CL|
 |Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_CL|

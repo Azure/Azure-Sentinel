@@ -1,0 +1,837 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Recorded Future - Data Connectors v2",
+        "description": "Deploys shared infrastructure (DCE, DCRs, Log Analytics tables) used by the Recorded Future playbooks to write data to Log Analytics via the Azure Monitor Logs Ingestion API. Covers: Alert Importer, Playbook Alert Importer, ThreatMap Importers, and Sandbox playbooks.",
+        "lastUpdateTime": "2026-08-03T00:00:00.000Z",
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [
+                    "DCE and DCRs for all log-ingesting Recorded Future playbooks.",
+                    "Creates five Log Analytics tables: RecordedFuturePlaybookAlerts_V2_CL, RecordedFutureClassicAlerts_V2_CL, RecordedFutureThreatMap_V2_CL, RecordedFutureThreatMapMalware_V2_CL, RecordedFutureSandboxResults_V2_CL."
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "log_analytics_workspace_name": {
+            "type": "string",
+            "metadata": {
+                "description": "Required. Name of the Log Analytics Workspace where the tables will be created. Must be in the same resource group as this deployment."
+            }
+        },
+        "log_analytics_workspace_location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location of the Log Analytics Workspace. Defaults to the resource group location."
+            }
+        }
+    },
+    "variables": {
+        "DceName": "recorded-future-dce",
+        "DcrPlaybookAlertsName": "recorded-future-dcr-playbook-alerts",
+        "DcrClassicAlertsName": "recorded-future-dcr-classic-alerts",
+        "DcrThreatMapName": "recorded-future-dcr-threatmap",
+        "DcrThreatMapMalwareName": "recorded-future-dcr-threatmap-malware",
+        "DcrSandboxResultsName": "recorded-future-dcr-sandbox-results",
+        "TablePlaybookAlertsName": "RecordedFuturePlaybookAlerts_V2_CL",
+        "TableClassicAlertsName": "RecordedFutureClassicAlerts_V2_CL",
+        "TableThreatMapName": "RecordedFutureThreatMap_V2_CL",
+        "TableThreatMapMalwareName": "RecordedFutureThreatMapMalware_V2_CL",
+        "TableSandboxResultsName": "RecordedFutureSandboxResults_V2_CL",
+        "StreamPlaybookAlertsName": "Custom-RecordedFuturePlaybookAlerts_V2_CL",
+        "StreamClassicAlertsName": "Custom-RecordedFutureClassicAlerts_V2_CL",
+        "StreamThreatMapName": "Custom-RecordedFutureThreatMap_V2_CL",
+        "StreamThreatMapMalwareName": "Custom-RecordedFutureThreatMapMalware_V2_CL",
+        "StreamSandboxResultsName": "Custom-RecordedFutureSandboxResults_V2_CL",
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('log_analytics_workspace_name'))]",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrPlaybookAlertsResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrPlaybookAlertsName'))]",
+        "dcrClassicAlertsResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrClassicAlertsName'))]",
+        "dcrThreatMapResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrThreatMapName'))]",
+        "dcrThreatMapMalwareResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrThreatMapMalwareName'))]",
+        "dcrSandboxResultsResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrSandboxResultsName'))]",
+        "tablePlaybookAlertsResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TablePlaybookAlertsName'))]",
+        "tableClassicAlertsResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableClassicAlertsName'))]",
+        "tableThreatMapResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableThreatMapName'))]",
+        "tableThreatMapMalwareResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableThreatMapMalwareName'))]",
+        "tableSandboxResultsResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('log_analytics_workspace_name'), variables('TableSandboxResultsName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TablePlaybookAlertsName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TablePlaybookAlertsName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "alert_title",
+                            "type": "string"
+                        },
+                        {
+                            "name": "id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rule_label",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "priority",
+                            "type": "string"
+                        },
+                        {
+                            "name": "created_date",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "updated_date",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "targets",
+                            "type": "string"
+                        },
+                        {
+                            "name": "evidence_summary",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alert_description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "link",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableClassicAlertsName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableClassicAlertsName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "RuleName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "RuleId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Triggered",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "AlertName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AlertID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Entity",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "Documents",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "URL",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Document_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AISummary",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Fragment",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableThreatMapName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableThreatMapName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data",
+                            "type": "dynamic"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableThreatMapMalwareName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableThreatMapMalwareName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "data",
+                            "type": "dynamic"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/', variables('TableSandboxResultsName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('TableSandboxResultsName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "FileName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SandboxScore",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SandboxVerdict",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SampleId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "HtmlReport",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ScanTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "EmailFrom",
+                            "type": "string"
+                        },
+                        {
+                            "name": "EmailTo",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "retentionInDays": 90,
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrPlaybookAlertsName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tablePlaybookAlertsResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamPlaybookAlertsName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "alert_title",
+                                "type": "string"
+                            },
+                            {
+                                "name": "id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "rule_label",
+                                "type": "string"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "priority",
+                                "type": "string"
+                            },
+                            {
+                                "name": "created_date",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "updated_date",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "targets",
+                                "type": "string"
+                            },
+                            {
+                                "name": "evidence_summary",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alert_description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "link",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamPlaybookAlertsName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = datetime(null), alert_title = tostring(alert_title), id = tostring(id), category = tostring(category), rule_label = tostring(rule_label), status = tostring(status), priority = tostring(priority), created_date = todatetime(created_date), updated_date = todatetime(updated_date), targets = tostring(targets), evidence_summary = tostring(evidence_summary), alert_description = tostring(alert_description), link = tostring(link)",
+                        "outputStream": "[variables('StreamPlaybookAlertsName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrClassicAlertsName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableClassicAlertsResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamClassicAlertsName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "RuleName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "RuleId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Triggered",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "AlertName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AlertID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Entity",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "Documents",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "URL",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Document_url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "AISummary",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Fragment",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamClassicAlertsName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = datetime(null), RuleName = tostring(RuleName), RuleId = tostring(RuleId), Triggered = todatetime(Triggered), AlertName = tostring(AlertName), AlertID = tostring(AlertID), Entity = todynamic(tostring(Entity)), Documents = todynamic(tostring(Documents)), URL = tostring(URL), Document_url = tostring(Document_url), AISummary = tostring(AISummary), Fragment = tostring(Fragment)",
+                        "outputStream": "[variables('StreamClassicAlertsName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrThreatMapName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableThreatMapResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamThreatMapName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamThreatMapName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = datetime(null), data = todynamic(tostring(data))",
+                        "outputStream": "[variables('StreamThreatMapName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrThreatMapMalwareName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableThreatMapMalwareResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamThreatMapMalwareName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamThreatMapMalwareName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = datetime(null), data = todynamic(tostring(data))",
+                        "outputStream": "[variables('StreamThreatMapMalwareName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2024-03-11",
+            "name": "[variables('DcrSandboxResultsName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('dceResourceId')]",
+                "[variables('tableSandboxResultsResourceId')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dceResourceId')]",
+                "streamDeclarations": {
+                    "[variables('StreamSandboxResultsName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "FileName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "SandboxScore",
+                                "type": "string"
+                            },
+                            {
+                                "name": "SandboxVerdict",
+                                "type": "string"
+                            },
+                            {
+                                "name": "SampleId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "HtmlReport",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Source",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ScanTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "EmailFrom",
+                                "type": "string"
+                            },
+                            {
+                                "name": "EmailTo",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamSandboxResultsName')]"
+                        ],
+                        "destinations": [
+                            "workspace"
+                        ],
+                        "transformKql": "source | project TimeGenerated = datetime(null), FileName = tostring(FileName), SandboxScore = tostring(SandboxScore), SandboxVerdict = tostring(SandboxVerdict), SampleId = tostring(SampleId), HtmlReport = tostring(HtmlReport), Source = tostring(Source), ScanTime = todatetime(ScanTime), EmailFrom = tostring(EmailFrom), EmailTo = tostring(EmailTo)",
+                        "outputStream": "[variables('StreamSandboxResultsName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2021-03-01-preview",
+            "name": "[concat(parameters('log_analytics_workspace_name'), '/Microsoft.SecurityInsights/RecordedFuture')]",
+            "location": "[parameters('log_analytics_workspace_location')]",
+            "kind": "GenericUI",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "RecordedFuture",
+                    "title": "Recorded Future - Log Ingestion",
+                    "publisher": "Recorded Future",
+                    "descriptionMarkdown": "Imports Recorded Future data into Microsoft Sentinel via the Log Ingestion API. Writes playbook alerts to `RecordedFuturePlaybookAlerts_V2_CL`, classic alerts to `RecordedFutureClassicAlerts_V2_CL`, threat map data to `RecordedFutureThreatMap_V2_CL` and `RecordedFutureThreatMapMalware_V2_CL`, and sandbox results to `RecordedFutureSandboxResults_V2_CL`.",
+                    "graphQueries": [
+                        {
+                            "metricName": "Playbook Alerts",
+                            "legend": "RecordedFuturePlaybookAlerts_V2_CL",
+                            "baseQuery": "RecordedFuturePlaybookAlerts_V2_CL"
+                        },
+                        {
+                            "metricName": "Classic Alerts",
+                            "legend": "RecordedFutureClassicAlerts_V2_CL",
+                            "baseQuery": "RecordedFutureClassicAlerts_V2_CL"
+                        },
+                        {
+                            "metricName": "Threat Map",
+                            "legend": "RecordedFutureThreatMap_V2_CL",
+                            "baseQuery": "RecordedFutureThreatMap_V2_CL"
+                        },
+                        {
+                            "metricName": "Threat Map Malware",
+                            "legend": "RecordedFutureThreatMapMalware_V2_CL",
+                            "baseQuery": "RecordedFutureThreatMapMalware_V2_CL"
+                        },
+                        {
+                            "metricName": "Sandbox Results",
+                            "legend": "RecordedFutureSandboxResults_V2_CL",
+                            "baseQuery": "RecordedFutureSandboxResults_V2_CL"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Recent playbook alerts",
+                            "query": "RecordedFuturePlaybookAlerts_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Recent classic alerts",
+                            "query": "RecordedFutureClassicAlerts_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Recent threat map entries",
+                            "query": "RecordedFutureThreatMap_V2_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Recent sandbox results",
+                            "query": "RecordedFutureSandboxResults_V2_CL\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "RecordedFuturePlaybookAlerts_V2_CL",
+                            "lastDataReceivedQuery": "RecordedFuturePlaybookAlerts_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RecordedFutureClassicAlerts_V2_CL",
+                            "lastDataReceivedQuery": "RecordedFutureClassicAlerts_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RecordedFutureThreatMap_V2_CL",
+                            "lastDataReceivedQuery": "RecordedFutureThreatMap_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RecordedFutureThreatMapMalware_V2_CL",
+                            "lastDataReceivedQuery": "RecordedFutureThreatMapMalware_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        },
+                        {
+                            "name": "RecordedFutureSandboxResults_V2_CL",
+                            "lastDataReceivedQuery": "RecordedFutureSandboxResults_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriterias": [
+                        {
+                            "type": "IsConnectedQuery",
+                            "value": [
+                                "RecordedFuturePlaybookAlerts_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| project IsConnected = LastLog >= ago(24h)",
+                                "RecordedFutureClassicAlerts_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| project IsConnected = LastLog >= ago(24h)",
+                                "RecordedFutureThreatMap_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| project IsConnected = LastLog >= ago(24h)",
+                                "RecordedFutureThreatMapMalware_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| project IsConnected = LastLog >= ago(24h)",
+                                "RecordedFutureSandboxResults_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| project IsConnected = LastLog >= ago(24h)"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Azure Subscription",
+                                "description": "Monitoring Contributor and Log Analytics Contributor permissions required to deploy the Data Connectors infrastructure. Owner or Role Based Access Control Administrator required to deploy playbooks with automatic role assignment."
+                            },
+                            {
+                                "name": "Recorded Future API Token",
+                                "description": "A Recorded Future API token is required to authorize the Recorded Future Custom Connector used by the playbooks."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Step 1 \u2014 Deploy Data Connectors infrastructure",
+                            "description": "Deploys the shared Data Collection Endpoint (DCE), Data Collection Rules (DCRs), Log Analytics tables, and this connector definition tile. Deploy this into the same resource group as your Log Analytics Workspace.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FData%20Connectors%2Fazuredeploy.json)"
+                        },
+                        {
+                            "title": "Step 2 \u2014 Deploy the Recorded Future Custom Connector",
+                            "description": "The custom connector handles authentication towards the Recorded Future API. Deploy it once \u2014 it is shared by the playbooks.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%2FPlaybooks%2FConnectors%2FRecordedFuture-CustomConnector%2Fazuredeploy.json)"
+                        },
+                        {
+                            "title": "Step 3 \u2014 Deploy playbooks",
+                            "description": "Deploy one or more playbooks depending on your use case. No manual configuration is needed \u2014 each playbook connects to the Data Connectors infrastructure deployed in Step 1 automatically."
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "dceEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+        },
+        "dcrPlaybookAlertsImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrPlaybookAlertsResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrClassicAlertsImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrClassicAlertsResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrThreatMapImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrThreatMapResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrThreatMapMalwareImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrThreatMapMalwareResourceId'), '2024-03-11').immutableId]"
+        },
+        "dcrSandboxResultsImmutableId": {
+            "type": "string",
+            "value": "[reference(variables('dcrSandboxResultsResourceId'), '2024-03-11').immutableId]"
+        },
+        "streamPlaybookAlertsName": {
+            "type": "string",
+            "value": "[variables('StreamPlaybookAlertsName')]"
+        },
+        "streamClassicAlertsName": {
+            "type": "string",
+            "value": "[variables('StreamClassicAlertsName')]"
+        },
+        "streamThreatMapName": {
+            "type": "string",
+            "value": "[variables('StreamThreatMapName')]"
+        },
+        "streamThreatMapMalwareName": {
+            "type": "string",
+            "value": "[variables('StreamThreatMapMalwareName')]"
+        },
+        "streamSandboxResultsName": {
+            "type": "string",
+            "value": "[variables('StreamSandboxResultsName')]"
+        }
+    }
+}

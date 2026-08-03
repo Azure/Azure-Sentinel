@@ -1,17 +1,18 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "2.0.0.0",
+    "contentVersion": "3.0.0.0",
     "metadata": {
         "author": {
             "name": "Recorded Future"
         },
-        "description": "This playbook imports alerts from Recorded Future and stores them in a custom log (RecordedFuturePortalAlerts_CL) in the log analytics workspace. To create Microsoft Defender incidents from these alerts, use a Analytics Rule that queries the RecordedFuturePortalAlerts_CL table. Direct incident creation via Logic Apps is no longer supported in the unified Microsoft Defender portal.",
+        "description": "This playbook imports alerts from Recorded Future and stores them in a custom log (RecordedFutureClassicAlerts_V2_CL) in the log analytics workspace. To create Microsoft Defender incidents from these alerts, use an Analytics Rule that queries the RecordedFutureClassicAlerts_V2_CL table.",
         "entities": [],
-        "lastUpdateTime": "2026-01-29T00:00:00.000Z",
+        "lastUpdateTime": "2026-08-03T00:00:00.000Z",
         "postDeployment": [
             "After deployment, open the playbook to configure all connections and press save."
         ],
         "prerequisites": [
+            "Deploy the Data Connectors infrastructure (DCE, DCR, Log Analytics table, and connector definition) by deploying the azuredeploy.json template from the Data Connectors folder before deploying this playbook. This playbook must be deployed into the same resource group as the Data Connectors infrastructure.",
             "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
         ],
         "releaseNotes": [
@@ -65,6 +66,16 @@
                 ],
                 "title": "RecordedFuture-Alert-Importer",
                 "version": "2.0"
+            },
+            {
+                "version": "3.0",
+                "title": "RecordedFuture-Alert-Importer",
+                "notes": [
+                    "BREAKING CHANGE: Migrated from deprecated HTTP Data Collector API (azureloganalyticsdatacollector connector) to the Log Ingestion API (DCE/DCR with MSI authentication).",
+                    "Data now ingested into RecordedFutureClassicAlerts_V2_CL (new table). RecordedFutureClassicAlerts_CL will no longer receive data after this update.",
+                    "Deploy the Data Connectors infrastructure template (azuredeploy.json) into the same resource group before deploying this playbook.",
+                    "Automatically assigns Monitoring Metrics Publisher (on DCR) and Log Analytics Reader (on workspace) roles to the Logic App managed identity."
+                ]
             }
         ],
         "support": {
@@ -87,13 +98,19 @@
                 "description": "Microsoft Sentinel Workspace name"
             },
             "type": "string"
+        },
+        "create_role_assignment": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "If true, automatically assigns the Monitoring Metrics Publisher role on the shared DCR and Log Analytics Reader role on the workspace to the Logic App managed identity. Requires Owner or Role Based Access Control Administrator on the resource group. Set to false to assign the roles manually after deployment."
+            }
         }
     },
     "resources": [
         {
             "apiVersion": "2017-07-01",
             "dependsOn": [
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('Recordedfuturev2ConnectionName'))]"
             ],
@@ -110,21 +127,41 @@
                             "actions": {
                                 "For_each_hit": {
                                     "actions": {
-                                        "Send_Data_2": {
+                                        "Compose_Record": {
+                                            "type": "Compose",
                                             "inputs": {
-                                                "body": "{\n\"RuleName\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_triggered_alert')?['rule']?['name'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"RuleId\": \"@{items('For_each_triggered_alert')?['rule']?['id']}\",\n\"Triggered\": \"@{items('For_each_triggered_alert')?['log']?['triggered']}\",\n\"AlertName\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_triggered_alert')?['title'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"AlertID\": \"@{items('For_each_triggered_alert')?['id']}\", \n\"Entity\": @{items('For_each_hit')?['entities']},\n\"Documents\": @{items('For_each_hit')?['document']},\n\"URL\": \"@{items('For_each_triggered_alert')?['rule']?['url']?['portal']}\",\n\"Document_url\": \"@{items('For_each_hit')?['document']?['url']}\",\n\"AISummary\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\ncoalesce(items('For_each_triggered_alert')?['ai_insights']?['text'],''),\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"Fragment\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_hit')?['fragment'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\"}",
-                                                "headers": {
-                                                    "Log-Type": "RecordedFuturePortalAlerts"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/logs"
+                                                "RuleName": "@coalesce(items('For_each_triggered_alert')?['rule']?['name'],'')",
+                                                "RuleId": "@coalesce(items('For_each_triggered_alert')?['rule']?['id'],'')",
+                                                "Triggered": "@coalesce(items('For_each_triggered_alert')?['log']?['triggered'],'')",
+                                                "AlertName": "@coalesce(items('For_each_triggered_alert')?['title'],'')",
+                                                "AlertID": "@coalesce(items('For_each_triggered_alert')?['id'],'')",
+                                                "Entity": "@items('For_each_hit')?['entities']",
+                                                "Documents": "@items('For_each_hit')?['document']",
+                                                "URL": "@coalesce(items('For_each_triggered_alert')?['rule']?['url']?['portal'],'')",
+                                                "Document_url": "@coalesce(items('For_each_hit')?['document']?['url'],'')",
+                                                "AISummary": "@coalesce(items('For_each_triggered_alert')?['ai_insights']?['text'],'')",
+                                                "Fragment": "@coalesce(items('For_each_hit')?['fragment'],'')"
+                                            }
+                                        },
+                                        "Send_Data": {
+                                            "runAfter": {
+                                                "Compose_Record": [
+                                                    "Succeeded"
+                                                ]
                                             },
-                                            "type": "ApiConnection"
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "POST",
+                                                "uri": "@{parameters('DceEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "body": "@createArray(outputs('Compose_Record'))",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
+                                            }
                                         }
                                     },
                                     "foreach": "@items('For_each_triggered_alert')['hits']",
@@ -154,7 +191,7 @@
                         },
                         "Run_query_and_list_results": {
                             "inputs": {
-                                "body": "RecordedFuturePortalAlerts_CL\n| summarize LatestEvent=max(Triggered_t)| extend LatestEvent=coalesce(LatestEvent, ago(1d))",
+                                "body": "RecordedFutureClassicAlerts_V2_CL\n| summarize LatestEvent=max(todatetime(Triggered))| extend LatestEvent=coalesce(LatestEvent, ago(1d))",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -217,6 +254,15 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "DceEndpoint": {
+                            "type": "String"
+                        },
+                        "DcrImmutableId": {
+                            "type": "String"
+                        },
+                        "StreamName": {
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -236,11 +282,6 @@
                 "parameters": {
                     "$connections": {
                         "value": {
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "azuremonitorlogs": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                                 "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
@@ -257,6 +298,15 @@
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
                             }
                         }
+                    },
+                    "DceEndpoint": {
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+                    },
+                    "DcrImmutableId": {
+                        "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
+                    },
+                    "StreamName": {
+                        "value": "[variables('StreamName')]"
                     }
                 },
                 "provisioningState": "Succeeded",
@@ -264,23 +314,39 @@
             },
             "tags": {
                 "hidden-SentinelTemplateName": "RecordedFuture-AlertImporter",
-                "hidden-SentinelTemplateVersion": "2.0"
+                "hidden-SentinelTemplateVersion": "3.0"
             },
             "type": "Microsoft.Logic/workflows"
         },
         {
-            "apiVersion": "2016-06-01",
-            "kind": "V1",
-            "location": "[resourceGroup().location]",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('dcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
             "properties": {
-                "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                },
-                "customParameterValues": {},
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
             },
-            "type": "Microsoft.Web/connections"
+            "condition": "[parameters('create_role_assignment')]"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('lawResourceId'), parameters('PlaybookName'), variables('LogAnalyticsReaderRoleId'))]",
+            "scope": "[variables('lawResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('LogAnalyticsReaderRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "condition": "[parameters('create_role_assignment')]"
         },
         {
             "apiVersion": "2016-06-01",
@@ -315,8 +381,15 @@
         }
     ],
     "variables": {
-        "AzureloganalyticsdatacollectorConnectionName": "RecordedFuture-Azureloganalyticsdatacollector",
         "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
-        "Recordedfuturev2ConnectionName": "RecordedFuture-ConnectorV2"
+        "Recordedfuturev2ConnectionName": "RecordedFuture-ConnectorV2",
+        "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "LogAnalyticsReaderRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '73c42c96-874c-492b-b04d-ab87d138a893')]",
+        "DceName": "recorded-future-dce",
+        "DcrName": "recorded-future-dcr-classic-alerts",
+        "StreamName": "Custom-RecordedFutureClassicAlerts_V2_CL",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+        "lawResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace_name'))]"
     }
 }

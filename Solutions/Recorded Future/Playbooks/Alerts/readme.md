@@ -22,9 +22,9 @@ Connectors used: ***recordedfuturev2***, ***azureloganalyticsdatacollector*** an
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
-Retrieves Alerts and stores them in the **RecordedFuturePortalAlerts_CL** custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts" target="_blank">Alerts</a> (requires Recorded Future login)
+Retrieves Alerts and stores them in the **RecordedFutureClassicAlerts_CL** custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts" target="_blank">Alerts</a> (requires Recorded Future login)
 
-> **Note:** The `create_incident` parameter is removed. Use Analytics Rules to create incidents from the `RecordedFuturePortalAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
+> **Note:** The `create_incident` parameter is removed. Use Analytics Rules to create incidents from the `RecordedFutureClassicAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
 
 
 
