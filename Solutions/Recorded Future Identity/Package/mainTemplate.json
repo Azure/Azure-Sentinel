@@ -36,6 +36,15 @@
     "_solutionVersion": "3.2.0",
     "solutionId": "recordedfuture1605638642586.recorded_future_identity_solution",
     "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "RecordedFutureIdentityAlertImporter",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "RecordedFutureIdentityAlertImporter",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "RFI-CustomConnector-0-2-0": "RFI-CustomConnector-0-2-0",
     "_RFI-CustomConnector-0-2-0": "[variables('RFI-CustomConnector-0-2-0')]",
     "TemplateEmptyArray": "[json('[]')]",
@@ -80,6 +89,286 @@
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Recorded Future Identity data connector with template version 3.2.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "_comment": "Keep in sync with azuredeploy-alert-importer.json (used by the standalone README / Deploy to Azure button path).",
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Recorded Future Identity - Playbook Alert Importer",
+                  "publisher": "Recorded Future",
+                  "descriptionMarkdown": "Imports Recorded Future Identity Playbook Alerts into Microsoft Sentinel. Enables incident creation via Analytic Rules on the `RFI_PlaybookAlertResults_V2_CL` table. For full installation details, see the [readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/readme.md).",
+                  "graphQueries": [
+                    {
+                      "metricName": "Playbook Alert Results",
+                      "legend": "RFI_PlaybookAlertResults_V2_CL",
+                      "baseQuery": "RFI_PlaybookAlertResults_V2_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All playbook alert results",
+                      "query": "RFI_PlaybookAlertResults_V2_CL\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "High priority exposures",
+                      "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_priority == 'High'\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "New alerts only",
+                      "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_status == 'New'\n| sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "RFI_PlaybookAlertResults_V2_CL",
+                      "lastDataReceivedQuery": "RFI_PlaybookAlertResults_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "RFI_PlaybookAlertResults_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| where LastLog >= ago(24h)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Azure Subscription",
+                        "description": "Step 1 (Data Connectors infrastructure) requires **Monitoring Contributor** and **Log Analytics Contributor** on the resource group. Step 3 (playbook) requires **Owner** or **Role Based Access Control Administrator** when deploying with automatic role assignment (`create_role_assignment=true`), otherwise **Contributor** suffices."
+                      },
+                      {
+                        "name": "Recorded Future API Token",
+                        "description": "A Recorded Future Identity API token is required to authorize the RFI Custom Connector used by the playbook."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Deploys the shared Data Collection Endpoint (DCE), Data Collection Rule (DCR), Log Analytics table (`RFI_PlaybookAlertResults_V2_CL`), and this connector definition tile.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-alert-importer.json)",
+                      "title": "Step 1 — Deploy Data Connectors infrastructure"
+                    },
+                    {
+                      "description": "The custom connector handles authentication towards the Recorded Future API. Deploy it once — it is shared by the playbook.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FConnectors%2FRFI-CustomConnector-0-2-0%2Fazuredeploy.json)",
+                      "title": "Step 2 — Deploy RFI-CustomConnector"
+                    },
+                    {
+                      "description": "Deploys the Logic App that imports Recorded Future Identity Playbook Alerts and writes them to the Log Analytics table using Managed Identity. Set `create_role_assignment=false` if your organization requires manual role assignment (see permissions above). After deployment, authorize the connectors and enable the Logic App.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json)",
+                      "title": "Step 3 — Deploy RFI-Playbook-Alert-Importer-LAW"
+                    },
+                    {
+                      "description": "Creates Microsoft Sentinel incidents from the `RFI_PlaybookAlertResults_V2_CL` table. The rule is also available under **Microsoft Sentinel → Configuration → Analytics → Rule Templates**.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-incident-creation-analytic-rule.json)",
+                      "title": "Step 4 — Deploy Analytics Rule"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Recorded Future Identity",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Recorded Future Premier Integrations",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Recorded Future Support Team",
+                  "email": "support@recordedfuture.com",
+                  "tier": "Partner",
+                  "link": "https://support.recordedfuture.com/"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Recorded Future Identity - Playbook Alert Importer",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Recorded Future Identity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Recorded Future Premier Integrations",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Recorded Future Support Team",
+          "email": "support@recordedfuture.com",
+          "tier": "Partner",
+          "link": "https://support.recordedfuture.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Recorded Future Identity - Playbook Alert Importer",
+          "publisher": "Recorded Future",
+          "descriptionMarkdown": "Imports Recorded Future Identity Playbook Alerts into Microsoft Sentinel. Enables incident creation via Analytic Rules on the `RFI_PlaybookAlertResults_V2_CL` table. For full installation details, see the [readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/readme.md).",
+          "graphQueries": [
+            {
+              "metricName": "Playbook Alert Results",
+              "legend": "RFI_PlaybookAlertResults_V2_CL",
+              "baseQuery": "RFI_PlaybookAlertResults_V2_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "RFI_PlaybookAlertResults_V2_CL",
+              "lastDataReceivedQuery": "RFI_PlaybookAlertResults_V2_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "RFI_PlaybookAlertResults_V2_CL\n| summarize LastLog = max(TimeGenerated)\n| where LastLog >= ago(24h)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All playbook alert results",
+              "query": "RFI_PlaybookAlertResults_V2_CL\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "High priority exposures",
+              "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_priority == 'High'\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "New alerts only",
+              "query": "RFI_PlaybookAlertResults_V2_CL\n| where panel_status_status == 'New'\n| sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Azure Subscription",
+                "description": "Step 1 (Data Connectors infrastructure) requires **Monitoring Contributor** and **Log Analytics Contributor** on the resource group. Step 3 (playbook) requires **Owner** or **Role Based Access Control Administrator** when deploying with automatic role assignment (`create_role_assignment=true`), otherwise **Contributor** suffices."
+              },
+              {
+                "name": "Recorded Future API Token",
+                "description": "A Recorded Future Identity API token is required to authorize the RFI Custom Connector used by the playbook."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Deploys the shared Data Collection Endpoint (DCE), Data Collection Rule (DCR), Log Analytics table (`RFI_PlaybookAlertResults_V2_CL`), and this connector definition tile.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-alert-importer.json)",
+              "title": "Step 1 — Deploy Data Connectors infrastructure"
+            },
+            {
+              "description": "The custom connector handles authentication towards the Recorded Future API. Deploy it once — it is shared by the playbook.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FConnectors%2FRFI-CustomConnector-0-2-0%2Fazuredeploy.json)",
+              "title": "Step 2 — Deploy RFI-CustomConnector"
+            },
+            {
+              "description": "Deploys the Logic App that imports Recorded Future Identity Playbook Alerts and writes them to the Log Analytics table using Managed Identity. Set `create_role_assignment=false` if your organization requires manual role assignment (see permissions above). After deployment, authorize the connectors and enable the Logic App.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW%2Fazuredeploy.json)",
+              "title": "Step 3 — Deploy RFI-Playbook-Alert-Importer-LAW"
+            },
+            {
+              "description": "Creates Microsoft Sentinel incidents from the `RFI_PlaybookAlertResults_V2_CL` table. The rule is also available under **Microsoft Sentinel → Configuration → Analytics → Rule Templates**.\n\n[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FData%20Connectors%2Fazuredeploy-incident-creation-analytic-rule.json)",
+              "title": "Step 4 — Deploy Analytics Rule"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -5136,10 +5425,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "RecordedFutureIdentityAlertImporter",
                     "dataTypes": [
                       "RFI_PlaybookAlertResults_V2_CL"
-                    ]
+                    ],
+                    "connectorId": "RecordedFutureIdentityAlertImporter"
                   }
                 ],
                 "tactics": [
@@ -5147,13 +5436,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "panel_status_entity_name",
                         "identifier": "Name"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
@@ -5169,16 +5458,16 @@
                   "alertDynamicProperties": []
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
+                    "lookbackDuration": "PT15M",
+                    "matchingMethod": "AllEntities",
                     "groupByEntities": [
                       "Account"
                     ],
-                    "enabled": true,
                     "reopenClosedIncident": false,
-                    "lookbackDuration": "PT15M",
-                    "matchingMethod": "AllEntities"
-                  },
-                  "createIncident": true
+                    "enabled": true
+                  }
                 }
               }
             },
@@ -5234,7 +5523,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Recorded Future Identity",
         "publisherDisplayName": "Recorded Future Support Team",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Recorded%20Future%20Identity/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://www.recordedfuture.com/\">Recorded Future</a> Identity Intelligence enables security and IT teams to detect identity compromises, for both employees and customers. To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action with applications such as Entra ID and Microsoft Sentinel.\nThere are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways. In particular, these playbooks include several actions that can be coordinated, or used separately. They include:</p>\n<ol>\n<li>searches for compromised workforce or external customer users</li>\n<li>looking up existing users and saving the compromised user data to a Log file</li>\n<li>confirming high risk Entra ID users</li>\n<li>adding a compromised user to an Entra ID security group</li>\n<li>Updating Recorded Future Playbook Alerts</li>\n</ol>\n<p>For more information, see the <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Recorded%20Future%20Identity/Playbooks\">Documentation for this Solution</a>.</p>\n<p>The playbooks have internal dependencies where you have to install:</p>\n<ul>\n<li>RFI-CustomConnector-0-2-0</li>\n</ul>\n<p>Before:</p>\n<ul>\n<li>RFI-Playbook-Alert-Importer</li>\n<li>RFI-Playbook-Alert-Importer-LAW</li>\n</ul>\n<p>This solution depends on underlying Microsoft technologies. Some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:</p>\n<ul>\n<li><a href=\"https://learn.microsoft.com/en-us/azure/azure-monitor/logs/workspace-design\">Log Analytics</a></li>\n<li><a href=\"https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-pricing\">Logic apps</a></li>\n</ul>\n<p><strong>Analytic Rules:</strong> 1, <strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Playbooks:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Recorded%20Future%20Identity/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://www.recordedfuture.com/\">Recorded Future</a> Identity Intelligence enables security and IT teams to detect identity compromises, for both employees and customers. To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action with applications such as Entra ID and Microsoft Sentinel.\nThere are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways. In particular, these playbooks include several actions that can be coordinated, or used separately. They include:</p>\n<ol>\n<li>searches for compromised workforce or external customer users</li>\n<li>looking up existing users and saving the compromised user data to a Log file</li>\n<li>confirming high risk Entra ID users</li>\n<li>adding a compromised user to an Entra ID security group</li>\n<li>Updating Recorded Future Playbook Alerts</li>\n</ol>\n<p>For more information, see the <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Recorded%20Future%20Identity/Playbooks\">Documentation for this Solution</a>.</p>\n<p>The playbooks have internal dependencies where you have to install:</p>\n<ul>\n<li>RFI-CustomConnector-0-2-0</li>\n</ul>\n<p>Before:</p>\n<ul>\n<li>RFI-Playbook-Alert-Importer</li>\n<li>RFI-Playbook-Alert-Importer-LAW</li>\n</ul>\n<p>This solution depends on underlying Microsoft technologies. Some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:</p>\n<ul>\n<li><a href=\"https://learn.microsoft.com/en-us/azure/azure-monitor/logs/workspace-design\">Log Analytics</a></li>\n<li><a href=\"https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-pricing\">Logic apps</a></li>\n</ul>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1, <strong>Custom Azure Logic Apps Connectors:</strong> 1, <strong>Playbooks:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -5259,6 +5548,11 @@
         "dependencies": {
           "operator": "AND",
           "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
             {
               "kind": "LogicAppsCustomConnector",
               "contentId": "[variables('_RFI-CustomConnector-0-2-0')]",
