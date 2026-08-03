@@ -34,6 +34,10 @@ def rename_reserved_columns(records: list, rename_map: dict) -> list:
 class UpwindClient:
     """Base client for the Upwind API with authentication, retry, and pagination."""
 
+    # Rate limiting plus transient server-side failures. Any other status is
+    # returned to the caller untouched.
+    RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)
+
     def __init__(self, config):
         self.org_id = config.get("upwind_org_id")
         self.client_id = config.get("upwind_client_id")
@@ -119,16 +123,36 @@ class UpwindClient:
         logging.info("Fetched %d total items from Upwind API.", len(all_items))
         return all_items
 
-    def _request_with_retry(self, url, headers, json_body, params) -> requests.Response:
-        """Execute a POST request with exponential backoff on 429 responses."""
+    def _send_with_retry(
+        self, method, url, headers, params, json_body=None
+    ) -> requests.Response:
+        """
+        Execute an HTTP request with exponential backoff.
+
+        Retries on rate limiting (429), transient server errors, and network
+        failures (dropped connections and timeouts). Raises RuntimeError once
+        the retry budget is exhausted.
+        """
+
+        last_error = None
 
         for attempt in range(self.max_retries + 1):
-            response = requests.post(
-                url, json=json_body, headers=headers, params=params, timeout=60
-            )
+            try:
+                response = requests.request(
+                    method,
+                    url,
+                    json=json_body,
+                    headers=headers,
+                    params=params,
+                    timeout=60,
+                )
 
-            if response.status_code != 429:
-                return response
+                if response.status_code not in self.RETRYABLE_STATUS_CODES:
+                    return response
+
+                last_error = f"HTTP {response.status_code}: {response.text}"
+            except (requests.ConnectionError, requests.Timeout) as e:
+                last_error = f"{type(e).__name__}: {e}"
 
             if attempt < self.max_retries:
                 wait = min(
@@ -136,44 +160,28 @@ class UpwindClient:
                     self.max_backoff_seconds,
                 )
                 logging.warning(
-                    "Rate limited (429). Retrying in %ds (attempt %d/%d)...",
+                    "Upwind API request failed (%s). Retrying in %ds (attempt %d/%d)...",
+                    last_error,
                     wait,
                     attempt + 1,
                     self.max_retries,
                 )
                 time.sleep(wait)
-            else:
-                raise RuntimeError(
-                    f"Upwind API rate limit exceeded after {self.max_retries} retries: "
-                    f"{response.text}"
-                )
+
+        raise RuntimeError(
+            f"Upwind API request to {url} failed after "
+            f"{self.max_retries} retries: {last_error}"
+        )
+
+    def _request_with_retry(self, url, headers, json_body, params) -> requests.Response:
+        """Execute a POST request with retry on transient failures."""
+
+        return self._send_with_retry("POST", url, headers, params, json_body=json_body)
 
     def _get_with_retry(self, url, headers, params) -> requests.Response:
-        """Execute a GET request with exponential backoff on 429 responses."""
+        """Execute a GET request with retry on transient failures."""
 
-        for attempt in range(self.max_retries + 1):
-            response = requests.get(url, headers=headers, params=params, timeout=60)
-
-            if response.status_code != 429:
-                return response
-
-            if attempt < self.max_retries:
-                wait = min(
-                    self.initial_backoff_seconds * (2**attempt),
-                    self.max_backoff_seconds,
-                )
-                logging.warning(
-                    "Rate limited (429). Retrying in %ds (attempt %d/%d)...",
-                    wait,
-                    attempt + 1,
-                    self.max_retries,
-                )
-                time.sleep(wait)
-            else:
-                raise RuntimeError(
-                    f"Upwind API rate limit exceeded after {self.max_retries} retries: "
-                    f"{response.text}"
-                )
+        return self._send_with_retry("GET", url, headers, params)
 
     def _fetch_page_paginated(self, url: str, base_params: dict) -> list:
         """

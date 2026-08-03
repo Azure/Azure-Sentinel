@@ -42,7 +42,14 @@ def _upload_to_dcr(config, records: list, stream_name: str) -> None:
     dce_endpoint = config.get("azure_dce_endpoint")
     dcr_immutableid = config.get("azure_dcr_immutableid")
 
-    credential = ManagedIdentityCredential(client_id=azure_client_id)
+    # No client_id means the Function App's system-assigned identity, which is
+    # what the ARM template provisions. A client_id is only supplied when the
+    # deployment was pointed at a user-assigned identity instead.
+    credential = (
+        ManagedIdentityCredential(client_id=azure_client_id)
+        if azure_client_id
+        else ManagedIdentityCredential()
+    )
     client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential)
 
     upload_errors = []

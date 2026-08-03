@@ -70,7 +70,6 @@ Click the button below to deploy all required Azure resources (DCE, 6 custom tab
 | `UpwindOrgId` | Upwind Organization ID (Settings → Organization) |
 | `UpwindClientId` | Upwind API Client ID (Settings → API Keys) |
 | `UpwindClientSecret` | Upwind API Client Secret |
-| `AzureClientObjectId` | Object ID of the App Registration used by the Function App |
 | `AppInsightsWorkspaceResourceID` | Full Resource ID of the Log Analytics workspace |
 | `UpwindCatalogSchedule` | CRON schedule for the function trigger (default: `0 0 * * * *`) |
 | `UpwindThreatLookbackMinutes` | *(optional, default 90)* Lookback window in minutes for threat detections, threat events, threat stories, and configuration findings. Should exceed `UpwindCatalogSchedule`'s interval. |

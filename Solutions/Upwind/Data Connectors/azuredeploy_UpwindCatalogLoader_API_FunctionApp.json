@@ -28,12 +28,6 @@
                 "description": "Full Resource ID of the existing Log Analytics workspace for Application Insights (e.g. /subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...)."
             }
         },
-        "AzureClientObjectId": {
-            "type": "string",
-            "metadata": {
-                "description": "Object ID of the App Registration / Service Principal used by the Function App managed identity. Used to assign the Monitoring Metrics Publisher role on the DCR."
-            }
-        },
         "UpwindOrgId": {
             "type": "string",
             "metadata": {
@@ -498,14 +492,15 @@
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(variables('mainRuleName'), parameters('AzureClientObjectId'), variables('monitoringMetricsPublisherRoleId'))]",
+            "name": "[guid(variables('mainRuleName'), variables('FunctionName'), variables('monitoringMetricsPublisherRoleId'))]",
             "dependsOn": [
-                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]"
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
             ],
             "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('mainRuleName'))]",
             "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
-                "principalId": "[parameters('AzureClientObjectId')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2022-03-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }
         },
@@ -594,6 +589,9 @@
             "name": "[variables('FunctionName')]",
             "location": "[resourceGroup().location]",
             "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
@@ -636,10 +634,6 @@
                         {
                             "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
                             "value": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]"
-                        },
-                        {
-                            "name": "AZURE_CLIENT_ID",
-                            "value": "[parameters('AzureClientObjectId')]"
                         },
                         {
                             "name": "DCE_ENDPOINT",
