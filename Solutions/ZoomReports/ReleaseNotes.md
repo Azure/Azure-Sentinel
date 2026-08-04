@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.12      | 04-08-2026                     | Fix ARM template expression error caused by unescaped [DEPRECATED] prefix in connector title, and fix CCF connector 401 Unauthorized by switching auth type from JwtToken to OAuth2 for correct Basic auth encoding during Zoom Server-to-Server OAuth token acquisition |
 | 3.0.11      | 15-06-2026                     | Deprecate Zoom Reports (using Azure Function) |
 | 3.0.10      | 29-04-2026                     | Bump version to 3.0.10 for a new publishing, same connector content as the previous one |
 | 3.0.9       | 29-04-2026                     | Update Cloud recording api polling interval to one day with one day delay to reduce duplication |
