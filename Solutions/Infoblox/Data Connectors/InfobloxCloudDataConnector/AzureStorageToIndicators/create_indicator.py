@@ -7,6 +7,7 @@ from ..SharedCode.infoblox_exception import InfobloxException, InfobloxTimeoutEx
 from ..SharedCode.logger import applogger
 from .indicator_mapping import Mapping
 from ..SharedCode.state_manager import StateManager
+from ..SharedCode.table_checkpoint_manager import TableCheckpointManager
 from ..SharedCode.utils import Utils
 
 
@@ -45,11 +46,26 @@ class CreateThreatIndicator(Utils):
         __method_name = inspect.currentframe().f_code.co_name
         try:
             file_list = self.filter_file_list(consts.FILE_NAME_PREFIX_COMPLETED)
-            count_state_obj = StateManager(
-                connection_string=consts.CONN_STRING,
-                file_path="indicator_count",
-                share_name=consts.FILE_SHARE_NAME_DATA,
-            )
+            count_state_obj = TableCheckpointManager(consts.CONN_STRING, "indicator_count", consts.CHECKPOINT_TABLE_NAME)
+            # Upgrade migration: if no table entry, check old file-based location
+            if count_state_obj.get() is None:
+                _old_count_obj = StateManager(
+                    connection_string=consts.CONN_STRING,
+                    file_path="indicator_count",
+                    share_name=consts.FILE_SHARE_NAME_DATA,
+                )
+                _old_val = _old_count_obj.get()
+                if _old_val:
+                    applogger.info(
+                        self.log_format.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.azure_function_name,
+                            "Migrating indicator_count from file share to table.",
+                        )
+                    )
+                    count_state_obj.post(_old_val)
+                    _old_count_obj.delete()
             for file_item in file_list:
                 if int(time.time()) >= self.start + consts.FUNCTION_APP_TIMEOUT_SECONDS:
                     raise InfobloxTimeoutException()
@@ -64,7 +80,7 @@ class CreateThreatIndicator(Utils):
                         "No. of records in  storage file = {} File = {}".format(len(request_body), file_item),
                     )
                 )
-                checkpoint_file_count = self.get_checkpoint_data(count_state_obj)
+                checkpoint_file_count = self.get_time_checkpoint(count_state_obj)
                 stored_indicator_count = 0 if not checkpoint_file_count else int(checkpoint_file_count)
                 applogger.info(
                     self.log_format.format(
@@ -164,13 +180,13 @@ class CreateThreatIndicator(Utils):
                         ),
                     )
                 )
-                self.post_checkpoint_data(
+                self.post_time_checkpoint(
                     count_state_obj,
                     str(stored_indicator_count),
                 )
                 index += 1
 
-            self.post_checkpoint_data(count_state_obj, "")
+            self.post_time_checkpoint(count_state_obj, "")
             state_file_obj.delete()
             applogger.info(
                 self.log_format.format(
