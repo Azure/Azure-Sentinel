@@ -7,6 +7,7 @@
     "prerequisites": [
       "The PRODAFT USTA - Account Takeover Prevention solution installed. The backfill can run before the data connector has ingested anything: it creates the PRODAFTUstaCompromisedCredentials_CL table itself if the connector has not yet done so. Connecting the data connector starts forward polling.",
       "A PRODAFT USTA long-lived API key.",
+      "Permission to write tables on the workspace (Microsoft.OperationalInsights/workspaces/tables/write, included in Log Analytics Contributor), since the template creates the PRODAFTUstaCompromisedCredentials_CL table when it is missing.",
       "Permission to create role assignments in the workspace resource group (Owner or User Access Administrator), since the template grants its identity 'Monitoring Metrics Publisher' automatically."
     ],
     "postDeployment": [
@@ -82,7 +83,7 @@
     "WorkspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
     "TableName": "PRODAFTUstaCompromisedCredentials_CL",
     "TableDeploymentName": "[concat(parameters('PlaybookName'), '-table')]",
-    "TableDeploymentResourceId": "[resourceId('Microsoft.Resources/deployments', concat(parameters('PlaybookName'), '-table'))]",
+    "TableDeploymentResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.Resources/deployments', concat(parameters('PlaybookName'), '-table'))]",
     "DceName": "[concat(parameters('PlaybookName'), '-DCE')]",
     "DcrName": "[concat(parameters('PlaybookName'), '-DCR')]",
     "DceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
@@ -91,13 +92,16 @@
   },
   "resources": [
     {
-      "comments": "Ensures the destination table exists. The codeless connector only materialises PRODAFTUstaCompromisedCredentials_CL once it ingests its first record, so a backfill run before any live data would otherwise fail with the table not found. Deploying the table is a PUT: it creates the table when absent and is a no-op when the connector already created it. Runs in the workspace's resource group, which may differ from this deployment's.",
+      "comments": "Ensures the destination table exists. The codeless connector only materialises PRODAFTUstaCompromisedCredentials_CL once it ingests its first record, so a backfill run before any live data would otherwise fail with the table not found. Deploying the table is a create-or-update: it creates the table when absent, and when it already exists it re-asserts this schema and sets retention from TableRetentionDays, so pass the table's current retention if you have changed it from the default. Runs in the workspace's resource group, which may differ from this deployment's. Expression scope is 'outer' (the ARM default, stated explicitly here) so the inline template resolves the parent's parameters and variables; do not reference secure parameters inside it.",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2021-04-01",
       "name": "[variables('TableDeploymentName')]",
       "resourceGroup": "[parameters('WorkspaceResourceGroup')]",
       "properties": {
         "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "outer"
+        },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "1.0.0.0",
